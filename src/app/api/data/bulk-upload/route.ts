@@ -1,0 +1,90 @@
+import { createClient } from '@supabase/supabase-js'
+import { NextRequest, NextResponse } from 'next/server'
+
+const adminClient = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
+
+export async function POST(req: NextRequest) {
+  try {
+    const { type, hotel_id, update_date, do_delete, business_dates, rows } = await req.json()
+
+    if (!hotel_id || !rows?.length) {
+      return NextResponse.json({ error: '필수 값 누락' }, { status: 400 })
+    }
+
+    console.log('첫 번째 row business_date:', rows[0]?.business_date)
+    console.log('타입:', typeof rows[0]?.business_date)
+    console.log('값:', JSON.stringify(rows[0]?.business_date))
+
+    // 브라우저(transformRow)에서 이미 변환된 값을 그대로 사용
+    // OTB: 각 row의 update_date 우선, 없으면 상위 update_date 사용
+    const insertData = type === 'otb'
+      ? rows.map((row: any) => ({ ...row, update_date: row.update_date ?? update_date ?? null }))
+      : rows
+
+    const CHUNK = 500
+    let   count = 0
+
+    if (type === 'actual') {
+      // ── Actual ──────────────────────────────────────────────────────────────
+
+      // 1. DELETE (한 번만 — 첫 번째 API 요청에만 business_dates 전달됨)
+      if (business_dates?.length > 0) {
+        const { error } = await adminClient.rpc('r01_delete_actual', {
+          p_hotel_id: hotel_id,
+          p_dates:    business_dates,
+        })
+        if (error) throw new Error(`DELETE 오류: ${error.message}`)
+      }
+
+      // 3. INSERT (청크 반복)
+      for (let i = 0; i < insertData.length; i += CHUNK) {
+        const chunk = insertData.slice(i, i + CHUNK)
+
+        const { data, error } = await adminClient.rpc('r01_insert_actual', {
+          p_hotel_id: hotel_id,
+          p_rows:     chunk,
+        })
+        if (error || !data?.success) {
+          throw new Error(error?.message ?? data?.error ?? 'RPC 오류')
+        }
+        count += data.count
+      }
+
+    } else {
+      // ── OTB ─────────────────────────────────────────────────────────────────
+
+      // 1. DELETE (do_delete === true인 첫 번째 청크에만 실행)
+      if (do_delete && update_date) {
+        const { error } = await adminClient.rpc('r02_delete_otb', {
+          p_hotel_id:    hotel_id,
+          p_update_date: update_date,
+        })
+        if (error) throw new Error(`DELETE 오류: ${error.message}`)
+      }
+
+      // 2. INSERT (청크 반복)
+      for (let i = 0; i < insertData.length; i += CHUNK) {
+        const chunk = insertData.slice(i, i + CHUNK)
+
+        const { data, error } = await adminClient.rpc('r02_insert_otb', {
+          p_hotel_id:    hotel_id,
+          p_update_date: null,   // 각 row의 update_date 사용 (COALESCE fallback)
+          p_rows:        chunk,
+        })
+        if (error || !data?.success) {
+          throw new Error(error?.message ?? data?.error ?? 'RPC 오류')
+        }
+        count += data.count
+      }
+    }
+
+    return NextResponse.json({ success: true, count })
+
+  } catch (err: any) {
+    console.error('bulk upload error:', err)
+    return NextResponse.json({ error: err.message }, { status: 500 })
+  }
+}

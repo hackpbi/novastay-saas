@@ -1,0 +1,96 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: [
+    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/views/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/layouts/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
+  theme: {
+    extend: {
+      colors: {
+        bg: {
+          primary:   'var(--color-bg-primary)',
+          secondary: 'var(--color-bg-secondary)',
+          tertiary:  'var(--color-bg-tertiary)',
+          elevated:  'var(--color-bg-elevated)',
+          surface:   'var(--color-bg-surface)',
+        },
+        accent: {
+          primary:   'var(--color-accent-primary)',
+          secondary: 'var(--color-accent-secondary)',
+        },
+        brand: {
+          text:   'var(--color-text-primary)',
+          muted:  'var(--color-text-secondary)',
+          subtle: 'var(--color-text-tertiary)',
+          dimmed: 'var(--color-text-muted)',
+        },
+        status: {
+          positive: 'var(--color-positive)',
+          negative: 'var(--color-negative)',
+          warning:  'var(--color-warning)',
+          info:     'var(--color-info)',
+        },
+        ns: {
+          bg:             'var(--color-bg-primary)',
+          sidebar:        'var(--color-bg-secondary)',
+          card:           'var(--color-bg-surface)',
+          border:         'var(--color-border-default)',
+          accent:         'var(--color-accent-primary)',
+          'accent-hover': 'var(--color-accent-secondary)',
+          'accent-surface': 'var(--accent-badge-bg)',
+          'accent-border':  'var(--accent-badge-border)',
+          text:           'var(--color-text-primary)',
+          'text-secondary': 'var(--color-text-secondary)',
+          'text-muted':   'var(--color-text-tertiary)',
+          'text-placeholder': 'var(--color-text-muted)',
+          warning:        'var(--color-warning)',
+          info:           'var(--color-info)',
+          purple:         'var(--color-ns-purple)',
+          negative:       'var(--color-negative)',
+        },
+      },
+      fontFamily: {
+        sans: ['"DM Sans"', 'Inter', 'sans-serif'],
+        mono: ['"DM Mono"', '"JetBrains Mono"', 'monospace'],
+      },
+      borderRadius: {
+        xs:   '4px',
+        sm:   '6px',
+        md:   '8px',
+        lg:   '12px',
+        xl:   '16px',
+        '2xl':'24px',
+        full: '9999px',
+      },
+      boxShadow: {
+        card:          'var(--shadow-card)',
+        elevated:      'var(--shadow-elevated)',
+        'accent-glow': 'var(--shadow-accent-glow)',
+        'hero-glow':   'var(--shadow-hero-glow)',
+      },
+      backgroundImage: {
+        'gradient-cta':  'var(--gradient-cta)',
+        'gradient-hero': 'var(--gradient-hero)',
+      },
+      animation: {
+        'fade-in':         'fadeIn 0.35s ease forwards',
+        'slide-up':        'slideUp 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards',
+        'slide-in-right':  'slideInRight 0.3s cubic-bezier(0.4,0,0.2,1) forwards',
+        'page-enter':      'pageEnter 0.25s ease forwards',
+        'progress-run':    'progressRun 0.55s cubic-bezier(0.4,0,0.2,1) forwards',
+        'progress-done':   'progressDone 0.2s ease forwards',
+      },
+      keyframes: {
+        fadeIn:       { '0%': { opacity: '0' },                                                          '100%': { opacity: '1' } },
+        slideUp:      { '0%': { opacity: '0', transform: 'translateY(24px)' },                           '100%': { opacity: '1', transform: 'translateY(0)' } },
+        slideInRight: { '0%': { opacity: '0', transform: 'translateX(40px)' },                           '100%': { opacity: '1', transform: 'translateX(0)' } },
+        pageEnter:    { '0%': { opacity: '0' },                                                          '100%': { opacity: '1' } },
+        progressRun:  { '0%': { width: '0%' }, '60%': { width: '75%' }, '100%': { width: '92%' } },
+        progressDone: { '0%': { width: '92%', opacity: '1' }, '100%': { width: '100%', opacity: '0' } },
+      },
+    },
+  },
+  plugins: [],
+}

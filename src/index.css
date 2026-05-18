@@ -1,0 +1,281 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══════════════════════════════════════════════════════════════
+   DARK THEME  (Cryptix — default)
+   ═══════════════════════════════════════════════════════════════ */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-bg-primary:   #0A0A0A;
+  --color-bg-secondary: #111111;
+  --color-bg-tertiary:  #1A1A1A;
+  --color-bg-elevated:  #1E1E1E;
+  --color-bg-surface:   #141414;
+
+  --color-accent-primary:   #00E5A0;
+  --color-accent-secondary: #00C87E;
+  --color-accent-glow:      rgba(0, 229, 160, 0.15);
+  --color-accent-dim:       rgba(0, 229, 160, 0.08);
+
+  --color-text-primary:   #FFFFFF;
+  --color-text-secondary: #A0A0A0;
+  --color-text-tertiary:  #666666;
+  --color-text-accent:    #00E5A0;
+  --color-text-muted:     #717171;
+
+  --color-positive: #00E5A0;
+  --color-negative: #FF4D4D;
+  --color-warning:  #F5A623;
+  --color-info:     #4A9EFF;
+
+  --color-border-default: rgba(255, 255, 255, 0.08);
+  --color-border-subtle:  rgba(255, 255, 255, 0.04);
+  --color-border-accent:  rgba(0, 229, 160, 0.30);
+
+  /* Overlays */
+  --overlay-xs:    rgba(255, 255, 255, 0.03);
+  --overlay-sm:    rgba(255, 255, 255, 0.05);
+  --overlay-md:    rgba(255, 255, 255, 0.08);
+  --overlay-hover: rgba(0, 229, 160, 0.10);
+
+  /* Shadows */
+  --shadow-card:        0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.6);
+  --shadow-elevated:    0 10px 40px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4);
+  --shadow-accent-glow: 0 0 20px rgba(0,229,160,0.25), 0 0 40px rgba(0,229,160,0.1);
+  --shadow-hero-glow:   0 0 80px rgba(0,229,160,0.12), 0 0 160px rgba(0,229,160,0.06);
+
+  /* Gradients */
+  --gradient-cta:  linear-gradient(135deg, #00E5A0, #00C87E);
+  --gradient-hero: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0,229,160,0.15) 0%, transparent 60%);
+
+  /* Nav */
+  --bg-nav: rgba(10, 10, 10, 0.85);
+
+  /* Badge / accent highlights */
+  --accent-badge-bg:     rgba(0, 229, 160, 0.10);
+  --accent-badge-border: rgba(0, 229, 160, 0.20);
+  --accent-btn-glow:     0 0 16px rgba(0,229,160,0.25), 0 0 32px rgba(0,229,160,0.08);
+
+  /* Negative / error */
+  --negative-bg:     rgba(255, 77, 77, 0.08);
+  --negative-border: rgba(255, 77, 77, 0.18);
+
+  /* Card header */
+  --card-header-bg:         linear-gradient(145deg, rgba(0,229,160,0.07) 0%, rgba(0,229,160,0.02) 50%, transparent 80%);
+  --card-header-glow-color: rgba(0,229,160,0.20);
+
+  /* Forecasting section */
+  --forecast-bg:     rgba(0, 229, 160, 0.05);
+  --forecast-border: rgba(0, 229, 160, 0.12);
+  --forecast-line:   rgba(0, 229, 160, 0.15);
+
+  /* Section dividers */
+  --divider-color: rgba(255, 255, 255, 0.05);
+
+  /* DatePicker popup */
+  --popup-bg:         #111111;
+  --popup-border:     rgba(255, 255, 255, 0.10);
+  --popup-footer-bg:  rgba(0, 0, 0, 0.20);
+  --popup-top-accent: linear-gradient(90deg, transparent, #00E5A0, transparent);
+
+  /* Login panel glows */
+  --panel-glow-left:  radial-gradient(ellipse 70% 60% at 20% 50%, rgba(0,229,160,0.12) 0%, transparent 65%);
+  --panel-glow-right: radial-gradient(ellipse 60% 50% at 80% 30%, rgba(0,229,160,0.08) 0%, transparent 60%);
+  --grid-pattern:     linear-gradient(rgba(255,255,255,0.15) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(255,255,255,0.15) 1px, transparent 1px);
+
+  /* Ghost button (Seg / Account) */
+  --ghost-btn-border:       rgba(255, 255, 255, 0.10);
+  --ghost-btn-border-hover: rgba(255, 255, 255, 0.22);
+
+  /* Control borders (property tabs, year selector) */
+  --control-border:   rgba(255, 255, 255, 0.08);
+  --control-divider:  rgba(255, 255, 255, 0.06);
+  --control-inner-border: rgba(255, 255, 255, 0.08);
+
+  /* Pagination dot */
+  --dot-inactive:       rgba(255, 255, 255, 0.18);
+  --dot-inactive-hover: rgba(255, 255, 255, 0.38);
+
+  /* RM action icon */
+  --rm-icon-bg:     rgba(0, 229, 160, 0.08);
+  --rm-icon-border: rgba(0, 229, 160, 0.12);
+  --rm-icon-stroke: #00E5A0;
+
+  /* NS user management extras */
+  --color-ns-purple: #9F7AEA;
+  --ns-purple-bg:    #130E29;
+  --ns-purple-border: #1E1040;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LIGHT THEME  (NovaStay Day — warm cream)
+   ═══════════════════════════════════════════════════════════════ */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --color-bg-primary:   #FFFFFF;
+  --color-bg-secondary: #F7F7F7;
+  --color-bg-tertiary:  #EEEEEE;
+  --color-bg-elevated:  #FFFFFF;
+  --color-bg-surface:   #FAFAFA;
+
+  --color-accent-primary:   #00B883;
+  --color-accent-secondary: #008F66;
+  --color-accent-glow:      rgba(0, 184, 131, 0.12);
+  --color-accent-dim:       rgba(0, 184, 131, 0.06);
+
+  --color-text-primary:   #1A1815;
+  --color-text-secondary: #5C5A52;
+  --color-text-tertiary:  #8A887E;
+  --color-text-accent:    #00B883;
+  --color-text-muted:     #B5B3A9;
+
+  --color-positive: #00B883;
+  --color-negative: #D63838;
+  --color-warning:  #D67E0E;
+  --color-info:     #2D7DD2;
+
+  --color-border-default: rgba(0, 0, 0, 0.10);
+  --color-border-subtle:  rgba(0, 0, 0, 0.05);
+  --color-border-accent:  rgba(0, 184, 131, 0.40);
+
+  --overlay-xs:    rgba(0, 0, 0, 0.02);
+  --overlay-sm:    rgba(0, 0, 0, 0.04);
+  --overlay-md:    rgba(0, 0, 0, 0.08);
+  --overlay-hover: rgba(0, 184, 131, 0.10);
+
+  --shadow-card:        0 1px 2px rgba(60,50,30,0.04), 0 2px 6px rgba(60,50,30,0.06);
+  --shadow-elevated:    0 4px 12px rgba(60,50,30,0.08), 0 12px 32px rgba(60,50,30,0.12);
+  --shadow-accent-glow: 0 2px 8px rgba(0,184,131,0.15), 0 0 0 1px rgba(0,184,131,0.10);
+  --shadow-hero-glow:   0 8px 32px rgba(0,184,131,0.08);
+
+  --gradient-cta:  linear-gradient(135deg, #00E5A0, #00B883);
+  --gradient-hero: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0,184,131,0.08) 0%, transparent 60%);
+
+  --bg-nav: rgba(252, 252, 248, 0.85);
+
+  --accent-badge-bg:     rgba(0, 184, 131, 0.08);
+  --accent-badge-border: rgba(0, 184, 131, 0.18);
+  --accent-btn-glow:     0 2px 8px rgba(0,184,131,0.20), 0 0 0 1px rgba(0,184,131,0.10);
+
+  --negative-bg:     rgba(214, 56, 56, 0.08);
+  --negative-border: rgba(214, 56, 56, 0.16);
+
+  --card-header-bg:         linear-gradient(145deg, rgba(0,184,131,0.06) 0%, rgba(0,184,131,0.02) 50%, transparent 80%);
+  --card-header-glow-color: rgba(0,184,131,0.15);
+
+  --forecast-bg:     rgba(0, 184, 131, 0.05);
+  --forecast-border: rgba(0, 184, 131, 0.12);
+  --forecast-line:   rgba(0, 184, 131, 0.14);
+
+  --divider-color: rgba(0, 0, 0, 0.06);
+
+  --popup-bg:         #F5F4ED;
+  --popup-border:     rgba(0, 0, 0, 0.10);
+  --popup-footer-bg:  rgba(0, 0, 0, 0.03);
+  --popup-top-accent: linear-gradient(90deg, transparent, #00B883, transparent);
+
+  --panel-glow-left:  radial-gradient(ellipse 70% 60% at 20% 50%, rgba(0,184,131,0.08) 0%, transparent 65%);
+  --panel-glow-right: radial-gradient(ellipse 60% 50% at 80% 30%, rgba(0,184,131,0.05) 0%, transparent 60%);
+  --grid-pattern:     linear-gradient(rgba(0,0,0,0.06) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(0,0,0,0.06) 1px, transparent 1px);
+
+  --ghost-btn-border:       rgba(0, 0, 0, 0.12);
+  --ghost-btn-border-hover: rgba(0, 0, 0, 0.22);
+
+  --control-border:       rgba(0, 0, 0, 0.10);
+  --control-divider:      rgba(0, 0, 0, 0.06);
+  --control-inner-border: rgba(0, 0, 0, 0.08);
+
+  --dot-inactive:       rgba(0, 0, 0, 0.18);
+  --dot-inactive-hover: rgba(0, 0, 0, 0.35);
+
+  --rm-icon-bg:     rgba(0, 184, 131, 0.08);
+  --rm-icon-border: rgba(0, 184, 131, 0.14);
+  --rm-icon-stroke: #00B883;
+
+  /* NS user management extras */
+  --color-ns-purple: #7C5CC6;
+  --ns-purple-bg:    #F0ECF9;
+  --ns-purple-border: #C9B8EE;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════════════════════ */
+@layer base {
+  * { box-sizing: border-box; }
+  html, body, #root { height: 100%; margin: 0; padding: 0; }
+
+  body {
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    font-family: 'DM Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--color-bg-secondary); }
+  ::-webkit-scrollbar-thumb { background: var(--overlay-md); border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-accent-primary); }
+
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent-primary);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   UTILITIES
+   ═══════════════════════════════════════════════════════════════ */
+@layer utilities {
+  .text-gradient-accent {
+    background: var(--gradient-cta);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .bg-glass {
+    background: var(--overlay-hover);
+    backdrop-filter: blur(8px);
+  }
+
+  .border-glass {
+    border: 1px solid var(--color-border-default);
+  }
+
+  .glow-accent {
+    box-shadow: var(--shadow-accent-glow);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LIGHT MODE — global overrides
+   ═══════════════════════════════════════════════════════════════ */
+
+/* text-white → primary dark text in light mode
+   Exception: elements inside mint-gradient buttons use text-bg-primary (not text-white) */
+[data-theme="light"] .text-white {
+  color: var(--color-text-primary);
+}
+
+/* hover:text-white in light mode → hover to primary text */
+[data-theme="light"] .hover\:text-white:hover {
+  color: var(--color-text-primary) !important;
+}
+
+/* Structural borders */
+[data-theme="light"] aside  { border-right-color:  var(--color-border-default) !important; }
+[data-theme="light"] header { border-bottom-color: var(--color-border-default) !important;
+                               background-color:    var(--color-bg-secondary)   !important; }
+
+/* Transition for theme switch */
+aside, header, main { transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease; }
