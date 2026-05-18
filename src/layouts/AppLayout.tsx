@@ -47,9 +47,12 @@ function TopProgressBar() {
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname()
-  const [collapsed,       setCollapsed]       = useState(false)
-  const [dates,           setDates]           = useState({ otb: '', vsOtb: '', fcst: '', hk: '' })
-  const [adminDropOpen,   setAdminDropOpen]   = useState(false)
+  const [collapsed,     setCollapsed]     = useState(false)
+  const [otbDate,       setOtbDate]       = useState<string>('')
+  const [vsOtbDate,     setVsOtbDate]     = useState<string>('')
+  const [fcstDate,      setFcstDate]      = useState<string>('')
+  const [hkDate,        setHkDate]        = useState<string>('')
+  const [adminDropOpen, setAdminDropOpen] = useState(false)
   const adminDropRef = useRef<HTMLDivElement>(null)
 
   const { profile }                           = useAuth()
@@ -58,33 +61,53 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   const isAdmin = profile?.role === 'super_admin' || profile?.role === 'admin'
 
-  // r02_otb update_date 목록 조회
+  // get_otb_dates RPC로 update_date 목록 조회
   const { data: otbDates = [] } = useQuery<string[]>({
-    queryKey: ['r02_otb_dates', hotelId],
+    queryKey: ['otb_dates', hotelId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from('r02_otb')
-        .select('update_date')
-        .eq('hotel_id', hotelId)
-        .order('update_date', { ascending: false })
+        .rpc('get_otb_dates', { p_hotel_id: hotelId })
       if (error) throw error
-      return [...new Set(data?.map((d: any) => d.update_date) ?? [])] as string[]
+      return (data ?? []) as string[]
     },
     enabled: !!hotelId,
     staleTime: 5 * 60 * 1000,
   })
 
-  // OTB 날짜: otbDates 로드 후 가장 최근 날짜로 자동 설정
+  // OTB: otbDates 로드 후 가장 최근 날짜로 자동 설정
   useEffect(() => {
-    if (otbDates.length > 0 && !dates.otb) {
-      setDates(prev => ({ ...prev, otb: otbDates[0] }))
+    if (otbDates.length === 0) return
+    if (!otbDate) {
+      setOtbDate(otbDates[0])
     }
   }, [otbDates])
 
-  // hotelId 변경 시 OTB 날짜 재설정
+  // VS OTB: OTB 날짜 변경 시 자동 재설정
   useEffect(() => {
-    setDates(prev => ({ ...prev, otb: '' }))
+    if (!otbDate || otbDates.length === 0) return
+    const prevDates = otbDates.filter(d => d < otbDate)
+    if (prevDates.length === 0) {
+      setVsOtbDate('')
+      return
+    }
+    const closest = prevDates[0]
+    if (!vsOtbDate || vsOtbDate >= otbDate) {
+      setVsOtbDate(closest)
+    }
+  }, [otbDate, otbDates])
+
+  // hotelId 변경 시 OTB / VS OTB 초기화 → 재조회 후 자동 설정
+  useEffect(() => {
+    setOtbDate('')
+    setVsOtbDate('')
   }, [hotelId])
+
+  // FCST / HK 초기값: 오늘
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    setFcstDate(today)
+    setHkDate(today)
+  }, [])
 
   // 드롭다운 외부 클릭 시 닫기
   useEffect(() => {
@@ -96,14 +119,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
   }, [])
-
-  useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10)
-    setDates(prev => ({ ...prev, vsOtb: today, fcst: today, hk: today }))
-  }, [])
-
-  const set = (key: keyof typeof dates) => (v: string) =>
-    setDates(prev => ({ ...prev, [key]: v }))
 
   return (
     <div className="flex h-screen bg-bg-primary overflow-hidden">
@@ -122,10 +137,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 <span className="text-xs font-semibold text-accent-primary tracking-wide">Date</span>
               </div>
               <div className="w-px h-4" style={{ background: 'var(--color-border-default)' }} />
-              <DatePicker label="OTB"    value={dates.otb}   onChange={set('otb')}   accent availableDates={otbDates} />
-              <DatePicker label="vs OTB" value={dates.vsOtb} onChange={set('vsOtb')} />
-              <DatePicker label="FCST"   value={dates.fcst}  onChange={set('fcst')}  />
-              <DatePicker label="HK"     value={dates.hk}    onChange={set('hk')}    />
+              <DatePicker label="OTB"    value={otbDate}   onChange={setOtbDate}   accent availableDates={otbDates} />
+              <DatePicker label="vs OTB" value={vsOtbDate} onChange={setVsOtbDate} availableDates={otbDates.filter(d => d < otbDate)} />
+              <DatePicker label="FCST"   value={fcstDate}  onChange={setFcstDate}  />
+              <DatePicker label="HK"     value={hkDate}    onChange={setHkDate}    />
             </div>
 
             <div className="flex-1" />
