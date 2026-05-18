@@ -437,9 +437,10 @@ function BulkModal({
             body:    JSON.stringify({
               type:           currentTab,
               hotel_id:       hotelId,
-              update_date:    bulkUpdateDate,                  // 매 청크 전달 (row 데이터)
-              do_delete:      i === 0,                         // 첫 번째 청크에만 DELETE
-              business_dates: i === 0 ? allBusinessDates : [], // Actual DELETE 트리거
+              update_date:    bulkUpdateDate,
+              do_delete:      i === 0,
+              is_last:        i + CHUNK >= transformedRows.length, // 마지막 청크 여부
+              business_dates: i === 0 ? allBusinessDates : [],
               rows:           chunk,
             }),
           })
@@ -772,7 +773,18 @@ export default function DataUploadPage() {
             errors:       errs,
           },
         }])
-        if (tab === 'otb') otbUploaded = true
+        if (tab === 'otb') {
+          otbUploaded = true
+          // 집계 테이블 갱신
+          try {
+            const { error: refreshError } = await (supabase as any)
+              .rpc('a01_refresh_otb_daily', { p_hotel_id: hotelId, p_update_date: date })
+            if (refreshError) console.error('집계 갱신 오류:', refreshError)
+            else console.log('집계 갱신 완료')
+          } catch (e) {
+            console.error('집계 갱신 예외:', e)
+          }
+        }
 
       } catch (e: any) {
         setFileResults(prev => [...prev, { fileName: file.name, result: { type: 'error', errors: [e.message ?? '알 수 없는 오류'] } }])

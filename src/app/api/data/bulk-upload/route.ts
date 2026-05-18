@@ -8,7 +8,7 @@ const adminClient = createClient(
 
 export async function POST(req: NextRequest) {
   try {
-    const { type, hotel_id, update_date, do_delete, business_dates, rows } = await req.json()
+    const { type, hotel_id, update_date, do_delete, is_last, business_dates, rows } = await req.json()
 
     if (!hotel_id || !rows?.length) {
       return NextResponse.json({ error: '필수 값 누락' }, { status: 400 })
@@ -78,6 +78,17 @@ export async function POST(req: NextRequest) {
           throw new Error(error?.message ?? data?.error ?? 'RPC 오류')
         }
         count += data.count
+      }
+
+      // 3. 마지막 청크에서 집계 테이블 갱신
+      if (is_last && update_date) {
+        try {
+          const { error: refreshError } = await adminClient
+            .rpc('a01_refresh_otb_daily', { p_hotel_id: hotel_id, p_update_date: update_date })
+          if (refreshError) console.error('집계 갱신 오류:', refreshError)
+        } catch (e) {
+          console.error('집계 갱신 예외:', e)
+        }
       }
     }
 
