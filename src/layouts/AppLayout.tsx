@@ -3,10 +3,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { Building2, CalendarDays, ChevronDown, Check } from 'lucide-react'
 import { usePathname } from 'next/navigation'
+import { useQuery } from '@tanstack/react-query'
 import Sidebar from '@/components/Sidebar'
 import DatePicker from '@/components/DatePicker'
 import { useAuth } from '@/contexts/AuthContext'
 import { useHotel } from '@/contexts/HotelContext'
+import { supabase } from '@/lib/supabase'
 import type { ReactNode } from 'react'
 
 
@@ -52,8 +54,37 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   const { profile }                           = useAuth()
   const { hotels, currentHotel, switchHotel } = useHotel()
+  const hotelId = currentHotel?.id ?? ''
 
   const isAdmin = profile?.role === 'super_admin' || profile?.role === 'admin'
+
+  // r02_otb update_date 목록 조회
+  const { data: otbDates = [] } = useQuery<string[]>({
+    queryKey: ['r02_otb_dates', hotelId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('r02_otb')
+        .select('update_date')
+        .eq('hotel_id', hotelId)
+        .order('update_date', { ascending: false })
+      if (error) throw error
+      return [...new Set(data?.map((d: any) => d.update_date) ?? [])] as string[]
+    },
+    enabled: !!hotelId,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // OTB 날짜: otbDates 로드 후 가장 최근 날짜로 자동 설정
+  useEffect(() => {
+    if (otbDates.length > 0 && !dates.otb) {
+      setDates(prev => ({ ...prev, otb: otbDates[0] }))
+    }
+  }, [otbDates])
+
+  // hotelId 변경 시 OTB 날짜 재설정
+  useEffect(() => {
+    setDates(prev => ({ ...prev, otb: '' }))
+  }, [hotelId])
 
   // 드롭다운 외부 클릭 시 닫기
   useEffect(() => {
@@ -68,7 +99,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const today = new Date().toISOString().slice(0, 10)
-    setDates({ otb: today, vsOtb: today, fcst: today, hk: today })
+    setDates(prev => ({ ...prev, vsOtb: today, fcst: today, hk: today }))
   }, [])
 
   const set = (key: keyof typeof dates) => (v: string) =>
@@ -91,7 +122,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 <span className="text-xs font-semibold text-accent-primary tracking-wide">Date</span>
               </div>
               <div className="w-px h-4" style={{ background: 'var(--color-border-default)' }} />
-              <DatePicker label="OTB"    value={dates.otb}   onChange={set('otb')}   accent />
+              <DatePicker label="OTB"    value={dates.otb}   onChange={set('otb')}   accent availableDates={otbDates} />
               <DatePicker label="vs OTB" value={dates.vsOtb} onChange={set('vsOtb')} />
               <DatePicker label="FCST"   value={dates.fcst}  onChange={set('fcst')}  />
               <DatePicker label="HK"     value={dates.hk}    onChange={set('hk')}    />

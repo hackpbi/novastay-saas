@@ -4,10 +4,11 @@ import { useState, useRef, useEffect } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 
 export interface DatePickerProps {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  accent?: boolean
+  label:           string
+  value:           string
+  onChange:        (v: string) => void
+  accent?:         boolean
+  availableDates?: string[]
 }
 
 export interface FormDatePickerProps {
@@ -36,7 +37,7 @@ function buildGrid(year: number, month: number): (number | null)[] {
 
 // ─── DatePicker ────────────────────────────────────────────────────────────────
 
-export default function DatePicker({ label, value, onChange, accent = false }: DatePickerProps) {
+export default function DatePicker({ label, value, onChange, accent = false, availableDates }: DatePickerProps) {
   const [todayStr,  setTodayStr]  = useState('')
   const [open,      setOpen]      = useState(false)
   const [viewYear,  setViewYear]  = useState(() => new Date().getFullYear())
@@ -99,7 +100,15 @@ export default function DatePicker({ label, value, onChange, accent = false }: D
     if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0) }
     else setViewMonth(m => m + 1)
   }
-  function selectDay(day: number) { onChange(toYMD(viewYear, viewMonth, day)); setOpen(false) }
+  function selectDay(day: number) {
+    const dateStr = toYMD(viewYear, viewMonth, day)
+    if (availableDates && availableDates.length > 0 && !availableDates.includes(dateStr)) return
+    onChange(dateStr)
+    setOpen(false)
+  }
+
+  const isDisabled = (dateStr: string) =>
+    !!availableDates && availableDates.length > 0 && !availableDates.includes(dateStr)
 
   const grid    = buildGrid(viewYear, viewMonth)
   const display = value ? value.slice(2).replace(/-/g, '.') : '——.——.——'
@@ -219,40 +228,29 @@ export default function DatePicker({ label, value, onChange, accent = false }: D
               const dateStr    = toYMD(viewYear, viewMonth, day)
               const isSelected = dateStr === value
               const isToday    = dateStr === todayStr
+              const disabled   = isDisabled(dateStr)
               const col        = i % 7
 
               return (
                 <button
                   key={i}
                   onClick={() => selectDay(day)}
+                  disabled={disabled}
                   className="w-8 h-8 mx-auto rounded-lg text-xs font-medium flex items-center justify-center transition-all duration-100"
                   style={
-                    isSelected
-                      ? {
-                          background: 'var(--gradient-cta)',
-                          boxShadow:  'var(--accent-btn-glow)',
-                          color:      '#0A0A0A',
-                          fontWeight: 700,
-                        }
-                      : isToday
-                        ? {
-                            background: 'var(--accent-badge-bg)',
-                            border:     '1px solid var(--accent-badge-border)',
-                            color:      'var(--color-accent-primary)',
-                          }
-                        : {
-                            color: col === 0
-                              ? 'var(--color-negative)'
-                              : col === 6
-                                ? 'var(--color-info)'
-                                : 'var(--color-text-secondary)',
-                          }
+                    disabled
+                      ? { opacity: 0.2, cursor: 'not-allowed', color: 'var(--color-text-muted)' }
+                      : isSelected
+                        ? { background: 'var(--gradient-cta)', boxShadow: 'var(--accent-btn-glow)', color: '#0A0A0A', fontWeight: 700 }
+                        : isToday
+                          ? { background: 'var(--accent-badge-bg)', border: '1px solid var(--accent-badge-border)', color: 'var(--color-accent-primary)' }
+                          : { color: col === 0 ? 'var(--color-negative)' : col === 6 ? 'var(--color-info)' : 'var(--color-text-secondary)' }
                   }
                   onMouseEnter={e => {
-                    if (!isSelected) e.currentTarget.style.background = 'var(--overlay-hover)'
+                    if (!isSelected && !disabled) e.currentTarget.style.background = 'var(--overlay-hover)'
                   }}
                   onMouseLeave={e => {
-                    if (!isSelected) e.currentTarget.style.background = isToday ? 'var(--accent-badge-bg)' : 'transparent'
+                    if (!isSelected && !disabled) e.currentTarget.style.background = isToday ? 'var(--accent-badge-bg)' : 'transparent'
                   }}
                 >
                   {day}

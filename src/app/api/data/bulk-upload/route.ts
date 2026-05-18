@@ -53,6 +53,19 @@ export async function POST(req: NextRequest) {
         count += data.count
       }
 
+      // 4. 마지막 청크에서 집계 테이블 갱신
+      if (is_last && business_dates?.length > 0) {
+        try {
+          const { error: refreshError } = await adminClient.rpc('a02_refresh_actual_daily', {
+            p_hotel_id: hotel_id,
+            p_dates:    business_dates,
+          })
+          if (refreshError) console.error('Actual 집계 갱신 오류:', refreshError)
+        } catch (e) {
+          console.error('Actual 집계 갱신 예외:', e)
+        }
+      }
+
     } else {
       // ── OTB ─────────────────────────────────────────────────────────────────
 

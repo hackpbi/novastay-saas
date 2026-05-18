@@ -735,6 +735,16 @@ export default function DataUploadPage() {
             }
           }
 
+          // 4. 집계 테이블 갱신
+          try {
+            await (supabase as any).rpc('a02_refresh_actual_daily', {
+              p_hotel_id: hotelId,
+              p_dates:    businessDates,
+            })
+          } catch (err) {
+            console.error('Actual 집계 갱신 오류:', err)
+          }
+
         } else {
           // ── OTB ─────────────────────────────────────────────────────────────
 
