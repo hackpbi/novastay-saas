@@ -138,7 +138,7 @@ export default function LoginPage() {
       {isLoading && <LoadingScreen progress={loadingProgress} message={loadingMessage} />}
 
       {/* ── Left brand panel ── */}
-      <div className="hidden lg:flex lg:w-[52%] relative flex-col justify-between p-12 overflow-hidden">
+      <div className="hidden lg:flex lg:w-[52%] relative flex-col justify-between p-12 overflow-hidden items-center text-center">
 
         {/* Panel glow */}
         <div
@@ -175,8 +175,8 @@ export default function LoginPage() {
         </div>
 
         {/* Main copy */}
-        <div className="relative space-y-10">
-          <div className="space-y-4">
+        <div className="relative space-y-10 w-full">
+          <div className="space-y-4 flex flex-col items-center">
             <div
               className="inline-flex items-center gap-2 rounded-full px-3 py-1"
               style={{ border: '1px solid var(--accent-badge-border)', background: 'var(--accent-badge-bg)' }}
@@ -185,13 +185,13 @@ export default function LoginPage() {
               <span className="text-xs font-medium text-accent-primary tracking-wide">Revenue Management System</span>
             </div>
 
-            <h1 className="text-4xl font-bold leading-[1.15] tracking-tight" style={{ color: 'var(--color-text-primary)' }}>
+            <h1 className="text-4xl font-bold leading-[1.15] tracking-tight text-center" style={{ color: 'var(--color-text-primary)' }}>
               숙박 수익을{' '}
               <span className="text-gradient-accent">최대화</span>하는
               <br />
               스마트 RMS 플랫폼
             </h1>
-            <p className="text-base text-brand-muted leading-relaxed max-w-sm">
+            <p className="text-base text-brand-muted leading-relaxed text-center">
               AI 기반 요금 최적화와 실시간 시장 분석으로
               <br />
               경쟁력 있는 가격 전략을 자동으로 수립합니다.
@@ -199,7 +199,7 @@ export default function LoginPage() {
           </div>
 
           {/* Feature list */}
-          <div className="space-y-3">
+          <div className="space-y-3 flex flex-col items-center w-full">
             {[
               {
                 icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>,
@@ -217,7 +217,7 @@ export default function LoginPage() {
                 desc:  'OTA·직판 채널 통합 대시보드로 수익 극대화',
               },
             ].map((item) => (
-              <div key={item.title} className="flex items-start gap-3.5">
+              <div key={item.title} className="flex items-start gap-3.5 max-w-xs w-full">
                 <div
                   className="mt-0.5 shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-accent-primary"
                   style={{ background: 'var(--accent-badge-bg)', border: '1px solid var(--accent-badge-border)' }}
@@ -234,8 +234,8 @@ export default function LoginPage() {
         </div>
 
         {/* Stats */}
-        <div className="relative">
-          <div className="grid grid-cols-3 gap-4">
+        <div className="relative w-full flex justify-center">
+          <div className="grid grid-cols-3 gap-4 max-w-sm w-full">
             {[
               { value: '32%',    label: '평균 수익 증가' },
               { value: '2,400+', label: '연동 숙박 시설' },
@@ -243,7 +243,7 @@ export default function LoginPage() {
             ].map((stat) => (
               <div
                 key={stat.label}
-                className="rounded-xl bg-bg-secondary px-4 py-3"
+                className="rounded-xl bg-bg-secondary px-4 py-3 text-center"
                 style={{ border: '1px solid var(--color-border-default)' }}
               >
                 <p className="font-mono text-lg font-semibold text-accent-primary">{stat.value}</p>
