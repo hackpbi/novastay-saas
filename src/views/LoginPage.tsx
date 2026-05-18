@@ -278,6 +278,13 @@ export default function LoginPage() {
         <div className="relative w-full max-w-[380px] animate-slide-up">
           {/* Heading */}
           <div className="mb-7 text-center">
+            {/* Logo */}
+            <div className="flex items-center justify-center gap-2.5 mb-5">
+              <img src="/zenith-logo-only.png" alt="ZenithOptima" style={{ height: 32, objectFit: 'contain' }} />
+              <span className="font-bold text-lg tracking-wide" style={{ color: 'var(--color-text-primary)' }}>
+                Zenith<span style={{ color: 'var(--color-accent-primary)' }}>Optima</span>
+              </span>
+            </div>
             {mode === 'login' ? (
               <>
                 <h2 className="text-2xl font-semibold mb-1" style={{ color: 'var(--color-text-primary)' }}>다시 오셨군요</h2>

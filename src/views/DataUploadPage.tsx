@@ -419,12 +419,16 @@ function BulkModal({
         const totalRows = transformedRows.length
         setCurrentTotal(totalRows)
 
-        const CHUNK   = 10000
+        const CHUNK   = 3000
         let   success = 0
         const errors: string[] = []
 
+        // null 값 제거로 payload 크기 축소
+        const stripNulls = (row: Record<string, any>) =>
+          Object.fromEntries(Object.entries(row).filter(([, v]) => v !== null && v !== undefined))
+
         for (let i = 0; i < transformedRows.length; i += CHUNK) {
-          const chunk = transformedRows.slice(i, i + CHUNK)
+          const chunk = transformedRows.slice(i, i + CHUNK).map(stripNulls)
           setCurrentFileProgress(Math.round((i / totalRows) * 100))
 
           const res = await fetch('/api/data/bulk-upload', {
