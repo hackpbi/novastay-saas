@@ -239,7 +239,7 @@ export default function DatePicker({ label, value, onChange, accent = false, ava
                   className="w-8 h-8 mx-auto rounded-lg text-xs font-medium flex items-center justify-center transition-all duration-100"
                   style={
                     disabled
-                      ? { opacity: 0.2, cursor: 'not-allowed', color: 'var(--color-text-muted)' }
+                      ? { opacity: 0.2, cursor: 'not-allowed', pointerEvents: 'none', color: 'var(--color-text-muted)' }
                       : isSelected
                         ? { background: 'var(--gradient-cta)', boxShadow: 'var(--accent-btn-glow)', color: '#0A0A0A', fontWeight: 700 }
                         : isToday
@@ -268,8 +268,15 @@ export default function DatePicker({ label, value, onChange, accent = false, ava
             }}
           >
             <button
-              onClick={() => { onChange(todayStr); setOpen(false) }}
-              className="text-[11px] font-semibold text-accent-primary hover:text-accent-secondary transition-colors duration-150"
+              onClick={() => {
+                if (!isDisabled(todayStr)) { onChange(todayStr); setOpen(false) }
+              }}
+              className="text-[11px] font-semibold transition-colors duration-150"
+              style={{
+                color: isDisabled(todayStr) ? 'var(--color-text-muted)' : 'var(--color-accent-primary)',
+                opacity: isDisabled(todayStr) ? 0.4 : 1,
+                cursor: isDisabled(todayStr) ? 'not-allowed' : 'pointer',
+              }}
             >
               오늘
             </button>
