@@ -787,8 +787,10 @@ export default function DataUploadPage() {
           otbUploaded = true
           // 집계 테이블 갱신
           try {
-            const { error: refreshError } = await (supabase as any)
+            console.log('a01_refresh_otb_daily 호출:', { hotelId, otbDate: date })
+            const { data: refreshData, error: refreshError } = await (supabase as any)
               .rpc('a01_refresh_otb_daily', { p_hotel_id: hotelId, p_update_date: date })
+            console.log('a01_refresh_otb_daily 결과:', refreshData, 'error:', refreshError)
             if (refreshError) console.error('집계 갱신 오류:', refreshError)
             else console.log('집계 갱신 완료')
           } catch (e) {

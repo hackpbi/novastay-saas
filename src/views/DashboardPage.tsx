@@ -1,7 +1,12 @@
 ﻿'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ArrowUp, AlignJustify, User, ChevronLeft, ChevronRight, ArrowLeftRight } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { usePickupData } from '@/hooks/usePickupData'
+import { useOtbVsActual } from '@/hooks/useOtbVsActual'
+import { useHotel } from '@/contexts/HotelContext'
+import { supabase } from '@/lib/supabase'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -15,6 +20,7 @@ interface MetricData {
 }
 
 interface MonthData {
+  year:  number
   month: number
   occ: MetricData
   adr: MetricData
@@ -25,11 +31,18 @@ interface MonthData {
   rmAction: string | null
 }
 
+interface MonthYoyStats {
+  varNightsPct:  number | null
+  varRevenuePct: number | null
+  varAdr:        number
+  byGroup: { group: string; varPct: number | null }[]
+}
+
 // ─── Mock Data ─────────────────────────────────────────────────────────────────
 
 const MONTHS: MonthData[] = [
   {
-    month: 4,
+    year: 2025, month: 4,
     occ: { current: 60.2, unit: '%', yoy: -4.6, yoyUnit: '%', fit: -1,  grp: -29 },
     adr: { current: 129,  unit: 'k', yoy: -1,   yoyUnit: 'k', fit:  0,  grp:  -9 },
     rev: { current: 167.4,unit: 'M', yoy: -13.6,yoyUnit: 'M', fit: -1,  grp: -35 },
@@ -38,7 +51,7 @@ const MONTHS: MonthData[] = [
     pu: 6, rmAction: null,
   },
   {
-    month: 5,
+    year: 2025, month: 5,
     occ: { current: 34.3, unit: '%', yoy: -3.4, yoyUnit: '%', fit:  27, grp: -57 },
     adr: { current: 152,  unit: 'k', yoy:  3,   yoyUnit: 'k', fit:  -6, grp:  -6 },
     rev: { current: 116.7,unit: 'M', yoy: -9.6, yoyUnit: 'M', fit:  20, grp: -59 },
@@ -47,7 +60,7 @@ const MONTHS: MonthData[] = [
     pu: 3, rmAction: null,
   },
   {
-    month: 6,
+    year: 2025, month: 6,
     occ: { current: 18.8, unit: '%', yoy:  8.7, yoyUnit: '%', fit:  96, grp:  77 },
     adr: { current: 119,  unit: 'k', yoy: -15,  yoyUnit: 'k', fit:  -1, grp: -23 },
     rev: { current: 48.5, unit: 'M', yoy:  19.0,yoyUnit: 'M', fit:  94, grp:  37 },
@@ -56,7 +69,7 @@ const MONTHS: MonthData[] = [
     pu: 7, rmAction: null,
   },
   {
-    month: 7,
+    year: 2025, month: 7,
     occ: { current: 12.1, unit: '%', yoy:  15.3,yoyUnit: '%', fit:  42, grp: -12 },
     adr: { current: 145,  unit: 'k', yoy:  8,   yoyUnit: 'k', fit:   5, grp: -15 },
     rev: { current: 31.2, unit: 'M', yoy:  24.5,yoyUnit: 'M', fit:  38, grp: -18 },
@@ -65,7 +78,7 @@ const MONTHS: MonthData[] = [
     pu: 12, rmAction: '성수기 요금 전략을 검토하세요.',
   },
   {
-    month: 8,
+    year: 2025, month: 8,
     occ: { current: 8.4,  unit: '%', yoy:  22.1,yoyUnit: '%', fit:  67, grp:  31 },
     adr: { current: 168,  unit: 'k', yoy:  12,  yoyUnit: 'k', fit:   8, grp:  -7 },
     rev: { current: 22.8, unit: 'M', yoy:  31.2,yoyUnit: 'M', fit:  71, grp:  -9 },
@@ -74,7 +87,7 @@ const MONTHS: MonthData[] = [
     pu: 18, rmAction: null,
   },
   {
-    month: 9,
+    year: 2025, month: 9,
     occ: { current: 4.2,  unit: '%', yoy:  -2.8,yoyUnit: '%', fit:  15, grp: -44 },
     adr: { current: 135,  unit: 'k', yoy:  -5,  yoyUnit: 'k', fit:  -3, grp: -18 },
     rev: { current: 8.9,  unit: 'M', yoy:  -4.1,yoyUnit: 'M', fit:  22, grp: -51 },
@@ -83,6 +96,32 @@ const MONTHS: MonthData[] = [
     pu: 24, rmAction: null,
   },
 ]
+
+interface MonthStats {
+  occ:       number
+  adr:       number
+  rev:       number
+  otbNights: number
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────────
+
+function formatCurrency(n: number): string {
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`
+  if (n >= 1_000_000)     return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000)         return `${(n / 1_000).toFixed(0)}k`
+  return n.toLocaleString('ko-KR')
+}
+
+function formatPu(n: number, type: 'nights' | 'currency'): string {
+  const sign = n >= 0 ? '+' : ''
+  if (type === 'currency') {
+    if (Math.abs(n) >= 1_000_000) return `${sign}${(n / 1_000_000).toFixed(1)}M`
+    if (Math.abs(n) >= 1_000)     return `${sign}${(n / 1_000).toFixed(0)}k`
+    return `${sign}${n.toLocaleString('ko-KR')}`
+  }
+  return `${sign}${n.toLocaleString('ko-KR')}`
+}
 
 // ─── Sub-components ─────────────────────────────────────────────────────────────
 
@@ -115,7 +154,15 @@ function SubMetric({ label, value }: { label: string; value: number }) {
   )
 }
 
-function MetricRow({ label, value, metric }: { label: string; value: string; metric: MetricData }) {
+function MetricRow({ label, value, metric, subValue, tooltip, yoyOverride, yoyLoading }: {
+  label:       string
+  value:       string
+  metric:      MetricData
+  subValue?:   string
+  tooltip?:    string
+  yoyOverride?: { value: number | null; unit: string; fitPct?: number | null; grpPct?: number | null; showFitGrp?: boolean }
+  yoyLoading?: boolean
+}) {
   return (
     <div
       className="flex items-center justify-between py-3 last:border-0"
@@ -125,20 +172,44 @@ function MetricRow({ label, value, metric }: { label: string; value: string; met
         <span className="text-[11px] font-semibold text-brand-dimmed tracking-widest w-8 shrink-0">
           {label}
         </span>
-        <span
-          className="font-mono font-bold leading-none"
-          style={{ fontSize: 26, color: 'var(--color-text-primary)' }}
-        >
-          {value}
-        </span>
+        <div className="flex flex-col" title={tooltip}>
+          <span
+            className="font-mono font-bold leading-none"
+            style={{ fontSize: 26, color: 'var(--color-text-primary)', cursor: tooltip ? 'help' : 'default' }}
+          >
+            {value}
+          </span>
+          {subValue && (
+            <span className="text-[10px] text-brand-dimmed mt-0.5">{subValue}</span>
+          )}
+        </div>
       </div>
       <div className="text-right space-y-1 shrink-0 ml-2">
         <p className="text-[10px] text-brand-dimmed">동기간대비</p>
-        <ChangeTag value={metric.yoy} unit={metric.yoyUnit} />
-        <div className="flex items-center gap-2 justify-end">
-          <SubMetric label="FIT" value={metric.fit} />
-          <SubMetric label="GRP" value={metric.grp} />
-        </div>
+        {yoyLoading ? (
+          <span className="text-[11px] text-brand-dimmed">-</span>
+        ) : yoyOverride ? (
+          <>
+            {yoyOverride.value !== null
+              ? <ChangeTag value={yoyOverride.value} unit={yoyOverride.unit} />
+              : <span className="text-[11px] text-brand-dimmed">-</span>
+            }
+            {yoyOverride.showFitGrp && (
+              <div className="flex items-center gap-2 justify-end">
+                <SubMetric label="FIT" value={Math.round(yoyOverride.fitPct ?? 0)} />
+                <SubMetric label="GRP" value={Math.round(yoyOverride.grpPct ?? 0)} />
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <ChangeTag value={metric.yoy} unit={metric.yoyUnit} />
+            <div className="flex items-center gap-2 justify-end">
+              <SubMetric label="FIT" value={metric.fit} />
+              <SubMetric label="GRP" value={metric.grp} />
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -146,8 +217,22 @@ function MetricRow({ label, value, metric }: { label: string; value: string; met
 
 // ─── Month Card ─────────────────────────────────────────────────────────────────
 
-function MonthCard({ data }: { data: MonthData }) {
-  const { month, occ, adr, rev, forecast, goal, pu, rmAction } = data
+function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading }: {
+  data:       MonthData
+  stats:      MonthStats
+  loading:    boolean
+  roomCount:  number
+  yoyStats:   MonthYoyStats
+  yoyLoading: boolean
+}) {
+  const { year, month, occ, adr, rev, forecast, goal, pu, rmAction } = data
+
+  const occValue = loading ? '-' : roomCount === 0 ? '-' : `${stats.occ.toFixed(1)}%`
+  const adrValue = loading ? '-' : formatCurrency(stats.adr)
+  const revValue = loading ? '-' : formatCurrency(stats.rev)
+
+  const fitPct = yoyStats.byGroup.find(g => g.group === 'fit')?.varPct ?? null
+  const grpPct = yoyStats.byGroup.find(g => g.group === 'group')?.varPct ?? null
 
   const otbBarPct  = Math.min((goal.otb / goal.pct) * 100, 100)
   const fcBarExtra = Math.max(0, Math.min(((goal.fc - goal.otb) / goal.pct) * 100, 100 - otbBarPct))
@@ -171,16 +256,54 @@ function MonthCard({ data }: { data: MonthData }) {
             {month}
           </span>
           <span className="text-lg font-medium text-brand-muted mb-1.5">월</span>
-          <span className="text-xs font-medium text-brand-dimmed mb-2 ml-0.5">2025</span>
+          <span className="text-xs font-medium text-brand-dimmed mb-2 ml-0.5">{year}</span>
         </div>
       </div>
 
       {/* ── OCC / ADR / REV ── */}
       <div className="px-5 pb-1">
-        <MetricRow label="OCC" value={`${occ.current}%`}            metric={occ} />
-        <MetricRow label="ADR" value={`${adr.current}${adr.unit}`}  metric={adr} />
-        <MetricRow label="REV" value={`${rev.current}${rev.unit}`}  metric={rev} />
+        <MetricRow
+          label="OCC"
+          value={occValue}
+          metric={occ}
+          subValue={loading ? undefined : `${stats.otbNights.toLocaleString('ko-KR')} nights`}
+          yoyOverride={{
+            value:      yoyStats.varNightsPct !== null ? Math.round(yoyStats.varNightsPct * 10) / 10 : null,
+            unit:       '%',
+            fitPct,
+            grpPct,
+            showFitGrp: true,
+          }}
+          yoyLoading={yoyLoading}
+        />
+        <MetricRow
+          label="ADR"
+          value={adrValue}
+          metric={adr}
+          tooltip={loading ? undefined : stats.adr.toLocaleString('ko-KR')}
+          yoyOverride={{
+            value:      Math.round(yoyStats.varAdr / 1000),
+            unit:       'k',
+            showFitGrp: false,
+          }}
+          yoyLoading={yoyLoading}
+        />
+        <MetricRow
+          label="REV"
+          value={revValue}
+          metric={rev}
+          tooltip={loading ? undefined : stats.rev.toLocaleString('ko-KR')}
+          yoyOverride={{
+            value:      yoyStats.varRevenuePct !== null ? Math.round(yoyStats.varRevenuePct * 10) / 10 : null,
+            unit:       '%',
+            fitPct,
+            grpPct,
+            showFitGrp: true,
+          }}
+          yoyLoading={yoyLoading}
+        />
       </div>
+
 
       {/* ── Forecasting ── */}
       <div
@@ -328,30 +451,130 @@ function MonthCard({ data }: { data: MonthData }) {
 
 // ─── Dashboard Page ─────────────────────────────────────────────────────────────
 
-const PAGE_SIZE   = 3
-const TOTAL_PAGES = Math.ceil(MONTHS.length / PAGE_SIZE)
+const PAGE_SIZE = 3
 
 export default function DashboardPage() {
   const [page, setPage] = useState(0)
 
-  const visibleMonths = MONTHS.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
-  const startMonth    = visibleMonths[0]?.month ?? 1
-  const endMonth      = visibleMonths[visibleMonths.length - 1]?.month ?? PAGE_SIZE
+  const { currentHotel } = useHotel()
+  const hotelId = currentHotel?.id ?? ''
+
+  const { data: pickupData, loading: pickupLoading, otbDate } = usePickupData()
+  const { data: otbVsActualData, loading: yoyLoading } = useOtbVsActual()
+
+  function getMonthYoyStats(year: number, month: number): MonthYoyStats {
+    const monthData = otbVsActualData.filter(row => {
+      const d = new Date(row.business_date)
+      return d.getFullYear() === year && d.getMonth() + 1 === month
+    })
+
+    const totalOtbNights  = monthData.filter(r => r.segmentation !== 'HOU').reduce((sum, r) => sum + (r.otb_nights  ?? 0), 0)
+    const totalActNights  = monthData.filter(r => r.segmentation !== 'HOU').reduce((sum, r) => sum + (r.act_nights  ?? 0), 0)
+    const totalOtbRevenue = monthData.reduce((sum, r) => sum + (r.otb_revenue ?? 0), 0)
+    const totalActRevenue = monthData.reduce((sum, r) => sum + (r.act_revenue ?? 0), 0)
+
+    const varNightsPct  = totalActNights  > 0 ? ((totalOtbNights  - totalActNights)  / totalActNights  * 100) : null
+    const varRevenuePct = totalActRevenue > 0 ? ((totalOtbRevenue - totalActRevenue) / totalActRevenue * 100) : null
+
+    const otbAdr = totalOtbNights > 0 ? Math.round(totalOtbRevenue / totalOtbNights) : 0
+    const actAdr = totalActNights > 0 ? Math.round(totalActRevenue / totalActNights) : 0
+    const varAdr = otbAdr - actAdr
+
+    const byGroup = ['fit', 'group'].map(grp => {
+      const grpData = monthData.filter(r => r.sorting2 === grp)
+      const otbN = grpData.filter(r => r.segmentation !== 'HOU').reduce((sum, r) => sum + (r.otb_nights ?? 0), 0)
+      const actN = grpData.filter(r => r.segmentation !== 'HOU').reduce((sum, r) => sum + (r.act_nights ?? 0), 0)
+      const varPct = actN > 0 ? ((otbN - actN) / actN * 100) : null
+      return { group: grp, varPct }
+    })
+
+    return { varNightsPct, varRevenuePct, varAdr, byGroup }
+  }
+
+  const { data: hotelDetail } = useQuery({
+    queryKey: ['m03_hotel_details', hotelId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('m03_hotel_details')
+        .select('room_count')
+        .eq('hotel_id', hotelId)
+        .single()
+      if (error) throw error
+      return data
+    },
+    enabled: !!hotelId,
+    staleTime: 10 * 60 * 1000,
+  })
+  const roomCount = hotelDetail?.room_count ?? 0
+
+  function getMonthStats(year: number, month: number): MonthStats {
+    const monthData = pickupData.filter(row => {
+      const d = new Date(row.business_date)
+      return d.getFullYear() === year && d.getMonth() + 1 === month
+    })
+    const otbNights = monthData
+      .filter(r => r.segmentation !== 'HOU')
+      .reduce((sum, r) => sum + (r.otb_nights ?? 0), 0)
+    const otbRevenue = monthData
+      .reduce((sum, r) => sum + (r.otb_revenue ?? 0), 0)
+    const daysInMonth = new Date(year, month, 0).getDate()
+    const occ = roomCount > 0 && daysInMonth > 0
+      ? (otbNights / (daysInMonth * roomCount)) * 100
+      : 0
+    const adr = otbNights > 0 ? Math.round(otbRevenue / otbNights) : 0
+    return { occ, adr, rev: otbRevenue, otbNights }
+  }
+
+  const totalPuNights  = pickupData.reduce((sum, row) => sum + (row.pu_nights  ?? 0), 0)
+  const totalPuRevenue = pickupData.reduce((sum, row) => sum + (row.pu_revenue ?? 0), 0)
+  const totalPuAdr     = totalPuNights > 0 ? Math.round(totalPuRevenue / totalPuNights) : 0
+
+  // otbDate 기준 6개월 범위 생성
+  const base = otbDate ? new Date(otbDate) : new Date()
+  const months: MonthData[] = Array.from({ length: 6 }, (_, i) => {
+    const d    = new Date(base.getFullYear(), base.getMonth() + i, 1)
+    const year = d.getFullYear()
+    const mon  = d.getMonth() + 1
+    const mock = MONTHS[i % MONTHS.length]
+    return { ...mock, year, month: mon }
+  })
+
+  const totalPages    = Math.ceil(months.length / PAGE_SIZE)
+  const visibleMonths = months.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
+
+  // otbDate 변경 시 페이지 초기화
+  useEffect(() => {
+    setPage(0)
+  }, [otbDate])
 
   return (
     <div className="space-y-5 animate-fade-in">
 
       {/* ── Header ── */}
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight" style={{ color: 'var(--color-text-primary)' }}>
+      <div className="mb-6">
+        <h1 className="text-xl font-semibold mb-1" style={{ color: 'var(--color-text-primary)' }}>
           대시보드
         </h1>
-        <p className="text-sm text-brand-muted mt-0.5">
-          오늘 <span className="font-mono text-brand-subtle">(2026-04-23)</span> 기준 1일간&nbsp;&nbsp;
-          총 <span className="font-semibold text-status-positive">+18실</span>,&nbsp;
-          ADR <span className="font-semibold text-status-positive">+192k</span>,&nbsp;
-          REV <span className="font-semibold text-status-positive">+3.5M</span> 픽업 되었습니다.
-        </p>
+        {pickupLoading ? (
+          <div className="h-5 w-80 rounded animate-pulse" style={{ background: 'var(--color-bg-tertiary)' }} />
+        ) : (
+          <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+            오늘 ({otbDate}) 기준 1일간&nbsp;
+            총&nbsp;
+            <span style={{ color: totalPuNights >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600 }}>
+              {formatPu(totalPuNights, 'nights')}실
+            </span>
+            ,&nbsp;ADR&nbsp;
+            <span style={{ color: totalPuAdr >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600 }}>
+              {formatPu(totalPuAdr, 'currency')}
+            </span>
+            ,&nbsp;REV&nbsp;
+            <span style={{ color: totalPuRevenue >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600 }}>
+              {formatPu(totalPuRevenue, 'currency')}
+            </span>
+            &nbsp;픽업 되었습니다.
+          </p>
+        )}
       </div>
 
 
@@ -360,11 +583,11 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <span className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-            {startMonth}월 &mdash; {endMonth}월
+            {months[0]?.month}월 &mdash; {months[months.length - 1]?.month}월
           </span>
-          <span className="text-xs text-brand-dimmed font-mono">2025년</span>
+          <span className="text-xs text-brand-dimmed font-mono">{months[0]?.year}년</span>
           <div className="flex items-center gap-1">
-            {Array.from({ length: TOTAL_PAGES }).map((_, i) => (
+            {Array.from({ length: totalPages }).map((_, i) => (
               <button
                 key={i}
                 onClick={() => setPage(i)}
@@ -376,7 +599,7 @@ export default function DashboardPage() {
                     ? 'var(--color-accent-primary)'
                     : 'var(--dot-inactive)',
                 }}
-                aria-label={`${i * PAGE_SIZE + 1}~${(i + 1) * PAGE_SIZE}월 보기`}
+                aria-label={`페이지 ${i + 1}`}
               />
             ))}
           </div>
@@ -393,8 +616,8 @@ export default function DashboardPage() {
             이전
           </button>
           <button
-            onClick={() => setPage(p => Math.min(TOTAL_PAGES - 1, p + 1))}
-            disabled={page === TOTAL_PAGES - 1}
+            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={page === totalPages - 1}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-brand-muted hover:text-brand-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150"
             style={{ border: '1px solid var(--control-border)' }}
           >
@@ -407,7 +630,15 @@ export default function DashboardPage() {
       {/* ── Month cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {visibleMonths.map(m => (
-          <MonthCard key={m.month} data={m} />
+          <MonthCard
+            key={`${m.year}-${m.month}`}
+            data={m}
+            stats={getMonthStats(m.year, m.month)}
+            loading={pickupLoading}
+            roomCount={roomCount}
+            yoyStats={getMonthYoyStats(m.year, m.month)}
+            yoyLoading={yoyLoading}
+          />
         ))}
       </div>
     </div>

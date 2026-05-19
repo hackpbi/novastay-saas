@@ -8,6 +8,7 @@ import Sidebar from '@/components/Sidebar'
 import DatePicker from '@/components/DatePicker'
 import { useAuth } from '@/contexts/AuthContext'
 import { useHotel } from '@/contexts/HotelContext'
+import { DateContext } from '@/contexts/DateContext'
 import { supabase } from '@/lib/supabase'
 import type { ReactNode } from 'react'
 
@@ -232,7 +233,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-6">
           <div key={pathname} className="w-full animate-page-enter" style={{ maxWidth: 1320 }}>
-            {children}
+            <DateContext.Provider value={{ otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate }}>
+              {children}
+            </DateContext.Provider>
           </div>
         </main>
       </div>
