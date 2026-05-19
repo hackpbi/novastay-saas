@@ -671,73 +671,62 @@ export default function DataUploadPage() {
 
     let otbUploaded = false
 
-    for (let idx = 0; idx < filesToProcess.length; idx++) {
-      setCurrentFileIdx(idx)
-      setCurrentFileProgress(0)
+    if (tab === 'actual') {
+      // ── Actual: 파일별 순차 처리 ─────────────────────────────────────────
 
-      const { file } = filesToProcess[idx]
+      for (let idx = 0; idx < filesToProcess.length; idx++) {
+        setCurrentFileIdx(idx)
+        setCurrentFileProgress(0)
 
-      try {
-        const rows = await parseExcelFile(file)
+        const { file } = filesToProcess[idx]
 
-        if (rows.length === 0) {
-          setFileResults(prev => [...prev, { fileName: file.name, result: { type: 'error', errors: ['데이터가 없습니다.'] } }])
-          continue
-        }
+        try {
+          const rows = await parseExcelFile(file)
 
-        const insertData = rows.map(row => ({
-          ...transformRow(row, hotelId),
-          ...(tab === 'otb' ? { update_date: date } : {}),
-        }))
+          if (rows.length === 0) {
+            setFileResults(prev => [...prev, { fileName: file.name, result: { type: 'error', errors: ['데이터가 없습니다.'] } }])
+            continue
+          }
 
-        const validErrs: string[] = []
-        insertData.forEach((row, i) => {
-          if (!row.id || isNaN(row.id)) validErrs.push(`${i + 1}행: id 누락`)
-          if (!row.business_date)       validErrs.push(`${i + 1}행: 판매일자 누락`)
-        })
-        if (validErrs.length > 0) {
-          setFileResults(prev => [...prev, { fileName: file.name, result: { type: 'error', errors: validErrs } }])
-          continue
-        }
+          const insertData = rows.map(row => transformRow(row, hotelId))
 
-        const CHUNK   = 1000
-        let   success = 0
-        const errs: string[] = []
+          const validErrs: string[] = []
+          insertData.forEach((row, i) => {
+            if (!row.id || isNaN(row.id)) validErrs.push(`${i + 1}행: id 누락`)
+            if (!row.business_date)       validErrs.push(`${i + 1}행: 판매일자 누락`)
+          })
+          if (validErrs.length > 0) {
+            setFileResults(prev => [...prev, { fileName: file.name, result: { type: 'error', errors: validErrs } }])
+            continue
+          }
 
-        if (tab === 'actual') {
-          // ── Actual ──────────────────────────────────────────────────────────
+          const CHUNK   = 1000
+          let   success = 0
+          const errs: string[] = []
 
-          // 1. business_date 목록 추출
           const businessDates = [...new Set(
             insertData.map((r: any) => r.business_date).filter(Boolean)
           )] as string[]
 
-          // 2. DELETE (한 번만)
           const { error: delError } = await (supabase as any).rpc('r01_delete_actual', {
             p_hotel_id: hotelId,
             p_dates:    businessDates,
           })
           if (delError) throw delError
 
-          // 3. INSERT (청크 반복)
           for (let i = 0; i < insertData.length; i += CHUNK) {
             const chunk = insertData.slice(i, i + CHUNK)
             setCurrentFileProgress(Math.round((i / insertData.length) * 100))
-
             const { data, error } = await (supabase as any).rpc('r01_insert_actual', {
               p_hotel_id: hotelId,
               p_rows:     chunk,
             })
-            if (error || !data?.success) {
-              errs.push(`${i + 1}~${i + chunk.length}행: ${error?.message ?? data?.error}`)
-            } else {
-              success += data.count
-            }
+            if (error || !data?.success) errs.push(`${i + 1}~${i + chunk.length}행: ${error?.message ?? data?.error}`)
+            else success += data.count
           }
 
-          // 4. 집계 테이블 갱신
           try {
-            await (supabase as any).rpc('a02_refresh_actual_daily', {
+            await (supabase as any).rpc('a01_refresh_actual_daily', {
               p_hotel_id: hotelId,
               p_dates:    businessDates,
             })
@@ -745,61 +734,118 @@ export default function DataUploadPage() {
             console.error('Actual 집계 갱신 오류:', err)
           }
 
-        } else {
-          // ── OTB ─────────────────────────────────────────────────────────────
+          setCurrentFileProgress(100)
+          setFileResults(prev => [...prev, {
+            fileName: file.name,
+            result: {
+              type:         errs.length > 0 ? (success > 0 ? 'partial' : 'error') : 'success',
+              successCount: success,
+              totalCount:   insertData.length,
+              errors:       errs,
+            },
+          }])
 
-          // 1. DELETE (한 번만)
+        } catch (e: any) {
+          setFileResults(prev => [...prev, { fileName: file.name, result: { type: 'error', errors: [e.message ?? '알 수 없는 오류'] } }])
+        }
+      }
+
+    } else {
+      // ── OTB: 전체 파싱 후 DELETE 1회 + INSERT 전체 ───────────────────────
+
+      // 1단계: 모든 파일 파싱 및 데이터 수집
+      const allInsertData: any[] = []
+
+      for (let idx = 0; idx < filesToProcess.length; idx++) {
+        setCurrentFileIdx(idx)
+        setCurrentFileProgress(0)
+
+        const { file } = filesToProcess[idx]
+
+        try {
+          const rows = await parseExcelFile(file)
+
+          if (rows.length === 0) {
+            setFileResults(prev => [...prev, { fileName: file.name, result: { type: 'error', errors: ['데이터가 없습니다.'] } }])
+            continue
+          }
+
+          const insertData = rows.map(row => ({
+            ...transformRow(row, hotelId),
+            update_date: date,
+          }))
+
+          const validErrs: string[] = []
+          insertData.forEach((row, i) => {
+            if (!row.id || isNaN(row.id)) validErrs.push(`${i + 1}행: id 누락`)
+            if (!row.business_date)       validErrs.push(`${i + 1}행: 판매일자 누락`)
+          })
+          if (validErrs.length > 0) {
+            setFileResults(prev => [...prev, { fileName: file.name, result: { type: 'error', errors: validErrs } }])
+            continue
+          }
+
+          allInsertData.push(...insertData)
+          setCurrentFileProgress(100)
+          setFileResults(prev => [...prev, {
+            fileName: file.name,
+            result: { type: 'success', successCount: insertData.length, totalCount: insertData.length, errors: [] },
+          }])
+
+        } catch (e: any) {
+          setFileResults(prev => [...prev, { fileName: file.name, result: { type: 'error', errors: [e.message ?? '알 수 없는 오류'] } }])
+        }
+      }
+
+      // 2단계: DELETE 1회 + INSERT 전체 + 집계 갱신
+      if (allInsertData.length > 0) {
+        const CHUNK   = 1000
+        let   success = 0
+        const errs: string[] = []
+
+        try {
           const { error: delError } = await (supabase as any).rpc('r02_delete_otb', {
             p_hotel_id:    hotelId,
             p_update_date: date,
           })
           if (delError) throw delError
 
-          // 2. INSERT (청크 반복)
-          for (let i = 0; i < insertData.length; i += CHUNK) {
-            const chunk = insertData.slice(i, i + CHUNK)
-            setCurrentFileProgress(Math.round((i / insertData.length) * 100))
-
+          for (let i = 0; i < allInsertData.length; i += CHUNK) {
+            const chunk = allInsertData.slice(i, i + CHUNK)
+            setCurrentFileProgress(Math.round((i / allInsertData.length) * 100))
             const { data, error } = await (supabase as any).rpc('r02_insert_otb', {
               p_hotel_id:    hotelId,
               p_update_date: date,
               p_rows:        chunk,
             })
-            if (error || !data?.success) {
-              errs.push(`${i + 1}~${i + chunk.length}행: ${error?.message ?? data?.error}`)
-            } else {
-              success += data.count
-            }
+            if (error || !data?.success) errs.push(`${i + 1}~${i + chunk.length}행: ${error?.message ?? data?.error}`)
+            else success += data.count
           }
-        }
 
-        setCurrentFileProgress(100)
-        setFileResults(prev => [...prev, {
-          fileName: file.name,
-          result: {
-            type:         errs.length > 0 ? (success > 0 ? 'partial' : 'error') : 'success',
-            successCount: success,
-            totalCount:   insertData.length,
-            errors:       errs,
-          },
-        }])
-        if (tab === 'otb') {
+          setCurrentFileProgress(100)
           otbUploaded = true
-          // 집계 테이블 갱신
+
+          // 집계 갱신 (한 번만)
           try {
-            console.log('a01_refresh_otb_daily 호출:', { hotelId, otbDate: date })
+            console.log('a02_refresh_otb_daily 호출:', { hotelId, otbDate: date })
             const { data: refreshData, error: refreshError } = await (supabase as any)
-              .rpc('a01_refresh_otb_daily', { p_hotel_id: hotelId, p_update_date: date })
-            console.log('a01_refresh_otb_daily 결과:', refreshData, 'error:', refreshError)
+              .rpc('a02_refresh_otb_daily', { p_hotel_id: hotelId, p_update_date: date })
+            console.log('a02_refresh_otb_daily 결과:', refreshData, 'error:', refreshError)
             if (refreshError) console.error('집계 갱신 오류:', refreshError)
             else console.log('집계 갱신 완료')
           } catch (e) {
             console.error('집계 갱신 예외:', e)
           }
-        }
 
-      } catch (e: any) {
-        setFileResults(prev => [...prev, { fileName: file.name, result: { type: 'error', errors: [e.message ?? '알 수 없는 오류'] } }])
+          if (errs.length > 0) console.error('OTB INSERT 오류:', errs)
+
+        } catch (e: any) {
+          console.error('OTB DELETE/INSERT 오류:', e)
+          setFileResults(prev => [...prev, {
+            fileName: 'OTB 업로드',
+            result: { type: 'error', errors: [e.message ?? 'DELETE/INSERT 오류'] },
+          }])
+        }
       }
     }
 

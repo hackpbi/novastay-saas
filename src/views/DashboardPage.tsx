@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { ArrowUp, AlignJustify, User, ChevronLeft, ChevronRight, ArrowLeftRight } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { usePickupData } from '@/hooks/usePickupData'
-import { useOtbVsActual } from '@/hooks/useOtbVsActual'
+import { useOtbData } from '@/hooks/useOtbData'
 import { useHotel } from '@/contexts/HotelContext'
 import { supabase } from '@/lib/supabase'
 
@@ -460,10 +460,10 @@ export default function DashboardPage() {
   const hotelId = currentHotel?.id ?? ''
 
   const { data: pickupData, loading: pickupLoading, otbDate } = usePickupData()
-  const { data: otbVsActualData, loading: yoyLoading } = useOtbVsActual()
+  const { data: otbData, loading: yoyLoading } = useOtbData()
 
   function getMonthYoyStats(year: number, month: number): MonthYoyStats {
-    const monthData = otbVsActualData.filter(row => {
+    const monthData = otbData.filter(row => {
       const d = new Date(row.business_date)
       return d.getFullYear() === year && d.getMonth() + 1 === month
     })
@@ -508,10 +508,13 @@ export default function DashboardPage() {
   const roomCount = hotelDetail?.room_count ?? 0
 
   function getMonthStats(year: number, month: number): MonthStats {
-    const monthData = pickupData.filter(row => {
+    const monthData = otbData.filter(row => {
       const d = new Date(row.business_date)
       return d.getFullYear() === year && d.getMonth() + 1 === month
     })
+    console.log(`OTB Stats ${year}-${month}:`, monthData.length,
+      '첫번째:', monthData[0]?.business_date,
+      'otb_nights:', monthData[0]?.otb_nights)
     const otbNights = monthData
       .filter(r => r.segmentation !== 'HOU')
       .reduce((sum, r) => sum + (r.otb_nights ?? 0), 0)

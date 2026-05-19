@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
       // 4. 마지막 청크에서 집계 테이블 갱신
       if (is_last && business_dates?.length > 0) {
         try {
-          const { error: refreshError } = await adminClient.rpc('a02_refresh_actual_daily', {
+          const { error: refreshError } = await adminClient.rpc('a01_refresh_actual_daily', {
             p_hotel_id: hotel_id,
             p_dates:    business_dates,
           })
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
       if (is_last && update_date) {
         try {
           const { error: refreshError } = await adminClient
-            .rpc('a01_refresh_otb_daily', { p_hotel_id: hotel_id, p_update_date: update_date })
+            .rpc('a02_refresh_otb_daily', { p_hotel_id: hotel_id, p_update_date: update_date })
           if (refreshError) console.error('집계 갱신 오류:', refreshError)
         } catch (e) {
           console.error('집계 갱신 예외:', e)

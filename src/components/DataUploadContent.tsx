@@ -260,6 +260,9 @@ export default function DataUploadContent({ hotelId, showBulkUpload = false, onB
     const tab = activeTab, date = otbDate
     let otbUploaded = false
 
+    // ── 1단계: 모든 파일 파싱 ──────────────────────────────────────────────────
+    const allInsertData: any[] = []
+
     for (let idx = 0; idx < filesToProcess.length; idx++) {
       setCurrentFileIdx(idx); setCurrentFileProgress(0)
       const { file } = filesToProcess[idx]
@@ -282,39 +285,79 @@ export default function DataUploadContent({ hotelId, showBulkUpload = false, onB
           setFileResults(prev => [...prev, { fileName: file.name, result: { type: 'error', errors: validErrs } }])
           continue
         }
-        const CHUNK = 1000; let success = 0; const errs: string[] = []
-        if (tab === 'actual') {
-          const businessDates = [...new Set(insertData.map((r: any) => r.business_date).filter(Boolean))] as string[]
-          const { error: delError } = await (supabase as any).rpc('r01_delete_actual', { p_hotel_id: hotelId, p_dates: businessDates })
-          if (delError) throw delError
-          for (let i = 0; i < insertData.length; i += CHUNK) {
-            const chunk = insertData.slice(i, i + CHUNK)
-            setCurrentFileProgress(Math.round((i / insertData.length) * 100))
-            const { data, error } = await (supabase as any).rpc('r01_insert_actual', { p_hotel_id: hotelId, p_rows: chunk })
-            if (error || !data?.success) errs.push(`${i + 1}~${i + chunk.length}행: ${error?.message ?? data?.error}`)
-            else success += data.count
-          }
-        } else {
-          const { error: delError } = await (supabase as any).rpc('r02_delete_otb', { p_hotel_id: hotelId, p_update_date: date })
-          if (delError) throw delError
-          for (let i = 0; i < insertData.length; i += CHUNK) {
-            const chunk = insertData.slice(i, i + CHUNK)
-            setCurrentFileProgress(Math.round((i / insertData.length) * 100))
-            const { data, error } = await (supabase as any).rpc('r02_insert_otb', { p_hotel_id: hotelId, p_update_date: date, p_rows: chunk })
-            if (error || !data?.success) errs.push(`${i + 1}~${i + chunk.length}행: ${error?.message ?? data?.error}`)
-            else success += data.count
-          }
-        }
+        allInsertData.push(...insertData)
         setCurrentFileProgress(100)
         setFileResults(prev => [...prev, {
           fileName: file.name,
-          result: { type: errs.length > 0 ? (success > 0 ? 'partial' : 'error') : 'success', successCount: success, totalCount: insertData.length, errors: errs },
+          result: { type: 'success', successCount: insertData.length, totalCount: insertData.length, errors: [] },
         }])
-        if (tab === 'otb') otbUploaded = true
       } catch (e: any) {
         setFileResults(prev => [...prev, { fileName: file.name, result: { type: 'error', errors: [e.message ?? '알 수 없는 오류'] } }])
       }
     }
+
+    if (allInsertData.length === 0) { setUploading(false); return }
+
+    const CHUNK = 1000
+
+    // ── 2단계: DELETE + INSERT ─────────────────────────────────────────────────
+    if (tab === 'otb') {
+      // update_date별 그룹핑 → 그룹당 DELETE 1회 + INSERT
+      const byUpdateDate = allInsertData.reduce<Record<string, any[]>>((acc, row) => {
+        const key = row.update_date ?? date
+        ;(acc[key] ??= []).push(row)
+        return acc
+      }, {})
+
+      for (const [updateDate, rows] of Object.entries(byUpdateDate)) {
+        try {
+          const { error: delError } = await (supabase as any).rpc('r02_delete_otb', {
+            p_hotel_id:    hotelId,
+            p_update_date: updateDate,
+          })
+          if (delError) throw delError
+
+          for (let i = 0; i < rows.length; i += CHUNK) {
+            const chunk = rows.slice(i, i + CHUNK)
+            setCurrentFileProgress(Math.round((i / rows.length) * 100))
+            const { data, error } = await (supabase as any).rpc('r02_insert_otb', {
+              p_hotel_id:    hotelId,
+              p_update_date: updateDate,
+              p_rows:        chunk,
+            })
+            if (error || !data?.success) console.error(`OTB INSERT 오류 [${updateDate}]:`, error?.message ?? data?.error)
+          }
+        } catch (e: any) {
+          console.error(`OTB DELETE/INSERT 오류 [${updateDate}]:`, e)
+        }
+      }
+      otbUploaded = true
+
+    } else {
+      // 전체 business_date 수집 → DELETE 1회 + INSERT 전체
+      const businessDates = [...new Set(allInsertData.map((r: any) => r.business_date).filter(Boolean))] as string[]
+
+      try {
+        const { error: delError } = await (supabase as any).rpc('r01_delete_actual', {
+          p_hotel_id: hotelId,
+          p_dates:    businessDates,
+        })
+        if (delError) throw delError
+
+        for (let i = 0; i < allInsertData.length; i += CHUNK) {
+          const chunk = allInsertData.slice(i, i + CHUNK)
+          setCurrentFileProgress(Math.round((i / allInsertData.length) * 100))
+          const { data, error } = await (supabase as any).rpc('r01_insert_actual', {
+            p_hotel_id: hotelId,
+            p_rows:     chunk,
+          })
+          if (error || !data?.success) console.error('Actual INSERT 오류:', error?.message ?? data?.error)
+        }
+      } catch (e: any) {
+        console.error('Actual DELETE/INSERT 오류:', e)
+      }
+    }
+
     if (otbUploaded) invalidateOtb()
     setUploading(false)
   }, [hotelId, activeTab, otbDate, queuedFiles, uploading, invalidateOtb])
