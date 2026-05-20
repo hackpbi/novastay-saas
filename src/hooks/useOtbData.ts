@@ -11,6 +11,8 @@ export type OtbDataRow = {
   sorting3:      string | null
   otb_nights:    number
   otb_revenue:   number
+  act_nights:    number
+  act_revenue:   number
 }
 
 export function useOtbData() {
