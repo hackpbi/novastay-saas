@@ -287,15 +287,58 @@ function SortableRow({ id, children }: {
   )
 }
 
+// ── Preview dummy metrics ─────────────────────────────────────────────────────
+
+function pvHash(s: string, salt: number): number {
+  let h = salt
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0
+  return Math.abs(h)
+}
+function pvSub(id: string) {
+  const rn  = 30 + pvHash(id, 1) % 170
+  const adr = 150000 + pvHash(id, 2) % 150000
+  return { rn, adr, rev: rn * adr }
+}
+function pvMid(id: string) {
+  const rn  = 10 + pvHash(id, 3) % 90
+  const adr = 80000 + pvHash(id, 4) % 120000
+  return { rn, adr, rev: rn * adr }
+}
+function fRn(n: number)  { return Math.round(n).toLocaleString('ko-KR') }
+function fAdr(n: number) { return Math.round(n / 1000).toLocaleString('ko-KR') }
+function fRev(n: number) { return (n / 1_000_000).toFixed(1) }
+
 // ── Market Preview Table ──────────────────────────────────────────────────────
 
 function MarketPreviewTable({ tree, isDark }: { tree: SchemaTree; isDark: boolean }) {
-  const CELL = { borderLeft: '1px dashed var(--color-border-default)', width: 64, textAlign: 'center' as const }
+  const CELL     = { borderLeft: '1px dashed var(--color-border-default)', width: 64, textAlign: 'center' as const }
+  const CELL_DIM = { ...CELL, color: 'var(--color-text-muted)', fontSize: 11 }
 
   const fontColor = (item: TableSchema, fallback: string) =>
     isDark
       ? (item.font_dark_color  ?? fallback)
       : (item.font_light_color ?? fallback)
+
+  // 더미 데이터 사전 계산
+  const subMap: Record<string, { rn: number; adr: number; rev: number }> = {}
+  tree.groups.forEach(g => g.children.forEach(c => { subMap[c.id] = pvSub(c.id) }))
+
+  const midMap: Record<string, { rn: number; adr: number; rev: number }> = {}
+  tree.mids.forEach(m => { midMap[m.id] = pvMid(m.id) })
+
+  const groupMap: Record<string, { rn: number; adr: number; rev: number }> = {}
+  tree.groups.forEach(g => {
+    const rn  = g.children.reduce((s, c) => s + (subMap[c.id]?.rn  ?? 0), 0)
+    const rev = g.children.reduce((s, c) => s + (subMap[c.id]?.rev ?? 0), 0)
+    groupMap[g.parent.id] = { rn, adr: rn > 0 ? rev / rn : 0, rev }
+  })
+
+  const allVals  = [...Object.values(groupMap), ...Object.values(midMap)]
+  const grandRn  = allVals.reduce((s, m) => s + m.rn,  0)
+  const grandRev = allVals.reduce((s, m) => s + m.rev, 0)
+  const grandAdr = grandRn > 0 ? grandRev / grandRn : 0
+  const occ      = grandRn > 0 ? (grandRn / (100 * 30) * 100) : 0
+  const revpar   = Math.round(grandRev / (100 * 30))
 
   return (
     <div className="rounded-xl overflow-hidden text-sm" style={{ border: '1px solid var(--color-border-default)' }}>
@@ -320,7 +363,6 @@ function MarketPreviewTable({ tree, isDark }: { tree: SchemaTree; isDark: boolea
         </thead>
         <tbody>
           {(() => {
-            // 대분류 + 중분류를 order_index 순으로 인터리빙
             const topLevel = [
               ...tree.groups.map(g => g.parent),
               ...tree.mids,
@@ -328,36 +370,52 @@ function MarketPreviewTable({ tree, isDark }: { tree: SchemaTree; isDark: boolea
 
             return topLevel.map(item => {
               if (item.level === 'main') {
-                const group = tree.groups.find(g => g.parent.id === item.id)
+                const group    = tree.groups.find(g => g.parent.id === item.id)
+                const gm       = groupMap[item.id] ?? { rn: 0, adr: 0, rev: 0 }
+                const mainColor = fontColor(item, 'var(--color-text-primary)')
+                const mainW    = item.is_bold ? 700 : 600
                 return (
                   <React.Fragment key={item.id}>
                     <tr style={{ background: item.color ? `${item.color}22` : 'var(--color-bg-secondary)', borderTop: '1px solid var(--color-border-default)' }}>
-                      <td className={`px-3 py-2 ${item.is_bold ? 'font-bold' : 'font-semibold'}`}
-                        style={{ color: fontColor(item, 'var(--color-text-primary)') }}>
+                      <td className="px-3 py-2"
+                        style={{ color: mainColor, fontWeight: mainW }}>
                         {item.name}
                       </td>
-                      {[0,1,2].map(i => <td key={i} style={CELL} />)}
+                      <td style={{ ...CELL, color: mainColor, fontWeight: mainW, fontSize: 11 }}>{fRn(gm.rn)}</td>
+                      <td style={{ ...CELL, color: mainColor, fontWeight: mainW, fontSize: 11 }}>{fAdr(gm.adr)}</td>
+                      <td style={{ ...CELL, color: mainColor, fontWeight: mainW, fontSize: 11 }}>{fRev(gm.rev)}</td>
                     </tr>
-                    {group?.children.map(child => (
-                      <tr key={child.id} style={{ borderBottom: '1px dashed var(--color-border-subtle)' }}>
-                        <td className={`py-1.5 ${child.is_bold ? 'font-bold' : 'font-normal'}`}
-                          style={{ paddingLeft: 20, color: fontColor(child, child.color ?? 'var(--color-accent-primary)'), fontSize: 12 }}>
-                          {child.name}
-                        </td>
-                        {[0,1,2].map(i => <td key={i} style={CELL} />)}
-                      </tr>
-                    ))}
+                    {group?.children.map(child => {
+                      const sm         = subMap[child.id] ?? { rn: 0, adr: 0, rev: 0 }
+                      const childColor = fontColor(child, child.color ?? 'var(--color-accent-primary)')
+                      const childW     = child.is_bold ? 600 : 400
+                      return (
+                        <tr key={child.id} style={{ borderBottom: '1px dashed var(--color-border-subtle)' }}>
+                          <td style={{ paddingLeft: 20, color: childColor, fontWeight: childW, fontSize: 12 }}>
+                            {child.name}
+                          </td>
+                          <td style={{ ...CELL, color: childColor, fontWeight: childW, fontSize: 11 }}>{fRn(sm.rn)}</td>
+                          <td style={{ ...CELL, color: childColor, fontWeight: childW, fontSize: 11 }}>{fAdr(sm.adr)}</td>
+                          <td style={{ ...CELL, color: childColor, fontWeight: childW, fontSize: 11 }}>{fRev(sm.rev)}</td>
+                        </tr>
+                      )
+                    })}
                   </React.Fragment>
                 )
               }
               // 중분류
+              const mm       = midMap[item.id] ?? { rn: 0, adr: 0, rev: 0 }
+              const midColor = fontColor(item, 'var(--color-text-primary)')
+              const midW     = item.is_bold ? 600 : 400
               return (
                 <tr key={item.id} style={{ background: item.color ? `${item.color}22` : 'var(--color-bg-secondary)', borderTop: '1px solid var(--color-border-default)', borderBottom: '1px solid var(--color-border-default)' }}>
-                  <td className={`px-3 py-2 ${item.is_bold ? 'font-bold' : 'font-semibold'}`}
-                    style={{ color: fontColor(item, 'var(--color-text-primary)') }}>
+                  <td className="px-3 py-2"
+                    style={{ color: midColor, fontWeight: midW }}>
                     {item.name}
                   </td>
-                  {[0,1,2].map(i => <td key={i} style={CELL} />)}
+                  <td style={{ ...CELL, color: midColor, fontWeight: midW, fontSize: 11 }}>{fRn(mm.rn)}</td>
+                  <td style={{ ...CELL, color: midColor, fontWeight: midW, fontSize: 11 }}>{fAdr(mm.adr)}</td>
+                  <td style={{ ...CELL, color: midColor, fontWeight: midW, fontSize: 11 }}>{fRev(mm.rev)}</td>
                 </tr>
               )
             })
@@ -372,7 +430,7 @@ function MarketPreviewTable({ tree, isDark }: { tree: SchemaTree; isDark: boolea
             </tr>
           )}
 
-          {/* ── Total / Occ / Rev.PAR — 대분류 폰트 색상·볼드와 연동 ── */}
+          {/* ── Total / Occ / Rev.PAR ── */}
           {(tree.groups.length > 0 || tree.mids.length > 0) && (() => {
             const mainItem   = tree.groups[0]?.parent
             const fallback   = isDark ? '#00E5A0' : '#00B883'
@@ -382,10 +440,10 @@ function MarketPreviewTable({ tree, isDark }: { tree: SchemaTree; isDark: boolea
               <>
                 {/* Total */}
                 <tr style={{ borderTop: '2px solid var(--color-border-default)', background: 'var(--color-bg-tertiary)' }}>
-                  <td className={`px-3 py-2 text-sm ${totalBold}`} style={{ color: totalColor }}>
-                    Total
-                  </td>
-                  {[0,1,2].map(i => <td key={i} style={CELL} />)}
+                  <td className={`px-3 py-2 text-sm ${totalBold}`} style={{ color: totalColor }}>Total</td>
+                  <td style={{ ...CELL_DIM, color: totalColor }}>{fRn(grandRn)}</td>
+                  <td style={{ ...CELL_DIM, color: totalColor }}>{fAdr(grandAdr)}</td>
+                  <td style={{ ...CELL_DIM, color: totalColor }}>{fRev(grandRev)}</td>
                 </tr>
 
                 {/* Occ */}
@@ -393,15 +451,17 @@ function MarketPreviewTable({ tree, isDark }: { tree: SchemaTree; isDark: boolea
                   <td className={`px-3 py-1.5 text-sm ${totalBold}`} style={{ color: totalColor, borderBottom: '1px dashed var(--color-border-subtle)' }}>
                     Occ
                   </td>
-                  <td colSpan={3} style={{ borderLeft: '1px dashed var(--color-border-default)', borderBottom: '1px dashed var(--color-border-subtle)' }} />
+                  <td style={{ ...CELL_DIM, color: totalColor, borderBottom: '1px dashed var(--color-border-subtle)' }}>
+                    {occ.toFixed(1)}%
+                  </td>
+                  <td colSpan={2} style={{ borderLeft: '1px dashed var(--color-border-subtle)', borderBottom: '1px dashed var(--color-border-subtle)' }} />
                 </tr>
 
                 {/* Rev.PAR */}
                 <tr style={{ background: 'var(--color-bg-secondary)' }}>
-                  <td className={`px-3 py-1.5 text-sm ${totalBold}`} style={{ color: totalColor }}>
-                    Rev.PAR
-                  </td>
-                  <td colSpan={3} style={{ borderLeft: '1px dashed var(--color-border-default)' }} />
+                  <td className={`px-3 py-1.5 text-sm ${totalBold}`} style={{ color: totalColor }}>Rev.PAR</td>
+                  <td colSpan={2} style={{ borderLeft: '1px dashed var(--color-border-default)' }} />
+                  <td style={{ ...CELL_DIM, color: totalColor }}>{fRev(revpar)}</td>
                 </tr>
               </>
             )
@@ -755,8 +815,9 @@ export default function MarketCodeManagementPage() {
         segmentation: r.segmentation ?? [],
       })) as TableSchema[]
     },
-    enabled:   !!hotelId,
-    staleTime: 10 * 60 * 1000,
+    enabled:        !!hotelId,
+    staleTime:      0,
+    refetchOnMount: true,
   })
 
   const { data: segmentationList = [] } = useQuery({
@@ -778,8 +839,9 @@ export default function MarketCodeManagementPage() {
       )
       return unique as { segmentation: string; market_code_description: string | null }[]
     },
-    enabled:   !!hotelId,
-    staleTime: 10 * 60 * 1000,
+    enabled:        !!hotelId,
+    staleTime:      0,
+    refetchOnMount: true,
   })
 
   const tree = useMemo(() => buildTree(schemas), [schemas])
