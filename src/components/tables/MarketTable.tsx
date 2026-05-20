@@ -525,7 +525,7 @@ export default function MarketTable({
           <tr style={{ borderTop: '1px solid var(--color-border-subtle)', background: FOOTER_BG, fontWeight: 600 }}>
             <td className="px-4 py-2 font-semibold" style={{ color: accentColor, ...sSegStyle(FOOTER_BG) }}>Occ</td>
             {hasGroups ? (
-              groupSpans.map(gs => {
+              groupSpans.map((gs, gi) => {
                 const groupCols  = columns.filter(c => (c.group ?? '') === gs.group)
                 const rnCol      = groupCols.find(c => c.type === 'number' || c.key.endsWith('_rn') || c.key === 'total_rn')
                 const rnVal      = rnCol ? aggregateTotal(tree, data, rnCol.key) : 0
@@ -535,7 +535,11 @@ export default function MarketTable({
                 return (
                   <td key={gs.group} colSpan={gs.span}
                     className="px-2 py-2 text-center whitespace-nowrap"
-                    style={{ color: accentColor, borderLeft: '1px solid var(--color-border-default)' }}>
+                    style={{
+                      color: accentColor,
+                      borderLeft: '1px solid var(--color-border-default)',
+                      ...(stickyFirstGroup && gi === 0 ? { position: 'sticky', left: SEG_WIDTH, zIndex: 1, background: FOOTER_BG } : {}),
+                    }}>
                     {occPct !== null && occPct > 0 ? `${occPct.toFixed(1)}%` : '-'}
                   </td>
                 )
@@ -558,7 +562,7 @@ export default function MarketTable({
           <tr style={{ borderTop: '1px solid var(--color-border-subtle)', background: FOOTER_BG, fontWeight: 600 }}>
             <td className="px-4 py-2 font-semibold" style={{ color: accentColor, ...sSegStyle(FOOTER_BG) }}>Rev.PAR</td>
             {hasGroups ? (
-              groupSpans.map(gs => {
+              groupSpans.map((gs, gi) => {
                 const groupCols   = columns.filter(c => (c.group ?? '') === gs.group)
                 const rnCol       = groupCols.find(c => c.type === 'number' || c.key.endsWith('_rn') || c.key === 'total_rn')
                 const revCol      = groupCols.find(c => c.type === 'currency' || c.key.endsWith('_rev') || c.key === 'total_rev')
@@ -572,7 +576,11 @@ export default function MarketTable({
                 return (
                   <td key={gs.group} colSpan={gs.span}
                     className="px-2 py-2 text-center whitespace-nowrap"
-                    style={{ color: accentColor, borderLeft: '1px solid var(--color-border-default)' }}>
+                    style={{
+                      color: accentColor,
+                      borderLeft: '1px solid var(--color-border-default)',
+                      ...(stickyFirstGroup && gi === 0 ? { position: 'sticky', left: SEG_WIDTH, zIndex: 1, background: FOOTER_BG } : {}),
+                    }}>
                     {grpRevpar > 0 ? formatValue(grpRevpar, 'currency') : '-'}
                   </td>
                 )

@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm create *)"
+      "Bash(npm create *)",
+      "PowerShell(Remove-Item \"c:\\\\Users\\\\hackp\\\\OneDrive\\\\Desktop\\\\18_NovaStay_Saas_ver1\\\\src\\\\hooks\\\\useOtbVsActual.ts\" -Confirm:$false)",
+      "PowerShell(git add src/app/api/data/bulk-upload/route.ts src/components/DataUploadContent.tsx src/hooks/useOtbData.ts src/views/DashboardPage.tsx src/views/DataUploadPage.tsx)",
+      "PowerShell(git rm src/hooks/useOtbVsActual.ts)",
+      "Bash(vercel --version)",
+      "PowerShell(vercel --version 2>&1)"
     ]
   }
 }
