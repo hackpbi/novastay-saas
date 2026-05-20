@@ -4,7 +4,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Plus, Trash2,
-  Loader2, X, Save, GripVertical, Pencil, Palette,
+  Loader2, X, Save, GripVertical, Pencil, Palette, RefreshCw,
 } from 'lucide-react'
 import {
   DndContext, type DragEndEvent, PointerSensor,
@@ -86,6 +86,25 @@ const LEVEL_BADGE_LIGHT: Record<SchemaLevel, BadgeCfg> = {
 const inputCls   = 'w-full rounded-md bg-bg-tertiary text-sm px-3.5 py-2.5 focus:outline-none transition-all'
 const inputStyle = { color: 'var(--color-text-primary)', border: '1px solid var(--color-border-default)' }
 
+// ── Default colors for reset ───────────────────────────────────────────────────
+const DEFAULT_BG_COLOR   = '#1A1F2E'
+const DEFAULT_FONT_DARK  = '#FFFFFF'
+const DEFAULT_FONT_LIGHT = '#111111'
+
+// ── Excel color palette ────────────────────────────────────────────────────────
+const THEME_ROWS: string[] = [
+  '#FFFFFF', '#000000', '#E7E6E6', '#44546A', '#4472C4', '#ED7D31', '#FFC000', '#70AD47', '#FF0000', '#00B0F0',
+  '#F2F2F2', '#808080', '#CFCECE', '#D6DCE4', '#D9E2F3', '#FCE4D6', '#FFF2CC', '#E2EFDA', '#FFCCCC', '#DEEBF7',
+  '#D9D9D9', '#595959', '#AFABAB', '#ACB9CA', '#B4C7E7', '#F8CBAD', '#FFE699', '#C6E0B4', '#FF9999', '#BDD7EE',
+  '#BFBFBF', '#404040', '#767171', '#8496B0', '#9DC3E6', '#F4B183', '#FFD966', '#A9D18E', '#FF6666', '#9EC6F0',
+  '#808080', '#262626', '#3A3838', '#597082', '#2E75B6', '#C55A11', '#BF8F00', '#538135', '#CC0000', '#0070C0',
+  '#595959', '#0D0D0D', '#171616', '#213243', '#1F4E79', '#833C00', '#7F5F00', '#375623', '#990000', '#003A78',
+]
+const STANDARD_COLORS: string[] = [
+  '#C00000', '#FF0000', '#FFC000', '#FFFF00', '#92D050',
+  '#00B050', '#00B0F0', '#0070C0', '#002060', '#7030A0',
+]
+
 const onFocus = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
   e.currentTarget.style.border    = '1px solid var(--color-accent-primary)'
   e.currentTarget.style.boxShadow = '0 0 0 3px var(--color-accent-dim)'
@@ -141,6 +160,115 @@ function LevelBadge({ level }: { level: SchemaLevel }) {
       style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
       {cfg.label}
     </span>
+  )
+}
+
+// ── Excel Color Picker ────────────────────────────────────────────────────────
+
+function ExcelColorPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open,       setOpen]       = useState(false)
+  const [customMode, setCustomMode] = useState(false)
+  const [hexInput,   setHexInput]   = useState(value)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => { setHexInput(value) }, [value])
+
+  useEffect(() => {
+    if (!open) return
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false); setCustomMode(false)
+      }
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  const apply = (color: string) => { onChange(color); setOpen(false); setCustomMode(false) }
+  const handleHex = (v: string) => {
+    setHexInput(v)
+    if (/^#[0-9A-Fa-f]{6}$/.test(v)) onChange(v)
+  }
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        onClick={() => { setOpen(o => !o); setCustomMode(false) }}
+        style={{
+          width: 32, height: 32, flexShrink: 0, cursor: 'pointer', borderRadius: 6,
+          background: value || 'transparent',
+          border: '1px solid var(--color-border-default)',
+        }}
+      />
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 10000,
+          padding: 12, borderRadius: 12,
+          background: 'var(--color-bg-elevated)',
+          border: '1px solid var(--color-border-default)',
+          boxShadow: 'var(--shadow-elevated)',
+        }}>
+          <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: 5 }}>테마 색</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 16px)', gap: 2 }}>
+            {THEME_ROWS.map((color, i) => (
+              <button key={i} title={color} onClick={() => apply(color)}
+                style={{
+                  width: 16, height: 16, background: color, borderRadius: 1, cursor: 'pointer',
+                  border: value.toLowerCase() === color.toLowerCase()
+                    ? '2px solid var(--color-accent-primary)'
+                    : '1px solid rgba(0,0,0,0.18)',
+                }} />
+            ))}
+          </div>
+
+          <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-text-muted)', marginTop: 8, marginBottom: 5 }}>표준 색</p>
+          <div style={{ display: 'flex', gap: 2 }}>
+            {STANDARD_COLORS.map((color, i) => (
+              <button key={i} title={color} onClick={() => apply(color)}
+                style={{
+                  width: 16, height: 16, background: color, borderRadius: 1, cursor: 'pointer',
+                  border: value.toLowerCase() === color.toLowerCase()
+                    ? '2px solid var(--color-accent-primary)'
+                    : '1px solid rgba(0,0,0,0.18)',
+                }} />
+            ))}
+          </div>
+
+          <button onClick={() => apply('')}
+            className="w-full mt-2 text-left transition-colors"
+            style={{ fontSize: 11, padding: '5px 6px', borderRadius: 4, color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-default)', background: 'transparent' }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--overlay-hover)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+            채우기 없음(N)
+          </button>
+
+          {!customMode ? (
+            <button onClick={() => setCustomMode(true)}
+              className="w-full mt-1 text-left transition-colors"
+              style={{ fontSize: 11, padding: '5px 6px', borderRadius: 4, color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-default)', background: 'transparent' }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--overlay-hover)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+              다른 색(M)...
+            </button>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+              <div style={{ width: 18, height: 18, background: value, border: '1px solid var(--color-border-default)', borderRadius: 3, flexShrink: 0 }} />
+              <input
+                type="text" value={hexInput} maxLength={7} placeholder="#000000" autoFocus
+                onChange={e => handleHex(e.target.value)}
+                onBlur={() => { if (!/^#[0-9A-Fa-f]{6}$/.test(hexInput)) setHexInput(value) }}
+                onKeyDown={e => { if (e.key === 'Enter' && /^#[0-9A-Fa-f]{6}$/.test(hexInput)) apply(hexInput) }}
+                style={{
+                  flex: 1, fontSize: 11, padding: '3px 6px', borderRadius: 4, fontFamily: 'monospace',
+                  background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-default)',
+                  color: 'var(--color-text-primary)', outline: 'none',
+                }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -244,14 +372,17 @@ function MarketPreviewTable({ tree, isDark }: { tree: SchemaTree; isDark: boolea
             </tr>
           )}
 
-          {/* ── Total / Occ / Rev.PAR ── */}
+          {/* ── Total / Occ / Rev.PAR — 대분류 폰트 색상·볼드와 연동 ── */}
           {(tree.groups.length > 0 || tree.mids.length > 0) && (() => {
-            const accentColor = isDark ? '#00E5A0' : '#00B883'
+            const mainItem   = tree.groups[0]?.parent
+            const fallback   = isDark ? '#00E5A0' : '#00B883'
+            const totalColor = mainItem ? fontColor(mainItem, fallback) : fallback
+            const totalBold  = mainItem?.is_bold ? 'font-bold' : 'font-semibold'
             return (
               <>
                 {/* Total */}
                 <tr style={{ borderTop: '2px solid var(--color-border-default)', background: 'var(--color-bg-tertiary)' }}>
-                  <td className="px-3 py-2 text-xs font-semibold" style={{ color: accentColor }}>
+                  <td className={`px-3 py-2 text-sm ${totalBold}`} style={{ color: totalColor }}>
                     Total
                   </td>
                   {[0,1,2].map(i => <td key={i} style={CELL} />)}
@@ -259,7 +390,7 @@ function MarketPreviewTable({ tree, isDark }: { tree: SchemaTree; isDark: boolea
 
                 {/* Occ */}
                 <tr style={{ borderTop: '1px solid var(--color-border-default)', background: 'var(--color-bg-secondary)' }}>
-                  <td className="px-3 py-1.5 text-xs font-semibold" style={{ color: accentColor, borderBottom: '1px dashed var(--color-border-subtle)' }}>
+                  <td className={`px-3 py-1.5 text-sm ${totalBold}`} style={{ color: totalColor, borderBottom: '1px dashed var(--color-border-subtle)' }}>
                     Occ
                   </td>
                   <td colSpan={3} style={{ borderLeft: '1px dashed var(--color-border-default)', borderBottom: '1px dashed var(--color-border-subtle)' }} />
@@ -267,7 +398,7 @@ function MarketPreviewTable({ tree, isDark }: { tree: SchemaTree; isDark: boolea
 
                 {/* Rev.PAR */}
                 <tr style={{ background: 'var(--color-bg-secondary)' }}>
-                  <td className="px-3 py-1.5 text-xs font-semibold" style={{ color: accentColor }}>
+                  <td className={`px-3 py-1.5 text-sm ${totalBold}`} style={{ color: totalColor }}>
                     Rev.PAR
                   </td>
                   <td colSpan={3} style={{ borderLeft: '1px dashed var(--color-border-default)' }} />
@@ -310,7 +441,9 @@ function SchemaModal({ hotelId, schemas, segmentationList, editItem, defaultLeve
   })
   const [saving,      setSaving]      = useState(false)
   const [error,       setError]       = useState<string | null>(null)
-  const [showSort,    setShowSort]    = useState(false)
+  const [showSort,    setShowSort]    = useState(
+    !!(editItem?.sorting1 || editItem?.sorting2 || editItem?.sorting3 || editItem?.sorting4 || editItem?.sorting5)
+  )
   const [pickerOpen,  setPickerOpen]  = useState(false)
   const [pickerSearch, setPickerSearch] = useState('')
   const pickerRef = useRef<HTMLDivElement>(null)
@@ -567,6 +700,8 @@ export default function MarketCodeManagementPage() {
   const { theme }    = useTheme()
   const isDark       = theme === 'dark'
   const levelBadge   = (level: SchemaLevel) => isDark ? LEVEL_BADGE_DARK[level] : LEVEL_BADGE_LIGHT[level]
+  const fontColor    = (item: TableSchema, fallback: string) =>
+    isDark ? (item.font_dark_color ?? fallback) : (item.font_light_color ?? fallback)
 
   const [schemaModal,   setSchemaModal]   = useState<{ open: boolean; item: TableSchema | null; defaultLevel?: SchemaLevel }>({ open: false, item: null })
   const [segPickerId,   setSegPickerId]   = useState<string | null>(null)
@@ -575,6 +710,7 @@ export default function MarketCodeManagementPage() {
   const [tempBgColor,   setTempBgColor]   = useState('#1A1F2E')
   const [tempFontDark,  setTempFontDark]  = useState('#FFFFFF')
   const [tempFontLight, setTempFontLight] = useState('#111111')
+  const [tempBold,      setTempBold]      = useState(false)
   const segPickerRef  = useRef<HTMLDivElement>(null)
   const fontColorRef  = useRef<HTMLDivElement>(null)
 
@@ -650,10 +786,10 @@ export default function MarketCodeManagementPage() {
 
   // 레벨별 현재 색상 (첫 번째 항목 기준 — 레벨 내 전체 일괄 적용이므로 동일)
   const levelColors = useMemo(() => {
-    const result: Record<SchemaLevel, { bg: string | null; dark: string | null; light: string | null }> = {
-      main: { bg: null, dark: null, light: null },
-      mid:  { bg: null, dark: null, light: null },
-      sub:  { bg: null, dark: null, light: null },
+    const result: Record<SchemaLevel, { bg: string | null; dark: string | null; light: string | null; bold: boolean }> = {
+      main: { bg: null, dark: null, light: null, bold: false },
+      mid:  { bg: null, dark: null, light: null, bold: false },
+      sub:  { bg: null, dark: null, light: null, bold: false },
     }
     for (const level of ['main', 'mid', 'sub'] as SchemaLevel[]) {
       const first = schemas.find(s => s.level === level)
@@ -661,6 +797,7 @@ export default function MarketCodeManagementPage() {
         bg:    first.color            ?? null,
         dark:  first.font_dark_color  ?? null,
         light: first.font_light_color ?? null,
+        bold:  first.is_bold          ?? false,
       }
     }
     return result
@@ -691,10 +828,10 @@ export default function MarketCodeManagementPage() {
 
   // ── Level colors bulk save (배경 + 폰트 다크/라이트) ──────────────────────────
 
-  const saveLevelColors = async (level: SchemaLevel, bg: string, dark: string, light: string) => {
+  const saveLevelColors = async (level: SchemaLevel, bg: string, dark: string, light: string, bold: boolean) => {
     await (supabase as any)
       .from('c05_market_table_schema')
-      .update({ color: bg || null, font_dark_color: dark || null, font_light_color: light || null })
+      .update({ color: bg || null, font_dark_color: dark || null, font_light_color: light || null, is_bold: bold })
       .eq('hotel_id', hotelId)
       .eq('level', level)
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.marketTableSchema(hotelId) })
@@ -774,13 +911,6 @@ export default function MarketCodeManagementPage() {
 
   const SchemaActions = ({ schema }: { schema: TableSchema }) => (
     <div className="flex items-center gap-1 justify-end relative">
-      {/* Bold */}
-      <button onClick={e => { e.stopPropagation(); toggleBold.mutate(schema) }}
-        className="w-6 h-6 rounded text-xs font-bold transition-colors"
-        style={{ background: schema.is_bold ? 'var(--accent-badge-bg)' : 'transparent', color: schema.is_bold ? 'var(--color-accent-primary)' : '#4A5568', border: '1px solid var(--color-border-default)' }}>
-        B
-      </button>
-
       {/* Edit */}
       <button onClick={e => { e.stopPropagation(); setSchemaModal({ open: true, item: schema }) }}
         className="w-6 h-6 rounded flex items-center justify-center transition-colors"
@@ -897,36 +1027,51 @@ export default function MarketCodeManagementPage() {
         </button>
         <div>
           <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--color-text-primary)' }}>
-            마켓 코드 관리
+            기본 테이블 설정
           </h1>
-          <p className="text-sm text-brand-muted mt-0.5">마켓 표 스키마와 마켓 코드를 관리합니다.</p>
+          <p className="text-sm text-brand-muted mt-0.5">모든 페이지의 마켓 세그먼트 표의 순서 및 마켓코드를 관리합니다.</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[69fr_34fr] gap-6 items-start">
 
         {/* ── Left: 마켓 표 스키마 ── */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-              마켓 표 스키마
-            </h2>
-            <div className="flex items-center gap-1.5">
-              {(['main', 'mid', 'sub'] as SchemaLevel[]).map(level => {
-                const cfg = levelBadge(level)
-                return (
-                  <button key={level}
-                    onClick={() => setSchemaModal({ open: true, item: null, defaultLevel: level })}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-opacity hover:opacity-80"
-                    style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
-                    <Plus size={10} />{cfg.label}
-                  </button>
-                )
-              })}
+        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--color-border-default)' }}>
+          <div className="flex items-center justify-between flex-wrap gap-2 px-4 py-3"
+            style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-secondary)' }}>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+                Market Segment Setup
+              </h2>
+              <button
+                onClick={() => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.marketTableSchema(hotelId) })}
+                disabled={schemaLoading}
+                className="text-brand-muted hover:text-brand-text transition-colors disabled:opacity-40"
+              >
+                <RefreshCw size={13} className={schemaLoading ? 'animate-spin' : ''} />
+              </button>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl"
+              style={{ background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-default)' }}>
+              <span className="text-xs text-brand-muted shrink-0">추가하기</span>
+              <div style={{ width: 1, height: 14, background: 'var(--color-border-default)', flexShrink: 0 }} />
+              <div className="flex items-center gap-1.5">
+                {(['main', 'mid', 'sub'] as SchemaLevel[]).map(level => {
+                  const cfg = levelBadge(level)
+                  return (
+                    <button key={level}
+                      onClick={() => setSchemaModal({ open: true, item: null, defaultLevel: level })}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-opacity hover:opacity-80"
+                      style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
+                      <Plus size={10} />{cfg.label}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           </div>
 
-          <div className="rounded-xl" style={{ border: '1px solid var(--color-border-default)', overflow: 'visible' }}>
+          <div>
             {schemaLoading ? (
               <div className="flex items-center justify-center py-12 gap-2 text-brand-muted">
                 <Loader2 size={14} className="animate-spin" /><span className="text-sm">불러오는 중...</span>
@@ -946,19 +1091,25 @@ export default function MarketCodeManagementPage() {
                         if (item.level === 'main') {
                           const group = tree.groups.find(g => g.parent.id === item.id)
                           if (!group) return null
+                          const mainBg = item.color ? `${item.color}18` : 'var(--color-bg-secondary)'
                           return (
                             <React.Fragment key={item.id}>
                               <SortableRow id={item.id}>
                                 {(handleProps) => (<>
-                                  <td className="w-7 px-2 py-2.5 text-brand-dimmed cursor-grab" {...handleProps}>
+                                  <td className="w-7 px-2 py-2.5 text-brand-dimmed cursor-grab"
+                                    style={{ background: mainBg }} {...handleProps}>
                                     <GripVertical size={13} />
                                   </td>
-                                  <td className="w-16 px-1 py-2.5"><LevelBadge level="main" /></td>
+                                  <td className="w-16 px-1 py-2.5" style={{ background: mainBg }}>
+                                    <LevelBadge level="main" />
+                                  </td>
                                   <td className={`px-3 py-2.5 text-sm ${item.is_bold ? 'font-bold' : 'font-semibold'}`}
-                                    style={{ color: 'var(--color-text-primary)', background: item.color ? `${item.color}18` : undefined }}>
+                                    style={{ color: fontColor(item, 'var(--color-text-primary)'), background: mainBg }}>
                                     {item.name}
                                   </td>
-                                  <td className="px-2 py-2.5"><SchemaActions schema={item} /></td>
+                                  <td className="px-2 py-2.5" style={{ background: mainBg }}>
+                                    <SchemaActions schema={item} />
+                                  </td>
                                 </>)}
                               </SortableRow>
 
@@ -976,7 +1127,7 @@ export default function MarketCodeManagementPage() {
                                           <LevelBadge level="sub" />
                                         </td>
                                         <td className={`px-3 py-2 text-sm ${child.is_bold ? 'font-bold' : 'font-normal'}`}
-                                          style={{ paddingLeft: 28, color: 'var(--color-text-primary)', borderBottom: '1px solid var(--color-border-subtle)' }}>
+                                          style={{ paddingLeft: 28, color: fontColor(child, 'var(--color-text-secondary)'), borderBottom: '1px solid var(--color-border-subtle)' }}>
                                           <span className="inline-flex items-center gap-0 flex-wrap">
                                             <span className="text-brand-dimmed mr-1.5 text-xs">└</span>
                                             {child.name}
@@ -997,27 +1148,28 @@ export default function MarketCodeManagementPage() {
                         }
 
                         // 중분류
+                        const midBg = item.color ? `${item.color}18` : 'var(--color-bg-secondary)'
                         return (
                           <React.Fragment key={item.id}>
                             <SortableRow id={item.id}>
                               {(handleProps) => (<>
                                 <td className="w-7 px-2 py-2.5 text-brand-dimmed cursor-grab"
-                                  style={{ borderBottom: '1px solid var(--color-border-subtle)', background: item.color ? `${item.color}18` : undefined }} {...handleProps}>
+                                  style={{ borderBottom: '1px solid var(--color-border-subtle)', background: midBg }} {...handleProps}>
                                   <GripVertical size={13} />
                                 </td>
                                 <td className="w-16 px-1 py-2.5"
-                                  style={{ borderBottom: '1px solid var(--color-border-subtle)', background: item.color ? `${item.color}18` : undefined }}>
+                                  style={{ borderBottom: '1px solid var(--color-border-subtle)', background: midBg }}>
                                   <LevelBadge level="mid" />
                                 </td>
                                 <td className={`px-3 py-2.5 text-sm ${item.is_bold ? 'font-bold' : 'font-semibold'}`}
-                                  style={{ color: 'var(--color-text-primary)', borderBottom: '1px solid var(--color-border-subtle)', background: item.color ? `${item.color}18` : undefined }}>
+                                  style={{ color: fontColor(item, 'var(--color-text-primary)'), borderBottom: '1px solid var(--color-border-subtle)', background: midBg }}>
                                   <span className="inline-flex items-center flex-wrap gap-0">
                                     {item.name}
                                     <InlineSegTags schema={item} />
                                   </span>
                                 </td>
                                 <td className="px-2 py-2.5"
-                                  style={{ borderBottom: '1px solid var(--color-border-subtle)', background: item.color ? `${item.color}18` : undefined }}>
+                                  style={{ borderBottom: '1px solid var(--color-border-subtle)', background: midBg }}>
                                   <SchemaActions schema={item} />
                                 </td>
                               </>)}
@@ -1034,8 +1186,9 @@ export default function MarketCodeManagementPage() {
         </div>
 
         {/* ── Right: 마켓 표 미리보기 ── */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--color-border-default)' }}>
+          <div className="flex items-center justify-between flex-wrap gap-2 px-4 py-3"
+            style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-secondary)' }}>
             <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
               미리보기
             </h2>
@@ -1056,6 +1209,7 @@ export default function MarketCodeManagementPage() {
                         setTempBgColor(colors.bg      ?? '#1A1F2E')
                         setTempFontDark(colors.dark   ?? '#FFFFFF')
                         setTempFontLight(colors.light ?? '#111111')
+                        setTempBold(colors.bold        ?? false)
                         setFontColorOpen(level)
                       }}
                       className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-medium transition-opacity hover:opacity-80"
@@ -1076,9 +1230,7 @@ export default function MarketCodeManagementPage() {
                           <div>
                             <label className="text-[10px] text-brand-muted mb-1 block">배경 색상</label>
                             <div className="flex items-center gap-2">
-                              <input type="color" value={tempBgColor} onChange={e => setTempBgColor(e.target.value)}
-                                className="w-8 h-8 rounded cursor-pointer p-0.5 shrink-0"
-                                style={{ border: '1px solid var(--color-border-default)', background: 'transparent' }} />
+                              <ExcelColorPicker value={tempBgColor} onChange={setTempBgColor} />
                               <input type="text" value={tempBgColor} onChange={e => setTempBgColor(e.target.value)}
                                 className="flex-1 text-xs px-2 py-1.5 rounded"
                                 style={{ background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }} />
@@ -1092,9 +1244,7 @@ export default function MarketCodeManagementPage() {
                           <div>
                             <label className="text-[10px] text-brand-muted mb-1 block">폰트 색상 — 다크 모드</label>
                             <div className="flex items-center gap-2">
-                              <input type="color" value={tempFontDark} onChange={e => setTempFontDark(e.target.value)}
-                                className="w-8 h-8 rounded cursor-pointer p-0.5 shrink-0"
-                                style={{ border: '1px solid var(--color-border-default)', background: 'transparent' }} />
+                              <ExcelColorPicker value={tempFontDark} onChange={setTempFontDark} />
                               <input type="text" value={tempFontDark} onChange={e => setTempFontDark(e.target.value)}
                                 className="flex-1 text-xs px-2 py-1.5 rounded"
                                 style={{ background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }} />
@@ -1105,9 +1255,7 @@ export default function MarketCodeManagementPage() {
                           <div>
                             <label className="text-[10px] text-brand-muted mb-1 block">폰트 색상 — 라이트 모드</label>
                             <div className="flex items-center gap-2">
-                              <input type="color" value={tempFontLight} onChange={e => setTempFontLight(e.target.value)}
-                                className="w-8 h-8 rounded cursor-pointer p-0.5 shrink-0"
-                                style={{ border: '1px solid var(--color-border-default)', background: 'transparent' }} />
+                              <ExcelColorPicker value={tempFontLight} onChange={setTempFontLight} />
                               <input type="text" value={tempFontLight} onChange={e => setTempFontLight(e.target.value)}
                                 className="flex-1 text-xs px-2 py-1.5 rounded"
                                 style={{ background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }} />
@@ -1115,8 +1263,21 @@ export default function MarketCodeManagementPage() {
                           </div>
                         </div>
 
+                        {/* Bold 토글 */}
+                        <div style={{ borderTop: '1px solid var(--color-border-subtle)', paddingTop: 10, marginTop: 2 }}>
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] text-brand-muted">굵게 표시</label>
+                            <Toggle value={tempBold} onChange={setTempBold} />
+                          </div>
+                        </div>
+
                         <button
-                          onClick={() => saveLevelColors(level, '', '', '')}
+                          onClick={() => {
+                            setTempBgColor(DEFAULT_BG_COLOR)
+                            setTempFontDark(DEFAULT_FONT_DARK)
+                            setTempFontLight(DEFAULT_FONT_LIGHT)
+                            setTempBold(false)
+                          }}
                           className="w-full mt-2.5 text-xs py-1.5 rounded flex items-center justify-center gap-1.5 transition-colors"
                           style={{ border: '1px dashed var(--color-border-default)', color: 'var(--color-text-muted)' }}
                           onMouseEnter={e => (e.currentTarget.style.background = 'var(--overlay-hover)')}
@@ -1124,7 +1285,7 @@ export default function MarketCodeManagementPage() {
                           기본값으로 초기화
                         </button>
                         <div className="flex gap-2 mt-2">
-                          <button onClick={() => saveLevelColors(level, tempBgColor, tempFontDark, tempFontLight)}
+                          <button onClick={() => saveLevelColors(level, tempBgColor, tempFontDark, tempFontLight, tempBold)}
                             className="flex-1 text-xs py-1.5 rounded font-semibold"
                             style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
                             적용
@@ -1143,7 +1304,9 @@ export default function MarketCodeManagementPage() {
               </div>
             </div>
           </div>
-          <MarketPreviewTable tree={tree} isDark={isDark} />
+          <div className="p-4" style={{ background: 'var(--color-bg-primary)' }}>
+            <MarketPreviewTable tree={tree} isDark={isDark} />
+          </div>
         </div>
 
       </div>

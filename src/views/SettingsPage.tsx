@@ -39,8 +39,8 @@ const BASE_SETUP_ITEMS: SetupItem[] = [
   },
   {
     icon:        <Tags size={22} />,
-    title:       'Market_Code Table Setup',
-    description: '마켓코드별 실적 테이블을 설정합니다.',
+    title:       'Base Table Setup',
+    description: '기본 테이블(세그타입, 코드)을 설정합니다.',
     status:      'in-progress',
     href:        '/settings/market-codes',
   },

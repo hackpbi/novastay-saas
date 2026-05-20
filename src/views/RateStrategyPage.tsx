@@ -512,12 +512,9 @@ export default function RateStrategyPage() {
     queryKey: ['r02_otb_dates', hotelId],
     queryFn:  async () => {
       const { data, error } = await (supabase as any)
-        .from('r02_otb')
-        .select('update_date')
-        .eq('hotel_id', hotelId)
-        .order('update_date', { ascending: false })
+        .rpc('get_otb_dates', { p_hotel_id: hotelId })
       if (error) throw error
-      return [...new Set(data?.map((d: any) => d.update_date) ?? [])] as string[]
+      return (data ?? []) as string[]
     },
     enabled:   !!hotelId,
     staleTime: 5 * 60 * 1000,

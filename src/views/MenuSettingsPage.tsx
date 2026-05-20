@@ -97,16 +97,19 @@ function TypeBadge({ type }: { type: MenuType }) {
 // ── Sortable Menu Item ────────────────────────────────────────────────────────
 
 function SortableMenuItem({
-  menu, selected, onSelect, depth,
+  menu, selected, onSelect, depth, disabled,
 }: {
-  menu: SaasMenu; selected: SaasMenu | null; onSelect: (m: SaasMenu) => void; depth: number
+  menu: SaasMenu; selected: SaasMenu | null; onSelect: (m: SaasMenu) => void; depth: number; disabled?: boolean
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: menu.id })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: menu.id,
+    disabled,
+  })
 
-  const style = {
-    transform:  CSS.Transform.toString(transform),
+  const style: React.CSSProperties = {
+    transform:   CSS.Transform.toString(transform),
     transition,
-    opacity:    isDragging ? 0.5 : 1,
+    opacity:     isDragging ? 0.5 : 1,
     paddingLeft: depth * 20,
   }
 
@@ -116,7 +119,7 @@ function SortableMenuItem({
     <div ref={setNodeRef} style={style}>
       <div
         onClick={() => onSelect(menu)}
-        className="flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer transition-all group"
+        className="flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer transition-all"
         style={{
           background: isSelected ? 'var(--accent-badge-bg)' : 'transparent',
           border:     isSelected ? '1px solid var(--color-accent-primary)' : '1px solid transparent',
@@ -124,14 +127,18 @@ function SortableMenuItem({
         onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--color-bg-secondary)' }}
         onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
       >
-        <button
-          {...attributes}
-          {...listeners}
-          className="text-brand-dimmed hover:text-brand-muted transition-colors cursor-grab active:cursor-grabbing shrink-0"
-          onClick={e => e.stopPropagation()}
-        >
-          <GripVertical size={13} />
-        </button>
+        {!disabled ? (
+          <button
+            {...attributes}
+            {...listeners}
+            className="text-brand-dimmed hover:text-brand-muted transition-colors cursor-grab active:cursor-grabbing shrink-0"
+            onClick={e => e.stopPropagation()}
+          >
+            <GripVertical size={13} />
+          </button>
+        ) : (
+          <span className="shrink-0" style={{ width: 13 }} />
+        )}
 
         <TypeBadge type={menu.menu_type} />
 
@@ -151,15 +158,6 @@ function SortableMenuItem({
 
         <ChevronRight size={12} className={`shrink-0 transition-colors ${isSelected ? 'text-accent-primary' : 'text-brand-dimmed'}`} />
       </div>
-
-      {/* 하위 메뉴 */}
-      {menu.children && menu.children.length > 0 && (
-        <div>
-          {menu.children.map(child => (
-            <SortableMenuItem key={child.id} menu={child} selected={selected} onSelect={onSelect} depth={depth + 1} />
-          ))}
-        </div>
-      )}
     </div>
   )
 }
@@ -180,6 +178,16 @@ function buildTree(menus: SaasMenu[]): SaasMenu[] {
     }
   })
   return roots
+}
+
+// DFS 순서로 id 목록 추출 (SortableContext items 순서를 시각적 렌더 순서와 일치시키기 위함)
+function flattenTreeIds(nodes: SaasMenu[]): string[] {
+  const ids: string[] = []
+  for (const node of nodes) {
+    ids.push(node.id)
+    if (node.children?.length) ids.push(...flattenTreeIds(node.children))
+  }
+  return ids
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -227,36 +235,59 @@ export default function MenuSettingsPage() {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
-  // DnD 완료
+  // DnD 완료 — 상위 메뉴 드래그 시 하위 메뉴를 블록으로 함께 이동
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over || active.id === over.id) return
 
-    const parentId = menus.find(m => m.id === String(active.id))?.parent_id ?? null
-    const siblings = menus
-      .filter(m => m.parent_id === parentId)
-      .sort((a, b) => a.sort_order - b.sort_order)
+    const activeId = String(active.id)
+    const overId   = String(over.id)
+    const sorted   = [...menus].sort((a, b) => a.sort_order - b.sort_order)
 
-    const oldIdx = siblings.findIndex(m => m.id === active.id)
-    const newIdx = siblings.findIndex(m => m.id === over.id)
-    if (oldIdx === -1 || newIdx === -1) return
+    // 드래그된 아이템의 하위 메뉴 수집
+    const children = sorted.filter(m => m.parent_id === activeId)
 
-    const reordered = arrayMove(siblings, oldIdx, newIdx)
+    let newSorted: SaasMenu[]
 
-    // 로컬 업데이트
-    const updated = menus.map(m => {
-      const idx = reordered.findIndex(r => r.id === m.id)
-      return idx !== -1 ? { ...m, sort_order: idx + 1 } : m
-    })
+    if (children.length === 0) {
+      // 하위 메뉴 없음 — 단순 이동
+      const oldIdx = sorted.findIndex(m => m.id === activeId)
+      const newIdx = sorted.findIndex(m => m.id === overId)
+      if (oldIdx === -1 || newIdx === -1) return
+      newSorted = arrayMove(sorted, oldIdx, newIdx)
+    } else {
+      // 상위 메뉴 — 부모 + 자식을 블록으로 이동
+      const childIds  = new Set(children.map(c => c.id))
+      const block     = sorted.filter(m => m.id === activeId || childIds.has(m.id))
+      const remaining = sorted.filter(m => m.id !== activeId && !childIds.has(m.id))
+
+      // over가 블록 내 자식이면 이동 불가
+      if (childIds.has(overId)) return
+
+      const overInRemaining = remaining.findIndex(m => m.id === overId)
+      if (overInRemaining === -1) return
+
+      // 이동 방향에 따라 삽입 위치 결정
+      const oldParentPos = sorted.findIndex(m => m.id === activeId)
+      const overPos      = sorted.findIndex(m => m.id === overId)
+      const insertAt     = overPos > oldParentPos ? overInRemaining + 1 : overInRemaining
+
+      newSorted = [
+        ...remaining.slice(0, insertAt),
+        ...block,
+        ...remaining.slice(insertAt),
+      ]
+    }
+
+    const updated = newSorted.map((m, i) => ({ ...m, sort_order: i + 1 }))
     setMenus(updated)
     setTree(buildTree(updated))
 
-    // DB 업데이트
-    for (let i = 0; i < reordered.length; i++) {
+    for (let i = 0; i < newSorted.length; i++) {
       await (supabase as any)
         .from('m06_saas_menus')
         .update({ sort_order: i + 1 })
-        .eq('id', reordered[i].id)
+        .eq('id', newSorted[i].id)
     }
   }
 
@@ -419,15 +450,19 @@ export default function MenuSettingsPage() {
               </div>
             ) : (
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <SortableContext items={menus.map(m => m.id)} strategy={verticalListSortingStrategy}>
+                <SortableContext
+                  items={[...menus].sort((a, b) => a.sort_order - b.sort_order).map(m => m.id)}
+                  strategy={verticalListSortingStrategy}
+                >
                   <div className="space-y-0.5">
-                    {tree.map(menu => (
+                    {[...menus].sort((a, b) => a.sort_order - b.sort_order).map(menu => (
                       <SortableMenuItem
                         key={menu.id}
                         menu={menu}
                         selected={selected}
                         onSelect={handleSelect}
-                        depth={0}
+                        depth={menu.parent_id ? 1 : 0}
+                        disabled={!!menu.parent_id}
                       />
                     ))}
                   </div>

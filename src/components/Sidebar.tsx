@@ -499,13 +499,13 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </nav>
 
         {/* Bottom (고정) */}
-        <div className="shrink-0 py-2 space-y-0.5" style={{ borderTop: '1px solid var(--color-border-default)' }}>
+        <div className="shrink-0 py-2 space-y-2.5" style={{ borderTop: '1px solid var(--color-border-default)' }}>
           <SimpleNavItem path="/notifications" label="알림"  iconKey="Bell"     collapsed={collapsed} badge />
           <SimpleNavItem path="/settings"      label="설정"  iconKey="Settings" collapsed={collapsed} />
 
           {/* Theme toggle + Upload */}
           {collapsed ? (
-            <div className="flex flex-col items-center gap-1.5 mx-2 mb-1">
+            <div className="flex flex-col items-center gap-1.5 mx-2">
               <button onClick={toggle} title={mounted ? (isDark ? '라이트 모드' : '다크 모드') : '테마 전환'}
                 className="w-7 h-7 rounded-lg flex items-center justify-center transition-all hover:bg-[var(--overlay-hover)]"
                 style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}>
@@ -518,7 +518,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               </button>
             </div>
           ) : (
-            <div className="flex gap-2 mx-2 mb-1">
+            <div className="flex gap-2 mx-2">
               <button onClick={toggle}
                 className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg text-xs transition-all hover:bg-[var(--overlay-hover)]"
                 style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}>
@@ -535,7 +535,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           )}
 
           {/* User profile */}
-          <div className="mx-2 mt-1">
+          <div className="mx-2">
             <div className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg bg-bg-tertiary ${collapsed ? 'justify-center' : ''}`}
               style={{ border: '1px solid var(--color-border-default)' }}>
               <div className="w-7 h-7 rounded-full bg-gradient-cta flex items-center justify-center text-xs font-bold shrink-0" style={{ color: '#0A0A0A' }}>

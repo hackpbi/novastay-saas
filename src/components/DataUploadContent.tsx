@@ -10,10 +10,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { FormDatePicker } from '@/components/DatePicker'
 import { QUERY_KEYS } from '@/lib/queryKeys'
+import BudgetUploadTab from '@/components/BudgetUploadTab'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type TabType = 'otb' | 'actual'
+type TabType = 'otb' | 'actual' | 'budget'
 
 type UploadResult = {
   type:          'success' | 'partial' | 'error'
@@ -231,9 +232,9 @@ export default function DataUploadContent({ hotelId, showBulkUpload = false, onB
     queryKey: QUERY_KEYS.otbDates(hotelId),
     queryFn:  async () => {
       const { data, error } = await (supabase as any)
-        .from('r02_otb').select('update_date').eq('hotel_id', hotelId).order('update_date', { ascending: false })
+        .rpc('get_otb_dates', { p_hotel_id: hotelId })
       if (error) throw error
-      return [...new Set(data?.map((d: any) => d.update_date) ?? [])] as string[]
+      return (data ?? []) as string[]
     },
     enabled:   !!hotelId,
     staleTime: 5 * 60 * 1000,
@@ -327,6 +328,17 @@ export default function DataUploadContent({ hotelId, showBulkUpload = false, onB
             })
             if (error || !data?.success) console.error(`OTB INSERT 오류 [${updateDate}]:`, error?.message ?? data?.error)
           }
+
+          // 집계 갱신
+          try {
+            console.log('a02_refresh_otb_daily 호출 파라미터:', { p_hotel_id: hotelId, p_update_date: updateDate })
+            const { data: refreshData, error: refreshError } = await (supabase as any)
+              .rpc('a02_refresh_otb_daily', { p_hotel_id: hotelId, p_update_date: updateDate })
+            console.log('a02_refresh_otb_daily 결과:', refreshData, 'error:', refreshError)
+            if (refreshError) console.error('집계 갱신 오류:', refreshError)
+          } catch (e: any) {
+            console.error('a02_refresh_otb_daily 예외:', e)
+          }
         } catch (e: any) {
           console.error(`OTB DELETE/INSERT 오류 [${updateDate}]:`, e)
         }
@@ -372,7 +384,7 @@ export default function DataUploadContent({ hotelId, showBulkUpload = false, onB
       {/* 탭 */}
       <div className="flex gap-1 p-1 rounded-xl"
         style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)' }}>
-        {(['otb', 'actual'] as TabType[]).map(t => (
+        {(['otb', 'actual', 'budget'] as TabType[]).map(t => (
           <button key={t} onClick={() => switchTab(t)} disabled={uploading}
             className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
             style={{
@@ -380,12 +392,21 @@ export default function DataUploadContent({ hotelId, showBulkUpload = false, onB
               color:      activeTab === t ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
               boxShadow:  activeTab === t ? 'var(--shadow-card)' : 'none',
             }}>
-            {t === 'otb' ? 'OTB' : 'Actual'}
+            {t === 'otb' ? 'OTB' : t === 'actual' ? 'Actual' : 'Budget'}
           </button>
         ))}
       </div>
 
-      {/* 콘텐츠 카드 */}
+      {/* Budget 탭 */}
+      {activeTab === 'budget' && (
+        <div className="rounded-2xl p-6"
+          style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}>
+          <BudgetUploadTab hotelId={hotelId} />
+        </div>
+      )}
+
+      {/* 콘텐츠 카드 (OTB / Actual) */}
+      {activeTab !== 'budget' && (
       <div className="rounded-2xl p-6 space-y-5"
         style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}>
 
@@ -474,6 +495,7 @@ export default function DataUploadContent({ hotelId, showBulkUpload = false, onB
           </div>
         )}
       </div>
+      )}
 
       {/* 대용량 업로드 버튼 */}
       {showBulkUpload && onBulkOpen && (
