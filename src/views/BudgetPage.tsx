@@ -992,6 +992,7 @@ export default function BudgetPage() {
             data={monthlyTableData}
             loading={monthlyLoading}
             stickyFirstGroup
+            opaqueBg
           />
 
 

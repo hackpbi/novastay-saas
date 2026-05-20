@@ -29,6 +29,7 @@ export type MarketTableProps = {
   year?:             number
   month?:            number
   stickyFirstGroup?: boolean
+  opaqueBg?:         boolean
 }
 
 type Schema = {
@@ -192,7 +193,7 @@ function SegCell({
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function MarketTable({
-  hotelId, columns, data, groupHeader, loading, className, year, month, stickyFirstGroup,
+  hotelId, columns, data, groupHeader, loading, className, year, month, stickyFirstGroup, opaqueBg,
 }: MarketTableProps) {
 
   // queryKey에 'full' 추가 — BudgetPage의 minimal 쿼리 캐시와 충돌 방지
@@ -268,6 +269,10 @@ export default function MarketTable({
       else groupSpans.push({ group: g, span: 1 })
     })
   }
+
+  // color + 불투명도 헬퍼: opaqueBg=true면 순색, 아니면 13% 투명
+  const rowBg = (color: string | null, fallback: string) =>
+    color ? (opaqueBg ? color : `${color}22`) : fallback
 
   // ── Sticky first-group helpers ────────────────────────────────────────────────
   const stickyGroupCols = stickyFirstGroup && hasGroups ? (groupSpans[0]?.span ?? 0) : 0
@@ -393,7 +398,7 @@ export default function MarketTable({
                 <React.Fragment key={group.parent.id}>
                   {/* 대분류 */}
                   {(() => {
-                    const mainBg = group.parent.color ? `${group.parent.color}22` : 'var(--color-bg-secondary)'
+                    const mainBg = rowBg(group.parent.color, 'var(--color-bg-secondary)')
                     return (
                       <tr style={{ background: mainBg, borderTop: '1px solid var(--color-border-default)', fontWeight: group.parent.is_bold ? 700 : 600 }}>
                         <td className="px-4 py-2"
@@ -469,7 +474,7 @@ export default function MarketTable({
 
             // 중분류
             const mid   = item.data
-            const midBg = mid.color ? `${mid.color}22` : 'var(--color-bg-secondary)'
+            const midBg = rowBg(mid.color, 'var(--color-bg-secondary)')
             return (
               <tr key={mid.id}
                 style={{ background: midBg, borderTop: '1px solid var(--color-border-default)', fontWeight: mid.is_bold ? 600 : 400 }}>
