@@ -1,8 +1,8 @@
 'use client'
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Save, Download, Upload, ChevronDown, Loader2, AlertTriangle } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { Save, Download, Upload, ChevronDown, Loader2 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -43,15 +43,6 @@ type BudgetDailyRow = {
 }
 
 
-type DistributedRow = {
-  business_date:  string
-  segmentation:   string
-  budget_nights:  number
-  budget_revenue: number
-  has_warning:    boolean
-}
-
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatNumber(n: number): string {
@@ -75,11 +66,6 @@ function getDaysInMonth(year: number, month: number) {
 
 const DAY_COLOR: Record<string, string> = { 토: '#4A9EFF', 일: '#FC8181' }
 
-function formatCurrency(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}`
-  if (n >= 1_000)     return `${(n / 1_000).toFixed(0)}`
-  return n.toLocaleString('ko-KR')
-}
 
 // ── Input Cell ────────────────────────────────────────────────────────────────
 
@@ -112,11 +98,6 @@ function InputCell({
   )
 }
 
-// ── 안정적인 빈 배열 상수 (컴포넌트 외부) ─────────────────────────────────────
-// useQuery data가 undefined일 때 = [] 디폴트는 매 렌더마다 새 참조 생성 → useEffect 루프
-// 컴포넌트 외부 상수로 고정하면 참조가 항상 동일 → 루프 방지
-const EMPTY_MONTHLY_ROWS: BudgetMonthlyRow[] = []
-const EMPTY_DAILY_ROWS:   BudgetDailyRow[]   = []
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
@@ -137,141 +118,19 @@ export default function BudgetPage() {
   const [importing,       setImporting]       = useState(false)
   const [saveError,       setSaveError]       = useState<string | null>(null)
   const [initConfirm,     setInitConfirm]     = useState(false)
-  const [uploadedBudget,  setUploadedBudget]  = useState<Record<string, Record<number, MonthVal>> | null>(null)
-  const [distributedData, setDistributedData] = useState<DistributedRow[]>([])
-  const [warnings,        setWarnings]        = useState<string[]>([])
-  const [showDistributed, setShowDistributed] = useState(false)
   const [isDistributing,  setIsDistributing]  = useState(false)
-  const [isSaving,        setIsSaving]        = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 1 + i)
 
-  // ── Budget 기준일 목록 (get_budget_dates) ────────────────────────────────────
-  const { data: budgetDates = [] } = useQuery<string[]>({
-    queryKey: ['budget_dates', hotelId],
-    queryFn:  async () => {
-      const { data, error } = await (supabase as any)
-        .rpc('get_budget_dates', { p_hotel_id: hotelId })
-      if (error) throw error
-      return (data ?? []) as string[]
-    },
-    enabled:   !!hotelId,
-    staleTime: 5 * 60 * 1000,
-  })
-
-  // 가장 최근 날짜 자동 선택 — budgetDate를 deps에서 제거해 무한 루프 방지
-  useEffect(() => {
-    if (budgetDates.length > 0) {
-      setBudgetDate(prev => prev || budgetDates[0])
-    }
-  }, [budgetDates])
-
-  // ── 0. 객실수 + 세그먼트 스키마 조회 ─────────────────────────────────────────
-  const { data: hotelDetail } = useQuery<{ room_count: number }>({
-    queryKey: ['m03_hotel_details', hotelId],
-    queryFn:  async () => {
-      const { data, error } = await (supabase as any)
-        .from('m03_hotel_details')
-        .select('room_count')
-        .eq('hotel_id', hotelId)
-        .single()
-      if (error) throw error
-      return data
-    },
-    enabled:   !!hotelId,
-    staleTime: 10 * 60 * 1000,
-  })
-  const roomCount = hotelDetail?.room_count ?? 0
-
-  const { data: schemaRows = [] } = useQuery<{ segmentation: string[] | null; order_index: number }[]>({
-    queryKey: ['c05_market_table_schema', hotelId],
-    queryFn:  async () => {
-      const { data, error } = await (supabase as any)
-        .from('c05_market_table_schema')
-        .select('segmentation, order_index')
-        .eq('hotel_id', hotelId)
-        .eq('is_active', true)
-        .order('order_index')
-      if (error) throw error
-      return data ?? []
-    },
-    enabled:   !!hotelId,
-    staleTime: 10 * 60 * 1000,
-  })
-
-  const schemaSegs = useMemo(() => {
-    const seen = new Set<string>()
-    const segs: string[] = []
-    schemaRows.forEach(row => {
-      (row.segmentation ?? []).forEach((s: string) => { if (!seen.has(s)) { seen.add(s); segs.push(s) } })
-    })
-    return segs
-  }, [schemaRows])
-
-
-  // ── 1. 월별 조회 (get_budget_monthly) ─────────────────────────────────────────
-  const { data: budgetMonthlyRows = EMPTY_MONTHLY_ROWS, isLoading: monthlyLoading } = useQuery<BudgetMonthlyRow[]>({
-    queryKey: ['budget_monthly', hotelId, selectedYear, budgetDate],
-    queryFn:  async () => {
-      const { data, error } = await (supabase as any)
-        .rpc('get_budget_monthly', {
-          p_hotel_id:    hotelId,
-          p_year:        selectedYear,
-          p_update_date: budgetDate || undefined,
-        })
-      if (error) throw error
-      return data ?? []
-    },
-    enabled:   !!hotelId,
-    staleTime: 5 * 60 * 1000,
-  })
-
-  // 월별 RPC 결과 → 로컬 편집 상태 초기화
-  useEffect(() => {
-    const result: BudgetMonthData = {}
-    budgetMonthlyRows.forEach(row => {
-      if (!result[row.segmentation]) result[row.segmentation] = {}
-      result[row.segmentation][row.month_num] = {
-        rn:  row.budget_nights  ?? 0,
-        rev: row.budget_revenue ?? 0,
-      }
-    })
-    setBudgetData(result)
-  }, [budgetMonthlyRows])
-
-  // ── 2. 일별 조회 (get_budget_daily) ───────────────────────────────────────────
-  const { data: budgetDailyRows = EMPTY_DAILY_ROWS, isLoading: dailyLoading } = useQuery<BudgetDailyRow[]>({
-    queryKey: ['budget_daily', hotelId, selectedYear, selectedMonth, otbDate],
-    queryFn:  async () => {
-      const { data, error } = await (supabase as any)
-        .rpc('get_budget_daily', {
-          p_hotel_id: hotelId,
-          p_year:     selectedYear,
-          p_month:    selectedMonth,
-          p_otb_date: otbDate,
-        })
-        .limit(100000)
-      if (error) throw error
-      return data ?? []
-    },
-    enabled:   !!hotelId && !!otbDate && activeTab === 'daily',
-    staleTime: 5 * 60 * 1000,
-  })
-
-  // 일별 RPC 결과 → 로컬 편집 상태 초기화
-  useEffect(() => {
-    const edits: BudgetDailyEdits = {}
-    budgetDailyRows.forEach(row => {
-      if (!edits[row.business_date]) edits[row.business_date] = {}
-      edits[row.business_date][row.segmentation] = {
-        rn:  row.budget_nights  ?? 0,
-        rev: row.budget_revenue ?? 0,
-      }
-    })
-    setDailyEdits(edits)
-  }, [budgetDailyRows])
+  const budgetDates:       string[]          = []
+  const roomCount:         number            = 0
+  const schemaSegs:        string[]          = []
+  const budgetMonthlyRows: BudgetMonthlyRow[] = []
+  const monthlyLoading:    boolean           = false
+  const budgetDailyRows:   BudgetDailyRow[]  = []
+  const dailyLoading:      boolean           = false
 
   // ── 3. 전년 실적 불러오기 ────────────────────────────────────────────────────
   // init_budget_from_actual RPC 내부 중복 upsert 오류 회피:
@@ -380,7 +239,7 @@ export default function BudgetPage() {
     }))
 
     try {
-      const { data, error } = await (supabase as any)
+      const { error } = await (supabase as any)
         .rpc('upsert_budget', {
           p_hotel_id:    hotelId,
           p_profile_id:  profile.id,
@@ -401,7 +260,7 @@ export default function BudgetPage() {
     const rev = dailyEdits[businessDate]?.[segmentation]?.rev ?? 0
 
     try {
-      const { data, error } = await (supabase as any)
+      const { error } = await (supabase as any)
         .rpc('upsert_budget', {
           p_hotel_id:    hotelId,
           p_profile_id:  profile.id,
@@ -469,9 +328,45 @@ export default function BudgetPage() {
 
   // ── Step1. 엑셀 양식 다운로드 ────────────────────────────────────────────────
   const handleDownloadTemplate = async () => {
+    // 스키마 계층 구조 조회
+    const { data: schemaRows } = await (supabase as any)
+      .from('c05_market_table_schema')
+      .select('*')
+      .eq('hotel_id', hotelId)
+      .eq('is_active', true)
+      .order('order_index')
+
+    const schemas: any[] = schemaRows ?? []
+    const mainSchemas = schemas.filter((s: any) => s.level === 'main').sort((a: any, b: any) => a.order_index - b.order_index)
+    const subSchemas  = schemas.filter((s: any) => s.level === 'sub')
+    const midSchemas  = schemas.filter((s: any) => s.level === 'mid').sort((a: any, b: any) => a.order_index - b.order_index)
+
+    const groups = mainSchemas.map((main: any) => ({
+      parent:   main,
+      children: subSchemas.filter((s: any) => s.parent_id === main.id).sort((a: any, b: any) => a.order_index - b.order_index),
+    }))
+
+    // 대분류/중분류 order_index 인터리빙 (MarketTable과 동일 순서)
+    const items = [
+      ...groups.map((g: any) => ({ kind: 'group', data: g, idx: g.parent.order_index })),
+      ...midSchemas.map((m: any) => ({ kind: 'mid', data: m, idx: m.order_index })),
+    ].sort((a, b) => a.idx - b.idx)
+
+    // 템플릿 행 목록 생성
+    const templateRows: { label: string; isHeader: boolean }[] = []
+    items.forEach(item => {
+      if (item.kind === 'group') {
+        templateRows.push({ label: item.data.parent.name, isHeader: true })
+        item.data.children.forEach((child: any) => {
+          templateRows.push({ label: `  ${child.name}`, isHeader: false })
+        })
+      } else {
+        templateRows.push({ label: item.data.name, isHeader: false })
+      }
+    })
+
     const wb = XLSX.utils.book_new()
     const ws: any = {}
-    const segs = schemaSegs.length > 0 ? schemaSegs : allSegs
 
     // 헤더 행1: Segmentation | 1월(3칸) ... 12월(3칸) | 합계(3칸)
     ws['A1'] = { v: 'Segmentation' }
@@ -491,9 +386,9 @@ export default function BudgetPage() {
     ws[`${XLSX.utils.encode_col(38)}2`] = { v: 'ADR' }
     ws[`${XLSX.utils.encode_col(39)}2`] = { v: 'REV' }
 
-    // 세그먼트 행
-    segs.forEach((seg, rowIdx) => {
-      ws[`A${rowIdx + 3}`] = { v: seg }
+    // 데이터 행 (대분류 헤더 포함)
+    templateRows.forEach((row, rowIdx) => {
+      ws[`A${rowIdx + 3}`] = { v: row.label }
     })
 
     // 병합
@@ -506,7 +401,7 @@ export default function BudgetPage() {
     ]
     ws['!ref'] = XLSX.utils.encode_range({
       s: { r: 0, c: 0 },
-      e: { r: segs.length + 1, c: 39 },
+      e: { r: templateRows.length + 1, c: 39 },
     })
 
     XLSX.utils.book_append_sheet(wb, ws, 'Budget')
@@ -519,6 +414,21 @@ export default function BudgetPage() {
     if (!file) return
     if (fileInputRef.current) fileInputRef.current.value = ''
 
+    // 스키마 조회 → 이름 기반 행을 segmentation 코드로 변환
+    const { data: schemaRows } = await (supabase as any)
+      .from('c05_market_table_schema')
+      .select('id, name, level, segmentation')
+      .eq('hotel_id', hotelId)
+      .eq('is_active', true)
+
+    // label(trimmed) → segmentation codes[] 맵
+    const labelToCodesMap: Record<string, string[]> = {}
+    ;(schemaRows ?? []).forEach((s: any) => {
+      if ((s.level === 'sub' || s.level === 'mid') && s.segmentation?.length > 0) {
+        labelToCodesMap[s.name.trim()] = s.segmentation
+      }
+    })
+
     const buffer = await file.arrayBuffer()
     const wb = XLSX.read(buffer, { type: 'array' })
     const ws = wb.Sheets[wb.SheetNames[0]]
@@ -526,23 +436,28 @@ export default function BudgetPage() {
 
     const parsed: Record<string, Record<number, MonthVal>> = {}
     for (let i = 2; i < rows.length; i++) {
-      const row = rows[i]
-      const seg = String(row[0] ?? '').trim()
-      if (!seg) continue
-      parsed[seg] = {}
+      const row   = rows[i]
+      const label = String(row[0] ?? '').trim()
+      if (!label) continue
+
+      // 스키마 이름 매칭 → codes 확장 / 미매칭 시 label 자체를 코드로 사용 (구 양식 호환)
+      const codes   = labelToCodesMap[label] ?? [label]
+      const perCode = codes.length
+
       for (let m = 1; m <= 12; m++) {
-        const base = 1 + (m - 1) * 3
-        parsed[seg][m] = {
-          rn:  Number(row[base]     ?? 0),
-          rev: Number(row[base + 2] ?? 0),
-        }
+        const base    = 1 + (m - 1) * 3
+        const totalRn  = Number(row[base]     ?? 0)
+        const totalRev = Number(row[base + 2] ?? 0)
+        codes.forEach(code => {
+          if (!parsed[code]) parsed[code] = {}
+          parsed[code][m] = {
+            rn:  Math.round(totalRn  / perCode),
+            rev: Math.round(totalRev / perCode),
+          }
+        })
       }
     }
 
-    setUploadedBudget(parsed)
-    setShowDistributed(false)
-    setDistributedData([])
-    setWarnings([])
     await distributeBudget(parsed)
   }
 
@@ -588,9 +503,8 @@ export default function BudgetPage() {
       })
 
       // 일별 배분
-      const distributed: DistributedRow[] = []
       const newWarnings: string[] = []
-      const rowMap = new Map<string, DistributedRow>()
+      const rowMap = new Map<string, { business_date: string; segmentation: string; budget_nights: number; budget_revenue: number; has_warning: boolean }>()
 
       ;(calRows ?? []).forEach((cal: any) => {
         const date  = cal.date
@@ -635,9 +549,6 @@ export default function BudgetPage() {
         })
       })
 
-      setDistributedData(Array.from(rowMap.values()))
-      setWarnings(newWarnings)
-      setShowDistributed(true)
     } catch (err: any) {
       setSaveError(err.message)
     } finally {
@@ -645,61 +556,6 @@ export default function BudgetPage() {
     }
   }
 
-  // ── Step5. 최종 저장 ──────────────────────────────────────────────────────────
-  const handleSaveBudget = async () => {
-    if (!profile?.id) return
-    setIsSaving(true)
-    try {
-      const rows = distributedData.map(d => ({
-        business_date:  d.business_date,
-        segmentation:   d.segmentation,
-        sorting1:       null,
-        sorting2:       null,
-        sorting3:       null,
-        budget_nights:  d.budget_nights,
-        budget_revenue: d.budget_revenue,
-      }))
-      const CHUNK = 1000
-      for (let i = 0; i < rows.length; i += CHUNK) {
-        const { error } = await (supabase as any)
-          .rpc('upsert_budget', {
-            p_hotel_id:    hotelId,
-            p_profile_id:  profile.id,
-            p_update_date: budgetDate || new Date().toISOString().split('T')[0],
-            p_rows:        rows.slice(i, i + CHUNK),
-          })
-        if (error) throw error
-      }
-      setShowDistributed(false)
-      setUploadedBudget(null)
-      setSaveError(null)
-      queryClient.invalidateQueries({ queryKey: ['budget_monthly', hotelId, selectedYear] })
-      queryClient.invalidateQueries({ queryKey: ['budget_daily',   hotelId, selectedYear] })
-    } catch (err: any) {
-      setSaveError(err.message)
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  // ── 미리보기 월별 집계 ────────────────────────────────────────────────────────
-  const previewMonthlyData = useMemo(() => {
-    const result: Record<string, Record<string, number>> = {}
-    distributedData.forEach(row => {
-      const month = new Date(row.business_date).getMonth() + 1
-      if (!result[row.segmentation]) result[row.segmentation] = {}
-      result[row.segmentation][`rn_${month}`]  = (result[row.segmentation][`rn_${month}`]  ?? 0) + row.budget_nights
-      result[row.segmentation][`rev_${month}`] = (result[row.segmentation][`rev_${month}`] ?? 0) + row.budget_revenue
-    })
-    const mArr = Array.from({ length: 12 }, (_, i) => i + 1)
-    Object.keys(result).forEach(seg => {
-      const tRn  = mArr.reduce((s, m) => s + (result[seg][`rn_${m}`]  ?? 0), 0)
-      const tRev = mArr.reduce((s, m) => s + (result[seg][`rev_${m}`] ?? 0), 0)
-      result[seg]['total_rn']  = tRn
-      result[seg]['total_rev'] = tRev
-    })
-    return result
-  }, [distributedData])
 
   // ── 로컬 편집 핸들러 ──────────────────────────────────────────────────────────
   const handleBudgetChange = useCallback((seg: string, month: number, field: 'rn' | 'rev', val: number) => {
@@ -993,135 +849,8 @@ export default function BudgetPage() {
             loading={monthlyLoading}
             stickyFirstGroup
             opaqueBg
+            maxHeight="calc(100vh - 270px)"
           />
-
-
-          {/* ── Step4. 미리보기 ── */}
-          {showDistributed && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-                  업로드 미리보기
-                  <span className="ml-2 text-xs font-normal text-brand-muted">
-                    ({distributedData.length}건 · 전년 비율 배분)
-                  </span>
-                </h3>
-              </div>
-
-              {/* 경고 */}
-              {warnings.length > 0 && (
-                <div className="p-3 rounded-lg"
-                  style={{ background: 'rgba(246,173,85,0.08)', border: '1px solid rgba(246,173,85,0.3)' }}>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <AlertTriangle size={13} style={{ color: '#C17B00' }} />
-                    <span className="text-xs font-medium" style={{ color: '#C17B00' }}>
-                      {warnings.length}건 경고 (해당 날짜는 균등 배분 적용)
-                    </span>
-                  </div>
-                  <div className="text-xs text-brand-muted max-h-20 overflow-y-auto space-y-0.5">
-                    {warnings.slice(0, 20).map((w, i) => <div key={i}>{w}</div>)}
-                    {warnings.length > 20 && <div>외 {warnings.length - 20}건...</div>}
-                  </div>
-                </div>
-              )}
-
-              {/* 미리보기 테이블 */}
-              <div className="overflow-x-auto rounded-xl" style={{ border: '1px solid var(--color-border-default)' }}>
-                <table className="border-collapse" style={{ fontSize: 12, tableLayout: 'fixed', fontVariantNumeric: 'tabular-nums' }}>
-                  <colgroup>
-                    <col style={{ width: 140 }} />
-                    {Array.from({ length: 13 * 3 }, (_, i) => {
-                      const pos = i % 3
-                      return <col key={i} style={{ width: pos === 0 ? 68 : pos === 1 ? 64 : 76 }} />
-                    })}
-                  </colgroup>
-                  <thead>
-                    <tr style={{ background: 'var(--color-bg-tertiary)', borderBottom: '1px solid var(--color-border-default)' }}>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-brand-muted" rowSpan={2}>
-                        Segmentation
-                      </th>
-                      {months.map(m => (
-                        <th key={m} colSpan={3}
-                          className="px-2 py-2 text-center text-xs font-semibold"
-                          style={{ borderLeft: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}>
-                          {m}월
-                        </th>
-                      ))}
-                      <th colSpan={3}
-                        className="px-2 py-2 text-center text-xs font-semibold"
-                        style={{ borderLeft: '1px solid var(--color-border-default)', color: 'var(--color-accent-primary)' }}>
-                        합계
-                      </th>
-                    </tr>
-                    <tr style={{ background: 'var(--color-bg-tertiary)', borderBottom: '1px solid var(--color-border-default)' }}>
-                      {Array.from({ length: 13 }, (_, i) => (
-                        <React.Fragment key={i}>
-                          <th className="px-1 py-1.5 text-center text-[10px] text-brand-muted whitespace-nowrap"
-                            style={{ borderLeft: '1px solid var(--color-border-default)' }}>R/N</th>
-                          <th className="px-1 py-1.5 text-center text-[10px] text-brand-muted whitespace-nowrap"
-                            style={{ borderLeft: '1px solid var(--color-border-subtle)' }}>ADR</th>
-                          <th className="px-1 py-1.5 text-center text-[10px] text-brand-muted whitespace-nowrap"
-                            style={{ borderLeft: '1px solid var(--color-border-subtle)' }}>REV</th>
-                        </React.Fragment>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(previewMonthlyData).map(([seg, data]) => (
-                      <tr key={seg} style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-                        <td className="px-3 py-2 text-xs font-medium" style={{ color: 'var(--color-text-primary)' }}>
-                          {seg}
-                        </td>
-                        {Array.from({ length: 13 }, (_, i) => {
-                          const isTotal = i === 12
-                          const rn  = isTotal ? (data['total_rn']  ?? 0) : (data[`rn_${i + 1}`]  ?? 0)
-                          const rev = isTotal ? (data['total_rev'] ?? 0) : (data[`rev_${i + 1}`] ?? 0)
-                          const adr = rn > 0 ? Math.round(rev / rn) : 0
-                          const over = roomCount > 0 && rn > roomCount
-                          return (
-                            <React.Fragment key={i}>
-                              <td className="px-1 py-1.5 text-right text-xs"
-                                style={{ color: over ? '#FC8181' : 'var(--color-text-primary)', borderLeft: '1px solid var(--color-border-default)' }}>
-                                {rn ? rn.toLocaleString('ko-KR') : '-'}
-                              </td>
-                              <td className="px-1 py-1.5 text-right text-xs text-brand-muted"
-                                style={{ borderLeft: '1px solid var(--color-border-subtle)' }}>
-                                {adr ? formatCurrency(adr) : '-'}
-                              </td>
-                              <td className="px-1 py-1.5 text-right text-xs"
-                                style={{ color: 'var(--color-accent-primary)', borderLeft: '1px solid var(--color-border-subtle)' }}>
-                                {rev ? formatCurrency(rev) : '-'}
-                              </td>
-                            </React.Fragment>
-                          )
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* 저장 버튼 */}
-              <div className="flex items-center justify-end gap-3">
-                <button
-                  onClick={() => { setShowDistributed(false); setUploadedBudget(null) }}
-                  className="px-4 py-2 rounded-full text-sm transition-all hover:opacity-80"
-                  style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}
-                >
-                  취소
-                </button>
-                <button
-                  onClick={handleSaveBudget}
-                  disabled={isSaving || distributedData.length === 0}
-                  className="flex items-center gap-1.5 px-6 py-2 rounded-full text-sm font-semibold transition-all hover:-translate-y-px disabled:opacity-50"
-                  style={{ background: 'var(--gradient-cta)', color: '#0A0A0A', boxShadow: 'var(--accent-btn-glow)' }}
-                >
-                  {isSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-                  {isSaving ? '저장 중...' : `${distributedData.length.toLocaleString()}건 저장`}
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
 

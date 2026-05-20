@@ -310,14 +310,24 @@ function fRev(n: number) { return (n / 1_000_000).toFixed(1) }
 
 // ── Market Preview Table ──────────────────────────────────────────────────────
 
-function MarketPreviewTable({ tree, isDark }: { tree: SchemaTree; isDark: boolean }) {
+function MarketPreviewTable({ tree, isDark, overrides = {} }: { tree: SchemaTree; isDark: boolean; overrides?: Partial<Record<SchemaLevel, { bg: string | null; dark: string | null; light: string | null; bold: boolean } | null>> }) {
   const CELL     = { borderLeft: '1px dashed var(--color-border-default)', width: 64, textAlign: 'center' as const }
   const CELL_DIM = { ...CELL, color: 'var(--color-text-muted)', fontSize: 11 }
 
-  const fontColor = (item: TableSchema, fallback: string) =>
-    isDark
-      ? (item.font_dark_color  ?? fallback)
-      : (item.font_light_color ?? fallback)
+  const fontColor = (item: TableSchema, fallback: string) => {
+    const ov = overrides[item.level]
+    if (ov) return isDark ? (ov.dark ?? fallback) : (ov.light ?? fallback)
+    return isDark ? (item.font_dark_color ?? fallback) : (item.font_light_color ?? fallback)
+  }
+  const getBg = (item: TableSchema) => {
+    const ov = overrides[item.level]
+    const color = ov ? ov.bg : item.color
+    return color ? color : 'var(--color-bg-secondary)'
+  }
+  const getIsBold = (item: TableSchema) => {
+    const ov = overrides[item.level]
+    return ov ? ov.bold : item.is_bold
+  }
 
   // 더미 데이터 사전 계산
   const subMap: Record<string, { rn: number; adr: number; rev: number }> = {}
@@ -373,10 +383,10 @@ function MarketPreviewTable({ tree, isDark }: { tree: SchemaTree; isDark: boolea
                 const group    = tree.groups.find(g => g.parent.id === item.id)
                 const gm       = groupMap[item.id] ?? { rn: 0, adr: 0, rev: 0 }
                 const mainColor = fontColor(item, 'var(--color-text-primary)')
-                const mainW    = item.is_bold ? 700 : 600
+                const mainW    = getIsBold(item) ? 700 : 600
                 return (
                   <React.Fragment key={item.id}>
-                    <tr style={{ background: item.color ? `${item.color}22` : 'var(--color-bg-secondary)', borderTop: '1px solid var(--color-border-default)' }}>
+                    <tr style={{ background: getBg(item), borderTop: '1px solid var(--color-border-default)' }}>
                       <td className="px-3 py-2"
                         style={{ color: mainColor, fontWeight: mainW }}>
                         {item.name}
@@ -388,7 +398,7 @@ function MarketPreviewTable({ tree, isDark }: { tree: SchemaTree; isDark: boolea
                     {group?.children.map(child => {
                       const sm         = subMap[child.id] ?? { rn: 0, adr: 0, rev: 0 }
                       const childColor = fontColor(child, child.color ?? 'var(--color-accent-primary)')
-                      const childW     = child.is_bold ? 600 : 400
+                      const childW     = getIsBold(child) ? 600 : 400
                       return (
                         <tr key={child.id} style={{ borderBottom: '1px dashed var(--color-border-subtle)' }}>
                           <td style={{ paddingLeft: 20, color: childColor, fontWeight: childW, fontSize: 12 }}>
@@ -406,9 +416,9 @@ function MarketPreviewTable({ tree, isDark }: { tree: SchemaTree; isDark: boolea
               // 중분류
               const mm       = midMap[item.id] ?? { rn: 0, adr: 0, rev: 0 }
               const midColor = fontColor(item, 'var(--color-text-primary)')
-              const midW     = item.is_bold ? 600 : 400
+              const midW     = getIsBold(item) ? 600 : 400
               return (
-                <tr key={item.id} style={{ background: item.color ? `${item.color}22` : 'var(--color-bg-secondary)', borderTop: '1px solid var(--color-border-default)', borderBottom: '1px solid var(--color-border-default)' }}>
+                <tr key={item.id} style={{ background: getBg(item), borderTop: '1px solid var(--color-border-default)', borderBottom: '1px solid var(--color-border-default)' }}>
                   <td className="px-3 py-2"
                     style={{ color: midColor, fontWeight: midW }}>
                     {item.name}
@@ -771,6 +781,7 @@ export default function MarketCodeManagementPage() {
   const [tempFontDark,  setTempFontDark]  = useState('#FFFFFF')
   const [tempFontLight, setTempFontLight] = useState('#111111')
   const [tempBold,      setTempBold]      = useState(false)
+  const [previewOverrides, setPreviewOverrides] = useState<Partial<Record<SchemaLevel, { bg: string | null; dark: string | null; light: string | null; bold: boolean } | null>>>({})
   const segPickerRef  = useRef<HTMLDivElement>(null)
   const fontColorRef  = useRef<HTMLDivElement>(null)
 
@@ -793,6 +804,7 @@ export default function MarketCodeManagementPage() {
     function onDown(e: MouseEvent) {
       if (fontColorRef.current && !fontColorRef.current.contains(e.target as Node)) {
         setFontColorOpen(null)
+        if (fontColorOpen) setPreviewOverrides(prev => ({ ...prev, [fontColorOpen]: null }))
       }
     }
     document.addEventListener('mousedown', onDown)
@@ -898,6 +910,7 @@ export default function MarketCodeManagementPage() {
       .eq('level', level)
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.marketTableSchema(hotelId) })
     setFontColorOpen(null)
+    setPreviewOverrides(prev => ({ ...prev, [level]: null }))
   }
 
   // ── Segmentation add / remove (optimistic) ─────────────────────────────────
@@ -1153,7 +1166,7 @@ export default function MarketCodeManagementPage() {
                         if (item.level === 'main') {
                           const group = tree.groups.find(g => g.parent.id === item.id)
                           if (!group) return null
-                          const mainBg = item.color ? `${item.color}18` : 'var(--color-bg-secondary)'
+                          const mainBg = item.color ? item.color : 'var(--color-bg-secondary)'
                           return (
                             <React.Fragment key={item.id}>
                               <SortableRow id={item.id}>
@@ -1210,7 +1223,7 @@ export default function MarketCodeManagementPage() {
                         }
 
                         // 중분류
-                        const midBg = item.color ? `${item.color}18` : 'var(--color-bg-secondary)'
+                        const midBg = item.color ? item.color : 'var(--color-bg-secondary)'
                         return (
                           <React.Fragment key={item.id}>
                             <SortableRow id={item.id}>
@@ -1267,11 +1280,20 @@ export default function MarketCodeManagementPage() {
                   <div key={level} className="relative" ref={isOpen ? fontColorRef : undefined}>
                     <button
                       onClick={() => {
-                        if (isOpen) { setFontColorOpen(null); return }
-                        setTempBgColor(colors.bg      ?? '#1A1F2E')
-                        setTempFontDark(colors.dark   ?? '#FFFFFF')
-                        setTempFontLight(colors.light ?? '#111111')
-                        setTempBold(colors.bold        ?? false)
+                        if (isOpen) {
+                          setFontColorOpen(null)
+                          setPreviewOverrides(prev => ({ ...prev, [level]: null }))
+                          return
+                        }
+                        const bg    = colors.bg    ?? DEFAULT_BG_COLOR
+                        const dark  = colors.dark  ?? DEFAULT_FONT_DARK
+                        const light = colors.light ?? DEFAULT_FONT_LIGHT
+                        const bold  = colors.bold  ?? false
+                        setTempBgColor(bg)
+                        setTempFontDark(dark)
+                        setTempFontLight(light)
+                        setTempBold(bold)
+                        setPreviewOverrides(prev => ({ ...prev, [level]: { bg, dark, light, bold } }))
                         setFontColorOpen(level)
                       }}
                       className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-medium transition-opacity hover:opacity-80"
@@ -1292,8 +1314,8 @@ export default function MarketCodeManagementPage() {
                           <div>
                             <label className="text-[10px] text-brand-muted mb-1 block">배경 색상</label>
                             <div className="flex items-center gap-2">
-                              <ExcelColorPicker value={tempBgColor} onChange={setTempBgColor} />
-                              <input type="text" value={tempBgColor} onChange={e => setTempBgColor(e.target.value)}
+                              <ExcelColorPicker value={tempBgColor} onChange={v => { setTempBgColor(v); setPreviewOverrides(prev => ({ ...prev, [level]: { ...(prev[level] ?? { bg: null, dark: DEFAULT_FONT_DARK, light: DEFAULT_FONT_LIGHT, bold: false }), bg: v } })) }} />
+                              <input type="text" value={tempBgColor} onChange={e => { const v = e.target.value; setTempBgColor(v); setPreviewOverrides(prev => ({ ...prev, [level]: { ...(prev[level] ?? { bg: null, dark: DEFAULT_FONT_DARK, light: DEFAULT_FONT_LIGHT, bold: false }), bg: v } })) }}
                                 className="flex-1 text-xs px-2 py-1.5 rounded"
                                 style={{ background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }} />
                             </div>
@@ -1306,8 +1328,8 @@ export default function MarketCodeManagementPage() {
                           <div>
                             <label className="text-[10px] text-brand-muted mb-1 block">폰트 색상 — 다크 모드</label>
                             <div className="flex items-center gap-2">
-                              <ExcelColorPicker value={tempFontDark} onChange={setTempFontDark} />
-                              <input type="text" value={tempFontDark} onChange={e => setTempFontDark(e.target.value)}
+                              <ExcelColorPicker value={tempFontDark} onChange={v => { setTempFontDark(v); setPreviewOverrides(prev => ({ ...prev, [level]: { ...(prev[level] ?? { bg: null, dark: DEFAULT_FONT_DARK, light: DEFAULT_FONT_LIGHT, bold: false }), dark: v } })) }} />
+                              <input type="text" value={tempFontDark} onChange={e => { const v = e.target.value; setTempFontDark(v); setPreviewOverrides(prev => ({ ...prev, [level]: { ...(prev[level] ?? { bg: null, dark: DEFAULT_FONT_DARK, light: DEFAULT_FONT_LIGHT, bold: false }), dark: v } })) }}
                                 className="flex-1 text-xs px-2 py-1.5 rounded"
                                 style={{ background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }} />
                             </div>
@@ -1317,8 +1339,8 @@ export default function MarketCodeManagementPage() {
                           <div>
                             <label className="text-[10px] text-brand-muted mb-1 block">폰트 색상 — 라이트 모드</label>
                             <div className="flex items-center gap-2">
-                              <ExcelColorPicker value={tempFontLight} onChange={setTempFontLight} />
-                              <input type="text" value={tempFontLight} onChange={e => setTempFontLight(e.target.value)}
+                              <ExcelColorPicker value={tempFontLight} onChange={v => { setTempFontLight(v); setPreviewOverrides(prev => ({ ...prev, [level]: { ...(prev[level] ?? { bg: null, dark: DEFAULT_FONT_DARK, light: DEFAULT_FONT_LIGHT, bold: false }), light: v } })) }} />
+                              <input type="text" value={tempFontLight} onChange={e => { const v = e.target.value; setTempFontLight(v); setPreviewOverrides(prev => ({ ...prev, [level]: { ...(prev[level] ?? { bg: null, dark: DEFAULT_FONT_DARK, light: DEFAULT_FONT_LIGHT, bold: false }), light: v } })) }}
                                 className="flex-1 text-xs px-2 py-1.5 rounded"
                                 style={{ background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }} />
                             </div>
@@ -1329,7 +1351,7 @@ export default function MarketCodeManagementPage() {
                         <div style={{ borderTop: '1px solid var(--color-border-subtle)', paddingTop: 10, marginTop: 2 }}>
                           <div className="flex items-center justify-between">
                             <label className="text-[10px] text-brand-muted">굵게 표시</label>
-                            <Toggle value={tempBold} onChange={setTempBold} />
+                            <Toggle value={tempBold} onChange={v => { setTempBold(v); setPreviewOverrides(prev => ({ ...prev, [level]: { ...(prev[level] ?? { bg: null, dark: DEFAULT_FONT_DARK, light: DEFAULT_FONT_LIGHT, bold: false }), bold: v } })) }} />
                           </div>
                         </div>
 
@@ -1339,6 +1361,7 @@ export default function MarketCodeManagementPage() {
                             setTempFontDark(DEFAULT_FONT_DARK)
                             setTempFontLight(DEFAULT_FONT_LIGHT)
                             setTempBold(false)
+                            setPreviewOverrides(prev => ({ ...prev, [level]: { bg: DEFAULT_BG_COLOR, dark: DEFAULT_FONT_DARK, light: DEFAULT_FONT_LIGHT, bold: false } }))
                           }}
                           className="w-full mt-2.5 text-xs py-1.5 rounded flex items-center justify-center gap-1.5 transition-colors"
                           style={{ border: '1px dashed var(--color-border-default)', color: 'var(--color-text-muted)' }}
@@ -1350,9 +1373,9 @@ export default function MarketCodeManagementPage() {
                           <button onClick={() => saveLevelColors(level, tempBgColor, tempFontDark, tempFontLight, tempBold)}
                             className="flex-1 text-xs py-1.5 rounded font-semibold"
                             style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
-                            적용
+                            저장
                           </button>
-                          <button onClick={() => setFontColorOpen(null)}
+                          <button onClick={() => { setFontColorOpen(null); setPreviewOverrides(prev => ({ ...prev, [level]: null })) }}
                             className="flex-1 text-xs py-1.5 rounded"
                             style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}>
                             취소
@@ -1367,7 +1390,7 @@ export default function MarketCodeManagementPage() {
             </div>
           </div>
           <div className="p-4" style={{ background: 'var(--color-bg-primary)' }}>
-            <MarketPreviewTable tree={tree} isDark={isDark} />
+            <MarketPreviewTable tree={tree} isDark={isDark} overrides={previewOverrides} />
           </div>
         </div>
 

@@ -30,6 +30,7 @@ export type MarketTableProps = {
   month?:            number
   stickyFirstGroup?: boolean
   opaqueBg?:         boolean
+  maxHeight?:        string
 }
 
 type Schema = {
@@ -193,7 +194,7 @@ function SegCell({
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function MarketTable({
-  hotelId, columns, data, groupHeader, loading, className, year, month, stickyFirstGroup, opaqueBg,
+  hotelId, columns, data, groupHeader, loading, className, year, month, stickyFirstGroup, opaqueBg, maxHeight,
 }: MarketTableProps) {
 
   // queryKey에 'full' 추가 — BudgetPage의 minimal 쿼리 캐시와 충돌 방지
@@ -285,16 +286,24 @@ export default function MarketTable({
   }
 
   const sColStyle = (i: number, bg: string): React.CSSProperties =>
-    i < stickyGroupCols ? { position: 'sticky', left: colLeft[i], zIndex: 1, background: bg } : {}
+    i < stickyGroupCols
+      ? { position: 'sticky', left: colLeft[i], zIndex: 2, background: bg,
+          ...(i === stickyGroupCols - 1 ? { boxShadow: '2px 0 0 0 var(--color-border-default)' } : {}) }
+      : { position: 'relative', zIndex: 0 }
 
   const sColHdrStyle = (i: number): React.CSSProperties =>
-    i < stickyGroupCols ? { position: 'sticky', left: colLeft[i], zIndex: 2, background: 'var(--color-bg-tertiary)' } : {}
+    i < stickyGroupCols
+      ? { position: 'sticky', left: colLeft[i], zIndex: 2, background: 'var(--color-bg-tertiary)',
+          ...(i === stickyGroupCols - 1 ? { boxShadow: '2px 0 0 0 var(--color-border-default)' } : {}) }
+      : {}
 
   const sSegStyle = (bg: string): React.CSSProperties =>
-    stickyFirstGroup ? { position: 'sticky', left: 0, zIndex: 1, background: bg } : {}
+    stickyFirstGroup
+      ? { position: 'sticky', left: 0, zIndex: 2, background: bg, boxShadow: '2px 0 0 0 var(--color-border-default)' }
+      : { position: 'relative', zIndex: 0 }
 
   const sSegHdrStyle: React.CSSProperties = stickyFirstGroup
-    ? { position: 'sticky', left: 0, zIndex: 3, background: 'var(--color-bg-tertiary)' }
+    ? { position: 'sticky', left: 0, zIndex: 3, background: 'var(--color-bg-tertiary)', boxShadow: '2px 0 0 0 var(--color-border-default)' }
     : {}
 
   const FOOTER_BG = 'var(--color-bg-tertiary)'
@@ -306,9 +315,9 @@ export default function MarketTable({
   }
 
   return (
-    <div className={`overflow-x-auto rounded-xl ${className ?? ''}`}
-      style={{ border: '1px solid var(--color-border-default)' }}>
-      <table className="border-collapse" style={{ fontSize: 12, tableLayout: 'fixed', fontVariantNumeric: 'tabular-nums', width: `${tableWidth}px` }}>
+    <div className={`overflow-auto rounded-xl ${className ?? ''}`}
+      style={{ border: '1px solid var(--color-border-default)', ...(maxHeight ? { maxHeight } : {}) }}>
+      <table className="" style={{ fontSize: 12, tableLayout: 'fixed', fontVariantNumeric: 'tabular-nums', width: `${tableWidth}px`, borderCollapse: 'separate', borderSpacing: 0 }}>
 
         {/* ── colgroup: 컬럼 너비 고정 ── */}
         <colgroup>
@@ -319,7 +328,7 @@ export default function MarketTable({
         </colgroup>
 
         {/* ── 헤더 ── */}
-        <thead>
+        <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--color-bg-tertiary)' }}>
           {/* group 병합 행: 기존 헤더 위에 추가 (Budget 월별) */}
           {hasGroups && (
             <tr style={headerRowStyle}>
@@ -338,10 +347,11 @@ export default function MarketTable({
                     paddingTop:    6,
                     paddingBottom: 6,
                     ...(stickyFirstGroup && gi === 0 ? {
-                      position:   'sticky',
-                      left:       SEG_WIDTH,
-                      zIndex:     2,
-                      background: 'var(--color-bg-tertiary)',
+                      position:    'sticky',
+                      left:        SEG_WIDTH,
+                      zIndex:      2,
+                      background:  'var(--color-bg-tertiary)',
+                      boxShadow: '2px 0 0 0 var(--color-border-default)',
                     } : {}),
                   }}>
                   {gs.group}
@@ -400,9 +410,9 @@ export default function MarketTable({
                   {(() => {
                     const mainBg = rowBg(group.parent.color, 'var(--color-bg-secondary)')
                     return (
-                      <tr style={{ background: mainBg, borderTop: '1px solid var(--color-border-default)', fontWeight: group.parent.is_bold ? 700 : 600 }}>
+                      <tr style={{ borderTop: '1px solid var(--color-border-default)', fontWeight: group.parent.is_bold ? 700 : 600 }}>
                         <td className="px-4 py-2"
-                          style={{ color: fontColor(group.parent, 'var(--color-text-primary)'), ...sSegStyle(mainBg) }}>
+                          style={{ background: mainBg, color: fontColor(group.parent, 'var(--color-text-primary)'), ...sSegStyle(mainBg) }}>
                           {group.parent.name}
                         </td>
                         {columns.map((col, i) => {
@@ -411,6 +421,7 @@ export default function MarketTable({
                           return (
                             <td key={col.key} className="px-2 py-2 text-right whitespace-nowrap"
                               style={{
+                                background: mainBg,
                                 color:      fontColor(group.parent, 'var(--color-text-primary)'),
                                 borderLeft: hasGroups ? colBorderLeft(columns, i) : '1px solid var(--color-border-subtle)',
                                 ...sColStyle(i, mainBg),
@@ -437,6 +448,7 @@ export default function MarketTable({
                         }}>
                         <td className="py-2"
                           style={{
+                            background:  subBg,
                             paddingLeft: 16,
                             color:       fontColor(child, subFallback),
                             ...sSegStyle(subBg),
@@ -457,6 +469,7 @@ export default function MarketTable({
                           return (
                             <td key={col.key} className="px-2 py-2 text-right whitespace-nowrap"
                               style={{
+                                background: subBg,
                                 color:      fontColor(child, subFallback),
                                 borderLeft: hasGroups ? colBorderLeft(columns, i) : '1px solid var(--color-border-subtle)',
                                 ...sColStyle(i, subBg),
@@ -477,9 +490,9 @@ export default function MarketTable({
             const midBg = rowBg(mid.color, 'var(--color-bg-secondary)')
             return (
               <tr key={mid.id}
-                style={{ background: midBg, borderTop: '1px solid var(--color-border-default)', fontWeight: mid.is_bold ? 600 : 400 }}>
+                style={{ borderTop: '1px solid var(--color-border-default)', fontWeight: mid.is_bold ? 600 : 400 }}>
                 <td className="px-4 py-2"
-                  style={{ color: fontColor(mid, 'var(--color-text-primary)'), ...sSegStyle(midBg) }}>
+                  style={{ background: midBg, color: fontColor(mid, 'var(--color-text-primary)'), ...sSegStyle(midBg) }}>
                   <SegCell
                     label={mid.name}
                     codes={mid.segmentation ?? []}
@@ -495,6 +508,7 @@ export default function MarketTable({
                   return (
                     <td key={col.key} className="px-2 py-2 text-right whitespace-nowrap"
                       style={{
+                        background: midBg,
                         color:      fontColor(mid, 'var(--color-text-primary)'),
                         borderLeft: hasGroups ? colBorderLeft(columns, i) : '1px solid var(--color-border-subtle)',
                         ...sColStyle(i, midBg),
@@ -507,6 +521,8 @@ export default function MarketTable({
             )
           })}
 
+        </tbody>
+        <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 10, background: FOOTER_BG }}>
           {/* ── Total ── */}
           <tr style={{ borderTop: '2px solid var(--color-border-default)', background: FOOTER_BG, fontWeight: 600 }}>
             <td className="px-4 py-2 font-semibold" style={{ color: accentColor, ...sSegStyle(FOOTER_BG) }}>Total</td>
@@ -518,6 +534,7 @@ export default function MarketTable({
                   style={{
                     color:      accentColor,
                     borderLeft: hasGroups ? colBorderLeft(columns, i) : '1px solid var(--color-border-subtle)',
+                    background: FOOTER_BG,
                     ...sColStyle(i, FOOTER_BG),
                   }}>
                   {formatValue(val, col.type)}
@@ -543,7 +560,8 @@ export default function MarketTable({
                     style={{
                       color: accentColor,
                       borderLeft: '1px solid var(--color-border-default)',
-                      ...(stickyFirstGroup && gi === 0 ? { position: 'sticky', left: SEG_WIDTH, zIndex: 1, background: FOOTER_BG } : {}),
+                      background: FOOTER_BG,
+                      ...(stickyFirstGroup && gi === 0 ? { position: 'sticky', left: SEG_WIDTH, zIndex: 2, background: FOOTER_BG } : {}),
                     }}>
                     {occPct !== null && occPct > 0 ? `${occPct.toFixed(1)}%` : '-'}
                   </td>
@@ -555,7 +573,7 @@ export default function MarketTable({
                 const occPct  = isRnCol && availableRooms > 0 ? (totalRn / availableRooms) * 100 : null
                 return (
                   <td key={col.key} className="px-2 py-2 text-right whitespace-nowrap"
-                    style={{ color: accentColor, borderLeft: '1px solid var(--color-border-subtle)' }}>
+                    style={{ color: accentColor, borderLeft: '1px solid var(--color-border-subtle)', background: FOOTER_BG }}>
                     {occPct !== null ? `${occPct.toFixed(1)}%` : '-'}
                   </td>
                 )
@@ -584,7 +602,8 @@ export default function MarketTable({
                     style={{
                       color: accentColor,
                       borderLeft: '1px solid var(--color-border-default)',
-                      ...(stickyFirstGroup && gi === 0 ? { position: 'sticky', left: SEG_WIDTH, zIndex: 1, background: FOOTER_BG } : {}),
+                      background: FOOTER_BG,
+                      ...(stickyFirstGroup && gi === 0 ? { position: 'sticky', left: SEG_WIDTH, zIndex: 2, background: FOOTER_BG } : {}),
                     }}>
                     {grpRevpar > 0 ? formatValue(grpRevpar, 'currency') : '-'}
                   </td>
@@ -595,14 +614,14 @@ export default function MarketTable({
                 const isRevCol = col.key === 'rev' || col.key === 'room_revenue'
                 return (
                   <td key={col.key} className="px-2 py-2 text-right whitespace-nowrap"
-                    style={{ color: accentColor, borderLeft: '1px solid var(--color-border-subtle)' }}>
+                    style={{ color: accentColor, borderLeft: '1px solid var(--color-border-subtle)', background: FOOTER_BG }}>
                     {isRevCol ? formatValue(revpar, 'currency') : '-'}
                   </td>
                 )
               })
             )}
           </tr>
-        </tbody>
+        </tfoot>
       </table>
     </div>
   )

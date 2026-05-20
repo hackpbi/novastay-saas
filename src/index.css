@@ -30,8 +30,8 @@
   --color-warning:  #F5A623;
   --color-info:     #4A9EFF;
 
-  --color-border-default: rgba(255, 255, 255, 0.08);
-  --color-border-subtle:  rgba(255, 255, 255, 0.04);
+  --color-border-default: #2C2C2C;
+  --color-border-subtle:  #222222;
   --color-border-accent:  rgba(0, 229, 160, 0.30);
 
   /* Overlays */
@@ -138,8 +138,8 @@
   --color-warning:  #D67E0E;
   --color-info:     #2D7DD2;
 
-  --color-border-default: rgba(0, 0, 0, 0.10);
-  --color-border-subtle:  rgba(0, 0, 0, 0.05);
+  --color-border-default: #DADADA;
+  --color-border-subtle:  #E8E8E8;
   --color-border-accent:  rgba(0, 184, 131, 0.40);
 
   --overlay-xs:    rgba(0, 0, 0, 0.02);
