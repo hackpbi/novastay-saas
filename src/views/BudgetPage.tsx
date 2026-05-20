@@ -991,6 +991,7 @@ export default function BudgetPage() {
             columns={monthlyColumns}
             data={monthlyTableData}
             loading={monthlyLoading}
+            stickyFirstGroup
           />
 
 
