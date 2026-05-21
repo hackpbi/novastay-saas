@@ -16,31 +16,6 @@ type TabType = 'monthly' | 'daily'
 
 type MonthVal        = { rn: number; rev: number }
 type BudgetMonthData = Record<string, Record<number, MonthVal>>
-type BudgetDailyEdits= Record<string, Record<string, MonthVal>>   // date → seg → {rn,rev}
-
-type BudgetMonthlyRow = {
-  segmentation:   string
-  sorting1:       string | null
-  sorting2:       string | null
-  sorting3:       string | null
-  month_num:      number
-  budget_nights:  number
-  budget_revenue: number
-}
-
-type BudgetDailyRow = {
-  business_date:  string
-  segmentation:   string
-  sorting1:       string | null
-  sorting2:       string | null
-  sorting3:       string | null
-  budget_nights:  number
-  budget_revenue: number
-  act_nights:     number
-  act_revenue:    number
-  otb_nights:     number
-  otb_revenue:    number
-}
 
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -53,18 +28,6 @@ function formatNumber(n: number): string {
 function parseNumber(s: string): number {
   return Number(s.replace(/,/g, '')) || 0
 }
-
-function getDaysInMonth(year: number, month: number) {
-  return Array.from({ length: new Date(year, month, 0).getDate() }, (_, i) => {
-    const date = new Date(year, month - 1, i + 1)
-    return {
-      date:      date.toISOString().split('T')[0],
-      dayOfWeek: ['일', '월', '화', '수', '목', '금', '토'][date.getDay()],
-    }
-  })
-}
-
-const DAY_COLOR: Record<string, string> = { 토: '#4A9EFF', 일: '#FC8181' }
 
 
 // ── Input Cell ────────────────────────────────────────────────────────────────
@@ -546,15 +509,10 @@ export default function BudgetPage() {
   const hotelId          = currentHotel?.id ?? ''
 
   const [selectedYear,    setSelectedYear]    = useState(new Date().getFullYear())
-  const [selectedMonth,   setSelectedMonth]   = useState(new Date().getMonth() + 1)
   const [activeTab,       setActiveTab]       = useState<TabType>('monthly')
-  const [budgetDate]                          = useState<string>('')
   const [budgetData,      setBudgetData]      = useState<BudgetMonthData>({})
-  const [dailyEdits,      setDailyEdits]      = useState<BudgetDailyEdits>({})
   const [saving,          setSaving]          = useState(false)
-  const [importing,       setImporting]       = useState(false)
   const [saveError,       setSaveError]       = useState<string | null>(null)
-  const [initConfirm,     setInitConfirm]     = useState(false)
   const [uploadConfirm,   setUploadConfirm]   = useState(false)
   const [deleteConfirm,   setDeleteConfirm]   = useState(false)
   const [isDistributing,  setIsDistributing]  = useState(false)
@@ -596,163 +554,39 @@ export default function BudgetPage() {
 
 
   const [roomCount, setRoomCount] = useState<number>(0)
-  const schemaSegs:        string[]          = []
-  const budgetMonthlyRows: BudgetMonthlyRow[] = []
-  const monthlyLoading:    boolean           = false
-  const budgetDailyRows:   BudgetDailyRow[]  = []
-  const dailyLoading:      boolean           = false
+  const monthlyLoading: boolean = false
 
-  // ── 3. 전년 실적 불러오기 ────────────────────────────────────────────────────
-  // init_budget_from_actual RPC 내부 중복 upsert 오류 회피:
-  // 클라이언트에서 calendar + actual 직접 조회 후 중복 제거 → upsert_budget 호출
-  const handleInitFromActual = async () => {
-    if (!hotelId || !profile?.id) return
-    setImporting(true)
-    setSaveError(null)
-    try {
-      // 1. 해당 연도 calendar에서 yoy_match 날짜 조회 (컬럼명: date)
-      const { data: calRows, error: calErr } = await (supabase as any)
-        .from('c06_calendar')
-        .select('date, yoy_match')
-        .gte('date', `${selectedYear}-01-01`)
-        .lte('date', `${selectedYear}-12-31`)
-      if (calErr) throw calErr
 
-      const validCal: { date: string; yoy_match: string }[] =
-        (calRows ?? []).filter((r: any) => r.yoy_match)
-
-      const yoyDates = [...new Set(validCal.map((r: any) => r.yoy_match))]
-
-      // 2. 전년 실적 조회
-      const { data: actRows, error: actErr } = await (supabase as any)
-        .from('a01_actual_daily')
-        .select('business_date, segmentation, nights, room_revenue')
-        .eq('hotel_id', hotelId)
-        .in('business_date', yoyDates)
-      if (actErr) throw actErr
-
-      // 3. yoy_match → actual 매핑
-      const actMap: Record<string, Record<string, { rn: number; rev: number }>> = {}
-      ;(actRows ?? []).forEach((r: any) => {
-        if (!actMap[r.business_date]) actMap[r.business_date] = {}
-        actMap[r.business_date][r.segmentation] = {
-          rn:  r.nights       ?? 0,
-          rev: r.room_revenue ?? 0,
-        }
-      })
-
-      // 4. 행 생성 — Map으로 중복 제거 (동일 date+seg 는 마지막 값 유지)
-      const rowMap = new Map<string, any>()
-      validCal.forEach(cal => {
-        const yoyData = actMap[cal.yoy_match] ?? {}
-        Object.entries(yoyData).forEach(([seg, val]) => {
-          const key = `${cal.date}__${seg}`
-          rowMap.set(key, {
-            business_date:  cal.date,
-            segmentation:   seg,
-            sorting1:       null,
-            sorting2:       null,
-            sorting3:       null,
-            budget_nights:  val.rn,
-            budget_revenue: val.rev,
-          })
-        })
-      })
-
-      const rows = Array.from(rowMap.values())
-      if (rows.length === 0) {
-        setSaveError('불러올 전년 실적 데이터가 없습니다.')
-        return
-      }
-
-      // 5. upsert_budget RPC 호출 (청크 500)
-      const CHUNK = 500
-      for (let i = 0; i < rows.length; i += CHUNK) {
-        const { error } = await (supabase as any)
-          .rpc('upsert_budget', {
-            p_hotel_id:    hotelId,
-            p_profile_id:  profile.id,
-            p_update_date: budgetDate || new Date().toISOString().split('T')[0],
-            p_rows:        rows.slice(i, i + CHUNK),
-          })
-        if (error) throw error
-      }
-
-      queryClient.invalidateQueries({ queryKey: ['budget_monthly', hotelId, selectedYear] })
-      queryClient.invalidateQueries({ queryKey: ['budget_daily',   hotelId, selectedYear] })
-      setSaveError(null)
-    } catch (err: any) {
-      setSaveError(err.message)
-    } finally {
-      setImporting(false)
-      setInitConfirm(false)
-    }
-  }
-
-  // ── 4. 월별 저장 — onBlur (upsert_budget) ─────────────────────────────────────
+  // ── 4. 월별 저장 — onBlur (upsert_budget_mtd) ────────────────────────────────
   const saveBudgetMonthly = useCallback(async (segmentation: string, month: number) => {
     if (!hotelId || !profile?.id) return
     const rn  = budgetData[segmentation]?.[month]?.rn  ?? 0
     const rev = budgetData[segmentation]?.[month]?.rev ?? 0
-    const daysInMonth = new Date(selectedYear, month, 0).getDate()
-    const dailyRn     = Math.round(rn  / daysInMonth)
-    const dailyRev    = Math.round(rev / daysInMonth)
-
-    const rows = Array.from({ length: daysInMonth }, (_, i) => ({
-      business_date:  `${selectedYear}-${String(month).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`,
-      segmentation,
-      sorting1:       null,
-      sorting2:       null,
-      sorting3:       null,
-      budget_nights:  dailyRn,
-      budget_revenue: dailyRev,
-    }))
 
     try {
       const { error } = await (supabase as any)
-        .rpc('upsert_budget', {
+        .rpc('upsert_budget_mtd', {
           p_hotel_id:    hotelId,
           p_profile_id:  profile.id,
-          p_update_date: budgetDate || new Date().toISOString().split('T')[0],
-          p_rows:        rows,
+          p_update_date: otbDate || new Date().toISOString().split('T')[0],
+          p_rows: [{
+            year:  selectedYear,
+            month: month,
+            seg:   segmentation,
+            rn:    rn,
+            rev:   rev,
+          }],
+          p_confirmed: false,
         })
       if (error) throw error
-      queryClient.invalidateQueries({ queryKey: ['budget_monthly', hotelId, selectedYear] })
+      queryClient.invalidateQueries({ queryKey: ['budget_mtd', hotelId, selectedYear] })
     } catch (err: any) {
       console.error('월별 저장 오류:', err.message)
     }
-  }, [hotelId, profile?.id, budgetData, selectedYear, queryClient, budgetDate])
+  }, [hotelId, profile?.id, budgetData, selectedYear, otbDate, queryClient])
 
-  // ── 5. 일별 저장 — onBlur (upsert_budget) ─────────────────────────────────────
-  const saveBudgetDaily = useCallback(async (businessDate: string, segmentation: string) => {
-    if (!hotelId || !profile?.id) return
-    const rn  = dailyEdits[businessDate]?.[segmentation]?.rn  ?? 0
-    const rev = dailyEdits[businessDate]?.[segmentation]?.rev ?? 0
 
-    try {
-      const { error } = await (supabase as any)
-        .rpc('upsert_budget', {
-          p_hotel_id:    hotelId,
-          p_profile_id:  profile.id,
-          p_update_date: budgetDate || new Date().toISOString().split('T')[0],
-          p_rows: [{
-            business_date:  businessDate,
-            segmentation,
-            sorting1:       null,
-            sorting2:       null,
-            sorting3:       null,
-            budget_nights:  rn,
-            budget_revenue: rev,
-          }],
-        })
-      if (error) throw error
-      queryClient.invalidateQueries({ queryKey: ['budget_daily', hotelId, selectedYear, selectedMonth, otbDate] })
-    } catch (err: any) {
-      console.error('일별 저장 오류:', err.message)
-    }
-  }, [hotelId, profile?.id, dailyEdits, selectedYear, selectedMonth, otbDate, queryClient, budgetDate])
-
-  // ── 6. 전체 저장 (upsert_budget) ──────────────────────────────────────────────
+  // ── 6. 전체 저장 (upsert_budget_mtd) ────────────────────────────────────────
   const saveAll = async () => {
     if (!hotelId || !profile?.id) return
     setSaving(true)
@@ -761,33 +595,27 @@ export default function BudgetPage() {
       const rows: any[] = []
       Object.entries(budgetData).forEach(([seg, months]) => {
         Object.entries(months).forEach(([mStr, val]) => {
-          const month = Number(mStr)
-          const days  = new Date(selectedYear, month, 0).getDate()
-          Array.from({ length: days }, (_, i) => {
-            rows.push({
-              business_date:  `${selectedYear}-${String(month).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`,
-              segmentation:   seg,
-              sorting1:       null,
-              sorting2:       null,
-              sorting3:       null,
-              budget_nights:  Math.round(val.rn  / days),
-              budget_revenue: Math.round(val.rev / days),
-            })
+          rows.push({
+            year:  selectedYear,
+            month: Number(mStr),
+            seg:   seg,
+            rn:    val.rn,
+            rev:   val.rev,
           })
         })
       })
 
       if (rows.length > 0) {
         const { error } = await (supabase as any)
-          .rpc('upsert_budget', {
+          .rpc('upsert_budget_mtd', {
             p_hotel_id:    hotelId,
             p_profile_id:  profile.id,
-            p_update_date: budgetDate || new Date().toISOString().split('T')[0],
+            p_update_date: otbDate || new Date().toISOString().split('T')[0],
             p_rows:        rows,
+            p_confirmed:   false,
           })
         if (error) throw error
-        queryClient.invalidateQueries({ queryKey: ['budget_monthly', hotelId, selectedYear] })
-        queryClient.invalidateQueries({ queryKey: ['budget_daily',   hotelId, selectedYear] })
+        queryClient.invalidateQueries({ queryKey: ['budget_mtd', hotelId, selectedYear] })
       }
     } catch (err: any) {
       setSaveError(err.message)
@@ -796,40 +624,38 @@ export default function BudgetPage() {
     }
   }
 
-  // ── 7. 모달 적용 (applyModalEdit) ─────────────────────────────────────────────
+  // ── 7. 모달 적용 (applyModalEdit → upsert_budget_mtd) ────────────────────────
   const applyModalEdit = useCallback(async (seg: string, draft: Record<number, MonthVal>) => {
     if (!hotelId || !profile?.id) return
     setBudgetData(prev => ({ ...prev, [seg]: draft }))
+
     const rows: any[] = []
     MONTHS.forEach(m => {
-      const rn   = draft[m]?.rn  ?? 0
-      const rev  = draft[m]?.rev ?? 0
-      const days = new Date(selectedYear, m, 0).getDate()
-      Array.from({ length: days }, (_, i) => {
-        rows.push({
-          business_date:  `${selectedYear}-${String(m).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`,
-          segmentation:   seg,
-          sorting1: null, sorting2: null, sorting3: null,
-          budget_nights:  Math.round(rn  / days),
-          budget_revenue: Math.round(rev / days),
-        })
+      rows.push({
+        year:  selectedYear,
+        month: m,
+        seg:   seg,
+        rn:    draft[m]?.rn  ?? 0,
+        rev:   draft[m]?.rev ?? 0,
       })
     })
+
     try {
       const { error } = await (supabase as any)
-        .rpc('upsert_budget', {
+        .rpc('upsert_budget_mtd', {
           p_hotel_id:    hotelId,
           p_profile_id:  profile.id,
-          p_update_date: budgetDate || new Date().toISOString().split('T')[0],
+          p_update_date: otbDate || new Date().toISOString().split('T')[0],
           p_rows:        rows,
+          p_confirmed:   false,
         })
       if (error) throw error
-      queryClient.invalidateQueries({ queryKey: ['budget_monthly', hotelId, selectedYear] })
+      queryClient.invalidateQueries({ queryKey: ['budget_mtd', hotelId, selectedYear] })
     } catch (err: any) {
       setSaveError(err.message)
     }
     setModalSeg(null)
-  }, [hotelId, profile?.id, budgetDate, selectedYear, queryClient])
+  }, [hotelId, profile?.id, otbDate, selectedYear, queryClient])
 
   // ── Step1. 엑셀 양식 다운로드 ────────────────────────────────────────────────
   const handleDownloadTemplate = async () => {
@@ -915,7 +741,7 @@ export default function BudgetPage() {
     XLSX.writeFile(wb, `Budget_양식_${selectedYear}.xlsx`)
   }
 
-  // ── Step2. 엑셀 업로드 파싱 ──────────────────────────────────────────────────
+  // ── Step2. 엑셀 업로드 → upsert_budget_mtd ───────────────────────────────────
   const handleUploadBudget = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -928,7 +754,6 @@ export default function BudgetPage() {
       .eq('hotel_id', hotelId)
       .eq('is_active', true)
 
-    // label(trimmed) → segmentation codes[] 맵
     const labelToCodesMap: Record<string, string[]> = {}
     ;(schemaRows ?? []).forEach((s: any) => {
       if ((s.level === 'sub' || s.level === 'mid') && s.segmentation?.length > 0) {
@@ -941,18 +766,18 @@ export default function BudgetPage() {
     const ws = wb.Sheets[wb.SheetNames[0]]
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: 0 }) as any[][]
 
+    // 엑셀 파싱
     const parsed: Record<string, Record<number, MonthVal>> = {}
     for (let i = 2; i < rows.length; i++) {
       const row   = rows[i]
       const label = String(row[0] ?? '').trim()
       if (!label) continue
 
-      // 스키마 이름 매칭 → codes 확장 / 미매칭 시 label 자체를 코드로 사용 (구 양식 호환)
       const codes   = labelToCodesMap[label] ?? [label]
       const perCode = codes.length
 
       for (let m = 1; m <= 12; m++) {
-        const base    = 2 + (m - 1) * 3
+        const base     = 2 + (m - 1) * 3
         const totalRn  = Number(row[base]     ?? 0)
         const totalRev = Number(row[base + 2] ?? 0)
         codes.forEach(code => {
@@ -965,52 +790,55 @@ export default function BudgetPage() {
       }
     }
 
-    // ── Step2b. RPC distribute_budget 호출 ───────────────────────────────────────
-    const monthlyBudget: { seg: string; month: number; rn: number; rev: number }[] = []
+    // a04_budget_mtd 저장용 rows 구성
+    const mtdRows: any[] = []
     Object.entries(parsed).forEach(([seg, months]) => {
-      Object.entries(months).forEach(([month, vals]: any) => {
+      Object.entries(months).forEach(([mStr, vals]: any) => {
         if (vals.rn > 0 || vals.rev > 0) {
-          monthlyBudget.push({ seg, month: Number(month), rn: vals.rn, rev: vals.rev })
+          mtdRows.push({
+            year:  selectedYear,
+            month: Number(mStr),
+            seg,
+            rn:    vals.rn,
+            rev:   vals.rev,
+          })
         }
       })
     })
 
-    const profileId = profile?.id
+    if (mtdRows.length === 0) {
+      alert('업로드할 데이터가 없습니다.')
+      return
+    }
+
+    // upsert_budget_mtd RPC 호출
     const { data: rpcResult, error: rpcError } = await (supabase as any)
-      .rpc('distribute_budget', {
-        p_hotel_id:       hotelId,
-        p_year:           selectedYear,
-        p_profile_id:     profileId,
-        p_update_date:    new Date().toISOString().split('T')[0],
-        p_monthly_budget: monthlyBudget,
+      .rpc('upsert_budget_mtd', {
+        p_hotel_id:    hotelId,
+        p_profile_id:  profile?.id,
+        p_update_date: otbDate || new Date().toISOString().split('T')[0],
+        p_rows:        mtdRows,
+        p_confirmed:   false,
       })
 
     if (rpcError) {
       console.error('RPC error:', rpcError)
-      alert('배분 처리 실패: ' + rpcError.message)
+      alert('업로드 실패: ' + rpcError.message)
       return
     }
 
-    // ── Step2c. a03_budget에서 결과 조회 후 월별 집계 ────────────────────────────
-    const { data: budgetRows } = await (supabase as any)
-      .from('a03_budget')
-      .select('business_date, segmentation, budget_nights, budget_revenue')
-      .eq('hotel_id', hotelId)
-      .gte('business_date', `${selectedYear}-01-01`)
-      .lte('business_date', `${selectedYear}-12-31`)
-
+    // 화면(budgetData)에 반영
     const newBudgetData: BudgetMonthData = {}
-    ;(budgetRows ?? []).forEach((row: any) => {
-      const month = new Date(row.business_date).getMonth() + 1
-      const seg   = row.segmentation
-      if (!newBudgetData[seg]) newBudgetData[seg] = {}
-      if (!newBudgetData[seg][month]) newBudgetData[seg][month] = { rn: 0, rev: 0 }
-      newBudgetData[seg][month].rn  += row.budget_nights  ?? 0
-      newBudgetData[seg][month].rev += row.budget_revenue ?? 0
+    Object.entries(parsed).forEach(([seg, months]) => {
+      newBudgetData[seg] = {}
+      Object.entries(months).forEach(([mStr, vals]: any) => {
+        newBudgetData[seg][Number(mStr)] = { rn: vals.rn, rev: vals.rev }
+      })
     })
     setBudgetData(newBudgetData)
 
-    alert(`배분 완료: ${rpcResult?.rows_inserted ?? 0}개 행 저장됨`)
+    queryClient.invalidateQueries({ queryKey: ['budget_mtd', hotelId, selectedYear] })
+    alert(`업로드 완료: ${rpcResult?.rows_affected ?? 0}개 행 저장됨`)
   }
 
   // ── Step3. 전년 비율 배분 계산 (미사용) ──────────────────────────────────────
@@ -1125,19 +953,6 @@ export default function BudgetPage() {
       }
       return { ...prev, [seg]: { ...prev[seg], [month]: { rn: newRn, rev: newRev } } }
     })
-  }, [])
-
-  const handleDailyChange = useCallback((date: string, seg: string, field: 'rn' | 'rev', val: number) => {
-    setDailyEdits(prev => ({
-      ...prev,
-      [date]: {
-        ...prev[date],
-        [seg]: {
-          rn:  field === 'rn'  ? val : (prev[date]?.[seg]?.rn  ?? 0),
-          rev: field === 'rev' ? val : (prev[date]?.[seg]?.rev ?? 0),
-        },
-      },
-    }))
   }, [])
 
 
@@ -1263,24 +1078,6 @@ export default function BudgetPage() {
 
   // 월별 테이블 표시 순서 — 대분류 헤더 + 소분류 seg 행
 
-  // ── 일별 파생 데이터 ──────────────────────────────────────────────────────────
-  const dayList = useMemo(() => getDaysInMonth(selectedYear, selectedMonth), [selectedYear, selectedMonth])
-
-  const allSegs = useMemo(() => {
-    const segs = new Set<string>()
-    budgetMonthlyRows.forEach(r => segs.add(r.segmentation))
-    return Array.from(segs).sort()
-  }, [budgetMonthlyRows])
-
-  // business_date+seg → BudgetDailyRow 맵
-  const dailyRowMap = useMemo(() => {
-    const map: Record<string, Record<string, BudgetDailyRow>> = {}
-    budgetDailyRows.forEach(row => {
-      if (!map[row.business_date]) map[row.business_date] = {}
-      map[row.business_date][row.segmentation] = row
-    })
-    return map
-  }, [budgetDailyRows])
 
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -1301,34 +1098,6 @@ export default function BudgetPage() {
         />
       )}
 
-      {/* ── 전년 실적 불러오기 확인 모달 — 메인 div 밖에 렌더링 ── */}
-      {initConfirm && (
-        <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setInitConfirm(false)} />
-          <div className="relative rounded-2xl p-6 w-full max-w-sm space-y-4"
-            style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-elevated)' }}>
-            <p className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-              전년 실적으로 초기화
-            </p>
-            <p className="text-sm text-brand-muted">
-              {selectedYear}년 예산을 전년 실적으로 초기화할까요?<br />기존 데이터가 덮어씌워집니다.
-            </p>
-            <div className="flex gap-3 pt-1">
-              <button onClick={() => setInitConfirm(false)}
-                className="flex-1 py-2 rounded-lg text-sm hover:opacity-80 transition-all"
-                style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}>
-                취소
-              </button>
-              <button onClick={handleInitFromActual} disabled={importing}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold transition-all hover:-translate-y-px disabled:opacity-50"
-                style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
-                {importing ? <Loader2 size={13} className="animate-spin" /> : null}
-                확인
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── 데이터 삭제 확인 모달 ── */}
       {deleteConfirm && (
@@ -1348,7 +1117,7 @@ export default function BudgetPage() {
                 취소
               </button>
               <button
-                onClick={() => { setBudgetData({}); setDailyEdits({}); setDeleteConfirm(false) }}
+                onClick={() => { setBudgetData({}); setDeleteConfirm(false) }}
                 className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all hover:-translate-y-px"
                 style={{ background: 'rgba(252,129,129,0.15)', color: '#FC8181', border: '1px solid rgba(252,129,129,0.3)' }}>
                 삭제
@@ -1486,16 +1255,6 @@ export default function BudgetPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => setInitConfirm(true)}
-            disabled={importing}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all hover:opacity-80 disabled:opacity-50"
-            style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}
-          >
-            {importing ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-            전년 실적 불러오기
-          </button>
-
           {/* 엑셀 업로드 카드 */}
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
             style={{ border: '1px solid var(--color-border-default)', background: 'var(--color-bg-secondary)' }}>
@@ -1534,7 +1293,7 @@ export default function BudgetPage() {
           <MarketTable
             hotelId={hotelId}
             year={selectedYear}
-            month={selectedMonth}
+            month={new Date().getMonth() + 1}
             columns={monthlyColumns}
             data={monthlyTableData}
             loading={monthlyLoading}
@@ -1547,166 +1306,8 @@ export default function BudgetPage() {
 
       {/* ── 일별 탭 ── */}
       {activeTab === 'daily' && (
-        <div className="space-y-4">
-          {/* 월 선택 */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-brand-muted">월 선택</span>
-            <div className="relative">
-              <select
-                value={selectedMonth}
-                onChange={e => setSelectedMonth(Number(e.target.value))}
-                className="appearance-none pl-3 pr-7 py-1.5 text-sm rounded-lg focus:outline-none"
-                style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }}
-              >
-                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                  <option key={m} value={m}>{m}월</option>
-                ))}
-              </select>
-              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-brand-muted" />
-            </div>
-          </div>
-
-          {/* 일별 테이블 */}
-          <div className="overflow-x-auto rounded-xl" style={{ border: '1px solid var(--color-border-default)' }}>
-            <table className="w-full border-collapse" style={{ fontSize: 12 }}>
-              <thead>
-                <tr style={{ background: 'var(--color-bg-tertiary)', borderBottom: '1px solid var(--color-border-default)' }}>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-brand-muted sticky left-0"
-                    style={{ minWidth: 84, background: 'var(--color-bg-tertiary)' }}>날짜</th>
-                  <th className="px-2 py-2 text-center text-xs font-medium text-brand-muted"
-                    style={{ minWidth: 36, borderLeft: '1px solid var(--color-border-subtle)' }}>요일</th>
-                  {allSegs.map(seg => (
-                    <th key={seg} colSpan={9}
-                      className="px-2 py-2 text-center text-xs font-semibold"
-                      style={{ borderLeft: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}>
-                      {seg}
-                    </th>
-                  ))}
-                </tr>
-                <tr style={{ background: 'var(--color-bg-tertiary)', borderBottom: '1px solid var(--color-border-default)' }}>
-                  <th className="sticky left-0" style={{ background: 'var(--color-bg-tertiary)' }} />
-                  <th />
-                  {allSegs.map(seg => (
-                    <React.Fragment key={seg}>
-                      {/* Budget */}
-                      <th className="px-2 py-1 text-center text-[10px] font-semibold"
-                        style={{ borderLeft: '1px solid var(--color-border-default)', color: 'var(--color-accent-primary)', minWidth: 180 }}
-                        colSpan={3}>
-                        Budget
-                      </th>
-                      {/* 전년 */}
-                      <th className="px-2 py-1 text-center text-[10px] font-semibold"
-                        style={{ borderLeft: '1px solid var(--color-border-default)', color: '#4A9EFF', minWidth: 180 }}
-                        colSpan={3}>
-                        전년 실적
-                      </th>
-                      {/* OTB */}
-                      <th className="px-2 py-1 text-center text-[10px] font-semibold"
-                        style={{ borderLeft: '1px solid var(--color-border-default)', color: '#A78BFA', minWidth: 180 }}
-                        colSpan={3}>
-                        OTB
-                      </th>
-                    </React.Fragment>
-                  ))}
-                </tr>
-                <tr style={{ background: 'var(--color-bg-tertiary)', borderBottom: '1px solid var(--color-border-default)' }}>
-                  <th className="sticky left-0" style={{ background: 'var(--color-bg-tertiary)' }} />
-                  <th />
-                  {allSegs.map(seg => (
-                    <React.Fragment key={seg}>
-                      {['Budget', '전년', 'OTB'].map((group, gi) => (
-                        <React.Fragment key={group}>
-                          <th className="px-1 py-1 text-right text-[10px] text-brand-muted"
-                            style={{ borderLeft: gi === 0 ? '1px solid var(--color-border-default)' : '1px solid var(--color-border-default)', minWidth: 56 }}>R/N</th>
-                          <th className="px-1 py-1 text-right text-[10px] text-brand-muted"
-                            style={{ borderLeft: '1px solid var(--color-border-subtle)', minWidth: 56 }}>ADR</th>
-                          <th className="px-1 py-1 text-right text-[10px] text-brand-muted"
-                            style={{ borderLeft: '1px solid var(--color-border-subtle)', minWidth: 68 }}>REV</th>
-                        </React.Fragment>
-                      ))}
-                    </React.Fragment>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {dailyLoading ? (
-                  <tr>
-                    <td colSpan={2 + allSegs.length * 9} className="px-4 py-10 text-center text-sm text-brand-muted">
-                      <Loader2 size={16} className="animate-spin inline mr-2" />불러오는 중...
-                    </td>
-                  </tr>
-                ) : (
-                  dayList.map(({ date, dayOfWeek }, rowIdx) => (
-                    <tr key={date}
-                      style={{ borderBottom: '1px solid var(--color-border-subtle)', background: rowIdx % 2 === 0 ? 'transparent' : 'var(--color-bg-secondary)' }}>
-                      <td className="px-3 py-1.5 text-xs font-medium sticky left-0"
-                        style={{ color: DAY_COLOR[dayOfWeek] ?? 'var(--color-text-primary)', background: rowIdx % 2 === 0 ? 'var(--color-bg-primary)' : 'var(--color-bg-secondary)' }}>
-                        {date}
-                      </td>
-                      <td className="px-2 py-1.5 text-xs text-center"
-                        style={{ color: DAY_COLOR[dayOfWeek] ?? 'var(--color-text-muted)', borderLeft: '1px solid var(--color-border-subtle)' }}>
-                        {dayOfWeek}
-                      </td>
-                      {allSegs.map(seg => {
-                        const dbRow  = dailyRowMap[date]?.[seg]
-                        const budRn  = dailyEdits[date]?.[seg]?.rn  ?? dbRow?.budget_nights  ?? 0
-                        const budRev = dailyEdits[date]?.[seg]?.rev ?? dbRow?.budget_revenue ?? 0
-                        const budAdr = budRn > 0 ? Math.round(budRev / budRn) : 0
-                        const actRn  = dbRow?.act_nights   ?? 0
-                        const actRev = dbRow?.act_revenue  ?? 0
-                        const actAdr = actRn > 0 ? Math.round(actRev / actRn) : 0
-                        const otbRn  = dbRow?.otb_nights   ?? 0
-                        const otbRev = dbRow?.otb_revenue  ?? 0
-                        const otbAdr = otbRn > 0 ? Math.round(otbRev / otbRn) : 0
-
-                        return (
-                          <React.Fragment key={seg}>
-                            {/* Budget */}
-                            <td className="px-1 py-1" style={{ borderLeft: '1px solid var(--color-border-default)' }}>
-                              <InputCell value={budRn} onChange={n => handleDailyChange(date, seg, 'rn', n)} onBlur={() => saveBudgetDaily(date, seg)} />
-                            </td>
-                            <td className="px-2 py-1.5 text-right text-xs"
-                              style={{ color: 'var(--color-text-muted)', borderLeft: '1px solid var(--color-border-subtle)' }}>
-                              {budAdr ? budAdr.toLocaleString('ko-KR') : '-'}
-                            </td>
-                            <td className="px-1 py-1" style={{ borderLeft: '1px solid var(--color-border-subtle)', color: 'var(--color-accent-primary)' }}>
-                              <InputCell value={budRev} onChange={n => handleDailyChange(date, seg, 'rev', n)} onBlur={() => saveBudgetDaily(date, seg)} />
-                            </td>
-                            {/* 전년 */}
-                            <td className="px-2 py-1.5 text-right text-xs"
-                              style={{ color: '#4A9EFF', borderLeft: '1px solid var(--color-border-default)' }}>
-                              {actRn ? actRn.toLocaleString('ko-KR') : '-'}
-                            </td>
-                            <td className="px-2 py-1.5 text-right text-xs"
-                              style={{ color: '#4A9EFF', borderLeft: '1px solid var(--color-border-subtle)' }}>
-                              {actAdr ? actAdr.toLocaleString('ko-KR') : '-'}
-                            </td>
-                            <td className="px-2 py-1.5 text-right text-xs"
-                              style={{ color: '#4A9EFF', borderLeft: '1px solid var(--color-border-subtle)' }}>
-                              {actRev ? actRev.toLocaleString('ko-KR') : '-'}
-                            </td>
-                            {/* OTB */}
-                            <td className="px-2 py-1.5 text-right text-xs"
-                              style={{ color: '#A78BFA', borderLeft: '1px solid var(--color-border-default)' }}>
-                              {otbRn ? otbRn.toLocaleString('ko-KR') : '-'}
-                            </td>
-                            <td className="px-2 py-1.5 text-right text-xs"
-                              style={{ color: '#A78BFA', borderLeft: '1px solid var(--color-border-subtle)' }}>
-                              {otbAdr ? otbAdr.toLocaleString('ko-KR') : '-'}
-                            </td>
-                            <td className="px-2 py-1.5 text-right text-xs"
-                              style={{ color: '#A78BFA', borderLeft: '1px solid var(--color-border-subtle)' }}>
-                              {otbRev ? otbRev.toLocaleString('ko-KR') : '-'}
-                            </td>
-                          </React.Fragment>
-                        )
-                      })}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+        <div className="text-sm text-brand-muted text-center py-8">
+          일별 데이터 관리 화면입니다.
         </div>
       )}
     </div>
