@@ -238,8 +238,13 @@ export default function MarketTable({
     return SEG_WIDTH + colsWidth
   }, [columns])
 
-  const [allExpanded, setAllExpanded] = useState(false)
+  const [allExpanded,  setAllExpanded]  = useState(false)
   const toggleAll = () => setAllExpanded(prev => !prev)
+  const [hoveredRowId, setHoveredRowId] = useState<string | null>(null)
+  const hoverBg = (id: string, bg: string) =>
+    hoveredRowId === id
+      ? `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${bg}`
+      : bg
 
   const { theme } = useTheme()
   const isDark    = theme === 'dark'
@@ -408,11 +413,17 @@ export default function MarketTable({
                 <React.Fragment key={group.parent.id}>
                   {/* 대분류 */}
                   {(() => {
+                    const rowId  = `main-${group.parent.id}`
                     const mainBg = rowBg(group.parent.color, 'var(--color-bg-secondary)')
+                    const bg     = hoverBg(rowId, mainBg)
                     return (
-                      <tr style={{ borderTop: '1px solid var(--color-border-default)', fontWeight: group.parent.is_bold ? 700 : 600 }}>
+                      <tr
+                        style={{ borderTop: '1px solid var(--color-border-default)', fontWeight: group.parent.is_bold ? 700 : 600 }}
+                        onMouseEnter={() => setHoveredRowId(rowId)}
+                        onMouseLeave={() => setHoveredRowId(null)}
+                      >
                         <td className="px-4 py-2"
-                          style={{ background: mainBg, color: fontColor(group.parent, 'var(--color-text-primary)'), ...sSegStyle(mainBg) }}>
+                          style={{ background: bg, color: fontColor(group.parent, 'var(--color-text-primary)'), ...sSegStyle(bg) }}>
                           {group.parent.name}
                         </td>
                         {columns.map((col, i) => {
@@ -421,10 +432,10 @@ export default function MarketTable({
                           return (
                             <td key={col.key} className="px-2 py-2 text-right whitespace-nowrap"
                               style={{
-                                background: mainBg,
+                                background: bg,
                                 color:      fontColor(group.parent, 'var(--color-text-primary)'),
                                 borderLeft: hasGroups ? colBorderLeft(columns, i) : '1px solid var(--color-border-subtle)',
-                                ...sColStyle(i, mainBg),
+                                ...sColStyle(i, bg),
                               }}>
                               {formatValue(val, col.type)}
                             </td>
@@ -434,25 +445,23 @@ export default function MarketTable({
                     )
                   })()}
 
-                  {/* 소분류: fallback = child.color ?? accent (MarketPreviewTable과 동일) */}
+                  {/* 소분류 */}
                   {group.children.map((child, ci) => {
+                    const rowId      = `sub-${child.id}`
                     const subFallback = child.color ?? 'var(--color-accent-primary)'
                     const subBg       = 'var(--color-bg-primary)'
+                    const bg          = hoverBg(rowId, subBg)
                     return (
                       <tr key={child.id}
                         style={{
-                          borderBottom: ci < group.children.length - 1
-                            ? '1px solid var(--color-border-subtle)'
-                            : 'none',
+                          borderBottom: ci < group.children.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
                           fontWeight: child.is_bold ? 600 : 400,
-                        }}>
+                        }}
+                        onMouseEnter={() => setHoveredRowId(rowId)}
+                        onMouseLeave={() => setHoveredRowId(null)}
+                      >
                         <td className="py-2"
-                          style={{
-                            background:  subBg,
-                            paddingLeft: 16,
-                            color:       fontColor(child, subFallback),
-                            ...sSegStyle(subBg),
-                          }}>
+                          style={{ background: bg, paddingLeft: 16, color: fontColor(child, subFallback), ...sSegStyle(bg) }}>
                           <SegCell
                             label={child.name}
                             codes={child.segmentation ?? []}
@@ -469,10 +478,10 @@ export default function MarketTable({
                           return (
                             <td key={col.key} className="px-2 py-2 text-right whitespace-nowrap"
                               style={{
-                                background: subBg,
+                                background: bg,
                                 color:      fontColor(child, subFallback),
                                 borderLeft: hasGroups ? colBorderLeft(columns, i) : '1px solid var(--color-border-subtle)',
-                                ...sColStyle(i, subBg),
+                                ...sColStyle(i, bg),
                               }}>
                               {col.render ? col.render(val, row) : formatValue(val, col.type)}
                             </td>
@@ -487,12 +496,17 @@ export default function MarketTable({
 
             // 중분류
             const mid   = item.data
+            const rowId = `mid-${mid.id}`
             const midBg = rowBg(mid.color, 'var(--color-bg-secondary)')
+            const bg    = hoverBg(rowId, midBg)
             return (
               <tr key={mid.id}
-                style={{ borderTop: '1px solid var(--color-border-default)', fontWeight: mid.is_bold ? 600 : 400 }}>
+                style={{ borderTop: '1px solid var(--color-border-default)', fontWeight: mid.is_bold ? 600 : 400 }}
+                onMouseEnter={() => setHoveredRowId(rowId)}
+                onMouseLeave={() => setHoveredRowId(null)}
+              >
                 <td className="px-4 py-2"
-                  style={{ background: midBg, color: fontColor(mid, 'var(--color-text-primary)'), ...sSegStyle(midBg) }}>
+                  style={{ background: bg, color: fontColor(mid, 'var(--color-text-primary)'), ...sSegStyle(bg) }}>
                   <SegCell
                     label={mid.name}
                     codes={mid.segmentation ?? []}
@@ -508,10 +522,10 @@ export default function MarketTable({
                   return (
                     <td key={col.key} className="px-2 py-2 text-right whitespace-nowrap"
                       style={{
-                        background: midBg,
+                        background: bg,
                         color:      fontColor(mid, 'var(--color-text-primary)'),
                         borderLeft: hasGroups ? colBorderLeft(columns, i) : '1px solid var(--color-border-subtle)',
-                        ...sColStyle(i, midBg),
+                        ...sColStyle(i, bg),
                       }}>
                       {col.render ? col.render(val, row) : formatValue(val, col.type)}
                     </td>
@@ -605,7 +619,7 @@ export default function MarketTable({
                       background: FOOTER_BG,
                       ...(stickyFirstGroup && gi === 0 ? { position: 'sticky', left: SEG_WIDTH, zIndex: 2, background: FOOTER_BG } : {}),
                     }}>
-                    {grpRevpar > 0 ? formatValue(grpRevpar, 'currency') : '-'}
+                    {grpRevpar > 0 ? formatValue(grpRevpar, 'adr') : '-'}
                   </td>
                 )
               })
@@ -615,7 +629,7 @@ export default function MarketTable({
                 return (
                   <td key={col.key} className="px-2 py-2 text-right whitespace-nowrap"
                     style={{ color: accentColor, borderLeft: '1px solid var(--color-border-subtle)', background: FOOTER_BG }}>
-                    {isRevCol ? formatValue(revpar, 'currency') : '-'}
+                    {isRevCol ? formatValue(revpar, 'adr') : '-'}
                   </td>
                 )
               })

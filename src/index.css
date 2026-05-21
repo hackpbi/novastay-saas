@@ -279,3 +279,15 @@
 
 /* Transition for theme switch */
 aside, header, main { transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease; }
+
+/* Excel upload card buttons */
+.btn-excel-action {
+  color: var(--color-text-secondary);
+  transition: color 0.15s ease;
+}
+.btn-excel-action:hover {
+  color: var(--color-accent-primary);
+}
+.btn-excel-action:disabled {
+  opacity: 0.5;
+}
