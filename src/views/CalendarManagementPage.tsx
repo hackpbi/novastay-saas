@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useRef } from 'react'
+import { SyncHolidaysButton } from '@/components/calendar/SyncHolidaysButton'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Lock, CalendarDays, List, Search,
@@ -42,7 +43,7 @@ type ViewMode = 'list' | 'calendar'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const DAYS_HEADER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const DAYS_HEADER = ['일', '월', '화', '수', '목', '금', '토']
 const YEARS  = Array.from({ length: 11 }, (_, i) => 2020 + i)
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
 
@@ -310,22 +311,27 @@ function ListView({ data, searchParams, pendingHoliday, onToggleHoliday }: {
 
 // ── Calendar View ─────────────────────────────────────────────────────────────
 
-function CalendarView({ data, year, month, searchParams }: {
-  data:         CalendarRow[]
-  year:         number
-  month:        number
-  searchParams: { year: number; month: number | null } | null
+function CalendarView({ data, year, month, searchParams, isDragSource, onDropYoyMatch, hideHolidayBadge, pendingYoyMatch }: {
+  data:               CalendarRow[]
+  year:               number
+  month:              number
+  searchParams:       { year: number; month: number | null } | null
+  isDragSource?:      boolean
+  onDropYoyMatch?:    (targetDate: string, yoyDate: string) => void
+  hideHolidayBadge?:  boolean
+  pendingYoyMatch?:   Record<string, string>
 }) {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
-  const [editRow, setEditRow] = useState<CalendarRow | null>(null)
+  const [editRow,   setEditRow]   = useState<CalendarRow | null>(null)
+  const [dragOver,  setDragOver]  = useState<string | null>(null)
   const dataMap = Object.fromEntries(data.map(r => [r.date, r]))
 
   // 해당 월의 첫날 요일 (0=Sun→6, 1=Mon→0, ...)
   const firstDay  = new Date(year, month - 1, 1).getDay()
   const daysInMonth = new Date(year, month, 0).getDate()
-  // Mon=0 기준 offset
-  const offset = (firstDay + 6) % 7
+  // Sun=0 기준 offset (JS getDay() 그대로)
+  const offset = firstDay
 
   const cells: (number | null)[] = [
     ...Array(offset).fill(null),
@@ -348,7 +354,7 @@ function CalendarView({ data, year, month, searchParams }: {
           {DAYS_HEADER.map(day => (
             <div key={day}
               className="py-2.5 text-center text-xs font-semibold"
-              style={{ color: day === 'Fri' || day === 'Sat' ? WEEKEND_COLOR : 'var(--color-text-muted)' }}>
+              style={{ color: day === '금' || day === '토' ? WEEKEND_COLOR : 'var(--color-text-muted)' }}>
               {day}
             </div>
           ))}
@@ -366,30 +372,69 @@ function CalendarView({ data, year, month, searchParams }: {
               const dateStr = `${year}-${pad(month)}-${pad(dayNum)}`
               const dayData = dataMap[dateStr]
               // 올해요일 컬럼 기준 금/토, 데이터 없으면 그리드 위치(Fri=4, Sat=5) 폴백
-              const isWeekend = dayData ? (dayData.day === '금' || dayData.day === '토') : (di === 4 || di === 5)
+              const isWeekend = dayData ? (dayData.day === '금' || dayData.day === '토') : (di === 5 || di === 6)
 
+              const isDropTarget = !!onDropYoyMatch && !!dayData
+              const baseBg = dragOver === dateStr
+                ? 'var(--color-accent-dim)'
+                : dayData?.is_holiday === true ? holidayRowBg(isDark) : 'transparent'
               return (
                 <div key={di}
                   onClick={() => dayData && setEditRow(dayData)}
+                  draggable={isDragSource && !!dayData}
+                  onDragStart={isDragSource && dayData ? e => {
+                    e.dataTransfer.setData('text/plain', dateStr)
+                    e.dataTransfer.effectAllowed = 'copy'
+                    ;(e.currentTarget as HTMLElement).style.opacity = '0.5'
+                  } : undefined}
+                  onDragEnd={isDragSource ? e => {
+                    ;(e.currentTarget as HTMLElement).style.opacity = '1'
+                  } : undefined}
+                  onDragOver={isDropTarget ? e => {
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'copy'
+                    setDragOver(dateStr)
+                  } : undefined}
+                  onDragLeave={isDropTarget ? () => setDragOver(null) : undefined}
+                  onDrop={isDropTarget ? e => {
+                    e.preventDefault()
+                    setDragOver(null)
+                    const src = e.dataTransfer.getData('text/plain')
+                    if (src && src !== dateStr) onDropYoyMatch!(dateStr, src)
+                  } : undefined}
                   className="min-h-[88px] p-1.5 transition-colors"
                   style={{
                     borderRight: di < 6 ? '1px solid var(--color-border-subtle)' : 'none',
-                    background: dayData?.is_holiday === true ? holidayRowBg(isDark) : 'transparent',
-                    cursor: dayData ? 'pointer' : 'default',
+                    background: baseBg,
+                    cursor: isDragSource && dayData ? 'grab' : dayData ? 'pointer' : 'default',
                   }}
-                  onMouseEnter={e => { if (dayData) e.currentTarget.style.background = 'var(--overlay-hover)' }}
-                  onMouseLeave={e => { e.currentTarget.style.background = dayData?.is_holiday === true ? holidayRowBg(isDark) : 'transparent' }}>
-                  <div className="text-xs font-medium mb-1"
-                    style={{ color: isWeekend ? WEEKEND_COLOR : 'var(--color-text-primary)' }}>
-                    {dayNum}
+                  onMouseEnter={e => { if (dayData && dragOver !== dateStr) e.currentTarget.style.background = 'var(--overlay-hover)' }}
+                  onMouseLeave={e => { if (dragOver !== dateStr) e.currentTarget.style.background = baseBg }}>
+                  <div className="flex items-baseline justify-between mb-1">
+                    <span className="text-xs font-medium"
+                      style={{ color: isWeekend ? WEEKEND_COLOR : 'var(--color-text-primary)' }}>
+                      {dayNum}
+                    </span>
+                    {(() => {
+                      const pending = pendingYoyMatch?.[dateStr]
+                      const yoy     = pending ?? dayData?.yoy_match
+                      if (!yoy) return null
+                      return (
+                        <span className="text-[10px] leading-none flex items-center gap-0.5"
+                          style={{ color: pending ? 'var(--color-accent-primary)' : 'var(--color-text-muted)' }}>
+                          {pending && <span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--color-accent-primary)' }} />}
+                          {yoy.replace(/-/g, '.')}
+                        </span>
+                      )
+                    })()}
                   </div>
-                  {dayData?.is_holiday === true && (
+                  {dayData?.is_holiday === true && !hideHolidayBadge && (
                     <div className="text-[10px] px-1.5 py-0.5 rounded mb-0.5 truncate font-medium"
                       style={holidayBadge(isDark)}>
                       주연징
                     </div>
                   )}
-                  {dayData?.event && (
+                  {dayData?.event && dayData.event.toLowerCase() !== 'null' && (
                     <div className="text-[10px] px-1.5 py-0.5 rounded truncate"
                       style={{ background: 'var(--accent-badge-bg)', color: 'var(--color-accent-primary)' }}>
                       {dayData.event}
@@ -424,31 +469,68 @@ export default function CalendarManagementPage() {
   const [uploading,       setUploading]       = useState(false)
   const [uploadMsg,       setUploadMsg]       = useState<string | null>(null)
   const [calMonth,        setCalMonth]        = useState<number>(new Date().getMonth() + 1)
+  const [prevCalMonth,    setPrevCalMonth]    = useState<number>(new Date().getMonth() + 1)
   const [pendingHoliday,  setPendingHoliday]  = useState<Record<string, boolean>>({})
+  const [pendingYoyMatch, setPendingYoyMatch] = useState<Record<string, string>>({})
   const [savingPending,   setSavingPending]   = useState(false)
 
   // ── Query (훅은 항상 최상위에서 — guard 앞에 위치) ────────────────────────────
 
+  const fetchCalendar = async (year: number, month: number | null): Promise<CalendarRow[]> => {
+    let query = (supabase as any)
+      .from('c06_calendar')
+      .select('*')
+      .eq('year', year)
+      .order('date')
+    if (month) {
+      const start   = `${year}-${String(month).padStart(2, '0')}-01`
+      const lastDay = new Date(year, month, 0)
+      const end     = `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`
+      query = query.gte('date', start).lte('date', end)
+    }
+    const { data: rows, error } = await query
+    if (error) throw error
+    return rows as CalendarRow[]
+  }
+
   const { data = [], isLoading, isFetching } = useQuery<CalendarRow[]>({
     queryKey: ['c06_calendar', searchParams],
-    queryFn: async () => {
-      if (!searchParams) return []
-      let query = (supabase as any)
-        .from('c06_calendar')
-        .select('*')
-        .eq('year', searchParams.year)
-        .order('date')
-      if (searchParams.month) {
-        const start   = `${searchParams.year}-${String(searchParams.month).padStart(2, '0')}-01`
-        const lastDay = new Date(searchParams.year, searchParams.month, 0)
-        const end     = `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`
-        query = query.gte('date', start).lte('date', end)
-      }
-      const { data: rows, error } = await query
-      if (error) throw error
-      return rows as CalendarRow[]
-    },
+    queryFn:  () => fetchCalendar(searchParams!.year, searchParams!.month),
     enabled:   !!searchParams,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const prevYearParams    = searchParams ? { year: searchParams.year - 1, month: searchParams.month } : null
+  const prevPublicYear    = searchParams ? searchParams.year - 1 : 0
+  const currentPublicYear = searchParams?.year ?? 0
+
+  const { data: currentPublicRawData = [] } = useQuery<any[]>({
+    queryKey: ['c07_public_calendar', currentPublicYear],
+    queryFn: async () => {
+      const { data: rows, error } = await (supabase as any)
+        .from('c07_public_calendar')
+        .select('date, holiday_name, is_holiday')
+        .gte('date', `${currentPublicYear}-01-01`)
+        .lte('date', `${currentPublicYear}-12-31`)
+      if (error) throw error
+      return rows ?? []
+    },
+    enabled:   !!searchParams && currentPublicYear > 0,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const { data: publicRawData = [] } = useQuery<any[]>({
+    queryKey: ['c07_public_calendar', prevPublicYear],
+    queryFn: async () => {
+      const { data: rows, error } = await (supabase as any)
+        .from('c07_public_calendar')
+        .select('date, holiday_name, is_holiday')
+        .gte('date', `${prevPublicYear}-01-01`)
+        .lte('date', `${prevPublicYear}-12-31`)
+      if (error) throw error
+      return rows ?? []
+    },
+    enabled:   !!searchParams && prevPublicYear > 0,
     staleTime: 5 * 60 * 1000,
   })
 
@@ -471,11 +553,31 @@ export default function CalendarManagementPage() {
     )
   }
 
+  const isWorking = isLoading || isFetching
+
+  const usePublicData = !isWorking && !!searchParams && data.length === 0 && currentPublicRawData.length > 0
+
+  const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토']
+
+  const currentPublicCalRows: CalendarRow[] = currentPublicRawData.map((r: any): CalendarRow => ({
+    date:         r.date,
+    year:         new Date(r.date + 'T00:00:00').getFullYear(),
+    day:          WEEKDAY_KO[new Date(r.date + 'T00:00:00').getDay()],
+    rev_dow:      null,
+    yoy_match:    null,
+    event:        r.holiday_name || null,
+    similar_year: null,
+    is_holiday:   r.is_holiday ?? false,
+    created_at:   null,
+  }))
+
   // ── Handlers ──────────────────────────────────────────────────────────────────
 
   const handleSearch = () => {
     setSearchParams({ year: searchYear, month: searchMonth })
+    if (searchMonth) { setCalMonth(searchMonth); setPrevCalMonth(searchMonth) }
     setPendingHoliday({})
+    setPendingYoyMatch({})
   }
 
   const handleToggleHoliday = (date: string, currentValue: boolean) => {
@@ -483,18 +585,43 @@ export default function CalendarManagementPage() {
   }
 
   const handleSavePending = async () => {
-    const entries = Object.entries(pendingHoliday)
-    if (entries.length === 0) return
+    const holidayEntries = Object.entries(pendingHoliday)
+    const yoyEntries     = Object.entries(pendingYoyMatch)
+    const isPublicSave   = usePublicData && currentPublicRawData.length > 0
+    if (!isPublicSave && holidayEntries.length === 0 && yoyEntries.length === 0) return
     setSavingPending(true)
     try {
-      for (const [date, value] of entries) {
+      if (isPublicSave) {
+        const rows = currentPublicRawData.map((r: any) => ({
+          date:         r.date,
+          year:         new Date(r.date + 'T00:00:00').getFullYear(),
+          day:          WEEKDAY_KO[new Date(r.date + 'T00:00:00').getDay()],
+          rev_dow:      null,
+          yoy_match:    null,
+          event:        r.holiday_name || null,
+          similar_year: null,
+          is_holiday:   r.is_holiday ?? false,
+        }))
+        const { error } = await (supabase as any)
+          .from('c06_calendar')
+          .upsert(rows, { onConflict: 'date' })
+        if (error) throw error
+      }
+      for (const [date, value] of holidayEntries) {
         await (supabase as any)
           .from('c06_calendar')
           .update({ is_holiday: value })
           .eq('date', date)
       }
+      for (const [date, yoy] of yoyEntries) {
+        await (supabase as any)
+          .from('c06_calendar')
+          .update({ yoy_match: yoy })
+          .eq('date', date)
+      }
       queryClient.invalidateQueries({ queryKey: ['c06_calendar', searchParams] })
       setPendingHoliday({})
+      setPendingYoyMatch({})
     } finally {
       setSavingPending(false)
     }
@@ -565,20 +692,63 @@ export default function CalendarManagementPage() {
     }
   }
 
+  // ── yoy_match 드롭 — 저장 버튼 클릭 전까지 pending 상태 유지 ────────────────
+  const handleDropYoyMatch = (targetDate: string, yoyDate: string) => {
+    setPendingYoyMatch(prev => ({ ...prev, [targetDate]: yoyDate }))
+  }
+
   // 캘린더 뷰 월 네비게이션
   const calYear = searchYear
 
-  const goPrev = () => setCalMonth(m => m === 1 ? 12 : m - 1)
-  const goNext = () => setCalMonth(m => m === 12 ? 1 : m + 1)
+  const goPrev = () => {
+    const m = calMonth === 1 ? 12 : calMonth - 1
+    setCalMonth(m); setPrevCalMonth(m); setSearchMonth(m)
+    if (searchParams) setSearchParams({ year: searchParams.year, month: m })
+  }
+  const goNext = () => {
+    const m = calMonth === 12 ? 1 : calMonth + 1
+    setCalMonth(m); setPrevCalMonth(m); setSearchMonth(m)
+    if (searchParams) setSearchParams({ year: searchParams.year, month: m })
+  }
+  const goPrevYearMonth = () => setPrevCalMonth(m => m === 1 ? 12 : m - 1)
+  const goNextYearMonth = () => setPrevCalMonth(m => m === 12 ? 1 : m + 1)
 
-  const calData = searchParams?.month
-    ? data
+  const filterByMonth = (rows: CalendarRow[], month: number) =>
+    rows.filter(r => new Date(r.date + 'T00:00:00').getMonth() + 1 === month)
+
+  const monthFilteredData = usePublicData
+    ? filterByMonth(currentPublicCalRows, calMonth)
     : data.filter(r => {
-        const d = new Date(r.date)
+        const d = new Date(r.date + 'T00:00:00')
         return d.getFullYear() === calYear && d.getMonth() + 1 === calMonth
       })
 
-  const isWorking = isLoading || isFetching
+  const calData = usePublicData
+    ? filterByMonth(currentPublicCalRows, calMonth)
+    : data.filter(r => {
+        const d = new Date(r.date + 'T00:00:00')
+        return d.getFullYear() === calYear && d.getMonth() + 1 === calMonth
+      })
+
+  const prevYear = calYear - 1
+
+  const prevCalData: CalendarRow[] = publicRawData
+    .map((r: any): CalendarRow => ({
+      date:         r.date,
+      year:         new Date(r.date + 'T00:00:00').getFullYear(),
+      day:          WEEKDAY_KO[new Date(r.date + 'T00:00:00').getDay()],
+      rev_dow:      null,
+      yoy_match:    null,
+      event:        r.holiday_name || null,
+      similar_year: null,
+      is_holiday:   r.is_holiday ?? false,
+      created_at:   null,
+    }))
+    .filter(r => {
+      const d = new Date(r.date + 'T00:00:00')
+      return d.getMonth() + 1 === prevCalMonth
+    })
+
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -651,11 +821,11 @@ export default function CalendarManagementPage() {
 
         {/* 저장 버튼 */}
         <button onClick={handleSavePending}
-          disabled={Object.keys(pendingHoliday).length === 0 || savingPending}
+          disabled={(Object.keys(pendingHoliday).length === 0 && Object.keys(pendingYoyMatch).length === 0 && !usePublicData) || savingPending}
           className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:-translate-y-0.5 disabled:opacity-40"
           style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)', background: 'var(--color-bg-elevated)' }}>
           {savingPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-          저장{Object.keys(pendingHoliday).length > 0 && ` (${Object.keys(pendingHoliday).length})`}
+          {(() => { const n = Object.keys(pendingHoliday).length + Object.keys(pendingYoyMatch).length; return `저장${n > 0 ? ` (${n})` : ''}` })()}
         </button>
 
         <div className="ml-auto flex items-center gap-1.5">
@@ -665,6 +835,9 @@ export default function CalendarManagementPage() {
               {uploadMsg}
             </span>
           )}
+
+          {/* 공휴일 동기화 */}
+          <SyncHolidaysButton />
 
           {/* 양식 다운로드 */}
           <button onClick={downloadTemplate}
@@ -709,7 +882,7 @@ export default function CalendarManagementPage() {
       )}
 
       {/* ── 검색 결과 없음 ── */}
-      {searchParams && !isWorking && data.length === 0 && (
+      {searchParams && !isWorking && data.length === 0 && !usePublicData && (
         <div className="flex flex-col items-center justify-center py-20 gap-3">
           <CalendarDays size={32} style={{ color: 'var(--color-text-muted)' }} />
           <p className="text-sm text-brand-muted">검색 결과가 없습니다</p>
@@ -717,10 +890,20 @@ export default function CalendarManagementPage() {
         </div>
       )}
 
+      {/* ── 공공 데이터 미리보기 안내 ── */}
+      {usePublicData && (
+        <div className="flex items-center justify-between px-4 py-2.5 rounded-xl text-sm"
+          style={{ background: 'var(--accent-badge-bg)', border: '1px solid var(--accent-badge-border)' }}>
+          <span style={{ color: 'var(--color-accent-primary)' }}>
+            c06_calendar 데이터가 없어 공공 캘린더(c07_public_calendar) 데이터를 표시합니다. 저장 버튼을 클릭하면 c06_calendar에 저장됩니다.
+          </span>
+        </div>
+      )}
+
       {/* ── 목록 보기 ── */}
-      {searchParams && !isWorking && data.length > 0 && view === 'list' && (
+      {searchParams && !isWorking && (data.length > 0 || usePublicData) && view === 'list' && (
         <ListView
-          data={data}
+          data={monthFilteredData}
           searchParams={searchParams}
           pendingHoliday={pendingHoliday}
           onToggleHoliday={handleToggleHoliday}
@@ -728,36 +911,82 @@ export default function CalendarManagementPage() {
       )}
 
       {/* ── 캘린더 보기 ── */}
-      {searchParams && !isWorking && data.length > 0 && view === 'calendar' && (
+      {searchParams && !isWorking && (data.length > 0 || usePublicData) && view === 'calendar' && (
         <div className="space-y-3">
-          {/* 월 네비게이션 (전체 월 조회 시 표시) */}
-          {!searchParams.month && (
-            <div className="flex items-center gap-3">
-              <button onClick={goPrev}
-                className="p-1.5 rounded-lg transition-colors"
-                style={{ border: '1px solid var(--color-border-default)' }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-tertiary)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                <ChevronLeft size={15} className="text-brand-muted" />
-              </button>
-              <span className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)', minWidth: 80, textAlign: 'center' }}>
-                {calYear}년 {calMonth}월
-              </span>
-              <button onClick={goNext}
-                className="p-1.5 rounded-lg transition-colors"
-                style={{ border: '1px solid var(--color-border-default)' }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-tertiary)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                <ChevronRight size={15} className="text-brand-muted" />
-              </button>
+          {/* 월 네비게이션 */}
+          <div className="flex items-center gap-3">
+            <button onClick={goPrev}
+              className="p-1.5 rounded-lg transition-colors"
+              style={{ border: '1px solid var(--color-border-default)' }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-tertiary)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+              <ChevronLeft size={15} className="text-brand-muted" />
+            </button>
+            <span className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)', minWidth: 80, textAlign: 'center' }}>
+              {calYear}년 {calMonth}월
+            </span>
+            <button onClick={goNext}
+              className="p-1.5 rounded-lg transition-colors"
+              style={{ border: '1px solid var(--color-border-default)' }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-tertiary)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+              <ChevronRight size={15} className="text-brand-muted" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            {/* 올해 캘린더 */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold" style={{ color: 'var(--color-accent-primary)' }}>
+                  {calYear}년 {calMonth}월
+                </span>
+              </div>
+              <CalendarView
+                data={calData}
+                year={calYear}
+                month={calMonth}
+                searchParams={searchParams}
+                onDropYoyMatch={handleDropYoyMatch}
+                pendingYoyMatch={pendingYoyMatch}
+              />
             </div>
-          )}
-          <CalendarView
-            data={calData}
-            year={searchParams.month ? searchParams.year : calYear}
-            month={searchParams.month ?? calMonth}
-            searchParams={searchParams}
-          />
+
+            {/* 전년 캘린더 */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <button onClick={goPrevYearMonth}
+                  className="p-1 rounded transition-colors"
+                  style={{ border: '1px solid var(--color-border-default)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-tertiary)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                  <ChevronLeft size={13} className="text-brand-muted" />
+                </button>
+                <span className="text-sm font-bold" style={{ color: 'var(--color-text-muted)' }}>
+                  {prevYear}년 {prevCalMonth}월
+                </span>
+                <button onClick={goNextYearMonth}
+                  className="p-1 rounded transition-colors"
+                  style={{ border: '1px solid var(--color-border-default)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-tertiary)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                  <ChevronRight size={13} className="text-brand-muted" />
+                </button>
+                <span className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                  style={{ background: 'var(--color-bg-tertiary)', color: 'var(--color-text-muted)', border: '1px solid var(--color-border-subtle)' }}>
+                  전년
+                </span>
+              </div>
+              <CalendarView
+                data={prevCalData}
+                year={prevYear}
+                month={prevCalMonth}
+                searchParams={prevYearParams}
+                isDragSource
+                hideHolidayBadge
+              />
+            </div>
+          </div>
         </div>
       )}
     </div>
