@@ -515,6 +515,9 @@ export default function BudgetPage() {
   const [saveError,       setSaveError]       = useState<string | null>(null)
   const [uploadConfirm,   setUploadConfirm]   = useState(false)
   const [deleteConfirm,   setDeleteConfirm]   = useState(false)
+  const [saveModalOpen,   setSaveModalOpen]   = useState(false)
+  const [saveTarget,      setSaveTarget]      = useState<'mtd' | 'daily' | 'both'>('mtd')
+  const [saveConfirmed,   setSaveConfirmed]   = useState(false)
   const [isDistributing,  setIsDistributing]  = useState(false)
   const [isDirectEdit,    setIsDirectEdit]    = useState(true)
   const [modalSeg,        setModalSeg]        = useState<string | null>(null)
@@ -557,33 +560,10 @@ export default function BudgetPage() {
   const monthlyLoading: boolean = false
 
 
-  // ── 4. 월별 저장 — onBlur (upsert_budget_mtd) ────────────────────────────────
-  const saveBudgetMonthly = useCallback(async (segmentation: string, month: number) => {
-    if (!hotelId || !profile?.id) return
-    const rn  = budgetData[segmentation]?.[month]?.rn  ?? 0
-    const rev = budgetData[segmentation]?.[month]?.rev ?? 0
-
-    try {
-      const { error } = await (supabase as any)
-        .rpc('upsert_budget_mtd', {
-          p_hotel_id:    hotelId,
-          p_profile_id:  profile.id,
-          p_update_date: otbDate || new Date().toISOString().split('T')[0],
-          p_rows: [{
-            year:  selectedYear,
-            month: month,
-            seg:   segmentation,
-            rn:    rn,
-            rev:   rev,
-          }],
-          p_confirmed: false,
-        })
-      if (error) throw error
-      queryClient.invalidateQueries({ queryKey: ['budget_mtd', hotelId, selectedYear] })
-    } catch (err: any) {
-      console.error('월별 저장 오류:', err.message)
-    }
-  }, [hotelId, profile?.id, budgetData, selectedYear, otbDate, queryClient])
+  // ── 4. 월별 저장 — DB 저장 비활성화 (저장 버튼 클릭 시에만 저장됨) ──────────
+  const saveBudgetMonthly = useCallback(async (_segmentation: string, _month: number) => {
+    // budgetData state는 handleBudgetChange에서 이미 반영됨
+  }, [])
 
 
   // ── 6. 전체 저장 (upsert_budget_mtd) ────────────────────────────────────────
@@ -624,38 +604,82 @@ export default function BudgetPage() {
     }
   }
 
-  // ── 7. 모달 적용 (applyModalEdit → upsert_budget_mtd) ────────────────────────
-  const applyModalEdit = useCallback(async (seg: string, draft: Record<number, MonthVal>) => {
+  // ── 저장 모달 실행 ─────────────────────────────────────────────────────────────
+  const handleSaveSubmit = async () => {
     if (!hotelId || !profile?.id) return
-    setBudgetData(prev => ({ ...prev, [seg]: draft }))
+    setSaving(true)
+    setSaveError(null)
 
-    const rows: any[] = []
-    MONTHS.forEach(m => {
-      rows.push({
-        year:  selectedYear,
-        month: m,
-        seg:   seg,
-        rn:    draft[m]?.rn  ?? 0,
-        rev:   draft[m]?.rev ?? 0,
-      })
-    })
+    const updateDate = otbDate || new Date().toISOString().split('T')[0]
+    let mtdMsg   = ''
+    let dailyMsg = ''
 
     try {
-      const { error } = await (supabase as any)
-        .rpc('upsert_budget_mtd', {
-          p_hotel_id:    hotelId,
-          p_profile_id:  profile.id,
-          p_update_date: otbDate || new Date().toISOString().split('T')[0],
-          p_rows:        rows,
-          p_confirmed:   false,
+      if (saveTarget === 'mtd' || saveTarget === 'both') {
+        const mtdRows: any[] = []
+        Object.entries(budgetData).forEach(([seg, months]) => {
+          Object.entries(months).forEach(([mStr, val]) => {
+            if (val.rn > 0 || val.rev > 0) {
+              mtdRows.push({ year: selectedYear, month: Number(mStr), seg, rn: val.rn, rev: val.rev })
+            }
+          })
         })
-      if (error) throw error
-      queryClient.invalidateQueries({ queryKey: ['budget_mtd', hotelId, selectedYear] })
+        if (mtdRows.length > 0) {
+          const { data, error } = await (supabase as any)
+            .rpc('upsert_budget_mtd', {
+              p_hotel_id:    hotelId,
+              p_profile_id:  profile.id,
+              p_update_date: updateDate,
+              p_rows:        mtdRows,
+              p_confirmed:   saveConfirmed,
+            })
+          if (error) throw error
+          mtdMsg = `MTD: ${data?.rows_affected ?? 0}행`
+          queryClient.invalidateQueries({ queryKey: ['budget_mtd', hotelId, selectedYear] })
+        }
+      }
+
+      if (saveTarget === 'daily' || saveTarget === 'both') {
+        const monthlyBudget: any[] = []
+        Object.entries(budgetData).forEach(([seg, months]) => {
+          Object.entries(months).forEach(([mStr, val]) => {
+            if (val.rn > 0 || val.rev > 0) {
+              monthlyBudget.push({ seg, month: Number(mStr), rn: val.rn, rev: val.rev })
+            }
+          })
+        })
+        if (monthlyBudget.length > 0) {
+          const { data, error } = await (supabase as any)
+            .rpc('distribute_budget', {
+              p_hotel_id:       hotelId,
+              p_year:           selectedYear,
+              p_profile_id:     profile.id,
+              p_update_date:    updateDate,
+              p_monthly_budget: monthlyBudget,
+              p_confirmed:      saveConfirmed,
+            })
+          if (error) throw error
+          dailyMsg = `DAILY: ${data?.rows_inserted ?? 0}행`
+          queryClient.invalidateQueries({ queryKey: ['budget_daily', hotelId, selectedYear] })
+        }
+      }
+
+      const msgParts = [mtdMsg, dailyMsg].filter(Boolean)
+      alert(`저장 완료\n${msgParts.join('\n')}`)
+      setSaveModalOpen(false)
     } catch (err: any) {
       setSaveError(err.message)
+      alert('저장 실패: ' + err.message)
+    } finally {
+      setSaving(false)
     }
+  }
+
+  // ── 7. 모달 적용 — state 반영만 (DB 저장은 저장 버튼으로) ───────────────────
+  const applyModalEdit = useCallback((seg: string, draft: Record<number, MonthVal>) => {
+    setBudgetData(prev => ({ ...prev, [seg]: draft }))
     setModalSeg(null)
-  }, [hotelId, profile?.id, otbDate, selectedYear, queryClient])
+  }, [])
 
   // ── Step1. 엑셀 양식 다운로드 ────────────────────────────────────────────────
   const handleDownloadTemplate = async () => {
@@ -741,6 +765,74 @@ export default function BudgetPage() {
     XLSX.writeFile(wb, `Budget_양식_${selectedYear}.xlsx`)
   }
 
+  // ── 일별 엑셀 다운로드 ────────────────────────────────────────────────────────
+  const handleDownloadDaily = async () => {
+    if (!hotelId) return
+
+    const { data: budgetRows, error: bErr } = await (supabase as any)
+      .from('a03_budget')
+      .select('business_date, segmentation, budget_nights, budget_revenue')
+      .eq('hotel_id', hotelId)
+      .gte('business_date', `${selectedYear}-01-01`)
+      .lte('business_date', `${selectedYear}-12-31`)
+      .order('business_date')
+
+    if (bErr) { alert('데이터 조회 실패: ' + bErr.message); return }
+
+    const { data: calRows, error: cErr } = await (supabase as any)
+      .from('c06_calendar')
+      .select('date, day, rev_dow, event, is_holiday')
+      .gte('date', `${selectedYear}-01-01`)
+      .lte('date', `${selectedYear}-12-31`)
+      .order('date')
+
+    if (cErr) { alert('캘린더 조회 실패: ' + cErr.message); return }
+
+    const calMap: Record<string, any> = {}
+    ;(calRows ?? []).forEach((r: any) => { calMap[r.date] = r })
+
+    const budMap: Record<string, Record<string, { rn: number; rev: number }>> = {}
+    ;(budgetRows ?? []).forEach((r: any) => {
+      if (!budMap[r.business_date]) budMap[r.business_date] = {}
+      budMap[r.business_date][r.segmentation] = {
+        rn:  r.budget_nights  ?? 0,
+        rev: r.budget_revenue ?? 0,
+      }
+    })
+
+    const allSegs = Array.from(new Set((budgetRows ?? []).map((r: any) => r.segmentation as string))).sort()
+
+    const wb = XLSX.utils.book_new()
+
+    for (let m = 1; m <= 12; m++) {
+      const daysInMonth = new Date(selectedYear, m, 0).getDate()
+      const monthStr    = String(m).padStart(2, '0')
+
+      const headers = ['날짜', '요일', 'rev_dow', 'event', 'is_holiday']
+      allSegs.forEach(seg => { headers.push(`${seg} R/N`, `${seg} ADR`, `${seg} REV`) })
+
+      const sheetData: any[][] = [headers]
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = `${selectedYear}-${monthStr}-${String(d).padStart(2, '0')}`
+        const cal = calMap[dateStr] ?? {}
+        const row: any[] = [dateStr, cal.day ?? '', cal.rev_dow ?? '', cal.event ?? '', cal.is_holiday ?? false]
+        allSegs.forEach(seg => {
+          const bd  = budMap[dateStr]?.[seg as string] ?? { rn: 0, rev: 0 }
+          const adr = bd.rn > 0 ? Math.round(bd.rev / bd.rn) : 0
+          row.push(bd.rn, adr, bd.rev)
+        })
+        sheetData.push(row)
+      }
+
+      const ws = XLSX.utils.aoa_to_sheet(sheetData)
+      XLSX.utils.book_append_sheet(wb, ws, `${m}월`)
+    }
+
+    XLSX.writeFile(wb, `Budget_일별_${selectedYear}.xlsx`)
+  }
+
+
   // ── Step2. 엑셀 업로드 → upsert_budget_mtd ───────────────────────────────────
   const handleUploadBudget = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -811,22 +903,6 @@ export default function BudgetPage() {
       return
     }
 
-    // upsert_budget_mtd RPC 호출
-    const { data: rpcResult, error: rpcError } = await (supabase as any)
-      .rpc('upsert_budget_mtd', {
-        p_hotel_id:    hotelId,
-        p_profile_id:  profile?.id,
-        p_update_date: otbDate || new Date().toISOString().split('T')[0],
-        p_rows:        mtdRows,
-        p_confirmed:   false,
-      })
-
-    if (rpcError) {
-      console.error('RPC error:', rpcError)
-      alert('업로드 실패: ' + rpcError.message)
-      return
-    }
-
     // 화면(budgetData)에 반영
     const newBudgetData: BudgetMonthData = {}
     Object.entries(parsed).forEach(([seg, months]) => {
@@ -837,8 +913,7 @@ export default function BudgetPage() {
     })
     setBudgetData(newBudgetData)
 
-    queryClient.invalidateQueries({ queryKey: ['budget_mtd', hotelId, selectedYear] })
-    alert(`업로드 완료: ${rpcResult?.rows_affected ?? 0}개 행 저장됨`)
+
   }
 
   // ── Step3. 전년 비율 배분 계산 (미사용) ──────────────────────────────────────
@@ -1127,6 +1202,78 @@ export default function BudgetPage() {
         </div>
       )}
 
+      {/* ── 저장 옵션 모달 ── */}
+      {saveModalOpen && (
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSaveModalOpen(false)} />
+          <div className="relative rounded-2xl p-6 w-full max-w-md space-y-5"
+            style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-elevated)' }}>
+
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>저장 옵션 선택</p>
+              <button onClick={() => setSaveModalOpen(false)}
+                className="text-brand-muted hover:opacity-60 transition-opacity text-lg leading-none">✕</button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs text-brand-muted mb-2">저장 위치</p>
+                <div className="flex flex-col gap-2">
+                  {(['mtd', 'daily', 'both'] as const).map(opt => (
+                    <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                      <input type="radio" name="saveTarget" checked={saveTarget === opt}
+                        onChange={() => setSaveTarget(opt)} className="cursor-pointer" />
+                      <span className="text-sm" style={{ color: 'var(--color-text-primary)' }}>
+                        {opt === 'mtd'   && 'MTD만 (월별 자료 축적)'}
+                        {opt === 'daily' && 'DAILY만 (일별 운영)'}
+                        {opt === 'both'  && '둘 다 (MTD + 일별 자동 배분)'}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs text-brand-muted mb-2">확정 여부</p>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="saveConfirmed" checked={!saveConfirmed}
+                      onChange={() => setSaveConfirmed(false)} className="cursor-pointer" />
+                    <span className="text-sm" style={{ color: 'var(--color-text-primary)' }}>미확정</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="saveConfirmed" checked={saveConfirmed}
+                      onChange={() => setSaveConfirmed(true)} className="cursor-pointer" />
+                    <span className="text-sm" style={{ color: 'var(--color-text-primary)' }}>확정</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="text-xs text-brand-muted pt-2"
+                style={{ borderTop: '1px solid var(--color-border-default)' }}>
+                저장 날짜: {otbDate || new Date().toISOString().split('T')[0]}
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setSaveModalOpen(false)}
+                className="flex-1 py-2 rounded-lg text-sm hover:opacity-80 transition-all"
+                style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}>
+                취소
+              </button>
+              <button
+                onClick={handleSaveSubmit}
+                disabled={saving}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold transition-all hover:-translate-y-px disabled:opacity-50"
+                style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
+                {saving ? <Loader2 size={13} className="animate-spin" /> : null}
+                저장
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── 엑셀 업로드 안내 모달 ── */}
       {uploadConfirm && (
         <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4">
@@ -1216,7 +1363,7 @@ export default function BudgetPage() {
             ))}
           </div>
           <button
-            onClick={saveAll}
+            onClick={() => setSaveModalOpen(true)}
             disabled={saving}
             className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all hover:-translate-y-px disabled:opacity-50"
             style={{ background: 'var(--gradient-cta)', color: '#0A0A0A', boxShadow: 'var(--accent-btn-glow)' }}
@@ -1306,8 +1453,20 @@ export default function BudgetPage() {
 
       {/* ── 일별 탭 ── */}
       {activeTab === 'daily' && (
-        <div className="text-sm text-brand-muted text-center py-8">
-          일별 데이터 관리 화면입니다.
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownloadDaily}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all hover:opacity-80"
+              style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}
+            >
+              <Download size={13} />
+              일별 엑셀 다운
+            </button>
+          </div>
+          <div className="text-sm text-brand-muted text-center py-8">
+            일별 데이터 관리 화면입니다.
+          </div>
         </div>
       )}
     </div>
