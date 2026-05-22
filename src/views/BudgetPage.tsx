@@ -1,8 +1,8 @@
 'use client'
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { Save, Download, Upload, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Loader2, FileSpreadsheet, Calendar } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Save, Download, Upload, ChevronDown, ChevronUp, Loader2, FileSpreadsheet, Pencil, LayoutList, Trash2, Wand2 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -97,170 +97,7 @@ function InputCell({
 }
 
 
-// ── OTB Date Picker ───────────────────────────────────────────────────────────
 
-const DAY_LABELS_OTB   = ['일', '월', '화', '수', '목', '금', '토']
-const MONTH_LABELS_OTB = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월']
-
-function toOtbYMD(y: number, m: number, d: number) {
-  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-}
-
-function OtbDatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const today = new Date().toISOString().slice(0, 10)
-  const [open,      setOpen]      = useState(false)
-  const [viewYear,  setViewYear]  = useState(() => value ? new Date(value + 'T00:00:00').getFullYear() : new Date().getFullYear())
-  const [viewMonth, setViewMonth] = useState(() => value ? new Date(value + 'T00:00:00').getMonth()    : new Date().getMonth())
-  const [pos,       setPos]       = useState({ top: 0, left: 0 })
-  const btnRef = useRef<HTMLButtonElement>(null)
-  const calRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    function onDown(e: MouseEvent) {
-      if (!btnRef.current?.contains(e.target as Node) && !calRef.current?.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [open])
-
-  useEffect(() => {
-    if (!open) return
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false) }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [open])
-
-  function openCalendar() {
-    if (!btnRef.current) return
-    const CAL_W = 264, CAL_H = 316
-    const r    = btnRef.current.getBoundingClientRect()
-    const left = Math.max(8, Math.min(r.left, window.innerWidth - CAL_W - 8))
-    const top  = r.bottom + CAL_H + 10 > window.innerHeight ? r.top - CAL_H - 6 : r.bottom + 6
-    setPos({ top, left })
-    if (value) {
-      const d = new Date(value + 'T00:00:00')
-      setViewYear(d.getFullYear())
-      setViewMonth(d.getMonth())
-    }
-    setOpen(v => !v)
-  }
-
-  function prevMonth() {
-    if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11) }
-    else setViewMonth(m => m - 1)
-  }
-  function nextMonth() {
-    if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0) }
-    else setViewMonth(m => m + 1)
-  }
-
-  const startDow    = new Date(viewYear, viewMonth, 1).getDay()
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
-  const cells: (number | null)[] = Array(startDow).fill(null)
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
-  while (cells.length % 7 !== 0) cells.push(null)
-
-  return (
-    <>
-      <div className="flex items-center gap-1 mt-0.5">
-        <button
-          ref={btnRef}
-          onClick={openCalendar}
-          className="flex items-center gap-1 group"
-          style={{ borderBottom: '1px dashed var(--color-text-muted)' }}
-        >
-          <span className="text-sm text-brand-muted group-hover:opacity-70 transition-opacity">{value}</span>
-          <Calendar size={11} className="text-brand-muted group-hover:opacity-70 transition-opacity" />
-        </button>
-        <span className="text-sm text-brand-muted">기준</span>
-      </div>
-
-      {open && (
-        <div
-          ref={calRef}
-          className="rounded-2xl animate-fade-in overflow-hidden"
-          style={{
-            position: 'fixed', top: pos.top, left: pos.left, width: 264, zIndex: 9999,
-            background: 'var(--popup-bg)', border: '1px solid var(--popup-border)', boxShadow: 'var(--shadow-elevated)',
-          }}
-        >
-          <div className="h-0.5 w-full" style={{ background: 'var(--popup-top-accent)' }} />
-
-          <div className="flex items-center justify-between px-4 py-3">
-            <button onClick={prevMonth}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-brand-muted transition-all"
-              onMouseEnter={e => (e.currentTarget.style.background = 'var(--overlay-hover)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-              <ChevronLeft size={14} />
-            </button>
-            <span className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-              {viewYear}년&nbsp;{MONTH_LABELS_OTB[viewMonth]}
-            </span>
-            <button onClick={nextMonth}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-brand-muted transition-all"
-              onMouseEnter={e => (e.currentTarget.style.background = 'var(--overlay-hover)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-              <ChevronRight size={14} />
-            </button>
-          </div>
-
-          <div className="mx-4 h-px" style={{ background: 'var(--divider-color)' }} />
-
-          <div className="grid grid-cols-7 px-3 pt-3 pb-1">
-            {DAY_LABELS_OTB.map((d, i) => (
-              <div key={d} className="text-center text-[10px] font-bold py-1"
-                style={{ color: i === 0 ? 'var(--color-negative)' : i === 6 ? 'var(--color-info)' : 'var(--color-text-muted)', opacity: 0.75 }}>
-                {d}
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-7 gap-y-0.5 px-3 pb-3">
-            {cells.map((day, i) => {
-              if (!day) return <div key={i} className="w-8 h-8" />
-              const ds     = toOtbYMD(viewYear, viewMonth, day)
-              const isSel  = ds === value
-              const isToday = ds === today
-              const col    = i % 7
-              return (
-                <button key={i}
-                  onClick={() => { onChange(ds); setOpen(false) }}
-                  className="w-8 h-8 mx-auto rounded-lg text-xs font-medium flex items-center justify-center transition-all duration-100"
-                  style={
-                    isSel
-                      ? { background: 'var(--gradient-cta)', boxShadow: 'var(--accent-btn-glow)', color: '#0A0A0A', fontWeight: 700 }
-                      : isToday
-                        ? { background: 'var(--accent-badge-bg)', border: '1px solid var(--accent-badge-border)', color: 'var(--color-accent-primary)' }
-                        : { color: col === 0 ? 'var(--color-negative)' : col === 6 ? 'var(--color-info)' : 'var(--color-text-secondary)' }
-                  }
-                  onMouseEnter={e => { if (!isSel) e.currentTarget.style.background = 'var(--overlay-hover)' }}
-                  onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = isToday ? 'var(--accent-badge-bg)' : 'transparent' }}
-                >
-                  {day}
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="flex items-center justify-between px-4 py-2.5"
-            style={{ borderTop: '1px solid var(--divider-color)', background: 'var(--popup-footer-bg)' }}>
-            <button onClick={() => { onChange(today); setOpen(false) }}
-              className="text-[11px] font-semibold"
-              style={{ color: 'var(--color-accent-primary)' }}>
-              오늘
-            </button>
-            <span className="text-[10px] text-brand-dimmed font-mono">{value || '날짜 미선택'}</span>
-            <button onClick={() => setOpen(false)}
-              className="text-[11px] text-brand-dimmed hover:text-brand-muted transition-colors">
-              닫기
-            </button>
-          </div>
-        </div>
-      )}
-    </>
-  )
-}
 
 
 // ── Modal Edit ────────────────────────────────────────────────────────────────
@@ -504,7 +341,7 @@ export default function BudgetPage() {
   const queryClient      = useQueryClient()
   const { profile }      = useAuth()
   const { currentHotel } = useHotel()
-  const { otbDate, setOtbDate } = useDateContext()
+  const { otbDate } = useDateContext()
   const hotelId          = currentHotel?.id ?? ''
 
   const [selectedYear,    setSelectedYear]    = useState(new Date().getFullYear())
@@ -521,8 +358,18 @@ export default function BudgetPage() {
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
   const [uploadSource,    setUploadSource]    = useState<'mtd' | 'daily'>('mtd')
   const [selectedFile,    setSelectedFile]    = useState<File | null>(null)
+  const [bulkEditOpen,    setBulkEditOpen]    = useState(false)
+  const [bulkSegOpen,     setBulkSegOpen]     = useState(false)
+  const [bulkApplied,     setBulkApplied]     = useState<number | null>(null)
+  const [bulkSeg,         setBulkSeg]         = useState<string>('all')
+  const [bulkMonths,      setBulkMonths]      = useState<number[]>([1,2,3,4,5,6,7,8,9,10,11,12])
+  const [bulkRn,  setBulkRn]  = useState<{ operation: 'add' | 'replace' | 'percent'; value: string }>({ operation: 'add', value: '' })
+  const [bulkAdr, setBulkAdr] = useState<{ operation: 'add' | 'replace' | 'percent'; value: string }>({ operation: 'add', value: '' })
+  const [bulkRev, setBulkRev] = useState<{ operation: 'add' | 'replace' | 'percent'; value: string }>({ operation: 'add', value: '' })
+  const [dailyUploadedData, setDailyUploadedData] = useState<any[] | null>(null)
   const [loadDate,        setLoadDate]        = useState('')
   const [loadConfirmed,   setLoadConfirmed]   = useState(false)
+  const [loadSuccess,     setLoadSuccess]     = useState<{ segCount: number; recordCount: number } | null>(null)
   const [availableDates,  setAvailableDates]  = useState<string[]>([])
   const [isDistributing,  setIsDistributing]  = useState(false)
   const [isDirectEdit,    setIsDirectEdit]    = useState(true)
@@ -547,17 +394,6 @@ export default function BudgetPage() {
       })
   }, [hotelId])
 
-  useEffect(() => {
-    if (!hotelId) return
-    ;(supabase as any)
-      .from('m03_hotel_details')
-      .select('room_count')
-      .eq('hotel_id', hotelId)
-      .single()
-      .then(({ data }: any) => {
-        if (data?.room_count) setRoomCount(data.room_count)
-      })
-  }, [hotelId])
 
   useEffect(() => {
     if (!loadModalOpen || !hotelId) return
@@ -604,7 +440,20 @@ export default function BudgetPage() {
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 1 + i)
 
 
-  const [roomCount, setRoomCount] = useState<number>(0)
+  const { data: hotelDetail } = useQuery({
+    queryKey: ['hotel_detail', hotelId],
+    queryFn: async () => {
+      if (!hotelId) return null
+      const { data } = await (supabase as any)
+        .from('m03_hotel_details')
+        .select('room_count')
+        .eq('hotel_id', hotelId)
+        .single()
+      return data
+    },
+    enabled: !!hotelId,
+  })
+  const roomCount = hotelDetail?.room_count ?? 0
   const monthlyLoading: boolean = false
 
 
@@ -784,11 +633,10 @@ export default function BudgetPage() {
       }
 
       setBudgetData(newBudgetData)
-      setLoadModalOpen(false)
 
       const segCount    = Object.keys(newBudgetData).length
       const recordCount = Object.values(newBudgetData).reduce((s, m) => s + Object.keys(m).length, 0)
-      alert(`불러오기 완료\n세그먼트: ${segCount}개 / 월별 레코드: ${recordCount}건`)
+      setLoadSuccess({ segCount, recordCount })
     } catch (err: any) {
       console.error('불러오기 오류:', err.message)
       alert('불러오기 실패: ' + err.message)
@@ -1110,6 +958,120 @@ export default function BudgetPage() {
     XLSX.writeFile(wb, `Budget_DAILY_양식_${selectedYear}.xlsx`)
   }
 
+  // ── 일괄 수정 적용 ───────────────────────────────────────────────────────────
+  const handleBulkApply = () => {
+    if (bulkPreview.length === 0) return
+
+    setBudgetData(prev => {
+      const next = { ...prev }
+      bulkPreview.forEach(c => {
+        if (!next[c.seg]) next[c.seg] = {}
+        next[c.seg] = { ...next[c.seg], [c.month]: { rn: c.newRn, rev: c.newRev } }
+      })
+      return next
+    })
+
+    setBulkApplied(bulkPreview.length)
+    setBulkRn({ operation: 'add', value: '' })
+    setBulkAdr({ operation: 'add', value: '' })
+    setBulkRev({ operation: 'add', value: '' })
+  }
+
+  // ── 업로드 모달 제출 ─────────────────────────────────────────────────────────
+  const handleUploadSubmit = async () => {
+    if (!selectedFile || !hotelId) {
+      alert('파일을 선택해주세요.')
+      return
+    }
+
+    try {
+      const buffer = await selectedFile.arrayBuffer()
+      const wb     = XLSX.read(buffer, { type: 'array' })
+      const ws     = wb.Sheets[wb.SheetNames[0]]
+
+      if (uploadSource === 'mtd') {
+        const { data: schemaRows } = await (supabase as any)
+          .from('c05_market_table_schema')
+          .select('id, name, level, segmentation')
+          .eq('hotel_id', hotelId)
+          .eq('is_active', true)
+
+        const labelToCodesMap: Record<string, string[]> = {}
+        ;(schemaRows ?? []).forEach((s: any) => {
+          if ((s.level === 'sub' || s.level === 'mid') && s.segmentation?.length > 0) {
+            labelToCodesMap[s.name.trim()] = s.segmentation
+          }
+        })
+
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: 0 }) as any[][]
+        const parsed: Record<string, Record<number, MonthVal>> = {}
+
+        for (let i = 2; i < rows.length; i++) {
+          const row   = rows[i]
+          const label = String(row[0] ?? '').trim()
+          if (!label) continue
+
+          const codes   = labelToCodesMap[label] ?? [label]
+          const perCode = codes.length
+
+          for (let m = 1; m <= 12; m++) {
+            const base     = 2 + (m - 1) * 3
+            const totalRn  = Number(row[base]     ?? 0)
+            const totalRev = Number(row[base + 2] ?? 0)
+            codes.forEach(code => {
+              if (!parsed[code]) parsed[code] = {}
+              parsed[code][m] = {
+                rn:  Math.round(totalRn  / perCode),
+                rev: Math.round(totalRev / perCode),
+              }
+            })
+          }
+        }
+
+        setBudgetData(parsed)
+        setDailyUploadedData(null)
+      } else {
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' }) as any[]
+
+        const dailyRows: any[] = []
+        const newBudgetData: BudgetMonthData = {}
+
+        rows.forEach((r: any) => {
+          const dateStr = String(r['business_date'] ?? '').trim()
+          const seg     = String(r['segmentation']  ?? '').trim()
+          if (!dateStr || !seg) return
+
+          const rn  = Number(r['R/N'] ?? 0) || 0
+          const rev = Number(r['REV'] ?? 0) || 0
+          if (rn === 0 && rev === 0) return
+
+          dailyRows.push({
+            business_date:  dateStr,
+            segmentation:   seg,
+            budget_nights:  rn,
+            budget_revenue: rev,
+          })
+
+          const month = new Date(dateStr).getMonth() + 1
+          if (!newBudgetData[seg]) newBudgetData[seg] = {}
+          if (!newBudgetData[seg][month]) newBudgetData[seg][month] = { rn: 0, rev: 0 }
+          newBudgetData[seg][month].rn  += rn
+          newBudgetData[seg][month].rev += rev
+        })
+
+        setBudgetData(newBudgetData)
+        setDailyUploadedData(dailyRows)
+      }
+
+      setSelectedFile(null)
+      setUploadModalOpen(false)
+      alert('표 반영 완료 — 저장하려면 저장 버튼을 클릭하세요')
+    } catch (err: any) {
+      console.error('업로드 오류:', err)
+      alert('업로드 실패: ' + err.message)
+    }
+  }
+
   // ── Step2. 엑셀 업로드 → upsert_budget_mtd ───────────────────────────────────
   const handleUploadBudget = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -1407,6 +1369,104 @@ export default function BudgetPage() {
     ] as MarketTableColumn[]),
   ], [budgetData, handleBudgetChange, saveBudgetMonthly, isDirectEdit])
 
+  // ── 일괄 수정 미리보기 ───────────────────────────────────────────────────────
+  const bulkPreview = useMemo(() => {
+    const rnNum  = bulkRn.value  ? parseFloat(bulkRn.value)  : null
+    const adrNum = bulkAdr.value ? parseFloat(bulkAdr.value) : null
+    const revNum = bulkRev.value ? parseFloat(bulkRev.value) : null
+
+    const hasRn  = rnNum  !== null && !isNaN(rnNum)
+    const hasAdr = adrNum !== null && !isNaN(adrNum)
+    const hasRev = revNum !== null && !isNaN(revNum)
+
+    if (!hasRn && !hasAdr && !hasRev) return []
+    if (bulkMonths.length === 0) return []
+
+    const targetSegs = bulkSeg === 'all' ? Object.keys(budgetData).sort() : [bulkSeg]
+    const changes: Array<{
+      seg: string; month: number
+      oldRn: number; newRn: number
+      oldAdr: number; newAdr: number
+      oldRev: number; newRev: number
+    }> = []
+
+    const calcNew = (oldVal: number, field: { operation: string }, num: number): number => {
+      if (field.operation === 'add')     return Math.max(0, oldVal + num)
+      if (field.operation === 'replace') return Math.max(0, num)
+      if (field.operation === 'percent') return Math.max(0, Math.round(oldVal * (1 + num / 100)))
+      return oldVal
+    }
+
+    targetSegs.forEach(seg => {
+      bulkMonths.forEach(month => {
+        const cell = budgetData[seg]?.[month]
+        if (!cell) return
+
+        const oldRn  = cell.rn  ?? 0
+        const oldRev = cell.rev ?? 0
+        const oldAdr = oldRn > 0 ? Math.round(oldRev / oldRn) : 0
+
+        let newRn  = hasRn  ? calcNew(oldRn,  bulkRn,  rnNum!)  : oldRn
+        let newAdr = hasAdr ? calcNew(oldAdr, bulkAdr, adrNum!) : oldAdr
+        let newRev = hasRev ? calcNew(oldRev, bulkRev, revNum!) : oldRev
+
+        if (hasRn && hasAdr) {
+          newRev = newRn * newAdr
+        } else if (hasRn && hasRev && !hasAdr) {
+          newAdr = newRn > 0 ? Math.round(newRev / newRn) : 0
+        } else if (hasAdr && hasRev && !hasRn) {
+          newRn = newAdr > 0 ? Math.round(newRev / newAdr) : oldRn
+        } else if (hasRn && !hasAdr && !hasRev) {
+          newRev = newRn * oldAdr
+          newAdr = oldAdr
+        } else if (hasAdr && !hasRn && !hasRev) {
+          newRev = oldRn * newAdr
+        } else if (hasRev && !hasRn && !hasAdr) {
+          newAdr = oldRn > 0 ? Math.round(newRev / oldRn) : 0
+        }
+
+        if (oldRn === newRn && oldAdr === newAdr && oldRev === newRev) return
+        changes.push({ seg, month, oldRn, newRn, oldAdr, newAdr, oldRev, newRev })
+      })
+    })
+
+    return changes
+  }, [bulkRn, bulkAdr, bulkRev, bulkSeg, bulkMonths, budgetData])
+
+  // ── 일괄 수정 연간 합계 ──────────────────────────────────────────────────────
+  const bulkTotals = useMemo(() => {
+    if (bulkPreview.length === 0) return null
+
+    const changeMap = new Map<string, typeof bulkPreview[0]>()
+    bulkPreview.forEach(c => changeMap.set(`${c.seg}_${c.month}`, c))
+
+    let oldRn = 0, newRn = 0, oldRev = 0, newRev = 0
+
+    Object.entries(budgetData).forEach(([seg, months]) => {
+      for (let m = 1; m <= 12; m++) {
+        const cell = months[m]
+        if (!cell) continue
+        const change = changeMap.get(`${seg}_${m}`)
+        if (change) {
+          oldRn  += change.oldRn;  oldRev += change.oldRev
+          newRn  += change.newRn;  newRev += change.newRev
+        } else {
+          oldRn  += cell.rn  ?? 0; oldRev += cell.rev ?? 0
+          newRn  += cell.rn  ?? 0; newRev += cell.rev ?? 0
+        }
+      }
+    })
+
+    const oldAdr = oldRn > 0 ? Math.round(oldRev / oldRn) : 0
+    const newAdr = newRn > 0 ? Math.round(newRev / newRn) : 0
+    const yearDays = ((selectedYear % 4 === 0 && selectedYear % 100 !== 0) || selectedYear % 400 === 0) ? 366 : 365
+    const capacity = roomCount * yearDays
+    const oldOcc = capacity > 0 ? (oldRn / capacity) * 100 : 0
+    const newOcc = capacity > 0 ? (newRn / capacity) * 100 : 0
+
+    return { oldRn, newRn, oldAdr, newAdr, oldRev, newRev, oldOcc, newOcc }
+  }, [bulkPreview, budgetData, roomCount, selectedYear])
+
   // ── 월별 테이블 데이터 ────────────────────────────────────────────────────────
   const monthlyTableData = useMemo((): Record<string, Record<string, any>> => {
     const result: Record<string, Record<string, any>> = {}
@@ -1482,13 +1542,13 @@ export default function BudgetPage() {
       {/* ── 불러오기 모달 ── */}
       {loadModalOpen && (
         <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setLoadModalOpen(false)} />
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { setLoadModalOpen(false); setLoadSuccess(null) }} />
           <div className="relative rounded-2xl p-6 w-full max-w-md space-y-5"
             style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-elevated)' }}>
 
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>데이터 불러오기</p>
-              <button onClick={() => setLoadModalOpen(false)}
+              <button onClick={() => { setLoadModalOpen(false); setLoadSuccess(null) }}
                 className="text-brand-muted hover:opacity-60 transition-opacity text-lg leading-none">✕</button>
             </div>
 
@@ -1555,26 +1615,49 @@ export default function BudgetPage() {
               </div>
             </div>
 
+            {loadSuccess && (
+              <div className="flex items-start gap-3 px-4 py-3 rounded-xl"
+                style={{ background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-accent-primary)' }}>
+                <span style={{ color: 'var(--color-accent-primary)', fontSize: 18, lineHeight: 1 }}>✓</span>
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--color-accent-primary)' }}>불러오기 완료</p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
+                    세그먼트 {loadSuccess.segCount}개 / 월별 레코드 {loadSuccess.recordCount}건
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-2 pt-1">
-              <button onClick={() => setLoadModalOpen(false)}
-                className="flex-1 py-2 rounded-lg text-sm hover:opacity-80 transition-all"
-                style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}>
-                취소
-              </button>
-              <button
-                onClick={handleLoadDownload}
-                disabled={!loadDate}
-                className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all hover:-translate-y-px disabled:opacity-40"
-                style={{ border: '1px solid var(--color-accent-primary)', color: 'var(--color-accent-primary)' }}>
-                다운로드
-              </button>
-              <button
-                onClick={handleLoadSubmit}
-                disabled={!loadDate}
-                className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all hover:-translate-y-px disabled:opacity-40"
-                style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
-                불러오기
-              </button>
+              {loadSuccess ? (
+                <button onClick={() => { setLoadModalOpen(false); setLoadSuccess(null) }}
+                  className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all hover:-translate-y-px"
+                  style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
+                  닫기
+                </button>
+              ) : (
+                <>
+                  <button onClick={() => { setLoadModalOpen(false); setLoadSuccess(null) }}
+                    className="flex-1 py-2 rounded-lg text-sm hover:opacity-80 transition-all"
+                    style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}>
+                    취소
+                  </button>
+                  <button
+                    onClick={handleLoadDownload}
+                    disabled={!loadDate}
+                    className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all hover:-translate-y-px disabled:opacity-40"
+                    style={{ border: '1px solid var(--color-accent-primary)', color: 'var(--color-accent-primary)' }}>
+                    다운로드
+                  </button>
+                  <button
+                    onClick={handleLoadSubmit}
+                    disabled={!loadDate}
+                    className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all hover:-translate-y-px disabled:opacity-40"
+                    style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
+                    불러오기
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -1693,6 +1776,319 @@ export default function BudgetPage() {
         </div>
       )}
 
+      {/* ── 일괄 수정 모달 ── */}
+      {bulkEditOpen && (
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { setBulkEditOpen(false); setBulkApplied(null) }} />
+          <div className="relative rounded-2xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto"
+            style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-elevated)' }}>
+
+            {/* 헤더 */}
+            <div className="flex items-center justify-between mb-5">
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>일괄 수정</p>
+              <button onClick={() => { setBulkEditOpen(false); setBulkApplied(null) }}
+                className="text-brand-muted hover:opacity-60 transition-opacity text-lg leading-none">✕</button>
+            </div>
+
+            {/* 좌우 2열 */}
+            <div className="grid md:grid-cols-2 grid-cols-1 gap-6">
+
+              {/* ── 왼쪽: 입력 영역 ── */}
+              <div className="space-y-4">
+                {/* 대상 세그먼트 */}
+                <div className="relative">
+                  <p className="text-xs text-brand-muted mb-2">대상 세그먼트</p>
+                  <button
+                    type="button"
+                    onClick={() => setBulkSegOpen(v => !v)}
+                    className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-sm"
+                    style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }}
+                  >
+                    <span>{bulkSeg === 'all' ? '전체 세그먼트' : `${segNameMap[bulkSeg] ?? bulkSeg}`}</span>
+                    <span className="flex items-center gap-2">
+                      {bulkSeg !== 'all' && <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{bulkSeg}</span>}
+                      <ChevronDown size={13} style={{ color: 'var(--color-text-muted)' }} />
+                    </span>
+                  </button>
+                  {bulkSegOpen && (
+                    <div className="absolute z-10 w-full mt-1 rounded-lg overflow-hidden"
+                      style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-elevated)' }}>
+                      {[{ code: 'all', name: '전체 세그먼트' }, ...Object.keys(budgetData).sort().map(seg => ({ code: seg, name: segNameMap[seg] ?? '' }))].map(({ code, name }) => (
+                        <button
+                          key={code}
+                          type="button"
+                          onClick={() => { setBulkSeg(code); setBulkSegOpen(false) }}
+                          className="w-full flex items-center justify-between px-3 py-2 text-sm transition-colors"
+                          style={{ background: bulkSeg === code ? 'var(--color-accent-primary)' : 'transparent', color: bulkSeg === code ? '#0A0A0A' : 'var(--color-text-primary)' }}
+                          onMouseEnter={e => { if (bulkSeg !== code) e.currentTarget.style.background = 'var(--overlay-hover)' }}
+                          onMouseLeave={e => { if (bulkSeg !== code) e.currentTarget.style.background = 'transparent' }}
+                        >
+                          <span>{name || code}</span>
+                          {code !== 'all' && (
+                            <span className="text-xs font-mono" style={{ color: bulkSeg === code ? '#0A0A0A' : 'var(--color-text-muted)' }}>{code}</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 대상 월 */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-brand-muted">대상 월</p>
+                    <button
+                      onClick={() => setBulkMonths(bulkMonths.length === 12 ? [] : [1,2,3,4,5,6,7,8,9,10,11,12])}
+                      className="text-xs hover:opacity-80"
+                      style={{ color: 'var(--color-accent-primary)' }}>
+                      {bulkMonths.length === 12 ? '전체 해제' : '전체 선택'}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-6 gap-1.5">
+                    {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
+                      <button key={m}
+                        onClick={() => setBulkMonths(bulkMonths.includes(m) ? bulkMonths.filter(x => x !== m) : [...bulkMonths, m].sort((a,b) => a-b))}
+                        className="py-1.5 rounded-lg text-sm font-medium transition-all"
+                        style={{
+                          background: bulkMonths.includes(m) ? 'var(--gradient-cta)' : 'transparent',
+                          color:      bulkMonths.includes(m) ? '#0A0A0A' : 'var(--color-text-muted)',
+                          border:     '1px solid var(--color-border-default)',
+                        }}>
+                        {m}월
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 수정 지표 입력 */}
+                <div className="space-y-3">
+                  <p className="text-xs text-brand-muted">수정 지표 (변경할 항목만 값 입력)</p>
+
+                  {/* R/N */}
+                  <div className="rounded-lg p-2.5 space-y-1.5"
+                    style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-default)' }}>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold" style={{ color: 'var(--color-text-primary)' }}>R/N</p>
+                      <div className="flex gap-1 p-0.5 rounded-lg"
+                        style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)' }}>
+                        {(['add', 'replace', 'percent'] as const).map(opt => (
+                          <button key={opt} onClick={() => setBulkRn({ ...bulkRn, operation: opt })}
+                            className="px-2.5 py-1 rounded text-[11px] font-semibold transition-all"
+                            style={{
+                              background: bulkRn.operation === opt ? 'var(--gradient-cta)' : 'transparent',
+                              color:      bulkRn.operation === opt ? '#0A0A0A' : 'var(--color-text-muted)',
+                            }}>
+                            {opt === 'add' ? '증감' : opt === 'replace' ? '대체' : '%'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <input type="text" value={bulkRn.value}
+                      onChange={e => setBulkRn({ ...bulkRn, value: e.target.value })}
+                      placeholder={bulkRn.operation === 'add' ? '+5 또는 -3 (비우면 변경 안 함)' : bulkRn.operation === 'replace' ? '50 (절대값)' : '10 또는 -5 (%)'}
+                      className="w-full px-3 py-1.5 rounded-md text-sm focus:outline-none"
+                      style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }} />
+                  </div>
+
+                  {/* ADR */}
+                  <div className="rounded-lg p-2.5 space-y-1.5"
+                    style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-default)' }}>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold" style={{ color: 'var(--color-text-primary)' }}>ADR</p>
+                      <div className="flex gap-1 p-0.5 rounded-lg"
+                        style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)' }}>
+                        {(['add', 'replace', 'percent'] as const).map(opt => (
+                          <button key={opt} onClick={() => setBulkAdr({ ...bulkAdr, operation: opt })}
+                            className="px-2.5 py-1 rounded text-[11px] font-semibold transition-all"
+                            style={{
+                              background: bulkAdr.operation === opt ? 'var(--gradient-cta)' : 'transparent',
+                              color:      bulkAdr.operation === opt ? '#0A0A0A' : 'var(--color-text-muted)',
+                            }}>
+                            {opt === 'add' ? '증감' : opt === 'replace' ? '대체' : '%'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <input type="text" value={bulkAdr.value}
+                      onChange={e => setBulkAdr({ ...bulkAdr, value: e.target.value })}
+                      placeholder={bulkAdr.operation === 'add' ? '+1000 또는 -500 (원)' : bulkAdr.operation === 'replace' ? '50000 (원)' : '5 또는 -3 (%)'}
+                      className="w-full px-3 py-1.5 rounded-md text-sm focus:outline-none"
+                      style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }} />
+                  </div>
+
+                  {/* REV */}
+                  <div className="rounded-lg p-2.5 space-y-1.5"
+                    style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-default)' }}>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold" style={{ color: 'var(--color-text-primary)' }}>REV</p>
+                      <div className="flex gap-1 p-0.5 rounded-lg"
+                        style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)' }}>
+                        {(['add', 'replace', 'percent'] as const).map(opt => (
+                          <button key={opt} onClick={() => setBulkRev({ ...bulkRev, operation: opt })}
+                            className="px-2.5 py-1 rounded text-[11px] font-semibold transition-all"
+                            style={{
+                              background: bulkRev.operation === opt ? 'var(--gradient-cta)' : 'transparent',
+                              color:      bulkRev.operation === opt ? '#0A0A0A' : 'var(--color-text-muted)',
+                            }}>
+                            {opt === 'add' ? '증감' : opt === 'replace' ? '대체' : '%'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <input type="text" value={bulkRev.value}
+                      onChange={e => setBulkRev({ ...bulkRev, value: e.target.value })}
+                      placeholder={bulkRev.operation === 'add' ? '+1000000 또는 -500000 (원)' : bulkRev.operation === 'replace' ? '5000000 (원)' : '10 또는 -5 (%)'}
+                      className="w-full px-3 py-1.5 rounded-md text-sm focus:outline-none"
+                      style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }} />
+                  </div>
+
+                  {bulkRn.value && bulkAdr.value && bulkRev.value && (
+                    <div className="text-[11px] p-2 rounded-md"
+                      style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', color: '#f59e0b' }}>
+                      ⚠️ R/N × ADR이 우선 적용됩니다. REV 입력값은 무시되고 자동 계산됩니다.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ── 오른쪽: 미리보기 영역 ── */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-brand-muted">미리보기</p>
+                  {bulkPreview.length > 0 && (
+                    <p className="text-xs" style={{ color: 'var(--color-accent-primary)' }}>
+                      {bulkPreview.length}개 변경
+                    </p>
+                  )}
+                </div>
+                <div className="rounded-lg p-3 max-h-[500px] overflow-y-auto"
+                  style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-default)' }}>
+                  {bulkPreview.length === 0 ? (
+                    <p className="text-xs text-brand-muted text-center py-4">
+                      값을 입력하면 미리보기가 표시됩니다.
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      {bulkTotals && (
+                        <div>
+                          <p className="text-xs font-semibold mb-2" style={{ color: 'var(--color-text-primary)' }}>연간 전체 합계</p>
+                          <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+                            <thead>
+                              <tr style={{ borderBottom: '1px solid var(--color-border-default)' }}>
+                                <th className="text-left py-1.5 font-medium" style={{ color: 'var(--color-text-muted)' }}>지표</th>
+                                <th className="text-right py-1.5 font-medium" style={{ color: 'var(--color-text-muted)' }}>이전</th>
+                                <th className="text-right py-1.5 font-medium" style={{ color: 'var(--color-text-muted)' }}>이후</th>
+                                <th className="text-right py-1.5 font-medium" style={{ color: 'var(--color-text-muted)' }}>증감</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(() => {
+                                const rows: { label: string; old: number; new: number; format: (v: number) => string }[] = [
+                                  { label: 'R/N', old: bulkTotals.oldRn,  new: bulkTotals.newRn,  format: (v) => v.toLocaleString() },
+                                  { label: 'ADR', old: bulkTotals.oldAdr, new: bulkTotals.newAdr, format: (v) => `${(v / 1000).toFixed(1)}천` },
+                                  { label: 'REV', old: bulkTotals.oldRev, new: bulkTotals.newRev, format: (v) => `${(v / 1_000_000).toFixed(1)}백만` },
+                                ]
+                                if (roomCount > 0) rows.push({ label: 'OCC', old: bulkTotals.oldOcc, new: bulkTotals.newOcc, format: (v) => `${v.toFixed(1)}%` })
+                                return rows.map(r => {
+                                  const diff = r.new - r.old
+                                  const diffStr = r.label === 'ADR'
+                                    ? `${diff >= 0 ? '+' : ''}${(diff / 1000).toFixed(1)}천`
+                                    : r.label === 'REV'
+                                    ? `${diff >= 0 ? '+' : ''}${(diff / 1_000_000).toFixed(1)}백만`
+                                    : r.label === 'OCC'
+                                    ? `${diff >= 0 ? '+' : ''}${diff.toFixed(1)}%p`
+                                    : `${diff >= 0 ? '+' : ''}${diff.toLocaleString()}`
+                                  return (
+                                    <tr key={r.label} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                                      <td className="py-1.5" style={{ color: 'var(--color-text-secondary)' }}>{r.label}</td>
+                                      <td className="text-right py-1.5" style={{ color: 'var(--color-text-secondary)' }}>{r.format(r.old)}</td>
+                                      <td className="text-right py-1.5 font-semibold" style={{ color: 'var(--color-text-primary)' }}>{r.format(r.new)}</td>
+                                      <td className="text-right py-1.5 font-semibold" style={{ color: diff > 0 ? 'var(--color-accent-primary)' : diff < 0 ? '#ef4444' : 'var(--color-text-muted)' }}>
+                                        {diff === 0 ? '-' : diffStr}
+                                      </td>
+                                    </tr>
+                                  )
+                                })
+                              })()}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-xs font-semibold mb-2" style={{ color: 'var(--color-text-primary)' }}>개별 변경 사항</p>
+                        <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr style={{ borderBottom: '1px solid var(--color-border-default)' }}>
+                              <th className="text-center py-1.5 font-medium" style={{ color: 'var(--color-text-muted)' }}>항목</th>
+                              <th className="text-center py-1.5 font-medium" style={{ color: 'var(--color-text-muted)' }}>R/N</th>
+                              <th className="text-center py-1.5 font-medium" style={{ color: 'var(--color-text-muted)' }}>ADR (천)</th>
+                              <th className="text-center py-1.5 font-medium" style={{ color: 'var(--color-text-muted)' }}>REV (백만)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {bulkPreview.map((c, i) => {
+                              const rnChanged  = c.oldRn  !== c.newRn
+                              const adrChanged = c.oldAdr !== c.newAdr
+                              const revChanged = c.oldRev !== c.newRev
+                              return (
+                                <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                                  <td className="py-1.5 font-medium text-center" style={{ color: 'var(--color-text-primary)' }}>{c.month}월</td>
+                                  <td className="text-center py-1.5" style={{ color: rnChanged  ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)' }}>
+                                    {c.oldRn} → <strong>{c.newRn}</strong>
+                                  </td>
+                                  <td className="text-center py-1.5" style={{ color: adrChanged ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)' }}>
+                                    {(c.oldAdr / 1000).toFixed(1)} → <strong>{(c.newAdr / 1000).toFixed(1)}</strong>
+                                  </td>
+                                  <td className="text-center py-1.5" style={{ color: revChanged ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)' }}>
+                                    {(c.oldRev / 1_000_000).toFixed(1)} → <strong>{(c.newRev / 1_000_000).toFixed(1)}</strong>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* 적용 완료 메시지 */}
+            {bulkApplied !== null && (
+              <div className="flex items-start gap-3 px-4 py-3 rounded-xl mt-5"
+                style={{ background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-accent-primary)' }}>
+                <span style={{ color: 'var(--color-accent-primary)', fontSize: 18, lineHeight: 1 }}>✓</span>
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--color-accent-primary)' }}>적용 완료</p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
+                    {bulkApplied}개 항목이 수정되었습니다. 저장하려면 저장 버튼을 클릭하세요.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* 푸터 버튼 */}
+            <div className="flex gap-3 pt-5 mt-5" style={{ borderTop: '1px solid var(--color-border-default)' }}>
+              <button onClick={() => { setBulkEditOpen(false); setBulkApplied(null) }}
+                className="flex-1 py-2 rounded-lg text-sm hover:opacity-80 transition-all"
+                style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}>
+                {bulkApplied !== null ? '닫기' : '취소'}
+              </button>
+              {bulkApplied === null && (
+                <button
+                  onClick={handleBulkApply}
+                  disabled={bulkPreview.length === 0}
+                  className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all hover:-translate-y-px disabled:opacity-50"
+                  style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
+                  적용
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── 업로드 모달 ── */}
       {uploadModalOpen && (
         <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4">
@@ -1762,10 +2158,7 @@ export default function BudgetPage() {
                 취소
               </button>
               <button
-                onClick={() => {
-                  console.log('Upload:', { uploadSource, selectedFile })
-                  alert('업로드 로직은 다음 단계에서 구현됩니다.')
-                }}
+                onClick={handleUploadSubmit}
                 disabled={!selectedFile}
                 className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all hover:-translate-y-px disabled:opacity-50"
                 style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
@@ -1814,11 +2207,45 @@ export default function BudgetPage() {
           {/* 타이틀 */}
           <div>
             <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text-primary)' }}>Budget</h1>
-            <OtbDatePicker value={otbDate} onChange={setOtbDate} />
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* 표수정 박스 */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
+            style={{ border: '1px solid var(--color-border-default)', background: 'var(--color-bg-secondary)' }}>
+            <span className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>표수정</span>
+            <div className="w-px h-3.5" style={{ background: 'var(--color-border-default)' }} />
+            <button
+              onClick={() => setIsDirectEdit(v => !v)}
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-full font-semibold text-xs transition-all"
+              style={{
+                background: isDirectEdit ? 'var(--color-accent-primary)' : 'rgba(255,255,255,0.06)',
+                color:      isDirectEdit ? '#0A0A0A' : 'var(--color-text-muted)',
+                border: 'none', cursor: 'pointer',
+              }}
+            >
+              {isDirectEdit ? <Pencil size={10} /> : <LayoutList size={10} />}
+              {isDirectEdit ? '직접수정' : '월별수정'}
+            </button>
+            <button
+              onClick={() => setBulkEditOpen(true)}
+              disabled={Object.keys(budgetData).length === 0}
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition-all hover:opacity-80 disabled:opacity-40"
+              style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--color-text-muted)', border: 'none', cursor: 'pointer' }}
+            >
+              <Wand2 size={10} />
+              일괄수정
+            </button>
+            <button
+              onClick={() => setDeleteConfirm(true)}
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition-all hover:opacity-80"
+              style={{ background: 'rgba(252,129,129,0.12)', color: '#FC8181', border: 'none', cursor: 'pointer' }}
+            >
+              <Trash2 size={10} />
+              삭제
+            </button>
+          </div>
           <button
             onClick={() => setLoadModalOpen(true)}
             className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all hover:opacity-80"
@@ -1847,37 +2274,13 @@ export default function BudgetPage() {
         </div>
       </div>
 
-      {/* ── 탭 ── */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button
-              onClick={() => setIsDirectEdit(v => !v)}
-              className="inline-flex items-center gap-1.5 px-5 py-1.5 rounded-full font-semibold text-xs transition-all"
-              style={{
-                background: isDirectEdit ? 'var(--color-accent-primary)' : 'rgba(255,255,255,0.06)',
-                color:      isDirectEdit ? '#0A0A0A' : 'var(--color-text-muted)',
-                minWidth: '80px', justifyContent: 'center', border: 'none', cursor: 'pointer',
-              }}
-            >
-              {isDirectEdit ? '직접수정' : '일괄수정'}
-            </button>
-            <button
-              onClick={() => setDeleteConfirm(true)}
-              className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all hover:opacity-80"
-              style={{ background: 'rgba(252,129,129,0.12)', color: '#FC8181', border: 'none', cursor: 'pointer' }}
-            >
-              삭제
-            </button>
-        </div>
-
-        <input
-          type="file"
-          accept=".xlsx,.xls"
-          ref={fileInputRef}
-          style={{ display: 'none' }}
-          onChange={handleUploadBudget}
-        />
-      </div>
+      <input
+        type="file"
+        accept=".xlsx,.xls"
+        ref={fileInputRef}
+        style={{ display: 'none' }}
+        onChange={handleUploadBudget}
+      />
 
       <div className="space-y-4">
         <MarketTable
@@ -1889,7 +2292,7 @@ export default function BudgetPage() {
           loading={monthlyLoading}
           stickyFirstGroup
           opaqueBg
-          maxHeight="calc(100vh - 270px)"
+          maxHeight="calc(100vh - 180px)"
         />
       </div>
     </div>
