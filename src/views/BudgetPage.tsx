@@ -2207,6 +2207,7 @@ export default function BudgetPage() {
           {/* 타이틀 */}
           <div>
             <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text-primary)' }}>Budget</h1>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>월별·일별 예산 계획 및 관리</p>
           </div>
         </div>
 
@@ -2224,6 +2225,8 @@ export default function BudgetPage() {
                 color:      isDirectEdit ? '#0A0A0A' : 'var(--color-text-muted)',
                 border: 'none', cursor: 'pointer',
               }}
+              onMouseEnter={e => { if (!isDirectEdit) { e.currentTarget.style.color = 'var(--color-accent-primary)' } }}
+              onMouseLeave={e => { if (!isDirectEdit) { e.currentTarget.style.color = 'var(--color-text-muted)' } }}
             >
               {isDirectEdit ? <Pencil size={10} /> : <LayoutList size={10} />}
               {isDirectEdit ? '직접수정' : '월별수정'}
@@ -2231,8 +2234,10 @@ export default function BudgetPage() {
             <button
               onClick={() => setBulkEditOpen(true)}
               disabled={Object.keys(budgetData).length === 0}
-              className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition-all hover:opacity-80 disabled:opacity-40"
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition-all disabled:opacity-40"
               style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--color-text-muted)', border: 'none', cursor: 'pointer' }}
+              onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-accent-primary)' }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-muted)' }}
             >
               <Wand2 size={10} />
               일괄수정
@@ -2246,22 +2251,32 @@ export default function BudgetPage() {
               삭제
             </button>
           </div>
-          <button
-            onClick={() => setLoadModalOpen(true)}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all hover:opacity-80"
-            style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}
-          >
-            <Download size={13} />
-            불러오기
-          </button>
-          <button
-            onClick={() => setUploadModalOpen(true)}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all hover:opacity-80"
-            style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}
-          >
-            <Upload size={13} />
-            업로드
-          </button>
+          {/* 데이터 박스 */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
+            style={{ border: '1px solid var(--color-border-default)', background: 'var(--color-bg-secondary)' }}>
+            <span className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>데이터</span>
+            <div className="w-px h-3.5" style={{ background: 'var(--color-border-default)' }} />
+            <button
+              onClick={() => setLoadModalOpen(true)}
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition-all"
+              style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--color-text-muted)', border: 'none', cursor: 'pointer' }}
+              onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-accent-primary)' }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-muted)' }}
+            >
+              <Download size={10} />
+              불러오기
+            </button>
+            <button
+              onClick={() => setUploadModalOpen(true)}
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition-all"
+              style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--color-text-muted)', border: 'none', cursor: 'pointer' }}
+              onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-accent-primary)' }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-muted)' }}
+            >
+              <Upload size={10} />
+              업로드
+            </button>
+          </div>
           <button
             onClick={() => setSaveModalOpen(true)}
             disabled={saving}
