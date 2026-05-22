@@ -12,7 +12,6 @@ import MarketTable, { MarketTableColumn } from '@/components/tables/MarketTable'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type TabType = 'monthly' | 'daily'
 
 type MonthVal        = { rn: number; rev: number }
 type BudgetMonthData = Record<string, Record<number, MonthVal>>
@@ -509,7 +508,6 @@ export default function BudgetPage() {
   const hotelId          = currentHotel?.id ?? ''
 
   const [selectedYear,    setSelectedYear]    = useState(new Date().getFullYear())
-  const [activeTab,       setActiveTab]       = useState<TabType>('monthly')
   const [budgetData,      setBudgetData]      = useState<BudgetMonthData>({})
   const [saving,          setSaving]          = useState(false)
   const [saveError,       setSaveError]       = useState<string | null>(null)
@@ -518,6 +516,14 @@ export default function BudgetPage() {
   const [saveModalOpen,   setSaveModalOpen]   = useState(false)
   const [saveTarget,      setSaveTarget]      = useState<'mtd' | 'daily' | 'both'>('mtd')
   const [saveConfirmed,   setSaveConfirmed]   = useState(false)
+  const [loadModalOpen,   setLoadModalOpen]   = useState(false)
+  const [loadSource,      setLoadSource]      = useState<'mtd' | 'daily'>('mtd')
+  const [uploadModalOpen, setUploadModalOpen] = useState(false)
+  const [uploadSource,    setUploadSource]    = useState<'mtd' | 'daily'>('mtd')
+  const [selectedFile,    setSelectedFile]    = useState<File | null>(null)
+  const [loadDate,        setLoadDate]        = useState('')
+  const [loadConfirmed,   setLoadConfirmed]   = useState(false)
+  const [availableDates,  setAvailableDates]  = useState<string[]>([])
   const [isDistributing,  setIsDistributing]  = useState(false)
   const [isDirectEdit,    setIsDirectEdit]    = useState(true)
   const [modalSeg,        setModalSeg]        = useState<string | null>(null)
@@ -552,6 +558,48 @@ export default function BudgetPage() {
         if (data?.room_count) setRoomCount(data.room_count)
       })
   }, [hotelId])
+
+  useEffect(() => {
+    if (!loadModalOpen || !hotelId) return
+
+    const fetchDates = async () => {
+      try {
+        let query
+        if (loadSource === 'mtd') {
+          query = (supabase as any)
+            .from('a04_budget_mtd')
+            .select('update_date')
+            .eq('hotel_id', hotelId)
+            .eq('year', selectedYear)
+        } else {
+          query = (supabase as any)
+            .from('a03_budget')
+            .select('update_date')
+            .eq('hotel_id', hotelId)
+            .gte('business_date', `${selectedYear}-01-01`)
+            .lte('business_date', `${selectedYear}-12-31`)
+        }
+
+        const { data, error } = await query
+        if (error) throw error
+
+        const uniqueDates = Array.from(new Set(
+          (data ?? []).map((r: any) => r.update_date as string)
+        )).sort().reverse() as string[]
+
+        setAvailableDates(uniqueDates)
+
+        if (uniqueDates.length > 0 && !uniqueDates.includes(loadDate)) {
+          setLoadDate(uniqueDates[0])
+        }
+      } catch (err: any) {
+        console.error('update_date 조회 오류:', err.message)
+        setAvailableDates([])
+      }
+    }
+
+    fetchDates()
+  }, [loadModalOpen, loadSource, hotelId, selectedYear])
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 1 + i)
 
@@ -675,6 +723,176 @@ export default function BudgetPage() {
     }
   }
 
+  // ── 불러오기 실행 ──────────────────────────────────────────────────────────────
+  const handleLoadSubmit = async () => {
+    if (!hotelId || !loadDate) {
+      alert('Budget Date를 선택해주세요.')
+      return
+    }
+
+    try {
+      const newBudgetData: BudgetMonthData = {}
+
+      if (loadSource === 'mtd') {
+        const { data, error } = await (supabase as any)
+          .from('a04_budget_mtd')
+          .select('year, month, segmentation, budget_nights, budget_revenue')
+          .eq('hotel_id',    hotelId)
+          .eq('year',        selectedYear)
+          .eq('update_date', loadDate)
+          .eq('confirmed',   loadConfirmed)
+
+        if (error) throw error
+
+        if (!data || data.length === 0) {
+          alert(`선택한 조건의 ${loadConfirmed ? '확정' : '미확정'} MTD 데이터가 없습니다.`)
+          return
+        }
+
+        ;(data ?? []).forEach((r: any) => {
+          if (!newBudgetData[r.segmentation]) newBudgetData[r.segmentation] = {}
+          newBudgetData[r.segmentation][r.month] = {
+            rn:  r.budget_nights  ?? 0,
+            rev: r.budget_revenue ?? 0,
+          }
+        })
+      } else {
+        const { data, error } = await (supabase as any)
+          .from('a03_budget')
+          .select('business_date, segmentation, budget_nights, budget_revenue')
+          .eq('hotel_id',    hotelId)
+          .eq('update_date', loadDate)
+          .eq('confirmed',   loadConfirmed)
+          .gte('business_date', `${selectedYear}-01-01`)
+          .lte('business_date', `${selectedYear}-12-31`)
+
+        if (error) throw error
+
+        if (!data || data.length === 0) {
+          alert(`선택한 조건의 ${loadConfirmed ? '확정' : '미확정'} DAILY 데이터가 없습니다.`)
+          return
+        }
+
+        ;(data ?? []).forEach((r: any) => {
+          const month = new Date(r.business_date).getMonth() + 1
+          const seg   = r.segmentation
+          if (!newBudgetData[seg]) newBudgetData[seg] = {}
+          if (!newBudgetData[seg][month]) newBudgetData[seg][month] = { rn: 0, rev: 0 }
+          newBudgetData[seg][month].rn  += r.budget_nights  ?? 0
+          newBudgetData[seg][month].rev += r.budget_revenue ?? 0
+        })
+      }
+
+      setBudgetData(newBudgetData)
+      setLoadModalOpen(false)
+
+      const segCount    = Object.keys(newBudgetData).length
+      const recordCount = Object.values(newBudgetData).reduce((s, m) => s + Object.keys(m).length, 0)
+      alert(`불러오기 완료\n세그먼트: ${segCount}개 / 월별 레코드: ${recordCount}건`)
+    } catch (err: any) {
+      console.error('불러오기 오류:', err.message)
+      alert('불러오기 실패: ' + err.message)
+    }
+  }
+
+  // ── 불러오기 다운로드 (표에 반영 안 함) ────────────────────────────────────────
+  const handleLoadDownload = async () => {
+    if (!hotelId || !loadDate) {
+      alert('Budget Date를 선택해주세요.')
+      return
+    }
+    try {
+      const wb = XLSX.utils.book_new()
+
+      if (loadSource === 'mtd') {
+        const { data, error } = await (supabase as any)
+          .from('a04_budget_mtd')
+          .select('year, month, segmentation, budget_nights, budget_revenue')
+          .eq('hotel_id',    hotelId)
+          .eq('year',        selectedYear)
+          .eq('update_date', loadDate)
+          .eq('confirmed',   loadConfirmed)
+          .order('month')
+          .order('segmentation')
+
+        if (error) throw error
+        if (!data || data.length === 0) {
+          alert(`선택한 조건의 ${loadConfirmed ? '확정' : '미확정'} MTD 데이터가 없습니다.`)
+          return
+        }
+
+        const wsData = [
+          ['year', 'month', 'segmentation', 'R/N', 'ADR(천)', 'REV(백만)'],
+          ...(data as any[]).map((r: any) => {
+            const rn  = r.budget_nights  ?? 0
+            const rev = r.budget_revenue ?? 0
+            const adr = rn > 0 ? Math.round(rev / rn) : 0
+            return [r.year, r.month, r.segmentation, rn, adr, +(rev / 1_000_000).toFixed(1)]
+          }),
+        ]
+        const ws = XLSX.utils.aoa_to_sheet(wsData)
+        XLSX.utils.book_append_sheet(wb, ws, 'MTD')
+        XLSX.writeFile(wb, `Budget_MTD_${selectedYear}_${loadDate}.xlsx`)
+
+      } else {
+        const { data: calData } = await (supabase as any)
+          .from('c06_calendar')
+          .select('business_date, rev_dow, event, is_holiday')
+          .eq('hotel_id', hotelId)
+          .gte('business_date', `${selectedYear}-01-01`)
+          .lte('business_date', `${selectedYear}-12-31`)
+
+        const calMap: Record<string, any> = {}
+        ;(calData ?? []).forEach((c: any) => { calMap[c.business_date] = c })
+
+        const { data, error } = await (supabase as any)
+          .from('a03_budget')
+          .select('business_date, segmentation, budget_nights, budget_revenue')
+          .eq('hotel_id',    hotelId)
+          .eq('update_date', loadDate)
+          .eq('confirmed',   loadConfirmed)
+          .gte('business_date', `${selectedYear}-01-01`)
+          .lte('business_date', `${selectedYear}-12-31`)
+          .order('business_date')
+          .order('segmentation')
+
+        if (error) throw error
+        if (!data || data.length === 0) {
+          alert(`선택한 조건의 ${loadConfirmed ? '확정' : '미확정'} DAILY 데이터가 없습니다.`)
+          return
+        }
+
+        const dowLabels = ['일', '월', '화', '수', '목', '금', '토']
+        const wsData = [
+          ['business_date', 'day', 'rev_dow', 'event', 'is_holiday', 'segmentation', 'R/N', 'ADR(천)', 'REV(백만)'],
+          ...(data as any[]).map((r: any) => {
+            const cal = calMap[r.business_date] ?? {}
+            const d   = new Date(r.business_date)
+            const rn  = r.budget_nights  ?? 0
+            const rev = r.budget_revenue ?? 0
+            const adr = rn > 0 ? Math.round(rev / rn) : 0
+            return [
+              r.business_date,
+              dowLabels[d.getDay()],
+              cal.rev_dow    ?? '',
+              cal.event      ?? '',
+              cal.is_holiday ? 'Y' : '',
+              r.segmentation,
+              rn,
+              adr,
+              +(rev / 1_000_000).toFixed(1),
+            ]
+          }),
+        ]
+        const ws = XLSX.utils.aoa_to_sheet(wsData)
+        XLSX.utils.book_append_sheet(wb, ws, 'Daily')
+        XLSX.writeFile(wb, `Budget_Daily_${selectedYear}_${loadDate}.xlsx`)
+      }
+    } catch (err: any) {
+      alert('다운로드 실패: ' + err.message)
+    }
+  }
+
   // ── 7. 모달 적용 — state 반영만 (DB 저장은 저장 버튼으로) ───────────────────
   const applyModalEdit = useCallback((seg: string, draft: Record<number, MonthVal>) => {
     setBudgetData(prev => ({ ...prev, [seg]: draft }))
@@ -765,7 +983,7 @@ export default function BudgetPage() {
     XLSX.writeFile(wb, `Budget_양식_${selectedYear}.xlsx`)
   }
 
-  // ── 일별 엑셀 다운로드 ────────────────────────────────────────────────────────
+  // ── 일별 엑셀 다운로드 (단일 시트 raw data) ──────────────────────────────────
   const handleDownloadDaily = async () => {
     if (!hotelId) return
 
@@ -776,8 +994,80 @@ export default function BudgetPage() {
       .gte('business_date', `${selectedYear}-01-01`)
       .lte('business_date', `${selectedYear}-12-31`)
       .order('business_date')
+      .order('segmentation')
 
     if (bErr) { alert('데이터 조회 실패: ' + bErr.message); return }
+
+    if (!budgetRows || budgetRows.length === 0) {
+      alert('다운로드할 데이터가 없습니다.')
+      return
+    }
+
+    const { data: calRows, error: cErr } = await (supabase as any)
+      .from('c06_calendar')
+      .select('date, day, rev_dow, event, is_holiday')
+      .gte('date', `${selectedYear}-01-01`)
+      .lte('date', `${selectedYear}-12-31`)
+
+    if (cErr) { alert('캘린더 조회 실패: ' + cErr.message); return }
+
+    const calMap: Record<string, any> = {}
+    ;(calRows ?? []).forEach((r: any) => { calMap[r.date] = r })
+
+    const headers = ['business_date', 'day', 'rev_dow', 'event', 'is_holiday', 'segmentation', 'R/N', 'ADR', 'REV']
+    const sheetData: any[][] = [headers]
+
+    ;(budgetRows ?? []).forEach((r: any) => {
+      const cal = calMap[r.business_date] ?? {}
+      const rn  = r.budget_nights  ?? 0
+      const rev = r.budget_revenue ?? 0
+      const adr = rn > 0 ? Math.round(rev / rn) : 0
+      sheetData.push([
+        r.business_date,
+        cal.day      ?? '',
+        cal.rev_dow  ?? '',
+        cal.event    ?? '',
+        cal.is_holiday ?? false,
+        r.segmentation,
+        rn, adr, rev,
+      ])
+    })
+
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(sheetData)
+    ws['!cols'] = [
+      { wch: 12 }, { wch: 6 }, { wch: 8 }, { wch: 14 }, { wch: 10 },
+      { wch: 12 }, { wch: 8 }, { wch: 10 }, { wch: 12 },
+    ]
+    XLSX.utils.book_append_sheet(wb, ws, 'Budget_Daily')
+    XLSX.writeFile(wb, `Budget_일별_${selectedYear}.xlsx`)
+  }
+
+
+  // ── DAILY 빈 양식 다운로드 ─────────────────────────────────────────────────────
+  const handleDownloadDailyTemplate = async () => {
+    if (!hotelId) return
+
+    const { data: schemaRows } = await (supabase as any)
+      .from('c05_market_table_schema')
+      .select('level, segmentation')
+      .eq('hotel_id', hotelId)
+      .eq('is_active', true)
+
+    const allSegs: string[] = []
+    ;(schemaRows ?? []).forEach((s: any) => {
+      if ((s.level === 'sub' || s.level === 'mid') && Array.isArray(s.segmentation)) {
+        s.segmentation.forEach((code: string) => {
+          if (!allSegs.includes(code)) allSegs.push(code)
+        })
+      }
+    })
+    allSegs.sort()
+
+    if (allSegs.length === 0) {
+      alert('세그먼트 정보가 없습니다. 시장 분할 설정을 먼저 해주세요.')
+      return
+    }
 
     const { data: calRows, error: cErr } = await (supabase as any)
       .from('c06_calendar')
@@ -788,50 +1078,37 @@ export default function BudgetPage() {
 
     if (cErr) { alert('캘린더 조회 실패: ' + cErr.message); return }
 
-    const calMap: Record<string, any> = {}
-    ;(calRows ?? []).forEach((r: any) => { calMap[r.date] = r })
-
-    const budMap: Record<string, Record<string, { rn: number; rev: number }>> = {}
-    ;(budgetRows ?? []).forEach((r: any) => {
-      if (!budMap[r.business_date]) budMap[r.business_date] = {}
-      budMap[r.business_date][r.segmentation] = {
-        rn:  r.budget_nights  ?? 0,
-        rev: r.budget_revenue ?? 0,
-      }
-    })
-
-    const allSegs = Array.from(new Set((budgetRows ?? []).map((r: any) => r.segmentation as string))).sort()
-
-    const wb = XLSX.utils.book_new()
-
-    for (let m = 1; m <= 12; m++) {
-      const daysInMonth = new Date(selectedYear, m, 0).getDate()
-      const monthStr    = String(m).padStart(2, '0')
-
-      const headers = ['날짜', '요일', 'rev_dow', 'event', 'is_holiday']
-      allSegs.forEach(seg => { headers.push(`${seg} R/N`, `${seg} ADR`, `${seg} REV`) })
-
-      const sheetData: any[][] = [headers]
-
-      for (let d = 1; d <= daysInMonth; d++) {
-        const dateStr = `${selectedYear}-${monthStr}-${String(d).padStart(2, '0')}`
-        const cal = calMap[dateStr] ?? {}
-        const row: any[] = [dateStr, cal.day ?? '', cal.rev_dow ?? '', cal.event ?? '', cal.is_holiday ?? false]
-        allSegs.forEach(seg => {
-          const bd  = budMap[dateStr]?.[seg as string] ?? { rn: 0, rev: 0 }
-          const adr = bd.rn > 0 ? Math.round(bd.rev / bd.rn) : 0
-          row.push(bd.rn, adr, bd.rev)
-        })
-        sheetData.push(row)
-      }
-
-      const ws = XLSX.utils.aoa_to_sheet(sheetData)
-      XLSX.utils.book_append_sheet(wb, ws, `${m}월`)
+    if (!calRows || calRows.length === 0) {
+      alert(`${selectedYear}년 캘린더 데이터가 없습니다.`)
+      return
     }
 
-    XLSX.writeFile(wb, `Budget_일별_${selectedYear}.xlsx`)
-  }
+    const headers = ['business_date', 'day', 'rev_dow', 'event', 'is_holiday', 'segmentation', 'R/N', 'ADR', 'REV']
+    const sheetData: any[][] = [headers]
 
+    calRows.forEach((cal: any) => {
+      allSegs.forEach(seg => {
+        sheetData.push([
+          cal.date,
+          cal.day        ?? '',
+          cal.rev_dow    ?? '',
+          cal.event      ?? '',
+          cal.is_holiday ?? false,
+          seg,
+          '', '', '',
+        ])
+      })
+    })
+
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(sheetData)
+    ws['!cols'] = [
+      { wch: 12 }, { wch: 6 }, { wch: 8 }, { wch: 14 }, { wch: 10 },
+      { wch: 12 }, { wch: 8 }, { wch: 10 }, { wch: 12 },
+    ]
+    XLSX.utils.book_append_sheet(wb, ws, 'Budget_Daily_Template')
+    XLSX.writeFile(wb, `Budget_DAILY_양식_${selectedYear}.xlsx`)
+  }
 
   // ── Step2. 엑셀 업로드 → upsert_budget_mtd ───────────────────────────────────
   const handleUploadBudget = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1202,6 +1479,107 @@ export default function BudgetPage() {
         </div>
       )}
 
+      {/* ── 불러오기 모달 ── */}
+      {loadModalOpen && (
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setLoadModalOpen(false)} />
+          <div className="relative rounded-2xl p-6 w-full max-w-md space-y-5"
+            style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-elevated)' }}>
+
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>데이터 불러오기</p>
+              <button onClick={() => setLoadModalOpen(false)}
+                className="text-brand-muted hover:opacity-60 transition-opacity text-lg leading-none">✕</button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs text-brand-muted mb-2">데이터 소스</p>
+                <div className="flex gap-1 p-1 rounded-xl w-full"
+                  style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-default)' }}>
+                  {(['mtd', 'daily'] as const).map(opt => (
+                    <button key={opt} onClick={() => setLoadSource(opt)}
+                      className="flex-1 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all"
+                      style={{
+                        background: loadSource === opt ? 'var(--gradient-cta)' : 'transparent',
+                        color:      loadSource === opt ? '#0A0A0A' : 'var(--color-text-muted)',
+                      }}>
+                      {opt === 'mtd' ? 'MTD' : 'DAILY'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs text-brand-muted mb-2">Budget Date</p>
+                <select
+                  value={loadDate}
+                  onChange={e => setLoadDate(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg text-sm focus:outline-none"
+                  style={{
+                    background: 'var(--color-bg-primary)',
+                    border:     '1px solid var(--color-border-default)',
+                    color:      'var(--color-text-primary)',
+                  }}
+                >
+                  {availableDates.length === 0 && (
+                    <option value="">저장된 데이터가 없습니다</option>
+                  )}
+                  {availableDates.map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <p className="text-xs text-brand-muted mb-2">확정 여부</p>
+                <div className="flex gap-1 p-1 rounded-xl w-full"
+                  style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-default)' }}>
+                  <button onClick={() => setLoadConfirmed(false)}
+                    className="flex-1 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all"
+                    style={{
+                      background: !loadConfirmed ? 'var(--gradient-cta)' : 'transparent',
+                      color:      !loadConfirmed ? '#0A0A0A' : 'var(--color-text-muted)',
+                    }}>
+                    미확정
+                  </button>
+                  <button onClick={() => setLoadConfirmed(true)}
+                    className="flex-1 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all"
+                    style={{
+                      background: loadConfirmed ? 'var(--gradient-cta)' : 'transparent',
+                      color:      loadConfirmed ? '#0A0A0A' : 'var(--color-text-muted)',
+                    }}>
+                    확정
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setLoadModalOpen(false)}
+                className="flex-1 py-2 rounded-lg text-sm hover:opacity-80 transition-all"
+                style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}>
+                취소
+              </button>
+              <button
+                onClick={handleLoadDownload}
+                disabled={!loadDate}
+                className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all hover:-translate-y-px disabled:opacity-40"
+                style={{ border: '1px solid var(--color-accent-primary)', color: 'var(--color-accent-primary)' }}>
+                다운로드
+              </button>
+              <button
+                onClick={handleLoadSubmit}
+                disabled={!loadDate}
+                className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all hover:-translate-y-px disabled:opacity-40"
+                style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
+                불러오기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── 저장 옵션 모달 ── */}
       {saveModalOpen && (
         <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4">
@@ -1218,34 +1596,43 @@ export default function BudgetPage() {
             <div className="space-y-3">
               <div>
                 <p className="text-xs text-brand-muted mb-2">저장 위치</p>
-                <div className="flex flex-col gap-2">
+                <div className="flex gap-1 p-1 rounded-xl w-full"
+                  style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-default)' }}>
                   {(['mtd', 'daily', 'both'] as const).map(opt => (
-                    <label key={opt} className="flex items-center gap-2 cursor-pointer">
-                      <input type="radio" name="saveTarget" checked={saveTarget === opt}
-                        onChange={() => setSaveTarget(opt)} className="cursor-pointer" />
-                      <span className="text-sm" style={{ color: 'var(--color-text-primary)' }}>
-                        {opt === 'mtd'   && 'MTD만 (월별 자료 축적)'}
-                        {opt === 'daily' && 'DAILY만 (일별 운영)'}
-                        {opt === 'both'  && '둘 다 (MTD + 일별 자동 배분)'}
-                      </span>
-                    </label>
+                    <button key={opt} onClick={() => setSaveTarget(opt)}
+                      className="flex-1 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all"
+                      style={{
+                        background: saveTarget === opt ? 'var(--gradient-cta)' : 'transparent',
+                        color:      saveTarget === opt ? '#0A0A0A' : 'var(--color-text-muted)',
+                      }}>
+                      {opt === 'mtd'   && 'MTD만'}
+                      {opt === 'daily' && 'DAILY만'}
+                      {opt === 'both'  && '둘 다'}
+                    </button>
                   ))}
                 </div>
               </div>
 
               <div>
                 <p className="text-xs text-brand-muted mb-2">확정 여부</p>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="saveConfirmed" checked={!saveConfirmed}
-                      onChange={() => setSaveConfirmed(false)} className="cursor-pointer" />
-                    <span className="text-sm" style={{ color: 'var(--color-text-primary)' }}>미확정</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="saveConfirmed" checked={saveConfirmed}
-                      onChange={() => setSaveConfirmed(true)} className="cursor-pointer" />
-                    <span className="text-sm" style={{ color: 'var(--color-text-primary)' }}>확정</span>
-                  </label>
+                <div className="flex gap-1 p-1 rounded-xl w-full"
+                  style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-default)' }}>
+                  <button onClick={() => setSaveConfirmed(false)}
+                    className="flex-1 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all"
+                    style={{
+                      background: !saveConfirmed ? 'var(--gradient-cta)' : 'transparent',
+                      color:      !saveConfirmed ? '#0A0A0A' : 'var(--color-text-muted)',
+                    }}>
+                    미확정
+                  </button>
+                  <button onClick={() => setSaveConfirmed(true)}
+                    className="flex-1 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all"
+                    style={{
+                      background: saveConfirmed ? 'var(--gradient-cta)' : 'transparent',
+                      color:      saveConfirmed ? '#0A0A0A' : 'var(--color-text-muted)',
+                    }}>
+                    확정
+                  </button>
                 </div>
               </div>
 
@@ -1306,6 +1693,89 @@ export default function BudgetPage() {
         </div>
       )}
 
+      {/* ── 업로드 모달 ── */}
+      {uploadModalOpen && (
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { setUploadModalOpen(false); setSelectedFile(null) }} />
+          <div className="relative rounded-2xl p-6 w-full max-w-md space-y-5"
+            style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-elevated)' }}>
+
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>파일 업로드</p>
+              <button onClick={() => { setUploadModalOpen(false); setSelectedFile(null) }}
+                className="text-brand-muted hover:opacity-60 transition-opacity text-lg leading-none">✕</button>
+            </div>
+
+            <div className="space-y-4">
+              {/* 데이터 소스 */}
+              <div>
+                <p className="text-xs text-brand-muted mb-2">데이터 소스</p>
+                <div className="flex gap-1 p-1 rounded-xl w-full"
+                  style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-default)' }}>
+                  {(['mtd', 'daily'] as const).map(opt => (
+                    <button key={opt} onClick={() => setUploadSource(opt)}
+                      className="flex-1 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all"
+                      style={{
+                        background: uploadSource === opt ? 'var(--gradient-cta)' : 'transparent',
+                        color:      uploadSource === opt ? '#0A0A0A' : 'var(--color-text-muted)',
+                      }}>
+                      {opt === 'mtd' ? 'MTD' : 'DAILY'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 양식 다운로드 */}
+              <div>
+                <p className="text-xs text-brand-muted mb-2">처음이라면 양식을 받으세요</p>
+                <button
+                  onClick={() => uploadSource === 'mtd' ? handleDownloadTemplate() : handleDownloadDailyTemplate()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all hover:opacity-80 w-full justify-center"
+                  style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}>
+                  <Download size={13} />
+                  {uploadSource === 'mtd' ? 'MTD' : 'DAILY'} 양식 다운로드
+                </button>
+              </div>
+
+              {/* 파일 선택 */}
+              <div>
+                <p className="text-xs text-brand-muted mb-2">파일 선택</p>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
+                  className="w-full text-sm"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                />
+                {selectedFile && (
+                  <p className="text-xs mt-2" style={{ color: 'var(--color-accent-primary)' }}>
+                    ✓ {selectedFile.name}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => { setUploadModalOpen(false); setSelectedFile(null) }}
+                className="flex-1 py-2 rounded-lg text-sm hover:opacity-80 transition-all"
+                style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}>
+                취소
+              </button>
+              <button
+                onClick={() => {
+                  console.log('Upload:', { uploadSource, selectedFile })
+                  alert('업로드 로직은 다음 단계에서 구현됩니다.')
+                }}
+                disabled={!selectedFile}
+                className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all hover:-translate-y-px disabled:opacity-50"
+                style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
+                업로드
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     <div className="space-y-5 animate-fade-in">
 
       {/* ── 에러 배너 ── */}
@@ -1349,19 +1819,22 @@ export default function BudgetPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex gap-1 p-1 rounded-xl w-fit"
-            style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)' }}>
-            {(['monthly', 'daily'] as TabType[]).map(tab => (
-              <button key={tab} onClick={() => setActiveTab(tab)}
-                className="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all"
-                style={{
-                  background: activeTab === tab ? 'var(--gradient-cta)' : 'transparent',
-                  color:      activeTab === tab ? '#0A0A0A' : 'var(--color-text-muted)',
-                }}>
-                {tab === 'monthly' ? '월별' : '일별'}
-              </button>
-            ))}
-          </div>
+          <button
+            onClick={() => setLoadModalOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all hover:opacity-80"
+            style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}
+          >
+            <Download size={13} />
+            불러오기
+          </button>
+          <button
+            onClick={() => setUploadModalOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-all hover:opacity-80"
+            style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}
+          >
+            <Upload size={13} />
+            업로드
+          </button>
           <button
             onClick={() => setSaveModalOpen(true)}
             disabled={saving}
@@ -1377,98 +1850,48 @@ export default function BudgetPage() {
       {/* ── 탭 ── */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {activeTab === 'monthly' && (
-            <>
-              <button
-                onClick={() => setIsDirectEdit(v => !v)}
-                className="inline-flex items-center gap-1.5 px-5 py-1.5 rounded-full font-semibold text-xs transition-all"
-                style={{
-                  background: isDirectEdit ? 'var(--color-accent-primary)' : 'rgba(255,255,255,0.06)',
-                  color:      isDirectEdit ? '#0A0A0A' : 'var(--color-text-muted)',
-                  minWidth: '80px', justifyContent: 'center', border: 'none', cursor: 'pointer',
-                }}
-              >
-                {isDirectEdit ? '직접수정' : '일괄수정'}
-              </button>
-              <button
-                onClick={() => setDeleteConfirm(true)}
-                className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all hover:opacity-80"
-                style={{ background: 'rgba(252,129,129,0.12)', color: '#FC8181', border: 'none', cursor: 'pointer' }}
-              >
-                삭제
-              </button>
-            </>
-          )}
+          <button
+              onClick={() => setIsDirectEdit(v => !v)}
+              className="inline-flex items-center gap-1.5 px-5 py-1.5 rounded-full font-semibold text-xs transition-all"
+              style={{
+                background: isDirectEdit ? 'var(--color-accent-primary)' : 'rgba(255,255,255,0.06)',
+                color:      isDirectEdit ? '#0A0A0A' : 'var(--color-text-muted)',
+                minWidth: '80px', justifyContent: 'center', border: 'none', cursor: 'pointer',
+              }}
+            >
+              {isDirectEdit ? '직접수정' : '일괄수정'}
+            </button>
+            <button
+              onClick={() => setDeleteConfirm(true)}
+              className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all hover:opacity-80"
+              style={{ background: 'rgba(252,129,129,0.12)', color: '#FC8181', border: 'none', cursor: 'pointer' }}
+            >
+              삭제
+            </button>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* 엑셀 업로드 카드 */}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
-            style={{ border: '1px solid var(--color-border-default)', background: 'var(--color-bg-secondary)' }}>
-            <FileSpreadsheet size={14} style={{ color: 'var(--color-accent-primary)' }} />
-            <span className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>엑셀파일</span>
-            <div className="w-px h-3.5 mx-1" style={{ background: 'var(--color-border-default)' }} />
-            <button
-              onClick={handleDownloadTemplate}
-              className="btn-excel-action flex items-center gap-1 text-sm font-medium"
-            >
-              <Download size={12} />
-              양식 다운
-            </button>
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              ref={fileInputRef}
-              style={{ display: 'none' }}
-              onChange={handleUploadBudget}
-            />
-            <button
-              onClick={() => setUploadConfirm(true)}
-              disabled={isDistributing}
-              className="btn-excel-action flex items-center gap-1 text-sm font-medium"
-            >
-              {isDistributing ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-              파일 업로드
-            </button>
-          </div>
-        </div>
+        <input
+          type="file"
+          accept=".xlsx,.xls"
+          ref={fileInputRef}
+          style={{ display: 'none' }}
+          onChange={handleUploadBudget}
+        />
       </div>
 
-      {/* ── 월별 탭 ── */}
-      {activeTab === 'monthly' && (
-        <div className="space-y-4">
-          <MarketTable
-            hotelId={hotelId}
-            year={selectedYear}
-            month={new Date().getMonth() + 1}
-            columns={monthlyColumns}
-            data={monthlyTableData}
-            loading={monthlyLoading}
-            stickyFirstGroup
-            opaqueBg
-            maxHeight="calc(100vh - 270px)"
-          />
-        </div>
-      )}
-
-      {/* ── 일별 탭 ── */}
-      {activeTab === 'daily' && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleDownloadDaily}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all hover:opacity-80"
-              style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}
-            >
-              <Download size={13} />
-              일별 엑셀 다운
-            </button>
-          </div>
-          <div className="text-sm text-brand-muted text-center py-8">
-            일별 데이터 관리 화면입니다.
-          </div>
-        </div>
-      )}
+      <div className="space-y-4">
+        <MarketTable
+          hotelId={hotelId}
+          year={selectedYear}
+          month={new Date().getMonth() + 1}
+          columns={monthlyColumns}
+          data={monthlyTableData}
+          loading={monthlyLoading}
+          stickyFirstGroup
+          opaqueBg
+          maxHeight="calc(100vh - 270px)"
+        />
+      </div>
     </div>
     </>
   )
