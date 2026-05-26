@@ -18,7 +18,6 @@ const DASH_BORDER  = '0.5px dashed var(--color-border-default)'
 const GROUP_BORDER = '1.5px solid var(--color-border-default)'
 
 const HEADER_BG = 'var(--color-bg-secondary)'
-const TOTAL_BG  = 'rgba(180,178,169,0.10)'
 const OTB_BG    = 'var(--color-bg-secondary)'
 const BODY_BG   = 'var(--color-bg-primary)'
 const TEXT      = 'var(--color-text-primary)'
@@ -254,7 +253,7 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
           <tr>
             {columnGroups.map((group, gi) => {
               const isTotal = group.id === 'total'
-              const bg      = isTotal ? TOTAL_BG : HEADER_BG
+              const bg      = HEADER_BG
               const isLast  = gi === totalGroups - 1
 
               if (isTotal) {
