@@ -133,6 +133,31 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
   // sticky left offsets for the four Total metric cells
   const TOT_LEFTS = [TOT_OCC_L, TOT_RN_L, TOT_ADR_L, TOT_REV_L] as const
 
+  const monthlyTotals = useMemo(() => {
+    let totRn = 0, totRev = 0
+    for (const day of data) {
+      for (const code of schema.allSegmentationCodes) {
+        const v = day.values[code]
+        if (v) { totRn += v.rn; totRev += v.rev }
+      }
+    }
+    const totAdr = totRn > 0 ? Math.round(totRev / totRn) : 0
+    const bySubCol = new Map<string, { rn: number; adr: number; rev: number }>()
+    for (const group of allGroups) {
+      for (const col of group.subCols) {
+        let rn = 0, rev = 0
+        for (const day of data) {
+          for (const code of col.segCodes) {
+            const v = day.values[code]
+            if (v) { rn += v.rn; rev += v.rev }
+          }
+        }
+        bySubCol.set(col.id, { rn, adr: rn > 0 ? Math.round(rev / rn) : 0, rev })
+      }
+    }
+    return { totRn, totAdr, totRev, bySubCol }
+  }, [data, schema, allGroups])
+
   return (
     <div style={{ overflowX: 'auto' }}>
       <table
@@ -300,6 +325,7 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
             const _evt       = cal?.event?.trim()
             const hasEvent   = !!_evt && _evt.toLowerCase() !== 'null'
             const isWeekend  = !hasEvent && cal?.rev_dow === '토'
+            const isFriSat   = cal?.day === '금' || cal?.day === '토'
             const expandable = canExpand(row)
             const isExpanded = expandable && (manualExpandedDates.has(row.business_date) || shouldAutoExpand(row, threshold))
             const fcBtm      = isExpanded ? DASH_BORDER : BORDER
@@ -331,7 +357,9 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                       <span style={{ fontSize: 9, color: MUTED, flexShrink: 0, visibility: expandable ? 'visible' : 'hidden' }}>
                         {isExpanded ? '▼' : '▶'}
                       </span>
-                      <span>{row.day_label}</span>
+                      <span style={isFriSat ? { color: '#3B82F6', fontWeight: 600 } : undefined}>
+                        {row.day_label}
+                      </span>
                       {hasEvent && (
                         <span
                           title={_evt}
@@ -538,6 +566,80 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
               </Fragment>
             )
           })}
+          {/* ── 월 합계 행 ── */}
+          {data.length > 0 && (() => {
+            const { totRn, totAdr, totRev, bySubCol } = monthlyTotals
+            const SUM_BG  = HEADER_BG
+            const SUM_TOP = GROUP_BORDER
+            return (
+              <tr key="monthly-total">
+                <td style={{
+                  ...tdBase,
+                  background:  SUM_BG,
+                  position:    'sticky',
+                  left:        0,
+                  zIndex:      3,
+                  fontWeight:  700,
+                  color:       TEXT,
+                  borderRight: GROUP_BORDER,
+                  borderTop:   SUM_TOP,
+                  width:       DATE_W,
+                  minWidth:    DATE_W,
+                }}>
+                  월 합계
+                </td>
+                {columnGroups.map((group, gi) => {
+                  const isTotal = group.id === 'total'
+                  const isLast  = gi === totalGroups - 1
+                  if (isTotal) {
+                    const rightBorder = isLast ? BORDER : GROUP_BORDER
+                    return (
+                      <Fragment key={group.id}>
+                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', fontWeight: 700, color: TEXT_SEC, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, borderTop: SUM_TOP, position: 'sticky', left: TOT_OCC_L, zIndex: 2 }}>
+                          {fmtOcc(totRn, schema.roomCount * data.length)}
+                        </td>
+                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', fontWeight: 700, color: TEXT, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, borderTop: SUM_TOP, position: 'sticky', left: TOT_RN_L, zIndex: 2 }}>
+                          {fmtRn(totRn)}
+                        </td>
+                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', fontWeight: 700, color: totAdr === 0 ? MUTED : TEXT, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, borderTop: SUM_TOP, position: 'sticky', left: TOT_ADR_L, zIndex: 2 }}>
+                          {fmtAdr(totAdr)}
+                        </td>
+                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', fontWeight: 700, color: totRev === 0 ? MUTED : TEXT, width: TOT_W, minWidth: TOT_W, borderRight: rightBorder, borderTop: SUM_TOP, position: 'sticky', left: TOT_REV_L, zIndex: 2 }}>
+                          {fmtRev(totRev)}
+                        </td>
+                      </Fragment>
+                    )
+                  }
+                  return group.subCols.map((col, ci) => {
+                    const rightBorder = subColRightBorder(gi, totalGroups, ci, group.subCols.length, col.isSummary)
+                    const sv = bySubCol.get(col.id)
+                    if (!sv) {
+                      return (
+                        <Fragment key={col.id}>
+                          <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', color: MUTED, fontWeight: 700, borderRight: BORDER, borderTop: SUM_TOP }}>-</td>
+                          <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', color: MUTED, fontWeight: 700, borderRight: BORDER, borderTop: SUM_TOP }}>-</td>
+                          <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', color: MUTED, fontWeight: 700, borderRight: rightBorder, borderTop: SUM_TOP }}>-</td>
+                        </Fragment>
+                      )
+                    }
+                    return (
+                      <Fragment key={col.id}>
+                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', color: TEXT, fontWeight: 700, borderRight: BORDER, borderTop: SUM_TOP }}>
+                          {fmtRn(sv.rn)}
+                        </td>
+                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', color: sv.adr === 0 ? MUTED : TEXT, fontWeight: 700, borderRight: BORDER, borderTop: SUM_TOP }}>
+                          {fmtAdr(sv.adr)}
+                        </td>
+                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', color: sv.rev === 0 ? MUTED : TEXT, fontWeight: 700, borderRight: rightBorder, borderTop: SUM_TOP }}>
+                          {fmtRev(sv.rev)}
+                        </td>
+                      </Fragment>
+                    )
+                  })
+                })}
+              </tr>
+            )
+          })()}
         </tbody>
       </table>
 
