@@ -1,14 +1,15 @@
 'use client'
 
 import { Fragment, useMemo } from 'react'
-import type { ForecastSchema, ForecastDayData } from '@/lib/forecast/types'
+import type { ForecastSchema, ForecastDayData, CalendarMap } from '@/lib/forecast/types'
 import { buildColumnGroups } from '@/lib/forecast/schema'
 import { fmtRn, fmtAdr, fmtRev, fmtOcc } from '@/lib/forecast/format'
 
 interface ForecastTableProps {
   schema:          ForecastSchema
   data:            ForecastDayData[]
-  selectedNodeIds: Set<string>   // top-level node ids to show
+  selectedNodeIds: Set<string>
+  calendar?:       CalendarMap
 }
 
 const BORDER       = '0.5px solid var(--color-border-default)'
@@ -28,8 +29,8 @@ const WARNING   = 'var(--color-warning, #F5A623)'
 const thBase: React.CSSProperties = {
   borderBottom: BORDER,
   borderRight:  BORDER,
-  padding:      '4px 7px',
-  fontSize:     '11px',
+  padding:      '8px 10px',
+  fontSize:     '12px',
   whiteSpace:   'nowrap',
   color:        TEXT,
   background:   HEADER_BG,
@@ -38,8 +39,8 @@ const thBase: React.CSSProperties = {
 const tdBase: React.CSSProperties = {
   borderBottom: BORDER,
   borderRight:  BORDER,
-  padding:      '3px 7px',
-  fontSize:     '11px',
+  padding:      '8px 10px',
+  fontSize:     '12px',
   whiteSpace:   'nowrap',
 }
 
@@ -68,7 +69,7 @@ function calcFromData(
   return { rn, adr: rn > 0 ? Math.round(rev / rn) : 0, rev }
 }
 
-export default function ForecastTable({ schema, data, selectedNodeIds }: ForecastTableProps) {
+export default function ForecastTable({ schema, data, selectedNodeIds, calendar }: ForecastTableProps) {
   // Build column groups filtered by selected nodes
   const allGroups = useMemo(
     () => buildColumnGroups(schema.nodes, schema.allSegmentationCodes),
@@ -116,7 +117,7 @@ export default function ForecastTable({ schema, data, selectedNodeIds }: Forecas
                 position:    'sticky',
                 left:        0,
                 zIndex:      2,
-                minWidth:    72,
+                minWidth:    150,
                 fontWeight:  600,
                 borderRight: GROUP_BORDER,
               }}
@@ -241,6 +242,10 @@ export default function ForecastTable({ schema, data, selectedNodeIds }: Forecas
             const rowBg   = rowIdx % 2 === 0 ? BODY_ODD : BODY_EVN
             const textCol = row.is_actual_day ? TEXT : TEXT_SEC
 
+            const cal        = calendar?.get(row.business_date)
+            const hasEvent   = !!(cal?.event && cal.event.trim() !== '')
+            const isWeekend  = !hasEvent && cal?.rev_dow === '토'
+
             return (
               <tr key={row.business_date}>
                 {/* 날짜 (sticky) */}
@@ -256,7 +261,31 @@ export default function ForecastTable({ schema, data, selectedNodeIds }: Forecas
                     borderRight: GROUP_BORDER,
                   }}
                 >
-                  {row.day_label}
+                  <div>{row.day_label}</div>
+                  {hasEvent && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                      <span style={{
+                        display:      'inline-block',
+                        width:        6,
+                        height:       6,
+                        borderRadius: '50%',
+                        background:   'var(--color-text-danger, #ef4444)',
+                        flexShrink:   0,
+                      }} />
+                      <span style={{ fontSize: 10, color: TEXT_SEC }}>{cal!.event}</span>
+                    </div>
+                  )}
+                  {isWeekend && (
+                    <div style={{ marginTop: 3 }}>
+                      <span style={{
+                        display:      'inline-block',
+                        width:        6,
+                        height:       6,
+                        borderRadius: '50%',
+                        background:   '#F59E0B',
+                      }} />
+                    </div>
+                  )}
                 </td>
 
                 {/* 데이터 셀 */}
