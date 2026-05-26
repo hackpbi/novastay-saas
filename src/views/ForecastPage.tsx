@@ -21,11 +21,12 @@ export default function ForecastPage() {
 
       {/* Table card */}
       <div
-        className="rounded-xl overflow-hidden"
+        className="rounded-xl"
         style={{
           border: '1px solid var(--color-border-default)',
           background: 'var(--color-bg-surface)',
           boxShadow: 'var(--shadow-card)',
+          overflow: 'clip',
         }}
       >
         <ForecastTable data={FORECAST_MAY_2026} />

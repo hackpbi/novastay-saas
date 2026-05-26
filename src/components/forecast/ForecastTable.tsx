@@ -12,16 +12,19 @@ interface ForecastTableProps {
 const BORDER = '0.5px solid var(--color-border-default)'
 
 const thBase: React.CSSProperties = {
-  border: BORDER,
-  padding: '4px 8px',
+  borderRight:  BORDER,
+  borderBottom: BORDER,
+  padding: '5px 8px',
   fontWeight: 600,
   fontSize: '11px',
   whiteSpace: 'nowrap',
+  color: 'var(--color-text-primary)',
 }
 
 const tdBase: React.CSSProperties = {
-  border: BORDER,
-  padding: '3px 6px',
+  borderRight:  BORDER,
+  borderBottom: BORDER,
+  padding: '3px 7px',
   fontSize: '11px',
   whiteSpace: 'nowrap',
 }
@@ -30,16 +33,25 @@ const HEADER_BG   = 'var(--color-bg-secondary)'
 const BODY_BG     = 'var(--color-bg-primary)'
 const TOTAL_BG    = 'rgba(180,178,169,0.08)'
 const MUTED_COLOR = 'var(--color-text-muted)'
-
-const ROW1_HEIGHT = 30
+const DATE_COL_BORDER = '1px solid var(--color-border-default)'
 
 export default function ForecastTable({ data }: ForecastTableProps) {
   return (
-    <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 220px)' }}>
-      <table style={{ borderCollapse: 'collapse', tableLayout: 'auto' }}>
+    <div style={{ overflowX: 'auto' }}>
+      <table
+        style={{
+          borderCollapse: 'separate',
+          borderSpacing: 0,
+          tableLayout: 'auto',
+          /* outer left + top border */
+          borderLeft: BORDER,
+          borderTop:  BORDER,
+        }}
+      >
         <thead>
           {/* Row 1: segment name headers */}
           <tr>
+            {/* Date column header — sticky left, spans 2 rows */}
             <th
               rowSpan={2}
               style={{
@@ -48,9 +60,9 @@ export default function ForecastTable({ data }: ForecastTableProps) {
                 textAlign: 'left',
                 position: 'sticky',
                 left: 0,
-                top: 0,
-                zIndex: 4,
-                minWidth: 72,
+                zIndex: 2,
+                minWidth: 76,
+                borderRight: DATE_COL_BORDER,
               }}
             >
               날짜
@@ -64,9 +76,6 @@ export default function ForecastTable({ data }: ForecastTableProps) {
                   ...thBase,
                   background: HEADER_BG,
                   textAlign: 'center',
-                  position: 'sticky',
-                  top: 0,
-                  zIndex: 2,
                 }}
               >
                 {seg.name}
@@ -80,9 +89,6 @@ export default function ForecastTable({ data }: ForecastTableProps) {
                 ...thBase,
                 background: TOTAL_BG,
                 textAlign: 'center',
-                position: 'sticky',
-                top: 0,
-                zIndex: 2,
               }}
             >
               Total
@@ -100,9 +106,6 @@ export default function ForecastTable({ data }: ForecastTableProps) {
                       ...thBase,
                       background: HEADER_BG,
                       textAlign: 'center',
-                      position: 'sticky',
-                      top: ROW1_HEIGHT,
-                      zIndex: 2,
                       fontWeight: 500,
                       color: 'var(--color-text-secondary)',
                     }}
@@ -120,9 +123,6 @@ export default function ForecastTable({ data }: ForecastTableProps) {
                   ...thBase,
                   background: TOTAL_BG,
                   textAlign: 'center',
-                  position: 'sticky',
-                  top: ROW1_HEIGHT,
-                  zIndex: 2,
                   fontWeight: 500,
                   color: 'var(--color-text-secondary)',
                 }}
@@ -151,6 +151,7 @@ export default function ForecastTable({ data }: ForecastTableProps) {
                     zIndex: 1,
                     fontWeight: 500,
                     color: 'var(--color-text-primary)',
+                    borderRight: DATE_COL_BORDER,
                   }}
                 >
                   {row.day_label}
