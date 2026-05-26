@@ -37,6 +37,14 @@ export type ColumnGroup = {
   subCols: SubColumn[]
 }
 
+// ─── Aggregated schema (fetch result) ─────────────────────────────────────────
+export type ForecastSchema = {
+  hotelId:               string
+  roomCount:             number
+  nodes:                 SchemaNode[]   // tree (top-level only, children nested)
+  allSegmentationCodes:  string[]       // all leaf codes for Total calculation
+}
+
 // ─── Forecast data ──────────────────────────────────────────────────────────────
 export type SegmentValue = {
   rn: number

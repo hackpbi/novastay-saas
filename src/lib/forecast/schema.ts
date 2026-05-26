@@ -1,18 +1,32 @@
 import { supabase } from '@/lib/supabase'
-import type { C05Row, SchemaNode, ColumnGroup, SubColumn } from './types'
+import type { C05Row, SchemaNode, ColumnGroup, SubColumn, ForecastSchema } from './types'
 
 // ─── Fetch ──────────────────────────────────────────────────────────────────────
 
-export async function fetchForecastSchema(hotelId: string): Promise<C05Row[]> {
-  const { data, error } = await (supabase as any)
-    .from('c05_market_table_schema')
-    .select('id, name, level, parent_id, segmentation, order_index, is_bold, is_active')
-    .eq('hotel_id', hotelId)
-    .eq('is_active', true)
-    .order('order_index', { ascending: true })
+export async function fetchForecastSchema(hotelId: string): Promise<ForecastSchema> {
+  const [c05Result, detailResult] = await Promise.all([
+    (supabase as any)
+      .from('c05_market_table_schema')
+      .select('id, name, level, parent_id, segmentation, order_index, is_bold, is_active')
+      .eq('hotel_id', hotelId)
+      .eq('is_active', true)
+      .order('order_index', { ascending: true }),
+    (supabase as any)
+      .from('m03_hotel_details')
+      .select('room_count')
+      .eq('hotel_id', hotelId)
+      .single(),
+  ])
 
-  if (error) throw error
-  return (data ?? []) as C05Row[]
+  if (c05Result.error) throw c05Result.error
+
+  const rows = (c05Result.data ?? []) as C05Row[]
+  const roomCount: number = detailResult.data?.room_count ?? 0
+
+  const nodes = buildSchemaTree(rows)
+  const allSegmentationCodes = getAllSegCodes(nodes)
+
+  return { hotelId, roomCount, nodes, allSegmentationCodes }
 }
 
 // ─── Tree builder ───────────────────────────────────────────────────────────────
@@ -46,7 +60,6 @@ export function buildSchemaTree(rows: C05Row[]): SchemaNode[] {
     }
   }
 
-  // Sort by orderIndex
   roots.sort((a, b) => a.orderIndex - b.orderIndex)
   for (const root of roots) {
     root.children.sort((a, b) => a.orderIndex - b.orderIndex)

@@ -3,25 +3,29 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import ForecastTable from '@/components/forecast/ForecastTable'
-import { fetchForecastSchema, buildSchemaTree, getAllSegCodes, buildColumnGroups } from '@/lib/forecast/schema'
+import { fetchForecastSchema, buildColumnGroups } from '@/lib/forecast/schema'
 import { getDummyForecast } from '@/lib/forecast/dummy'
 import { useHotel } from '@/contexts/HotelContext'
-import type { C05Row } from '@/lib/forecast/types'
+import type { ForecastSchema } from '@/lib/forecast/types'
 
 export default function ForecastPage() {
   const { currentHotel } = useHotel()
   const hotelId = currentHotel?.id ?? ''
 
-  const { data: schemaRows, isLoading, error } = useQuery<C05Row[]>({
+  const { data: schema, isLoading, error } = useQuery<ForecastSchema>({
     queryKey: ['forecast_schema', hotelId],
     queryFn:  () => fetchForecastSchema(hotelId),
     enabled:  !!hotelId,
   })
 
-  const schemaTree    = useMemo(() => buildSchemaTree(schemaRows ?? []),              [schemaRows])
-  const allSegCodes   = useMemo(() => getAllSegCodes(schemaTree),                     [schemaTree])
-  const columnGroups  = useMemo(() => buildColumnGroups(schemaTree, allSegCodes),     [schemaTree, allSegCodes])
-  const forecastData  = useMemo(() => getDummyForecast(allSegCodes),                  [allSegCodes])
+  const columnGroups = useMemo(
+    () => schema ? buildColumnGroups(schema.nodes, schema.allSegmentationCodes) : [],
+    [schema],
+  )
+  const forecastData = useMemo(
+    () => getDummyForecast(schema?.allSegmentationCodes ?? []),
+    [schema],
+  )
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -60,7 +64,7 @@ export default function ForecastPage() {
           </div>
         )}
 
-        {!isLoading && !error && schemaTree.length === 0 && (
+        {!isLoading && !error && (!schema || schema.nodes.length === 0) && (
           <div className="p-8 text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>
             세그먼트 설정이 필요합니다.
           </div>
@@ -70,6 +74,27 @@ export default function ForecastPage() {
           <ForecastTable columnGroups={columnGroups} data={forecastData} />
         )}
       </div>
+
+      {/* 임시 디버그 영역 (Step 1.5b에서 제거 예정) */}
+      {schema && (
+        <div
+          className="rounded-lg text-xs"
+          style={{
+            padding:    '10px 14px',
+            background: 'var(--color-bg-secondary)',
+            border:     '1px solid var(--color-border-default)',
+            color:      'var(--color-text-secondary)',
+            lineHeight: 1.7,
+          }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--color-text-primary)' }}>
+            Schema Loaded ✅
+          </div>
+          <div>Room count: {schema.roomCount}</div>
+          <div>Top-level nodes: {schema.nodes.length}</div>
+          <div>All segmentation codes: {schema.allSegmentationCodes.join(', ')}</div>
+        </div>
+      )}
     </div>
   )
 }
