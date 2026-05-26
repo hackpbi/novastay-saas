@@ -57,3 +57,37 @@ export type DailyForecast = {
   day_label: string                        // '5/1 (금)'
   values: Record<string, SegmentValue>     // keyed by segmentation CODE (COR, CNC, ...)
 }
+
+// ─── Baseline RPC types ────────────────────────────────────────────────────────
+export type ForecastRpcRow = {
+  business_date:           string
+  segmentation:            string
+  forecast_rn:             number
+  forecast_adr:            number | null
+  forecast_revenue:        number
+  current_otb_rn:          number
+  current_otb_revenue:     number
+  ly_remaining_pickup_rn:  number | null
+  ly_remaining_pickup_rev: number | null
+  ly_match_date:           string | null
+  ly_otb_snapshot_date:    string | null
+  capped:                  boolean
+  is_actual:               boolean
+}
+
+export type ForecastSegValue = {
+  rn:        number
+  adr:       number
+  rev:       number
+  otb_rn:    number
+  otb_rev:   number
+  is_actual: boolean
+  capped:    boolean
+}
+
+export type ForecastDayData = {
+  business_date: string
+  day_label:     string
+  is_actual_day: boolean
+  values:        Record<string, ForecastSegValue>
+}
