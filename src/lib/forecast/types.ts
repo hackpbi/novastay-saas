@@ -92,3 +92,14 @@ export type ForecastDayData = {
   has_capped:    boolean   // any segment capped on this day
   values:        Record<string, ForecastSegValue>
 }
+
+// ─── Calendar (c06_calendar) ───────────────────────────────────────────────────
+export type CalendarDay = {
+  date:       string        // 'YYYY-MM-DD'
+  day:        string        // '월', '화', ...
+  rev_dow:    string        // RM용 요일 그룹
+  event:      string | null // 이벤트명 (없으면 null)
+  is_holiday: boolean
+}
+
+export type CalendarMap = Map<string, CalendarDay>

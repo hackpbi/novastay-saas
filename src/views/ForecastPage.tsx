@@ -7,8 +7,9 @@ import SegmentFilter from '@/components/forecast/SegmentFilter'
 import SummaryCards from '@/components/forecast/SummaryCards'
 import { fetchForecastSchema } from '@/lib/forecast/schema'
 import { fetchBaselineForecast, transformRpcToTableData } from '@/lib/forecast/baseline'
+import { fetchCalendarRange, calendarToMap } from '@/lib/forecast/calendar'
 import { useHotel } from '@/contexts/HotelContext'
-import type { ForecastSchema, ForecastDayData } from '@/lib/forecast/types'
+import type { ForecastSchema, ForecastDayData, CalendarMap } from '@/lib/forecast/types'
 
 // ── Month helpers ──────────────────────────────────────────────────────────────
 
@@ -96,6 +97,23 @@ export default function ForecastPage() {
       .finally(() => setDataLoading(false))
   }, [hotelId, currentMonth])
 
+  // ── Calendar fetch (월 변경 시마다) ─────────────────────────────────────────
+  const [calendar, setCalendar] = useState<CalendarMap>(new Map())
+
+  useEffect(() => {
+    const { start, end } = monthRange(currentMonth.year, currentMonth.month)
+    fetchCalendarRange(start, end)
+      .then(days => {
+        console.log('=== Calendar days ===', days.length)
+        console.log('Sample:', days.slice(0, 3))
+        const eventDays = days.filter(d => d.event && d.event !== '')
+        console.log('Days with events:', eventDays.length)
+        console.log('Events:', eventDays)
+        setCalendar(calendarToMap(days))
+      })
+      .catch(e => console.error('Calendar fetch error:', e))
+  }, [currentMonth])
+
   // ── Render ───────────────────────────────────────────────────────────────────
   const error = schemaError ?? dataError
 
@@ -113,6 +131,27 @@ export default function ForecastPage() {
       {/* 상단 요약 카드 */}
       {schema && (
         <SummaryCards schema={schema} data={data} />
+      )}
+
+      {/* 임시 디버그 — Step 3.5b에서 제거 */}
+      {calendar.size > 0 && (
+        <div style={{
+          fontSize:     11,
+          padding:      12,
+          background:   'var(--color-bg-secondary)',
+          borderRadius: 8,
+          border:       '1px solid var(--color-border-default)',
+        }}>
+          <strong>Calendar Loaded ✅</strong>
+          <div>Days: {calendar.size}</div>
+          <div>
+            Events:{' '}
+            {Array.from(calendar.values())
+              .filter(d => d.event)
+              .map(d => `${d.date}(${d.event})`)
+              .join(', ') || '없음'}
+          </div>
+        </div>
       )}
 
       {/* 세그먼트 필터 */}
