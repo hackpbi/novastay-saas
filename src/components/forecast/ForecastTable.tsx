@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useMemo } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import type { ForecastSchema, ForecastDayData, CalendarMap } from '@/lib/forecast/types'
 import { buildColumnGroups } from '@/lib/forecast/schema'
 import { fmtRn, fmtAdr, fmtRev, fmtOcc } from '@/lib/forecast/format'
@@ -19,6 +19,7 @@ const GROUP_BORDER = '1.5px solid var(--color-border-default)'
 const HEADER_BG = 'var(--color-bg-secondary)'
 const TOTAL_BG  = 'rgba(180,178,169,0.10)'
 const SUM_BG    = 'rgba(180,178,169,0.06)'
+const OTB_BG    = 'var(--color-bg-secondary)'
 const BODY_ODD  = 'var(--color-bg-primary)'
 const BODY_EVN  = 'var(--overlay-xs)'
 const TEXT      = 'var(--color-text-primary)'
@@ -69,14 +70,36 @@ function calcFromData(
   return { rn, adr: rn > 0 ? Math.round(rev / rn) : 0, rev }
 }
 
+function calcOtbFromData(
+  daily:    ForecastDayData,
+  segCodes: string[],
+): { rn: number; adr: number; rev: number } | null {
+  let rn = 0, rev = 0, hasData = false
+  for (const code of segCodes) {
+    const v = daily.values[code]
+    if (v) { rn += v.otb_rn; rev += v.otb_rev; hasData = true }
+  }
+  if (!hasData) return null
+  return { rn, adr: rn > 0 ? Math.round(rev / rn) : 0, rev }
+}
+
 export default function ForecastTable({ schema, data, selectedNodeIds, calendar }: ForecastTableProps) {
-  // Build column groups filtered by selected nodes
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set())
+
+  function toggleExpand(date: string) {
+    setExpandedDates(prev => {
+      const next = new Set(prev)
+      if (next.has(date)) next.delete(date)
+      else next.add(date)
+      return next
+    })
+  }
+
   const allGroups = useMemo(
     () => buildColumnGroups(schema.nodes, schema.allSegmentationCodes),
     [schema],
   )
 
-  // Visible column groups: Total (always) + selected segment groups
   const columnGroups = useMemo(() => {
     return allGroups.filter(g => g.id === 'total' || selectedNodeIds.has(g.id))
   }, [allGroups, selectedNodeIds])
@@ -228,138 +251,238 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar 
 
         <tbody>
           {data.map((row, rowIdx) => {
-            const rowBg   = rowIdx % 2 === 0 ? BODY_ODD : BODY_EVN
-            const textCol = row.is_actual_day ? TEXT : TEXT_SEC
-
-            const cal        = calendar?.get(row.business_date)
-            const _evt       = cal?.event?.trim()
-            const hasEvent   = !!_evt && _evt.toLowerCase() !== 'null'
-            const isWeekend  = !hasEvent && cal?.rev_dow === '토'
+            const rowBg          = rowIdx % 2 === 0 ? BODY_ODD : BODY_EVN
+            const textCol        = row.is_actual_day ? TEXT : TEXT_SEC
+            const cal            = calendar?.get(row.business_date)
+            const _evt           = cal?.event?.trim()
+            const hasEvent       = !!_evt && _evt.toLowerCase() !== 'null'
+            const isWeekend      = !hasEvent && cal?.rev_dow === '토'
+            const isExpanded     = expandedDates.has(row.business_date)
+            const fcBtm          = isExpanded ? DASH_BORDER : BORDER
 
             return (
-              <tr key={row.business_date}>
-                {/* 날짜 (sticky) */}
-                <td
-                  style={{
-                    ...tdBase,
-                    background:  rowBg,
-                    position:    'sticky',
-                    left:        0,
-                    zIndex:      1,
-                    fontWeight:  500,
-                    color:       TEXT,
-                    borderRight: GROUP_BORDER,
-                  }}
+              <Fragment key={row.business_date}>
+                {/* ── FC 행 ── */}
+                <tr
+                  onClick={() => toggleExpand(row.business_date)}
+                  style={{ cursor: 'pointer' }}
                 >
-                  <div>{row.day_label}</div>
-                  {hasEvent && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
-                      <span style={{
-                        display:      'inline-block',
-                        width:        6,
-                        height:       6,
-                        borderRadius: '50%',
-                        background:   'var(--color-text-danger, #ef4444)',
-                        flexShrink:   0,
-                      }} />
-                      <span style={{ fontSize: 10, color: TEXT_SEC }}>{cal!.event}</span>
+                  {/* 날짜 (sticky) */}
+                  <td
+                    style={{
+                      ...tdBase,
+                      borderBottom: fcBtm,
+                      background:   rowBg,
+                      position:     'sticky',
+                      left:         0,
+                      zIndex:       1,
+                      fontWeight:   500,
+                      color:        TEXT,
+                      borderRight:  GROUP_BORDER,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 5 }}>
+                      <span style={{ fontSize: 9, color: MUTED, marginTop: 2, flexShrink: 0 }}>
+                        {isExpanded ? '▼' : '▶'}
+                      </span>
+                      <div>
+                        <div>{row.day_label}</div>
+                        {hasEvent && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                            <span style={{
+                              display:      'inline-block',
+                              width:        6,
+                              height:       6,
+                              borderRadius: '50%',
+                              background:   'var(--color-text-danger, #ef4444)',
+                              flexShrink:   0,
+                            }} />
+                            <span style={{ fontSize: 10, color: TEXT_SEC }}>{_evt}</span>
+                          </div>
+                        )}
+                        {isWeekend && (
+                          <div style={{ marginTop: 3 }}>
+                            <span style={{
+                              display:      'inline-block',
+                              width:        6,
+                              height:       6,
+                              borderRadius: '50%',
+                              background:   '#F59E0B',
+                            }} />
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  )}
-                  {isWeekend && (
-                    <div style={{ marginTop: 3 }}>
-                      <span style={{
-                        display:      'inline-block',
-                        width:        6,
-                        height:       6,
-                        borderRadius: '50%',
-                        background:   '#F59E0B',
-                      }} />
-                    </div>
-                  )}
-                </td>
+                  </td>
 
-                {/* 데이터 셀 */}
-                {columnGroups.map((group, gi) => {
-                  const isTotal = group.id === 'total'
-                  const isLast  = gi === totalGroups - 1
+                  {/* 데이터 셀 */}
+                  {columnGroups.map((group, gi) => {
+                    const isTotal = group.id === 'total'
+                    const isLast  = gi === totalGroups - 1
 
-                  if (isTotal) {
-                    // Total always uses all codes — filter only hides segment columns
-                    const sv          = calcFromData(row, schema.allSegmentationCodes)
-                    const rightBorder = isLast ? BORDER : GROUP_BORDER
+                    if (isTotal) {
+                      const sv          = calcFromData(row, schema.allSegmentationCodes)
+                      const rightBorder = isLast ? BORDER : GROUP_BORDER
 
-                    if (sv === null) {
+                      if (sv === null) {
+                        return (
+                          <Fragment key={group.id}>
+                            {([0, 1, 2, 3] as const).map(i => (
+                              <td key={i} style={{ ...tdBase, borderBottom: fcBtm, background: TOTAL_BG, textAlign: 'right', color: MUTED, fontWeight: 600, borderRight: i === 3 ? rightBorder : BORDER }}>-</td>
+                            ))}
+                          </Fragment>
+                        )
+                      }
+
                       return (
                         <Fragment key={group.id}>
-                          {([0, 1, 2, 3] as const).map(i => (
-                            <td key={i} style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', color: MUTED, fontWeight: 600, borderRight: i === 3 ? rightBorder : BORDER }}>-</td>
-                          ))}
+                          <td style={{ ...tdBase, borderBottom: fcBtm, background: TOTAL_BG, textAlign: 'right', fontWeight: 600, borderRight: BORDER }}>
+                            <span style={{ color: TEXT_SEC }}>{fmtOcc(sv.rn, schema.roomCount)}</span>
+                            {row.has_capped && (
+                              <span
+                                title="호텔 총 객실 수에 도달했습니다"
+                                style={{ marginLeft: 4, color: WARNING, fontSize: '10px', cursor: 'default' }}
+                              >
+                                ⚠
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ ...tdBase, borderBottom: fcBtm, background: TOTAL_BG, textAlign: 'right', color: textCol, fontWeight: 600, borderRight: BORDER }}>
+                            {fmtRn(sv.rn)}
+                          </td>
+                          <td style={{ ...tdBase, borderBottom: fcBtm, background: TOTAL_BG, textAlign: 'right', color: sv.adr === 0 ? MUTED : textCol, fontWeight: 600, borderRight: BORDER }}>
+                            {fmtAdr(sv.adr)}
+                          </td>
+                          <td style={{ ...tdBase, borderBottom: fcBtm, background: TOTAL_BG, textAlign: 'right', color: sv.rev === 0 ? MUTED : textCol, fontWeight: 600, borderRight: rightBorder }}>
+                            {fmtRev(sv.rev)}
+                          </td>
                         </Fragment>
                       )
                     }
 
-                    return (
-                      <Fragment key={group.id}>
-                        {/* OCC% — 맨 앞 */}
-                        <td style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', fontWeight: 600, borderRight: BORDER }}>
-                          <span style={{ color: TEXT_SEC }}>{fmtOcc(sv.rn, schema.roomCount)}</span>
-                          {row.has_capped && (
-                            <span
-                              title="호텔 총 객실 수에 도달했습니다"
-                              style={{ marginLeft: 4, color: WARNING, fontSize: '10px', cursor: 'default' }}
-                            >
-                              ⚠
-                            </span>
-                          )}
-                        </td>
-                        {/* RN */}
-                        <td style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', color: textCol, fontWeight: 600, borderRight: BORDER }}>
-                          {fmtRn(sv.rn)}
-                        </td>
-                        {/* ADR */}
-                        <td style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', color: sv.adr === 0 ? MUTED : textCol, fontWeight: 600, borderRight: BORDER }}>
-                          {fmtAdr(sv.adr)}
-                        </td>
-                        {/* REV */}
-                        <td style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', color: sv.rev === 0 ? MUTED : textCol, fontWeight: 600, borderRight: rightBorder }}>
-                          {fmtRev(sv.rev)}
-                        </td>
-                      </Fragment>
-                    )
-                  }
+                    return group.subCols.map((col, ci) => {
+                      const rightBorder = subColRightBorder(gi, totalGroups, ci, group.subCols.length, col.isSummary)
+                      const cellBg      = col.isSummary ? SUM_BG : rowBg
+                      const fw          = col.isSummary ? 500 : 400
+                      const sv          = calcFromData(row, col.segCodes)
 
-                  return group.subCols.map((col, ci) => {
-                    const rightBorder = subColRightBorder(gi, totalGroups, ci, group.subCols.length, col.isSummary)
-                    const cellBg      = col.isSummary ? SUM_BG : rowBg
-                    const fw          = col.isSummary ? 500 : 400
-                    const sv          = calcFromData(row, col.segCodes)
+                      if (sv === null) {
+                        return (
+                          <Fragment key={col.id}>
+                            <td style={{ ...tdBase, borderBottom: fcBtm, background: cellBg, textAlign: 'right', color: MUTED, fontWeight: fw, borderRight: BORDER }}>-</td>
+                            <td style={{ ...tdBase, borderBottom: fcBtm, background: cellBg, textAlign: 'right', color: MUTED, fontWeight: fw, borderRight: BORDER }}>-</td>
+                            <td style={{ ...tdBase, borderBottom: fcBtm, background: cellBg, textAlign: 'right', color: MUTED, fontWeight: fw, borderRight: rightBorder }}>-</td>
+                          </Fragment>
+                        )
+                      }
 
-                    if (sv === null) {
                       return (
                         <Fragment key={col.id}>
-                          <td style={{ ...tdBase, background: cellBg, textAlign: 'right', color: MUTED, fontWeight: fw, borderRight: BORDER }}>-</td>
-                          <td style={{ ...tdBase, background: cellBg, textAlign: 'right', color: MUTED, fontWeight: fw, borderRight: BORDER }}>-</td>
-                          <td style={{ ...tdBase, background: cellBg, textAlign: 'right', color: MUTED, fontWeight: fw, borderRight: rightBorder }}>-</td>
+                          <td style={{ ...tdBase, borderBottom: fcBtm, background: cellBg, textAlign: 'right', color: textCol, fontWeight: fw, borderRight: BORDER }}>
+                            {fmtRn(sv.rn)}
+                          </td>
+                          <td style={{ ...tdBase, borderBottom: fcBtm, background: cellBg, textAlign: 'right', color: sv.adr === 0 ? MUTED : textCol, fontWeight: fw, borderRight: BORDER }}>
+                            {fmtAdr(sv.adr)}
+                          </td>
+                          <td style={{ ...tdBase, borderBottom: fcBtm, background: cellBg, textAlign: 'right', color: sv.rev === 0 ? MUTED : textCol, fontWeight: fw, borderRight: rightBorder }}>
+                            {fmtRev(sv.rev)}
+                          </td>
                         </Fragment>
                       )
-                    }
+                    })
+                  })}
+                </tr>
 
-                    return (
-                      <Fragment key={col.id}>
-                        <td style={{ ...tdBase, background: cellBg, textAlign: 'right', color: textCol, fontWeight: fw, borderRight: BORDER }}>
-                          {fmtRn(sv.rn)}
-                        </td>
-                        <td style={{ ...tdBase, background: cellBg, textAlign: 'right', color: sv.adr === 0 ? MUTED : textCol, fontWeight: fw, borderRight: BORDER }}>
-                          {fmtAdr(sv.adr)}
-                        </td>
-                        <td style={{ ...tdBase, background: cellBg, textAlign: 'right', color: sv.rev === 0 ? MUTED : textCol, fontWeight: fw, borderRight: rightBorder }}>
-                          {fmtRev(sv.rev)}
-                        </td>
-                      </Fragment>
-                    )
-                  })
-                })}
-              </tr>
+                {/* ── OTB 행 (펼침 시) ── */}
+                {isExpanded && (
+                  <tr>
+                    {/* 날짜 셀 (sticky) */}
+                    <td
+                      style={{
+                        ...tdBase,
+                        fontSize:     '11px',
+                        background:   OTB_BG,
+                        position:     'sticky',
+                        left:         0,
+                        zIndex:       1,
+                        color:        TEXT_SEC,
+                        borderRight:  GROUP_BORDER,
+                        borderBottom: GROUP_BORDER,
+                      }}
+                    >
+                      <div style={{ paddingLeft: 14 }}>└ OTB</div>
+                    </td>
+
+                    {/* OTB 데이터 셀 */}
+                    {columnGroups.map((group, gi) => {
+                      const isTotal = group.id === 'total'
+                      const isLast  = gi === totalGroups - 1
+
+                      if (isTotal) {
+                        const sv          = calcOtbFromData(row, schema.allSegmentationCodes)
+                        const rightBorder = isLast ? BORDER : GROUP_BORDER
+
+                        if (sv === null) {
+                          return (
+                            <Fragment key={group.id}>
+                              {([0, 1, 2, 3] as const).map(i => (
+                                <td key={i} style={{ ...tdBase, fontSize: '11px', background: TOTAL_BG, textAlign: 'right', color: MUTED, fontWeight: 500, borderRight: i === 3 ? rightBorder : BORDER, borderBottom: GROUP_BORDER }}>-</td>
+                              ))}
+                            </Fragment>
+                          )
+                        }
+
+                        return (
+                          <Fragment key={group.id}>
+                            <td style={{ ...tdBase, fontSize: '11px', background: TOTAL_BG, textAlign: 'right', fontWeight: 500, borderRight: BORDER, borderBottom: GROUP_BORDER }}>
+                              <span style={{ color: TEXT_SEC }}>{fmtOcc(sv.rn, schema.roomCount)}</span>
+                            </td>
+                            <td style={{ ...tdBase, fontSize: '11px', background: TOTAL_BG, textAlign: 'right', color: TEXT_SEC, fontWeight: 500, borderRight: BORDER, borderBottom: GROUP_BORDER }}>
+                              {fmtRn(sv.rn)}
+                            </td>
+                            <td style={{ ...tdBase, fontSize: '11px', background: TOTAL_BG, textAlign: 'right', color: sv.adr === 0 ? MUTED : TEXT_SEC, fontWeight: 500, borderRight: BORDER, borderBottom: GROUP_BORDER }}>
+                              {fmtAdr(sv.adr)}
+                            </td>
+                            <td style={{ ...tdBase, fontSize: '11px', background: TOTAL_BG, textAlign: 'right', color: sv.rev === 0 ? MUTED : TEXT_SEC, fontWeight: 500, borderRight: rightBorder, borderBottom: GROUP_BORDER }}>
+                              {fmtRev(sv.rev)}
+                            </td>
+                          </Fragment>
+                        )
+                      }
+
+                      return group.subCols.map((col, ci) => {
+                        const rightBorder = subColRightBorder(gi, totalGroups, ci, group.subCols.length, col.isSummary)
+                        const cellBg      = col.isSummary ? SUM_BG : OTB_BG
+                        const sv          = calcOtbFromData(row, col.segCodes)
+
+                        if (sv === null) {
+                          return (
+                            <Fragment key={col.id}>
+                              <td style={{ ...tdBase, fontSize: '11px', background: cellBg, textAlign: 'right', color: MUTED, fontWeight: 400, borderRight: BORDER, borderBottom: GROUP_BORDER }}>-</td>
+                              <td style={{ ...tdBase, fontSize: '11px', background: cellBg, textAlign: 'right', color: MUTED, fontWeight: 400, borderRight: BORDER, borderBottom: GROUP_BORDER }}>-</td>
+                              <td style={{ ...tdBase, fontSize: '11px', background: cellBg, textAlign: 'right', color: MUTED, fontWeight: 400, borderRight: rightBorder, borderBottom: GROUP_BORDER }}>-</td>
+                            </Fragment>
+                          )
+                        }
+
+                        return (
+                          <Fragment key={col.id}>
+                            <td style={{ ...tdBase, fontSize: '11px', background: cellBg, textAlign: 'right', color: TEXT_SEC, fontWeight: 400, borderRight: BORDER, borderBottom: GROUP_BORDER }}>
+                              {fmtRn(sv.rn)}
+                            </td>
+                            <td style={{ ...tdBase, fontSize: '11px', background: cellBg, textAlign: 'right', color: sv.adr === 0 ? MUTED : TEXT_SEC, fontWeight: 400, borderRight: BORDER, borderBottom: GROUP_BORDER }}>
+                              {fmtAdr(sv.adr)}
+                            </td>
+                            <td style={{ ...tdBase, fontSize: '11px', background: cellBg, textAlign: 'right', color: sv.rev === 0 ? MUTED : TEXT_SEC, fontWeight: 400, borderRight: rightBorder, borderBottom: GROUP_BORDER }}>
+                              {fmtRev(sv.rev)}
+                            </td>
+                          </Fragment>
+                        )
+                      })
+                    })}
+                  </tr>
+                )}
+              </Fragment>
             )
           })}
         </tbody>

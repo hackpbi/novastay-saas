@@ -46,6 +46,7 @@ export function transformRpcToTableData(rows: ForecastRpcRow[]): ForecastDayData
       adr:       row.forecast_adr ?? 0,
       rev:       row.forecast_revenue,
       otb_rn:    row.current_otb_rn,
+      otb_adr:   row.current_otb_rn > 0 ? row.current_otb_revenue / row.current_otb_rn : 0,
       otb_rev:   row.current_otb_revenue,
       is_actual: row.is_actual,
       capped:    row.capped,

@@ -80,6 +80,7 @@ export type ForecastSegValue = {
   adr:       number
   rev:       number
   otb_rn:    number
+  otb_adr:   number
   otb_rev:   number
   is_actual: boolean
   capped:    boolean
