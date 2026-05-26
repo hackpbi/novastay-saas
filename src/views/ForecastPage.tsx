@@ -1,12 +1,15 @@
 'use client'
 
+import { useMemo } from 'react'
 import ForecastTable from '@/components/forecast/ForecastTable'
-import { FORECAST_MAY_2026 } from '@/lib/forecast/dummy'
+import { getDummyForecast } from '@/lib/forecast/dummy'
 
 export default function ForecastPage() {
+  const data = useMemo(() => getDummyForecast(), [])
+
   return (
     <div className="space-y-4 animate-fade-in">
-      {/* Page header */}
+      {/* 페이지 헤더 */}
       <div>
         <h1
           className="text-2xl font-semibold tracking-tight"
@@ -19,17 +22,16 @@ export default function ForecastPage() {
         </p>
       </div>
 
-      {/* Table card */}
+      {/* 표 카드 */}
       <div
-        className="rounded-xl"
+        className="rounded-xl overflow-hidden"
         style={{
-          border: '1px solid var(--color-border-default)',
+          border:     '1px solid var(--color-border-default)',
           background: 'var(--color-bg-surface)',
-          boxShadow: 'var(--shadow-card)',
-          overflow: 'clip',
+          boxShadow:  'var(--shadow-card)',
         }}
       >
-        <ForecastTable data={FORECAST_MAY_2026} />
+        <ForecastTable data={data} />
       </div>
     </div>
   )

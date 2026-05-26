@@ -1,11 +1,6 @@
-export type Segment = {
-  id: string
-  name: string
-  isBold: boolean
-  orderIndex: number
-}
+import type { ForecastSegment } from './types'
 
-export const SEGMENTS: Segment[] = [
+export const FORECAST_SEGMENTS: ForecastSegment[] = [
   { id: 'corpfit',  name: 'Corp. FIT', isBold: false, orderIndex: 0 },
   { id: 'direct',   name: 'Direct',    isBold: false, orderIndex: 1 },
   { id: 'ta',       name: 'TA',        isBold: false, orderIndex: 2 },

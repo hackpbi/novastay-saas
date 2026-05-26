@@ -1,4 +1,4 @@
-import type { SegmentValue } from './dummy'
+import type { SegmentValue } from './types'
 
 export function calcTotal(segments: Record<string, SegmentValue>): SegmentValue {
   let totalRn = 0

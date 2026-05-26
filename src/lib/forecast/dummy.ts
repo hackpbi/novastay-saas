@@ -1,30 +1,30 @@
-import { SEGMENTS } from './segments'
-
-export type SegmentValue = {
-  rn: number
-  adr: number
-  rev: number
-}
-
-export type DailyForecast = {
-  business_date: string
-  day_label: string
-  segments: Record<string, SegmentValue>
-}
+import { FORECAST_SEGMENTS } from './segments'
+import type { DailyForecast, SegmentValue } from './types'
 
 const DAY_KO = ['일', '월', '화', '수', '목', '금', '토'] as const
 
-const FREE_SEGMENTS = new Set(['employee', 'comp', 'houseuse'])
+// 2026년 5월 공휴일
+const HOLIDAYS = new Set(['2026-05-05']) // 어린이날
 
-const BASE_CONFIG: Record<string, { baseRn: number; baseAdr: number }> = {
-  corpfit:  { baseRn: 25, baseAdr: 198 },
-  direct:   { baseRn: 18, baseAdr: 182 },
-  ta:       { baseRn: 12, baseAdr: 162 },
-  employee: { baseRn: 3,  baseAdr: 0 },
-  member:   { baseRn: 6,  baseAdr: 138 },
-  group:    { baseRn: 10, baseAdr: 147 },
-  comp:     { baseRn: 2,  baseAdr: 0 },
-  houseuse: { baseRn: 1,  baseAdr: 0 },
+type SegCfg = {
+  weekdayRnMin: number
+  weekdayRnMax: number
+  weekendRnMin: number
+  weekendRnMax: number
+  adrMin: number  // 원
+  adrMax: number  // 원
+  isFree: boolean
+}
+
+const SEG_CONFIG: Record<string, SegCfg> = {
+  corpfit:  { weekdayRnMin: 25, weekdayRnMax: 30, weekendRnMin: 35, weekendRnMax: 40, adrMin: 180000, adrMax: 210000, isFree: false },
+  direct:   { weekdayRnMin: 18, weekdayRnMax: 25, weekendRnMin: 25, weekendRnMax: 30, adrMin: 175000, adrMax: 205000, isFree: false },
+  ta:       { weekdayRnMin: 15, weekdayRnMax: 20, weekendRnMin: 20, weekendRnMax: 25, adrMin: 165000, adrMax: 190000, isFree: false },
+  employee: { weekdayRnMin: 1,  weekdayRnMax: 3,  weekendRnMin: 1,  weekendRnMax: 3,  adrMin: 0,      adrMax: 0,      isFree: true  },
+  member:   { weekdayRnMin: 5,  weekdayRnMax: 10, weekendRnMin: 5,  weekendRnMax: 10, adrMin: 165000, adrMax: 175000, isFree: false },
+  group:    { weekdayRnMin: 10, weekdayRnMax: 20, weekendRnMin: 5,  weekendRnMax: 15, adrMin: 130000, adrMax: 160000, isFree: false },
+  comp:     { weekdayRnMin: 1,  weekdayRnMax: 3,  weekendRnMin: 1,  weekendRnMax: 3,  adrMin: 0,      adrMax: 0,      isFree: true  },
+  houseuse: { weekdayRnMin: 0,  weekdayRnMax: 2,  weekendRnMin: 0,  weekendRnMax: 2,  adrMin: 0,      adrMax: 0,      isFree: true  },
 }
 
 function seeded(n: number): number {
@@ -32,23 +32,31 @@ function seeded(n: number): number {
   return s / 0xffffffff
 }
 
-function generateDayData(dayIndex: number, dayOfWeek: number): Record<string, SegmentValue> {
+function randBetween(min: number, max: number, t: number): number {
+  return Math.round(min + (max - min) * t)
+}
+
+function buildDaySegments(
+  dayIndex: number,
+  dayOfWeek: number,
+  isHoliday: boolean,
+): Record<string, SegmentValue> {
   const isWeekend = dayOfWeek === 5 || dayOfWeek === 6
-  const wf = isWeekend ? 1.3 : 1.0
   const result: Record<string, SegmentValue> = {}
 
-  SEGMENTS.forEach((seg, si) => {
-    const cfg = BASE_CONFIG[seg.id]
-    const seed = dayIndex * 17 + si
+  FORECAST_SEGMENTS.forEach((seg, si) => {
+    const cfg = SEG_CONFIG[seg.id]
+    const seed = dayIndex * 13 + si
 
-    if (FREE_SEGMENTS.has(seg.id)) {
-      const rn = Math.max(1, Math.round(cfg.baseRn * (0.9 + seeded(seed + 100) * 0.4)))
+    if (cfg.isFree) {
+      const rn = randBetween(cfg.weekdayRnMin, cfg.weekdayRnMax, seeded(seed))
       result[seg.id] = { rn, adr: 0, rev: 0 }
     } else {
-      const rnVar = 0.88 + seeded(seed) * 0.24
-      const adrVar = 0.94 + seeded(seed + 200) * 0.12
-      const rn = Math.max(1, Math.round(cfg.baseRn * wf * rnVar))
-      const adr = Math.round(cfg.baseAdr * adrVar)
+      const rnMin = isWeekend ? cfg.weekendRnMin : cfg.weekdayRnMin
+      const rnMax = isWeekend ? cfg.weekendRnMax : cfg.weekdayRnMax
+      const baseRn = randBetween(rnMin, rnMax, seeded(seed))
+      const rn = isHoliday ? Math.round(baseRn * 1.5) : baseRn
+      const adr = randBetween(cfg.adrMin, cfg.adrMax, seeded(seed + 100))
       result[seg.id] = { rn, adr, rev: rn * adr }
     }
   })
@@ -56,14 +64,17 @@ function generateDayData(dayIndex: number, dayOfWeek: number): Record<string, Se
   return result
 }
 
-export const FORECAST_MAY_2026: DailyForecast[] = Array.from({ length: 31 }, (_, i) => {
-  const date = new Date(2026, 4, i + 1)
-  const dow = date.getDay()
-  const business_date = `2026-05-${String(i + 1).padStart(2, '0')}`
-  const day_label = `5/${i + 1} (${DAY_KO[dow]})`
-  return {
-    business_date,
-    day_label,
-    segments: generateDayData(i, dow),
-  }
-})
+export function getDummyForecast(): DailyForecast[] {
+  return Array.from({ length: 31 }, (_, i) => {
+    const date = new Date(2026, 4, i + 1) // May 2026 (month is 0-indexed)
+    const dow = date.getDay()
+    const business_date = `2026-05-${String(i + 1).padStart(2, '0')}`
+    const day_label = `5/${i + 1} (${DAY_KO[dow]})`
+
+    return {
+      business_date,
+      day_label,
+      segments: buildDaySegments(i, dow, HOLIDAYS.has(business_date)),
+    }
+  })
+}
