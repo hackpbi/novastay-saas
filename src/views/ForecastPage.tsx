@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import ForecastTable from '@/components/forecast/ForecastTable'
 import ForecastHeader from '@/components/forecast/ForecastHeader'
 import SegmentFilter from '@/components/forecast/SegmentFilter'
+import SummaryCards from '@/components/forecast/SummaryCards'
 import { fetchForecastSchema } from '@/lib/forecast/schema'
 import { fetchBaselineForecast, transformRpcToTableData } from '@/lib/forecast/baseline'
 import { useHotel } from '@/contexts/HotelContext'
@@ -108,6 +109,11 @@ export default function ForecastPage() {
         onNext={goNext}
         onToday={goToday}
       />
+
+      {/* 상단 요약 카드 */}
+      {schema && (
+        <SummaryCards schema={schema} data={data} />
+      )}
 
       {/* 세그먼트 필터 */}
       {schema && schema.nodes.length > 0 && (

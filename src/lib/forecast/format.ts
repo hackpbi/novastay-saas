@@ -16,3 +16,21 @@ export function fmtOcc(rn: number, roomCount: number): string {
   if (roomCount === 0) return '-'
   return ((rn / roomCount) * 100).toFixed(1) + '%'
 }
+
+// ── Card summary helpers ───────────────────────────────────────────────────────
+
+export function fmtMillion(won: number): string {
+  return '₩' + (won / 1_000_000).toFixed(1) + 'M'
+}
+
+export function fmtThousand(won: number): string {
+  return '₩' + Math.round(won / 1000).toLocaleString() + 'K'
+}
+
+export function fmtInt(n: number): string {
+  return Math.round(n).toLocaleString()
+}
+
+export function fmtPct(n: number): string {
+  return n.toFixed(1) + '%'
+}
