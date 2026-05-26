@@ -10,6 +10,7 @@ interface ForecastTableProps {
   data:            ForecastDayData[]
   selectedNodeIds: Set<string>
   calendar?:       CalendarMap
+  threshold?:      number   // auto-expand when any seg's otb_rn >= rn + threshold
 }
 
 const BORDER       = '0.5px solid var(--color-border-default)'
@@ -83,11 +84,19 @@ function calcOtbFromData(
   return { rn, adr: rn > 0 ? Math.round(rev / rn) : 0, rev }
 }
 
-export default function ForecastTable({ schema, data, selectedNodeIds, calendar }: ForecastTableProps) {
-  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set())
+function shouldAutoExpand(daily: ForecastDayData, threshold: number): boolean {
+  for (const code in daily.values) {
+    const v = daily.values[code]
+    if (v.otb_rn >= v.rn + threshold) return true
+  }
+  return false
+}
+
+export default function ForecastTable({ schema, data, selectedNodeIds, calendar, threshold = 0 }: ForecastTableProps) {
+  const [manualExpandedDates, setManualExpandedDates] = useState<Set<string>>(new Set())
 
   function toggleExpand(date: string) {
-    setExpandedDates(prev => {
+    setManualExpandedDates(prev => {
       const next = new Set(prev)
       if (next.has(date)) next.delete(date)
       else next.add(date)
@@ -257,7 +266,7 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar 
             const _evt           = cal?.event?.trim()
             const hasEvent       = !!_evt && _evt.toLowerCase() !== 'null'
             const isWeekend      = !hasEvent && cal?.rev_dow === '토'
-            const isExpanded     = expandedDates.has(row.business_date)
+            const isExpanded     = manualExpandedDates.has(row.business_date) || shouldAutoExpand(row, threshold)
             const fcBtm          = isExpanded ? DASH_BORDER : BORDER
 
             return (

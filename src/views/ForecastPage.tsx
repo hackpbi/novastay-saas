@@ -97,6 +97,19 @@ export default function ForecastPage() {
       .finally(() => setDataLoading(false))
   }, [hotelId, currentMonth])
 
+  // ── 자동 펼침 임계값 ──────────────────────────────────────────────────────────
+  const [threshold, setThreshold] = useState(3)
+
+  const autoCount = useMemo(() =>
+    data.filter(d => {
+      for (const code in d.values) {
+        const v = d.values[code]
+        if (v.otb_rn >= v.rn + threshold) return true
+      }
+      return false
+    }).length,
+  [data, threshold])
+
   // ── Calendar fetch (월 변경 시마다) ─────────────────────────────────────────
   const [calendar, setCalendar] = useState<CalendarMap>(new Map())
 
@@ -126,15 +139,47 @@ export default function ForecastPage() {
         <SummaryCards schema={schema} data={data} />
       )}
 
-      {/* 세그먼트 필터 */}
+      {/* 세그먼트 필터 + 임계값 슬라이더 */}
       {schema && schema.nodes.length > 0 && (
-        <SegmentFilter
-          nodes={schema.nodes}
-          selectedIds={selectedNodeIds}
-          onToggle={toggleNode}
-          onAll={selectAll}
-          onReset={selectNone}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <SegmentFilter
+            nodes={schema.nodes}
+            selectedIds={selectedNodeIds}
+            onToggle={toggleNode}
+            onAll={selectAll}
+            onReset={selectNone}
+          />
+
+          {/* 자동 펼침 임계값 슬라이더 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 12, color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+              자동 펼침
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={10}
+              step={1}
+              value={threshold}
+              onChange={e => setThreshold(parseInt(e.target.value))}
+              style={{
+                width:       110,
+                accentColor: 'var(--color-accent-primary, #00E5A0)',
+                cursor:      'pointer',
+              }}
+            />
+            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+              OTB ≥ FC +{' '}
+              <strong style={{ color: 'var(--color-text-primary)' }}>{threshold}</strong>
+              실
+              {autoCount > 0 && (
+                <span style={{ marginLeft: 6, color: 'var(--color-warning, #F5A623)', fontWeight: 600 }}>
+                  ({autoCount}일)
+                </span>
+              )}
+            </span>
+          </div>
+        </div>
       )}
 
       {/* 0개 선택 안내 */}
@@ -181,6 +226,7 @@ export default function ForecastPage() {
               data={data}
               selectedNodeIds={selectedNodeIds}
               calendar={calendar}
+              threshold={threshold}
             />
           )}
         </div>
