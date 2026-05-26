@@ -1,13 +1,15 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface ForecastHeaderProps {
-  year:    number
-  month:   number
-  onPrev:  () => void
-  onNext:  () => void
-  onToday: () => void
+  year:      number
+  month:     number
+  onPrev:    () => void
+  onNext:    () => void
+  onToday:   () => void
+  children?: ReactNode
 }
 
 const btnBase: React.CSSProperties = {
@@ -25,52 +27,51 @@ const btnBase: React.CSSProperties = {
   transition:     'background 0.15s, color 0.15s',
 }
 
-export default function ForecastHeader({ year, month, onPrev, onNext, onToday }: ForecastHeaderProps) {
+export default function ForecastHeader({ year, month, onPrev, onNext, onToday, children }: ForecastHeaderProps) {
   return (
-    <div className="flex items-center gap-3">
-      <div>
-        <h1
-          className="text-2xl font-semibold tracking-tight"
-          style={{ color: 'var(--color-text-primary)' }}
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+      {/* 좌측: 월 selector */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onPrev}
+          style={btnBase}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-secondary)' }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-surface)' }}
+          aria-label="이전 월"
         >
-          일자별 세그먼트 전망
-        </h1>
+          <ChevronLeft size={14} />
+        </button>
 
-        <div className="flex items-center gap-2 mt-1">
-          <button
-            onClick={onPrev}
-            style={btnBase}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-secondary)' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-surface)' }}
-            aria-label="이전 월"
-          >
-            <ChevronLeft size={14} />
-          </button>
+        <span className="text-sm font-medium min-w-[80px] text-center" style={{ color: 'var(--color-text-primary)' }}>
+          {year}년 {month}월
+        </span>
 
-          <span className="text-sm font-medium min-w-[80px] text-center" style={{ color: 'var(--color-text-primary)' }}>
-            {year}년 {month}월
-          </span>
+        <button
+          onClick={onNext}
+          style={btnBase}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-secondary)' }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-surface)' }}
+          aria-label="다음 월"
+        >
+          <ChevronRight size={14} />
+        </button>
 
-          <button
-            onClick={onNext}
-            style={btnBase}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-secondary)' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-surface)' }}
-            aria-label="다음 월"
-          >
-            <ChevronRight size={14} />
-          </button>
-
-          <button
-            onClick={onToday}
-            style={{ ...btnBase, padding: '4px 10px' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-secondary)' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-surface)' }}
-          >
-            오늘
-          </button>
-        </div>
+        <button
+          onClick={onToday}
+          style={{ ...btnBase, padding: '4px 10px' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-secondary)' }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-surface)' }}
+        >
+          오늘
+        </button>
       </div>
+
+      {/* 우측: 세그먼트 필터 + 자동 펼침 슬라이더 */}
+      {children && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          {children}
+        </div>
+      )}
     </div>
   )
 }

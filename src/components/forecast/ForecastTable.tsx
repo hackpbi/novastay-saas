@@ -159,7 +159,7 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
   }, [data, schema, allGroups])
 
   return (
-    <div style={{ overflowX: 'auto' }}>
+    <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 320px)', minHeight: 200 }}>
       <table
         style={{
           borderCollapse: 'separate',

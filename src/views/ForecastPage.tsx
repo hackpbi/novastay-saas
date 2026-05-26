@@ -45,27 +45,21 @@ export default function ForecastPage() {
   }, [])
 
   // ── Schema fetch (호텔 변경 시에만) ─────────────────────────────────────────
-  const [schema,       setSchema]       = useState<ForecastSchema | null>(null)
-  const [schemaError,  setSchemaError]  = useState<string | null>(null)
+  const [schema,      setSchema]      = useState<ForecastSchema | null>(null)
+  const [schemaError, setSchemaError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!hotelId) return
     fetchForecastSchema(hotelId)
-      .then(s => {
-        setSchema(s)
-        setSchemaError(null)
-      })
+      .then(s => { setSchema(s); setSchemaError(null) })
       .catch(e => setSchemaError(String(e)))
   }, [hotelId])
 
   // ── Segment filter state ─────────────────────────────────────────────────────
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set())
 
-  // 스키마 로드 시 전체 선택으로 초기화
   useEffect(() => {
-    if (schema) {
-      setSelectedNodeIds(new Set(schema.nodes.map(n => n.id)))
-    }
+    if (schema) setSelectedNodeIds(new Set(schema.nodes.map(n => n.id)))
   }, [schema])
 
   const toggleNode = useCallback((id: string) => {
@@ -82,9 +76,9 @@ export default function ForecastPage() {
   const selectNone = useCallback(() => setSelectedNodeIds(new Set()), [])
 
   // ── Baseline fetch (월 변경 시마다) ─────────────────────────────────────────
-  const [data,         setData]         = useState<ForecastDayData[]>([])
-  const [dataLoading,  setDataLoading]  = useState(false)
-  const [dataError,    setDataError]    = useState<string | null>(null)
+  const [data,        setData]        = useState<ForecastDayData[]>([])
+  const [dataLoading, setDataLoading] = useState(false)
+  const [dataError,   setDataError]   = useState<string | null>(null)
 
   useEffect(() => {
     if (!hotelId) return
@@ -124,63 +118,83 @@ export default function ForecastPage() {
   const error = schemaError ?? dataError
 
   return (
-    <div className="space-y-3 animate-fade-in">
-      {/* 페이지 헤더 + 월 selector */}
-      <ForecastHeader
-        year={currentMonth.year}
-        month={currentMonth.month}
-        onPrev={goPrev}
-        onNext={goNext}
-        onToday={goToday}
-      />
+    <div className="animate-fade-in">
 
-      {/* 상단 요약 카드 */}
-      {schema && (
-        <SummaryCards schema={schema} data={data} />
-      )}
+      {/* 페이지 제목 (일반 — non-sticky) */}
+      <h1
+        className="text-2xl font-semibold tracking-tight mb-3"
+        style={{ color: 'var(--color-text-primary)' }}
+      >
+        일자별 세그먼트 전망
+      </h1>
 
-      {/* 세그먼트 필터 + 임계값 슬라이더 */}
-      {schema && schema.nodes.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <SegmentFilter
-            nodes={schema.nodes}
-            selectedIds={selectedNodeIds}
-            onToggle={toggleNode}
-            onAll={selectAll}
-            onReset={selectNone}
-          />
-
-          {/* 자동 펼침 임계값 슬라이더 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 12, color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
-              자동 펼침
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={10}
-              step={1}
-              value={threshold}
-              onChange={e => setThreshold(parseInt(e.target.value))}
-              style={{
-                width:       110,
-                accentColor: 'var(--color-accent-primary, #00E5A0)',
-                cursor:      'pointer',
-              }}
-            />
-            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
-              OTB ≥ FC +{' '}
-              <strong style={{ color: 'var(--color-text-primary)' }}>{threshold}</strong>
-              실
-              {autoCount > 0 && (
-                <span style={{ marginLeft: 6, color: 'var(--color-warning, #F5A623)', fontWeight: 600 }}>
-                  ({autoCount}일)
+      {/* ── 상단 sticky 영역 ── */}
+      <div
+        style={{
+          position:      'sticky',
+          top:           0,
+          zIndex:        10,
+          background:    'var(--color-bg-primary)',
+          paddingBottom: 12,
+          marginBottom:  12,
+          boxShadow:     '0 2px 4px rgba(0,0,0,0.05)',
+        }}
+      >
+        {/* 월 selector + 컨트롤 (한 줄) */}
+        <ForecastHeader
+          year={currentMonth.year}
+          month={currentMonth.month}
+          onPrev={goPrev}
+          onNext={goNext}
+          onToday={goToday}
+        >
+          {schema && schema.nodes.length > 0 && (
+            <>
+              <SegmentFilter
+                nodes={schema.nodes}
+                selectedIds={selectedNodeIds}
+                onToggle={toggleNode}
+                onAll={selectAll}
+                onReset={selectNone}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12, color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+                  자동 펼침
                 </span>
-              )}
-            </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={10}
+                  step={1}
+                  value={threshold}
+                  onChange={e => setThreshold(parseInt(e.target.value))}
+                  style={{
+                    width:       110,
+                    accentColor: 'var(--color-accent-primary, #00E5A0)',
+                    cursor:      'pointer',
+                  }}
+                />
+                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+                  OTB ≥ FC +{' '}
+                  <strong style={{ color: 'var(--color-text-primary)' }}>{threshold}</strong>실
+                  {autoCount > 0 && (
+                    <span style={{ marginLeft: 6, color: 'var(--color-warning, #F5A623)', fontWeight: 600 }}>
+                      ({autoCount}일)
+                    </span>
+                  )}
+                </span>
+              </div>
+            </>
+          )}
+        </ForecastHeader>
+
+        {/* 상단 요약 카드 */}
+        {schema && (
+          <div style={{ marginTop: 12 }}>
+            <SummaryCards schema={schema} data={data} />
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* 0개 선택 안내 */}
       {schema && selectedNodeIds.size === 0 && (
@@ -197,7 +211,7 @@ export default function ForecastPage() {
             border:     '1px solid var(--color-border-default)',
             background: 'var(--color-bg-surface)',
             boxShadow:  'var(--shadow-card)',
-            overflow:   'clip',
+            overflow:   'hidden',
             opacity:    dataLoading ? 0.5 : 1,
             transition: 'opacity 0.2s',
           }}
@@ -234,7 +248,7 @@ export default function ForecastPage() {
 
       {/* 에러 (별도 표시) */}
       {error && schema && (
-        <div className="text-xs text-center" style={{ color: 'var(--color-text-danger, #ef4444)' }}>
+        <div className="text-xs text-center mt-2" style={{ color: 'var(--color-text-danger, #ef4444)' }}>
           {error}
         </div>
       )}
