@@ -89,7 +89,7 @@ export function buildColumnGroups(
   nodes: SchemaNode[],
   allCodes: string[],
 ): ColumnGroup[] {
-  const groups: ColumnGroup[] = nodes.map(node => {
+  const segmentGroups: ColumnGroup[] = nodes.map(node => {
     if (node.children.length > 0) {
       const subCols: SubColumn[] = [
         { id: `${node.id}-sum`, label: '(합산)', segCodes: node.segmentationCodes, isSummary: true },
@@ -120,15 +120,15 @@ export function buildColumnGroups(
     }
   })
 
-  // Total column (always last)
-  groups.push({
+  // Total column first (colSpan=4: RN + ADR + REV + OCC%)
+  const totalGroup: ColumnGroup = {
     id:            'total',
     parentLabel:   'Total',
     parentIsBold:  false,
     parentRowSpan: 2,
-    parentColSpan: 3,
+    parentColSpan: 4,
     subCols: [{ id: 'total', label: '', segCodes: allCodes, isSummary: true }],
-  })
+  }
 
-  return groups
+  return [totalGroup, ...segmentGroups]
 }

@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import ForecastTable from '@/components/forecast/ForecastTable'
-import { fetchForecastSchema, buildColumnGroups } from '@/lib/forecast/schema'
+import { fetchForecastSchema } from '@/lib/forecast/schema'
 import { getDummyForecast } from '@/lib/forecast/dummy'
 import { useHotel } from '@/contexts/HotelContext'
 import type { ForecastSchema } from '@/lib/forecast/types'
@@ -18,10 +18,6 @@ export default function ForecastPage() {
     enabled:  !!hotelId,
   })
 
-  const columnGroups = useMemo(
-    () => schema ? buildColumnGroups(schema.nodes, schema.allSegmentationCodes) : [],
-    [schema],
-  )
   const forecastData = useMemo(
     () => getDummyForecast(schema?.allSegmentationCodes ?? []),
     [schema],
@@ -70,31 +66,10 @@ export default function ForecastPage() {
           </div>
         )}
 
-        {!isLoading && !error && columnGroups.length > 0 && (
-          <ForecastTable columnGroups={columnGroups} data={forecastData} />
+        {!isLoading && !error && schema && schema.nodes.length > 0 && (
+          <ForecastTable schema={schema} data={forecastData} />
         )}
       </div>
-
-      {/* 임시 디버그 영역 (Step 1.5b에서 제거 예정) */}
-      {schema && (
-        <div
-          className="rounded-lg text-xs"
-          style={{
-            padding:    '10px 14px',
-            background: 'var(--color-bg-secondary)',
-            border:     '1px solid var(--color-border-default)',
-            color:      'var(--color-text-secondary)',
-            lineHeight: 1.7,
-          }}
-        >
-          <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--color-text-primary)' }}>
-            Schema Loaded ✅
-          </div>
-          <div>Room count: {schema.roomCount}</div>
-          <div>Top-level nodes: {schema.nodes.length}</div>
-          <div>All segmentation codes: {schema.allSegmentationCodes.join(', ')}</div>
-        </div>
-      )}
     </div>
   )
 }
