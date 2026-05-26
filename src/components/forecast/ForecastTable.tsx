@@ -33,6 +33,9 @@ const TOT_RN_L  = TOT_OCC_L + TOT_W     // 222
 const TOT_ADR_L = TOT_RN_L  + TOT_W     // 294
 const TOT_REV_L = TOT_ADR_L + TOT_W     // 366
 const HDR_H     = 35   // approximate header row height (px)
+const TOT_REV_W    = 90   // REV column wider for monthly totals ("1,240,000")
+const SEG_COL_W    = TOT_W  // segment metric column width (same as Total)
+const TOT_HDR_BORDER = '1px solid var(--color-border-default)'  // opaque 1px for Total header
 
 const thBase: React.CSSProperties = {
   borderBottom: BORDER,
@@ -165,8 +168,28 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
           borderSpacing:  0,
           borderLeft:     BORDER,
           borderTop:      BORDER,
+          tableLayout:    'fixed',
         }}
       >
+        {/* colgroup enforces exact widths so sticky left offsets are always correct */}
+        <colgroup>
+          <col style={{ width: DATE_W }} />
+          <col style={{ width: TOT_W }} />
+          <col style={{ width: TOT_W }} />
+          <col style={{ width: TOT_W }} />
+          <col style={{ width: TOT_REV_W }} />
+          {columnGroups
+            .filter(g => g.id !== 'total')
+            .flatMap(g => g.subCols)
+            .map((col, i) => (
+              <Fragment key={`seg-col-${col.id}-${i}`}>
+                <col style={{ width: SEG_COL_W }} />
+                <col style={{ width: SEG_COL_W }} />
+                <col style={{ width: SEG_COL_W }} />
+              </Fragment>
+            ))
+          }
+        </colgroup>
         <thead>
           {/* ── Row 1: parent group labels ── */}
           <tr>
@@ -178,7 +201,7 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                 position:    'sticky',
                 left:        0,
                 top:         0,
-                zIndex:      5,
+                zIndex:      6,
                 width:       DATE_W,
                 minWidth:    DATE_W,
                 fontWeight:  600,
@@ -204,8 +227,8 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                     background:  HEADER_BG,
                     position:    'sticky',
                     top:         0,
-                    zIndex:      4,
-                    ...(isTotal ? { left: TOT_OCC_L } : {}),
+                    zIndex:      isTotal ? 5 : 4,
+                    ...(isTotal ? { left: TOT_OCC_L, borderBottom: TOT_HDR_BORDER } : {}),
                   }}
                 >
                   {group.parentLabel}
@@ -269,15 +292,16 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                           textAlign:   'center',
                           fontWeight:  400,
                           color:       TEXT_SEC,
-                          width:       TOT_W,
-                          minWidth:    TOT_W,
-                          borderRight: mi === metrics.length - 1
-                            ? (isLast ? BORDER : GROUP_BORDER)
-                            : BORDER,
+                          width:        TOT_W,
+                          minWidth:     TOT_W,
+                          borderBottom: TOT_HDR_BORDER,
+                          borderRight:  mi === metrics.length - 1
+                            ? (isLast ? TOT_HDR_BORDER : GROUP_BORDER)
+                            : TOT_HDR_BORDER,
                           position:    'sticky',
                           top:         metricTop,
                           left:        TOT_LEFTS[mi],
-                          zIndex:      4,
+                          zIndex:      5,
                         }}
                       >
                         {metric}
