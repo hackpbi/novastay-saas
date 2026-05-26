@@ -232,7 +232,8 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar 
             const textCol = row.is_actual_day ? TEXT : TEXT_SEC
 
             const cal        = calendar?.get(row.business_date)
-            const hasEvent   = !!(cal?.event && cal.event.trim() !== '')
+            const _evt       = cal?.event?.trim()
+            const hasEvent   = !!_evt && _evt.toLowerCase() !== 'null'
             const isWeekend  = !hasEvent && cal?.rev_dow === '토'
 
             return (
