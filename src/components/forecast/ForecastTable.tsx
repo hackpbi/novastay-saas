@@ -28,6 +28,15 @@ const TEXT_SEC  = 'var(--color-text-secondary)'
 const MUTED     = 'var(--color-text-muted)'
 const WARNING   = 'var(--color-warning, #F5A623)'
 
+// ── Sticky geometry ──────────────────────────────────────────────────────────
+const DATE_W    = 150   // date column fixed width
+const TOT_W     = 72    // each Total sub-column width (OCC / RN / ADR / REV)
+const TOT_OCC_L = DATE_W                 // 150
+const TOT_RN_L  = TOT_OCC_L + TOT_W     // 222
+const TOT_ADR_L = TOT_RN_L  + TOT_W     // 294
+const TOT_REV_L = TOT_ADR_L + TOT_W     // 366
+const HDR_H     = 35   // approximate header row height (px)
+
 const thBase: React.CSSProperties = {
   borderBottom: BORDER,
   borderRight:  BORDER,
@@ -84,7 +93,12 @@ function calcOtbFromData(
   return { rn, adr: rn > 0 ? Math.round(rev / rn) : 0, rev }
 }
 
+function canExpand(daily: ForecastDayData): boolean {
+  return !daily.is_actual_day
+}
+
 function shouldAutoExpand(daily: ForecastDayData, threshold: number): boolean {
+  if (daily.is_actual_day) return false
   for (const code in daily.values) {
     const v = daily.values[code]
     if (v.otb_rn >= v.rn + threshold) return true
@@ -116,6 +130,10 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
   const totalGroups = columnGroups.length
   const hasSubRow   = columnGroups.some(g => g.parentRowSpan === 1)
   const rowSpanDate = hasSubRow ? 3 : 2
+  const metricTop   = hasSubRow ? HDR_H * 2 : HDR_H
+
+  // sticky left offsets for the four Total metric cells
+  const TOT_LEFTS = [TOT_OCC_L, TOT_RN_L, TOT_ADR_L, TOT_REV_L] as const
 
   return (
     <div style={{ overflowX: 'auto' }}>
@@ -137,8 +155,10 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                 textAlign:   'left',
                 position:    'sticky',
                 left:        0,
-                zIndex:      2,
-                minWidth:    150,
+                top:         0,
+                zIndex:      5,
+                width:       DATE_W,
+                minWidth:    DATE_W,
                 fontWeight:  600,
                 borderRight: GROUP_BORDER,
               }}
@@ -159,7 +179,11 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                     textAlign:   'center',
                     fontWeight:  group.parentIsBold ? 700 : 600,
                     borderRight: isLast ? BORDER : GROUP_BORDER,
-                    background:  isTotal ? TOTAL_BG : HEADER_BG,
+                    background:  HEADER_BG,
+                    position:    'sticky',
+                    top:         0,
+                    zIndex:      4,
+                    ...(isTotal ? { left: TOT_OCC_L } : {}),
                   }}
                 >
                   {group.parentLabel}
@@ -188,6 +212,9 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                             fontWeight:  col.isSummary ? 500 : 400,
                             color:       col.isSummary ? TEXT : TEXT_SEC,
                             borderRight: rightBorder,
+                            position:    'sticky',
+                            top:         HDR_H,
+                            zIndex:      4,
                           }}
                         >
                           {col.label}
@@ -220,9 +247,15 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                           textAlign:   'center',
                           fontWeight:  400,
                           color:       TEXT_SEC,
+                          width:       TOT_W,
+                          minWidth:    TOT_W,
                           borderRight: mi === metrics.length - 1
                             ? (isLast ? BORDER : GROUP_BORDER)
                             : BORDER,
+                          position:    'sticky',
+                          top:         metricTop,
+                          left:        TOT_LEFTS[mi],
+                          zIndex:      4,
                         }}
                       >
                         {metric}
@@ -246,6 +279,9 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                           fontWeight:  400,
                           color:       TEXT_SEC,
                           borderRight: mi === 2 ? rightBorder : BORDER,
+                          position:    'sticky',
+                          top:         metricTop,
+                          zIndex:      4,
                         }}
                       >
                         {metric}
@@ -260,21 +296,22 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
 
         <tbody>
           {data.map((row, rowIdx) => {
-            const rowBg          = rowIdx % 2 === 0 ? BODY_ODD : BODY_EVN
-            const textCol        = row.is_actual_day ? TEXT : TEXT_SEC
-            const cal            = calendar?.get(row.business_date)
-            const _evt           = cal?.event?.trim()
-            const hasEvent       = !!_evt && _evt.toLowerCase() !== 'null'
-            const isWeekend      = !hasEvent && cal?.rev_dow === '토'
-            const isExpanded     = manualExpandedDates.has(row.business_date) || shouldAutoExpand(row, threshold)
-            const fcBtm          = isExpanded ? DASH_BORDER : BORDER
+            const rowBg      = rowIdx % 2 === 0 ? BODY_ODD : BODY_EVN
+            const textCol    = row.is_actual_day ? TEXT : TEXT_SEC
+            const cal        = calendar?.get(row.business_date)
+            const _evt       = cal?.event?.trim()
+            const hasEvent   = !!_evt && _evt.toLowerCase() !== 'null'
+            const isWeekend  = !hasEvent && cal?.rev_dow === '토'
+            const expandable = canExpand(row)
+            const isExpanded = expandable && (manualExpandedDates.has(row.business_date) || shouldAutoExpand(row, threshold))
+            const fcBtm      = isExpanded ? DASH_BORDER : BORDER
 
             return (
               <Fragment key={row.business_date}>
                 {/* ── FC 행 ── */}
                 <tr
-                  onClick={() => toggleExpand(row.business_date)}
-                  style={{ cursor: 'pointer' }}
+                  onClick={expandable ? () => toggleExpand(row.business_date) : undefined}
+                  style={{ cursor: expandable ? 'pointer' : 'default' }}
                 >
                   {/* 날짜 (sticky) */}
                   <td
@@ -284,14 +321,16 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                       background:   rowBg,
                       position:     'sticky',
                       left:         0,
-                      zIndex:       1,
+                      zIndex:       3,
                       fontWeight:   500,
                       color:        TEXT,
                       borderRight:  GROUP_BORDER,
+                      width:        DATE_W,
+                      minWidth:     DATE_W,
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 5 }}>
-                      <span style={{ fontSize: 9, color: MUTED, marginTop: 2, flexShrink: 0 }}>
+                      <span style={{ fontSize: 9, color: MUTED, marginTop: 2, flexShrink: 0, visibility: expandable ? 'visible' : 'hidden' }}>
                         {isExpanded ? '▼' : '▶'}
                       </span>
                       <div>
@@ -337,7 +376,7 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                         return (
                           <Fragment key={group.id}>
                             {([0, 1, 2, 3] as const).map(i => (
-                              <td key={i} style={{ ...tdBase, borderBottom: fcBtm, background: TOTAL_BG, textAlign: 'right', color: MUTED, fontWeight: 600, borderRight: i === 3 ? rightBorder : BORDER }}>-</td>
+                              <td key={i} style={{ ...tdBase, borderBottom: fcBtm, background: HEADER_BG, textAlign: 'right', color: MUTED, fontWeight: 600, width: TOT_W, minWidth: TOT_W, borderRight: i === 3 ? rightBorder : BORDER, position: 'sticky', left: TOT_LEFTS[i], zIndex: 2 }}>-</td>
                             ))}
                           </Fragment>
                         )
@@ -345,7 +384,7 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
 
                       return (
                         <Fragment key={group.id}>
-                          <td style={{ ...tdBase, borderBottom: fcBtm, background: TOTAL_BG, textAlign: 'right', fontWeight: 600, borderRight: BORDER }}>
+                          <td style={{ ...tdBase, borderBottom: fcBtm, background: HEADER_BG, textAlign: 'right', fontWeight: 600, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, position: 'sticky', left: TOT_OCC_L, zIndex: 2 }}>
                             <span style={{ color: TEXT_SEC }}>{fmtOcc(sv.rn, schema.roomCount)}</span>
                             {row.has_capped && (
                               <span
@@ -356,13 +395,13 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                               </span>
                             )}
                           </td>
-                          <td style={{ ...tdBase, borderBottom: fcBtm, background: TOTAL_BG, textAlign: 'right', color: textCol, fontWeight: 600, borderRight: BORDER }}>
+                          <td style={{ ...tdBase, borderBottom: fcBtm, background: HEADER_BG, textAlign: 'right', color: textCol, fontWeight: 600, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, position: 'sticky', left: TOT_RN_L, zIndex: 2 }}>
                             {fmtRn(sv.rn)}
                           </td>
-                          <td style={{ ...tdBase, borderBottom: fcBtm, background: TOTAL_BG, textAlign: 'right', color: sv.adr === 0 ? MUTED : textCol, fontWeight: 600, borderRight: BORDER }}>
+                          <td style={{ ...tdBase, borderBottom: fcBtm, background: HEADER_BG, textAlign: 'right', color: sv.adr === 0 ? MUTED : textCol, fontWeight: 600, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, position: 'sticky', left: TOT_ADR_L, zIndex: 2 }}>
                             {fmtAdr(sv.adr)}
                           </td>
-                          <td style={{ ...tdBase, borderBottom: fcBtm, background: TOTAL_BG, textAlign: 'right', color: sv.rev === 0 ? MUTED : textCol, fontWeight: 600, borderRight: rightBorder }}>
+                          <td style={{ ...tdBase, borderBottom: fcBtm, background: HEADER_BG, textAlign: 'right', color: sv.rev === 0 ? MUTED : textCol, fontWeight: 600, width: TOT_W, minWidth: TOT_W, borderRight: rightBorder, position: 'sticky', left: TOT_REV_L, zIndex: 2 }}>
                             {fmtRev(sv.rev)}
                           </td>
                         </Fragment>
@@ -413,10 +452,12 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                         background:   OTB_BG,
                         position:     'sticky',
                         left:         0,
-                        zIndex:       1,
+                        zIndex:       3,
                         color:        TEXT_SEC,
                         borderRight:  GROUP_BORDER,
                         borderBottom: GROUP_BORDER,
+                        width:        DATE_W,
+                        minWidth:     DATE_W,
                       }}
                     >
                       <div style={{ paddingLeft: 14 }}>└ OTB</div>
@@ -435,7 +476,7 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                           return (
                             <Fragment key={group.id}>
                               {([0, 1, 2, 3] as const).map(i => (
-                                <td key={i} style={{ ...tdBase, fontSize: '11px', background: TOTAL_BG, textAlign: 'right', color: MUTED, fontWeight: 500, borderRight: i === 3 ? rightBorder : BORDER, borderBottom: GROUP_BORDER }}>-</td>
+                                <td key={i} style={{ ...tdBase, fontSize: '11px', background: OTB_BG, textAlign: 'right', color: MUTED, fontWeight: 500, width: TOT_W, minWidth: TOT_W, borderRight: i === 3 ? rightBorder : BORDER, borderBottom: GROUP_BORDER, position: 'sticky', left: TOT_LEFTS[i], zIndex: 2 }}>-</td>
                               ))}
                             </Fragment>
                           )
@@ -443,16 +484,16 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
 
                         return (
                           <Fragment key={group.id}>
-                            <td style={{ ...tdBase, fontSize: '11px', background: TOTAL_BG, textAlign: 'right', fontWeight: 500, borderRight: BORDER, borderBottom: GROUP_BORDER }}>
+                            <td style={{ ...tdBase, fontSize: '11px', background: OTB_BG, textAlign: 'right', fontWeight: 500, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, borderBottom: GROUP_BORDER, position: 'sticky', left: TOT_OCC_L, zIndex: 2 }}>
                               <span style={{ color: TEXT_SEC }}>{fmtOcc(sv.rn, schema.roomCount)}</span>
                             </td>
-                            <td style={{ ...tdBase, fontSize: '11px', background: TOTAL_BG, textAlign: 'right', color: TEXT_SEC, fontWeight: 500, borderRight: BORDER, borderBottom: GROUP_BORDER }}>
+                            <td style={{ ...tdBase, fontSize: '11px', background: OTB_BG, textAlign: 'right', color: TEXT_SEC, fontWeight: 500, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, borderBottom: GROUP_BORDER, position: 'sticky', left: TOT_RN_L, zIndex: 2 }}>
                               {fmtRn(sv.rn)}
                             </td>
-                            <td style={{ ...tdBase, fontSize: '11px', background: TOTAL_BG, textAlign: 'right', color: sv.adr === 0 ? MUTED : TEXT_SEC, fontWeight: 500, borderRight: BORDER, borderBottom: GROUP_BORDER }}>
+                            <td style={{ ...tdBase, fontSize: '11px', background: OTB_BG, textAlign: 'right', color: sv.adr === 0 ? MUTED : TEXT_SEC, fontWeight: 500, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, borderBottom: GROUP_BORDER, position: 'sticky', left: TOT_ADR_L, zIndex: 2 }}>
                               {fmtAdr(sv.adr)}
                             </td>
-                            <td style={{ ...tdBase, fontSize: '11px', background: TOTAL_BG, textAlign: 'right', color: sv.rev === 0 ? MUTED : TEXT_SEC, fontWeight: 500, borderRight: rightBorder, borderBottom: GROUP_BORDER }}>
+                            <td style={{ ...tdBase, fontSize: '11px', background: OTB_BG, textAlign: 'right', color: sv.rev === 0 ? MUTED : TEXT_SEC, fontWeight: 500, width: TOT_W, minWidth: TOT_W, borderRight: rightBorder, borderBottom: GROUP_BORDER, position: 'sticky', left: TOT_REV_L, zIndex: 2 }}>
                               {fmtRev(sv.rev)}
                             </td>
                           </Fragment>
