@@ -1,14 +1,13 @@
 'use client'
 
 import { Fragment, useMemo } from 'react'
-import type { ForecastSchema, DailyForecast } from '@/lib/forecast/types'
+import type { ForecastSchema, ForecastDayData } from '@/lib/forecast/types'
 import { buildColumnGroups } from '@/lib/forecast/schema'
-import { calcNodeValue } from '@/lib/forecast/calc'
 import { fmtRn, fmtAdr, fmtRev, fmtOcc } from '@/lib/forecast/format'
 
 interface ForecastTableProps {
   schema: ForecastSchema
-  data:   DailyForecast[]
+  data:   ForecastDayData[]
 }
 
 const BORDER       = '0.5px solid var(--color-border-default)'
@@ -54,15 +53,29 @@ function subColRightBorder(
   return BORDER
 }
 
+// null = no data (e.g. Group children MIC/TOG) → show "-"
+function calcFromData(
+  daily:    ForecastDayData,
+  segCodes: string[],
+): { rn: number; adr: number; rev: number } | null {
+  let rn = 0, rev = 0, hasData = false
+  for (const code of segCodes) {
+    const v = daily.values[code]
+    if (v) { rn += v.rn; rev += v.rev; hasData = true }
+  }
+  if (!hasData) return null
+  return { rn, adr: rn > 0 ? Math.round(rev / rn) : 0, rev }
+}
+
 export default function ForecastTable({ schema, data }: ForecastTableProps) {
   const columnGroups = useMemo(
     () => buildColumnGroups(schema.nodes, schema.allSegmentationCodes),
     [schema],
   )
 
-  const totalGroups  = columnGroups.length
-  const hasSubRow    = columnGroups.some(g => g.parentRowSpan === 1)
-  const rowSpanDate  = hasSubRow ? 3 : 2
+  const totalGroups = columnGroups.length
+  const hasSubRow   = columnGroups.some(g => g.parentRowSpan === 1)
+  const rowSpanDate = hasSubRow ? 3 : 2
 
   return (
     <div style={{ overflowX: 'auto' }}>
@@ -94,8 +107,8 @@ export default function ForecastTable({ schema, data }: ForecastTableProps) {
             </th>
 
             {columnGroups.map((group, gi) => {
-              const isTotal  = group.id === 'total'
-              const isLast   = gi === totalGroups - 1
+              const isTotal = group.id === 'total'
+              const isLast  = gi === totalGroups - 1
               return (
                 <th
                   key={group.id}
@@ -207,7 +220,10 @@ export default function ForecastTable({ schema, data }: ForecastTableProps) {
 
         <tbody>
           {data.map((row, rowIdx) => {
-            const rowBg = rowIdx % 2 === 0 ? BODY_ODD : BODY_EVN
+            const rowBg   = rowIdx % 2 === 0 ? BODY_ODD : BODY_EVN
+            // forecast(미래) rows: slightly muted text
+            const textCol = row.is_actual_day ? TEXT : TEXT_SEC
+
             return (
               <tr key={row.business_date}>
                 {/* 날짜 (sticky) */}
@@ -232,17 +248,28 @@ export default function ForecastTable({ schema, data }: ForecastTableProps) {
                   const isLast  = gi === totalGroups - 1
 
                   if (isTotal) {
-                    const sv        = calcNodeValue(row, group.subCols[0].segCodes)
+                    const sv          = calcFromData(row, group.subCols[0].segCodes)
                     const rightBorder = isLast ? BORDER : GROUP_BORDER
+
+                    if (sv === null) {
+                      return (
+                        <Fragment key={group.id}>
+                          {([0, 1, 2, 3] as const).map(i => (
+                            <td key={i} style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', color: MUTED, fontWeight: 600, borderRight: i === 3 ? rightBorder : BORDER }}>-</td>
+                          ))}
+                        </Fragment>
+                      )
+                    }
+
                     return (
                       <Fragment key={group.id}>
-                        <td style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', color: TEXT, fontWeight: 600, borderRight: BORDER }}>
+                        <td style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', color: textCol, fontWeight: 600, borderRight: BORDER }}>
                           {fmtRn(sv.rn)}
                         </td>
-                        <td style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', color: sv.adr === 0 ? MUTED : TEXT, fontWeight: 600, borderRight: BORDER }}>
+                        <td style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', color: sv.adr === 0 ? MUTED : textCol, fontWeight: 600, borderRight: BORDER }}>
                           {fmtAdr(sv.adr)}
                         </td>
-                        <td style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', color: sv.rev === 0 ? MUTED : TEXT, fontWeight: 600, borderRight: BORDER }}>
+                        <td style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', color: sv.rev === 0 ? MUTED : textCol, fontWeight: 600, borderRight: BORDER }}>
                           {fmtRev(sv.rev)}
                         </td>
                         <td style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', color: TEXT_SEC, fontWeight: 600, borderRight: rightBorder }}>
@@ -254,18 +281,29 @@ export default function ForecastTable({ schema, data }: ForecastTableProps) {
 
                   return group.subCols.map((col, ci) => {
                     const rightBorder = subColRightBorder(gi, totalGroups, ci, group.subCols.length, col.isSummary)
-                    const sv          = calcNodeValue(row, col.segCodes)
                     const cellBg      = col.isSummary ? SUM_BG : rowBg
                     const fw          = col.isSummary ? 500 : 400
+                    const sv          = calcFromData(row, col.segCodes)
+
+                    if (sv === null) {
+                      return (
+                        <Fragment key={col.id}>
+                          <td style={{ ...tdBase, background: cellBg, textAlign: 'right', color: MUTED, fontWeight: fw, borderRight: BORDER }}>-</td>
+                          <td style={{ ...tdBase, background: cellBg, textAlign: 'right', color: MUTED, fontWeight: fw, borderRight: BORDER }}>-</td>
+                          <td style={{ ...tdBase, background: cellBg, textAlign: 'right', color: MUTED, fontWeight: fw, borderRight: rightBorder }}>-</td>
+                        </Fragment>
+                      )
+                    }
+
                     return (
                       <Fragment key={col.id}>
-                        <td style={{ ...tdBase, background: cellBg, textAlign: 'right', color: TEXT, fontWeight: fw, borderRight: BORDER }}>
+                        <td style={{ ...tdBase, background: cellBg, textAlign: 'right', color: textCol, fontWeight: fw, borderRight: BORDER }}>
                           {fmtRn(sv.rn)}
                         </td>
-                        <td style={{ ...tdBase, background: cellBg, textAlign: 'right', color: sv.adr === 0 ? MUTED : TEXT, fontWeight: fw, borderRight: BORDER }}>
+                        <td style={{ ...tdBase, background: cellBg, textAlign: 'right', color: sv.adr === 0 ? MUTED : textCol, fontWeight: fw, borderRight: BORDER }}>
                           {fmtAdr(sv.adr)}
                         </td>
-                        <td style={{ ...tdBase, background: cellBg, textAlign: 'right', color: sv.rev === 0 ? MUTED : TEXT, fontWeight: fw, borderRight: rightBorder }}>
+                        <td style={{ ...tdBase, background: cellBg, textAlign: 'right', color: sv.rev === 0 ? MUTED : textCol, fontWeight: fw, borderRight: rightBorder }}>
                           {fmtRev(sv.rev)}
                         </td>
                       </Fragment>
