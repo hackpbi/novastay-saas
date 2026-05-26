@@ -1,5 +1,6 @@
 export function fmtRn(rn: number): string {
-  return rn.toLocaleString()
+  if (rn === 0) return '-'
+  return Math.round(rn).toLocaleString()
 }
 
 export function fmtAdr(adr: number): string {
@@ -9,11 +10,11 @@ export function fmtAdr(adr: number): string {
 
 export function fmtRev(rev: number): string {
   if (rev === 0) return '-'
-  return Math.round(rev / 1000).toLocaleString()
+  return (rev / 1_000_000).toFixed(1)
 }
 
 export function fmtOcc(rn: number, roomCount: number): string {
-  if (roomCount === 0) return '-'
+  if (roomCount === 0 || rn === 0) return '-'
   return ((rn / roomCount) * 100).toFixed(1) + '%'
 }
 

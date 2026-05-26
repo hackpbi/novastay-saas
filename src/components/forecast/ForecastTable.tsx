@@ -23,6 +23,7 @@ const BODY_BG   = 'var(--color-bg-primary)'
 const TEXT      = 'var(--color-text-primary)'
 const TEXT_SEC  = 'var(--color-text-secondary)'
 const MUTED     = 'var(--color-text-muted)'
+const TERTIARY  = 'var(--color-text-tertiary)'
 const WARNING   = 'var(--color-warning, #F5A623)'
 
 // ── Sticky geometry ──────────────────────────────────────────────────────────
@@ -304,7 +305,7 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                           zIndex:      5,
                         }}
                       >
-                        {metric}
+                        {metric === 'ADR' ? 'ADR(천)' : metric === 'REV' ? 'REV(백만)' : metric}
                       </th>
                     ))}
                   </Fragment>
@@ -330,7 +331,7 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                           zIndex:      4,
                         }}
                       >
-                        {metric}
+                        {metric === 'ADR' ? 'ADR(천)' : metric === 'REV' ? 'REV(백만)' : metric}
                       </th>
                     ))}
                   </Fragment>
@@ -343,7 +344,7 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
         <tbody>
           {data.map((row) => {
             const rowBg      = BODY_BG
-            const textCol    = row.is_actual_day ? TEXT : TEXT_SEC
+            const textCol    = row.is_actual_day ? TEXT_SEC : TEXT
             const cal        = calendar?.get(row.business_date)
             const _evt       = cal?.event?.trim()
             const hasEvent   = !!_evt && _evt.toLowerCase() !== 'null'
@@ -439,7 +440,7 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                       return (
                         <Fragment key={group.id}>
                           <td style={{ ...tdBase, borderBottom: fcBtm, background: HEADER_BG, textAlign: 'right', fontWeight: 600, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, position: 'sticky', left: TOT_OCC_L, zIndex: 2 }}>
-                            <span style={{ color: TEXT_SEC }}>{fmtOcc(sv.rn, schema.roomCount)}</span>
+                            <span style={{ color: sv.rn === 0 ? TERTIARY : textCol }}>{fmtOcc(sv.rn, schema.roomCount)}</span>
                             {row.has_capped && (
                               <span
                                 title="호텔 총 객실 수에 도달했습니다"
@@ -449,13 +450,13 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                               </span>
                             )}
                           </td>
-                          <td style={{ ...tdBase, borderBottom: fcBtm, background: HEADER_BG, textAlign: 'right', color: textCol, fontWeight: 600, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, position: 'sticky', left: TOT_RN_L, zIndex: 2 }}>
+                          <td style={{ ...tdBase, borderBottom: fcBtm, background: HEADER_BG, textAlign: 'right', color: sv.rn === 0 ? TERTIARY : textCol, fontWeight: 600, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, position: 'sticky', left: TOT_RN_L, zIndex: 2 }}>
                             {fmtRn(sv.rn)}
                           </td>
-                          <td style={{ ...tdBase, borderBottom: fcBtm, background: HEADER_BG, textAlign: 'right', color: sv.adr === 0 ? MUTED : textCol, fontWeight: 600, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, position: 'sticky', left: TOT_ADR_L, zIndex: 2 }}>
+                          <td style={{ ...tdBase, borderBottom: fcBtm, background: HEADER_BG, textAlign: 'right', color: sv.adr === 0 ? TERTIARY : textCol, fontWeight: 600, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, position: 'sticky', left: TOT_ADR_L, zIndex: 2 }}>
                             {fmtAdr(sv.adr)}
                           </td>
-                          <td style={{ ...tdBase, borderBottom: fcBtm, background: HEADER_BG, textAlign: 'right', color: sv.rev === 0 ? MUTED : textCol, fontWeight: 600, width: TOT_W, minWidth: TOT_W, borderRight: rightBorder, position: 'sticky', left: TOT_REV_L, zIndex: 2 }}>
+                          <td style={{ ...tdBase, borderBottom: fcBtm, background: HEADER_BG, textAlign: 'right', color: sv.rev === 0 ? TERTIARY : textCol, fontWeight: 600, width: TOT_W, minWidth: TOT_W, borderRight: rightBorder, position: 'sticky', left: TOT_REV_L, zIndex: 2 }}>
                             {fmtRev(sv.rev)}
                           </td>
                         </Fragment>
@@ -480,13 +481,13 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
 
                       return (
                         <Fragment key={col.id}>
-                          <td style={{ ...tdBase, borderBottom: fcBtm, background: cellBg, textAlign: 'right', color: textCol, fontWeight: fw, borderRight: BORDER }}>
+                          <td style={{ ...tdBase, borderBottom: fcBtm, background: cellBg, textAlign: 'right', color: sv.rn === 0 ? TERTIARY : textCol, fontWeight: fw, borderRight: BORDER }}>
                             {fmtRn(sv.rn)}
                           </td>
-                          <td style={{ ...tdBase, borderBottom: fcBtm, background: cellBg, textAlign: 'right', color: sv.adr === 0 ? MUTED : textCol, fontWeight: fw, borderRight: BORDER }}>
+                          <td style={{ ...tdBase, borderBottom: fcBtm, background: cellBg, textAlign: 'right', color: sv.adr === 0 ? TERTIARY : textCol, fontWeight: fw, borderRight: BORDER }}>
                             {fmtAdr(sv.adr)}
                           </td>
-                          <td style={{ ...tdBase, borderBottom: fcBtm, background: cellBg, textAlign: 'right', color: sv.rev === 0 ? MUTED : textCol, fontWeight: fw, borderRight: rightBorder }}>
+                          <td style={{ ...tdBase, borderBottom: fcBtm, background: cellBg, textAlign: 'right', color: sv.rev === 0 ? TERTIARY : textCol, fontWeight: fw, borderRight: rightBorder }}>
                             {fmtRev(sv.rev)}
                           </td>
                         </Fragment>
@@ -539,15 +540,15 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                         return (
                           <Fragment key={group.id}>
                             <td style={{ ...tdBase, fontSize: '11px', background: OTB_BG, textAlign: 'right', fontWeight: 500, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, borderBottom: GROUP_BORDER, position: 'sticky', left: TOT_OCC_L, zIndex: 2 }}>
-                              <span style={{ color: TEXT_SEC }}>{fmtOcc(sv.rn, schema.roomCount)}</span>
+                              <span style={{ color: sv.rn === 0 ? TERTIARY : TEXT_SEC }}>{fmtOcc(sv.rn, schema.roomCount)}</span>
                             </td>
-                            <td style={{ ...tdBase, fontSize: '11px', background: OTB_BG, textAlign: 'right', color: TEXT_SEC, fontWeight: 500, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, borderBottom: GROUP_BORDER, position: 'sticky', left: TOT_RN_L, zIndex: 2 }}>
+                            <td style={{ ...tdBase, fontSize: '11px', background: OTB_BG, textAlign: 'right', color: sv.rn === 0 ? TERTIARY : TEXT_SEC, fontWeight: 500, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, borderBottom: GROUP_BORDER, position: 'sticky', left: TOT_RN_L, zIndex: 2 }}>
                               {fmtRn(sv.rn)}
                             </td>
-                            <td style={{ ...tdBase, fontSize: '11px', background: OTB_BG, textAlign: 'right', color: sv.adr === 0 ? MUTED : TEXT_SEC, fontWeight: 500, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, borderBottom: GROUP_BORDER, position: 'sticky', left: TOT_ADR_L, zIndex: 2 }}>
+                            <td style={{ ...tdBase, fontSize: '11px', background: OTB_BG, textAlign: 'right', color: sv.adr === 0 ? TERTIARY : TEXT_SEC, fontWeight: 500, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, borderBottom: GROUP_BORDER, position: 'sticky', left: TOT_ADR_L, zIndex: 2 }}>
                               {fmtAdr(sv.adr)}
                             </td>
-                            <td style={{ ...tdBase, fontSize: '11px', background: OTB_BG, textAlign: 'right', color: sv.rev === 0 ? MUTED : TEXT_SEC, fontWeight: 500, width: TOT_W, minWidth: TOT_W, borderRight: rightBorder, borderBottom: GROUP_BORDER, position: 'sticky', left: TOT_REV_L, zIndex: 2 }}>
+                            <td style={{ ...tdBase, fontSize: '11px', background: OTB_BG, textAlign: 'right', color: sv.rev === 0 ? TERTIARY : TEXT_SEC, fontWeight: 500, width: TOT_W, minWidth: TOT_W, borderRight: rightBorder, borderBottom: GROUP_BORDER, position: 'sticky', left: TOT_REV_L, zIndex: 2 }}>
                               {fmtRev(sv.rev)}
                             </td>
                           </Fragment>
@@ -571,13 +572,13 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
 
                         return (
                           <Fragment key={col.id}>
-                            <td style={{ ...tdBase, fontSize: '11px', background: cellBg, textAlign: 'right', color: TEXT_SEC, fontWeight: 400, borderRight: BORDER, borderBottom: GROUP_BORDER }}>
+                            <td style={{ ...tdBase, fontSize: '11px', background: cellBg, textAlign: 'right', color: sv.rn === 0 ? TERTIARY : TEXT_SEC, fontWeight: 400, borderRight: BORDER, borderBottom: GROUP_BORDER }}>
                               {fmtRn(sv.rn)}
                             </td>
-                            <td style={{ ...tdBase, fontSize: '11px', background: cellBg, textAlign: 'right', color: sv.adr === 0 ? MUTED : TEXT_SEC, fontWeight: 400, borderRight: BORDER, borderBottom: GROUP_BORDER }}>
+                            <td style={{ ...tdBase, fontSize: '11px', background: cellBg, textAlign: 'right', color: sv.adr === 0 ? TERTIARY : TEXT_SEC, fontWeight: 400, borderRight: BORDER, borderBottom: GROUP_BORDER }}>
                               {fmtAdr(sv.adr)}
                             </td>
-                            <td style={{ ...tdBase, fontSize: '11px', background: cellBg, textAlign: 'right', color: sv.rev === 0 ? MUTED : TEXT_SEC, fontWeight: 400, borderRight: rightBorder, borderBottom: GROUP_BORDER }}>
+                            <td style={{ ...tdBase, fontSize: '11px', background: cellBg, textAlign: 'right', color: sv.rev === 0 ? TERTIARY : TEXT_SEC, fontWeight: 400, borderRight: rightBorder, borderBottom: GROUP_BORDER }}>
                               {fmtRev(sv.rev)}
                             </td>
                           </Fragment>
@@ -618,16 +619,16 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                     const rightBorder = isLast ? BORDER : GROUP_BORDER
                     return (
                       <Fragment key={group.id}>
-                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', fontWeight: 700, color: TEXT_SEC, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, borderTop: SUM_TOP, position: 'sticky', left: TOT_OCC_L, zIndex: 2 }}>
+                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', fontWeight: 700, color: totRn === 0 ? TERTIARY : TEXT_SEC, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, borderTop: SUM_TOP, position: 'sticky', left: TOT_OCC_L, zIndex: 2 }}>
                           {fmtOcc(totRn, schema.roomCount * data.length)}
                         </td>
-                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', fontWeight: 700, color: TEXT, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, borderTop: SUM_TOP, position: 'sticky', left: TOT_RN_L, zIndex: 2 }}>
+                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', fontWeight: 700, color: totRn === 0 ? TERTIARY : TEXT, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, borderTop: SUM_TOP, position: 'sticky', left: TOT_RN_L, zIndex: 2 }}>
                           {fmtRn(totRn)}
                         </td>
-                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', fontWeight: 700, color: totAdr === 0 ? MUTED : TEXT, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, borderTop: SUM_TOP, position: 'sticky', left: TOT_ADR_L, zIndex: 2 }}>
+                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', fontWeight: 700, color: totAdr === 0 ? TERTIARY : TEXT, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, borderTop: SUM_TOP, position: 'sticky', left: TOT_ADR_L, zIndex: 2 }}>
                           {fmtAdr(totAdr)}
                         </td>
-                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', fontWeight: 700, color: totRev === 0 ? MUTED : TEXT, width: TOT_W, minWidth: TOT_W, borderRight: rightBorder, borderTop: SUM_TOP, position: 'sticky', left: TOT_REV_L, zIndex: 2 }}>
+                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', fontWeight: 700, color: totRev === 0 ? TERTIARY : TEXT, width: TOT_W, minWidth: TOT_W, borderRight: rightBorder, borderTop: SUM_TOP, position: 'sticky', left: TOT_REV_L, zIndex: 2 }}>
                           {fmtRev(totRev)}
                         </td>
                       </Fragment>
@@ -647,13 +648,13 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                     }
                     return (
                       <Fragment key={col.id}>
-                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', color: TEXT, fontWeight: 700, borderRight: BORDER, borderTop: SUM_TOP }}>
+                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', color: sv.rn === 0 ? TERTIARY : TEXT, fontWeight: 700, borderRight: BORDER, borderTop: SUM_TOP }}>
                           {fmtRn(sv.rn)}
                         </td>
-                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', color: sv.adr === 0 ? MUTED : TEXT, fontWeight: 700, borderRight: BORDER, borderTop: SUM_TOP }}>
+                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', color: sv.adr === 0 ? TERTIARY : TEXT, fontWeight: 700, borderRight: BORDER, borderTop: SUM_TOP }}>
                           {fmtAdr(sv.adr)}
                         </td>
-                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', color: sv.rev === 0 ? MUTED : TEXT, fontWeight: 700, borderRight: rightBorder, borderTop: SUM_TOP }}>
+                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', color: sv.rev === 0 ? TERTIARY : TEXT, fontWeight: 700, borderRight: rightBorder, borderTop: SUM_TOP }}>
                           {fmtRev(sv.rev)}
                         </td>
                       </Fragment>
@@ -671,7 +672,7 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
         className="text-right text-xs px-3 py-1.5"
         style={{ color: MUTED, borderTop: BORDER }}
       >
-        단위: 천원
+        ADR 천원 · REV 백만원
       </div>
     </div>
   )
