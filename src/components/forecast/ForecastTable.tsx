@@ -19,10 +19,8 @@ const GROUP_BORDER = '1.5px solid var(--color-border-default)'
 
 const HEADER_BG = 'var(--color-bg-secondary)'
 const TOTAL_BG  = 'rgba(180,178,169,0.10)'
-const SUM_BG    = 'rgba(180,178,169,0.06)'
 const OTB_BG    = 'var(--color-bg-secondary)'
-const BODY_ODD  = 'var(--color-bg-primary)'
-const BODY_EVN  = 'var(--overlay-xs)'
+const BODY_BG   = 'var(--color-bg-primary)'
 const TEXT      = 'var(--color-text-primary)'
 const TEXT_SEC  = 'var(--color-text-secondary)'
 const MUTED     = 'var(--color-text-muted)'
@@ -295,8 +293,8 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
         </thead>
 
         <tbody>
-          {data.map((row, rowIdx) => {
-            const rowBg      = rowIdx % 2 === 0 ? BODY_ODD : BODY_EVN
+          {data.map((row) => {
+            const rowBg      = BODY_BG
             const textCol    = row.is_actual_day ? TEXT : TEXT_SEC
             const cal        = calendar?.get(row.business_date)
             const _evt       = cal?.event?.trim()
@@ -329,37 +327,42 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                       minWidth:     DATE_W,
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 5 }}>
-                      <span style={{ fontSize: 9, color: MUTED, marginTop: 2, flexShrink: 0, visibility: expandable ? 'visible' : 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ fontSize: 9, color: MUTED, flexShrink: 0, visibility: expandable ? 'visible' : 'hidden' }}>
                         {isExpanded ? '▼' : '▶'}
                       </span>
-                      <div>
-                        <div>{row.day_label}</div>
-                        {hasEvent && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
-                            <span style={{
-                              display:      'inline-block',
-                              width:        6,
-                              height:       6,
-                              borderRadius: '50%',
-                              background:   'var(--color-text-danger, #ef4444)',
-                              flexShrink:   0,
-                            }} />
-                            <span style={{ fontSize: 10, color: TEXT_SEC }}>{_evt}</span>
-                          </div>
-                        )}
-                        {isWeekend && (
-                          <div style={{ marginTop: 3 }}>
-                            <span style={{
-                              display:      'inline-block',
-                              width:        6,
-                              height:       6,
-                              borderRadius: '50%',
-                              background:   '#F59E0B',
-                            }} />
-                          </div>
-                        )}
-                      </div>
+                      <span>{row.day_label}</span>
+                      {hasEvent && (
+                        <span
+                          title={_evt}
+                          style={{
+                            display:        'inline-flex',
+                            alignItems:     'center',
+                            justifyContent: 'center',
+                            width:          18,
+                            height:         18,
+                            borderRadius:   '50%',
+                            background:     'var(--color-text-danger, #ef4444)',
+                            color:          '#fff',
+                            fontSize:       10,
+                            fontWeight:     600,
+                            flexShrink:     0,
+                            cursor:         'help',
+                          }}
+                        >
+                          {_evt!.charAt(0)}
+                        </span>
+                      )}
+                      {!hasEvent && isWeekend && (
+                        <span style={{
+                          display:      'inline-block',
+                          width:        6,
+                          height:       6,
+                          borderRadius: '50%',
+                          background:   '#F59E0B',
+                          flexShrink:   0,
+                        }} />
+                      )}
                     </div>
                   </td>
 
@@ -410,7 +413,7 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
 
                     return group.subCols.map((col, ci) => {
                       const rightBorder = subColRightBorder(gi, totalGroups, ci, group.subCols.length, col.isSummary)
-                      const cellBg      = col.isSummary ? SUM_BG : rowBg
+                      const cellBg      = rowBg
                       const fw          = col.isSummary ? 500 : 400
                       const sv          = calcFromData(row, col.segCodes)
 
@@ -502,7 +505,7 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
 
                       return group.subCols.map((col, ci) => {
                         const rightBorder = subColRightBorder(gi, totalGroups, ci, group.subCols.length, col.isSummary)
-                        const cellBg      = col.isSummary ? SUM_BG : OTB_BG
+                        const cellBg      = OTB_BG
                         const sv          = calcOtbFromData(row, col.segCodes)
 
                         if (sv === null) {
