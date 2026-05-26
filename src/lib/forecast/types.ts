@@ -89,5 +89,6 @@ export type ForecastDayData = {
   business_date: string
   day_label:     string
   is_actual_day: boolean
+  has_capped:    boolean   // any segment capped on this day
   values:        Record<string, ForecastSegValue>
 }

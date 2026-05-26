@@ -34,11 +34,13 @@ export function transformRpcToTableData(rows: ForecastRpcRow[]): ForecastDayData
         business_date: row.business_date,
         day_label:     formatDayLabel(row.business_date),
         is_actual_day: true,
+        has_capped:    false,
         values:        {},
       })
     }
     const day = dateMap.get(row.business_date)!
     if (!row.is_actual) day.is_actual_day = false
+    if (row.capped)     day.has_capped = true
     day.values[row.segmentation] = {
       rn:        row.forecast_rn,
       adr:       row.forecast_adr ?? 0,

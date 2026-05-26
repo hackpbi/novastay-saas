@@ -6,8 +6,9 @@ import { buildColumnGroups } from '@/lib/forecast/schema'
 import { fmtRn, fmtAdr, fmtRev, fmtOcc } from '@/lib/forecast/format'
 
 interface ForecastTableProps {
-  schema: ForecastSchema
-  data:   ForecastDayData[]
+  schema:          ForecastSchema
+  data:            ForecastDayData[]
+  selectedNodeIds: Set<string>   // top-level node ids to show
 }
 
 const BORDER       = '0.5px solid var(--color-border-default)'
@@ -22,6 +23,7 @@ const BODY_EVN  = 'var(--overlay-xs)'
 const TEXT      = 'var(--color-text-primary)'
 const TEXT_SEC  = 'var(--color-text-secondary)'
 const MUTED     = 'var(--color-text-muted)'
+const WARNING   = 'var(--color-warning, #F5A623)'
 
 const thBase: React.CSSProperties = {
   borderBottom: BORDER,
@@ -53,7 +55,6 @@ function subColRightBorder(
   return BORDER
 }
 
-// null = no data (e.g. Group children MIC/TOG) → show "-"
 function calcFromData(
   daily:    ForecastDayData,
   segCodes: string[],
@@ -67,11 +68,28 @@ function calcFromData(
   return { rn, adr: rn > 0 ? Math.round(rev / rn) : 0, rev }
 }
 
-export default function ForecastTable({ schema, data }: ForecastTableProps) {
-  const columnGroups = useMemo(
+export default function ForecastTable({ schema, data, selectedNodeIds }: ForecastTableProps) {
+  // Build column groups filtered by selected nodes
+  const allGroups = useMemo(
     () => buildColumnGroups(schema.nodes, schema.allSegmentationCodes),
     [schema],
   )
+
+  // Selected segmentation codes (for Total calculation)
+  const selectedCodes = useMemo(() => {
+    const codes: string[] = []
+    for (const node of schema.nodes) {
+      if (selectedNodeIds.has(node.id)) {
+        codes.push(...node.segmentationCodes)
+      }
+    }
+    return codes
+  }, [schema.nodes, selectedNodeIds])
+
+  // Visible column groups: Total (always) + selected segment groups
+  const columnGroups = useMemo(() => {
+    return allGroups.filter(g => g.id === 'total' || selectedNodeIds.has(g.id))
+  }, [allGroups, selectedNodeIds])
 
   const totalGroups = columnGroups.length
   const hasSubRow   = columnGroups.some(g => g.parentRowSpan === 1)
@@ -129,7 +147,7 @@ export default function ForecastTable({ schema, data }: ForecastTableProps) {
             })}
           </tr>
 
-          {/* ── Row 2: sub-column labels (only for groups with children) ── */}
+          {/* ── Row 2: sub-column labels ── */}
           {hasSubRow && (
             <tr>
               {columnGroups.map((group, gi) => {
@@ -160,7 +178,7 @@ export default function ForecastTable({ schema, data }: ForecastTableProps) {
             </tr>
           )}
 
-          {/* ── Row 3: metric labels (RN / ADR / REV [/ OCC% for Total]) ── */}
+          {/* ── Row 3: metric labels ── */}
           <tr>
             {columnGroups.map((group, gi) => {
               const isTotal = group.id === 'total'
@@ -221,7 +239,6 @@ export default function ForecastTable({ schema, data }: ForecastTableProps) {
         <tbody>
           {data.map((row, rowIdx) => {
             const rowBg   = rowIdx % 2 === 0 ? BODY_ODD : BODY_EVN
-            // forecast(미래) rows: slightly muted text
             const textCol = row.is_actual_day ? TEXT : TEXT_SEC
 
             return (
@@ -248,7 +265,8 @@ export default function ForecastTable({ schema, data }: ForecastTableProps) {
                   const isLast  = gi === totalGroups - 1
 
                   if (isTotal) {
-                    const sv          = calcFromData(row, group.subCols[0].segCodes)
+                    // Total uses selectedCodes so it reacts to filter
+                    const sv          = calcFromData(row, selectedCodes)
                     const rightBorder = isLast ? BORDER : GROUP_BORDER
 
                     if (sv === null) {
@@ -272,8 +290,18 @@ export default function ForecastTable({ schema, data }: ForecastTableProps) {
                         <td style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', color: sv.rev === 0 ? MUTED : textCol, fontWeight: 600, borderRight: BORDER }}>
                           {fmtRev(sv.rev)}
                         </td>
-                        <td style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', color: TEXT_SEC, fontWeight: 600, borderRight: rightBorder }}>
-                          {fmtOcc(sv.rn, schema.roomCount)}
+                        <td
+                          style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', fontWeight: 600, borderRight: rightBorder }}
+                        >
+                          <span style={{ color: TEXT_SEC }}>{fmtOcc(sv.rn, schema.roomCount)}</span>
+                          {row.has_capped && (
+                            <span
+                              title="호텔 총 객실 수에 도달했습니다"
+                              style={{ marginLeft: 4, color: WARNING, fontSize: '10px', cursor: 'default' }}
+                            >
+                              ⚠
+                            </span>
+                          )}
                         </td>
                       </Fragment>
                     )
