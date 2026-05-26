@@ -1,12 +1,2 @@
-import type { ForecastSegment } from './types'
-
-export const FORECAST_SEGMENTS: ForecastSegment[] = [
-  { id: 'corpfit',  name: 'Corp. FIT', isBold: false, orderIndex: 0 },
-  { id: 'direct',   name: 'Direct',    isBold: false, orderIndex: 1 },
-  { id: 'ta',       name: 'TA',        isBold: false, orderIndex: 2 },
-  { id: 'employee', name: 'Employee',  isBold: true,  orderIndex: 3 },
-  { id: 'member',   name: 'Member',    isBold: true,  orderIndex: 4 },
-  { id: 'group',    name: 'Group',     isBold: false, orderIndex: 5 },
-  { id: 'comp',     name: 'Comp',      isBold: true,  orderIndex: 6 },
-  { id: 'houseuse', name: 'House Use', isBold: true,  orderIndex: 7 },
-]
+// Superseded by c05_market_table_schema dynamic schema (Step 1.5)
+export {}

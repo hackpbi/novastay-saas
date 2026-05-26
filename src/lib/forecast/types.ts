@@ -1,19 +1,51 @@
-export type ForecastSegment = {
+// ─── C05 DB row ────────────────────────────────────────────────────────────────
+export type C05Row = {
   id: string
   name: string
-  isBold: boolean
-  orderIndex: number
-  // Step 3에서 children 추가 예정
+  level: 'main' | 'mid' | 'sub'
+  parent_id: string | null
+  segmentation: string[]
+  order_index: number
+  is_bold: boolean
 }
 
+// ─── Tree node (built from C05) ────────────────────────────────────────────────
+export type SchemaNode = {
+  id: string
+  name: string
+  level: 'main' | 'mid' | 'sub'
+  isBold: boolean
+  orderIndex: number
+  segmentationCodes: string[]  // leaf codes (own or aggregated from children)
+  children: SchemaNode[]
+}
+
+// ─── Column rendering units ────────────────────────────────────────────────────
+export type SubColumn = {
+  id: string
+  label: string         // '(합산)', child name, '' for mid/total
+  segCodes: string[]    // codes to aggregate for this column
+  isSummary: boolean    // true for (합산) and Total
+}
+
+export type ColumnGroup = {
+  id: string
+  parentLabel: string
+  parentIsBold: boolean
+  parentRowSpan: 1 | 2  // 1=main (has children), 2=mid/total (no children)
+  parentColSpan: number
+  subCols: SubColumn[]
+}
+
+// ─── Forecast data ──────────────────────────────────────────────────────────────
 export type SegmentValue = {
-  rn: number   // Room Nights
-  adr: number  // 원 단위 (DB 기준)
-  rev: number  // 원 단위 (DB 기준)
+  rn: number
+  adr: number   // 원 단위 (DB 기준)
+  rev: number   // 원 단위 (DB 기준)
 }
 
 export type DailyForecast = {
   business_date: string                    // '2026-05-01'
   day_label: string                        // '5/1 (금)'
-  segments: Record<string, SegmentValue>   // { corpfit: {...}, direct: {...}, ... }
+  values: Record<string, SegmentValue>     // keyed by segmentation CODE (COR, CNC, ...)
 }

@@ -1,15 +1,10 @@
-import type { SegmentValue } from './types'
+import type { DailyForecast, SegmentValue } from './types'
 
-export function calcTotal(segments: Record<string, SegmentValue>): SegmentValue {
-  let totalRn = 0
-  let totalRev = 0
-  for (const sv of Object.values(segments)) {
-    totalRn += sv.rn
-    totalRev += sv.rev
+export function calcNodeValue(row: DailyForecast, segCodes: string[]): SegmentValue {
+  let rn = 0, rev = 0
+  for (const code of segCodes) {
+    const v = row.values[code]
+    if (v) { rn += v.rn; rev += v.rev }
   }
-  return {
-    rn: totalRn,
-    adr: totalRn > 0 ? Math.round(totalRev / totalRn) : 0,
-    rev: totalRev,
-  }
+  return { rn, adr: rn > 0 ? Math.round(rev / rn) : 0, rev }
 }
