@@ -76,17 +76,6 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar 
     [schema],
   )
 
-  // Selected segmentation codes (for Total calculation)
-  const selectedCodes = useMemo(() => {
-    const codes: string[] = []
-    for (const node of schema.nodes) {
-      if (selectedNodeIds.has(node.id)) {
-        codes.push(...node.segmentationCodes)
-      }
-    }
-    return codes
-  }, [schema.nodes, selectedNodeIds])
-
   // Visible column groups: Total (always) + selected segment groups
   const columnGroups = useMemo(() => {
     return allGroups.filter(g => g.id === 'total' || selectedNodeIds.has(g.id))
@@ -187,7 +176,7 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar 
               const isLast  = gi === totalGroups - 1
 
               if (isTotal) {
-                const metrics = ['RN', 'ADR', 'REV', 'OCC%'] as const
+                const metrics = ['OCC%', 'RN', 'ADR', 'REV'] as const
                 return (
                   <Fragment key={group.id}>
                     {metrics.map((metric, mi) => (
@@ -294,8 +283,8 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar 
                   const isLast  = gi === totalGroups - 1
 
                   if (isTotal) {
-                    // Total uses selectedCodes so it reacts to filter
-                    const sv          = calcFromData(row, selectedCodes)
+                    // Total always uses all codes — filter only hides segment columns
+                    const sv          = calcFromData(row, schema.allSegmentationCodes)
                     const rightBorder = isLast ? BORDER : GROUP_BORDER
 
                     if (sv === null) {
@@ -310,18 +299,8 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar 
 
                     return (
                       <Fragment key={group.id}>
-                        <td style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', color: textCol, fontWeight: 600, borderRight: BORDER }}>
-                          {fmtRn(sv.rn)}
-                        </td>
-                        <td style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', color: sv.adr === 0 ? MUTED : textCol, fontWeight: 600, borderRight: BORDER }}>
-                          {fmtAdr(sv.adr)}
-                        </td>
-                        <td style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', color: sv.rev === 0 ? MUTED : textCol, fontWeight: 600, borderRight: BORDER }}>
-                          {fmtRev(sv.rev)}
-                        </td>
-                        <td
-                          style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', fontWeight: 600, borderRight: rightBorder }}
-                        >
+                        {/* OCC% — 맨 앞 */}
+                        <td style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', fontWeight: 600, borderRight: BORDER }}>
                           <span style={{ color: TEXT_SEC }}>{fmtOcc(sv.rn, schema.roomCount)}</span>
                           {row.has_capped && (
                             <span
@@ -331,6 +310,18 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar 
                               ⚠
                             </span>
                           )}
+                        </td>
+                        {/* RN */}
+                        <td style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', color: textCol, fontWeight: 600, borderRight: BORDER }}>
+                          {fmtRn(sv.rn)}
+                        </td>
+                        {/* ADR */}
+                        <td style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', color: sv.adr === 0 ? MUTED : textCol, fontWeight: 600, borderRight: BORDER }}>
+                          {fmtAdr(sv.adr)}
+                        </td>
+                        {/* REV */}
+                        <td style={{ ...tdBase, background: TOTAL_BG, textAlign: 'right', color: sv.rev === 0 ? MUTED : textCol, fontWeight: 600, borderRight: rightBorder }}>
+                          {fmtRev(sv.rev)}
                         </td>
                       </Fragment>
                     )
