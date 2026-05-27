@@ -110,7 +110,7 @@ function SimpleNavItem({
       href={path}
       title={collapsed ? label : undefined}
       className={[
-        'relative flex items-center gap-2.5 mx-2 px-2.5 py-2 rounded-lg text-sm transition-all duration-150 group',
+        'relative flex items-center gap-2.5 mx-2 px-2.5 py-[8.4px] rounded-lg text-sm transition-all duration-150 group',
         isActive
           ? 'bg-[var(--accent-badge-bg)] text-accent-primary'
           : 'text-brand-muted hover:bg-[var(--overlay-hover)] hover:text-brand-text',
@@ -377,7 +377,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </button>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 space-y-0.5">
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden py-[12.6px] space-y-[2.1px]">
           {menuLoading ? (
             <div className="px-2 space-y-1 py-1">
               {[1,2,3,4,5].map(i => (
@@ -392,7 +392,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               {mainItems.length > 0 && (
                 <div className="mb-1">
                   {!collapsed ? (
-                    <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-brand-dimmed select-none">
+                    <p className="px-4 pt-[12.6px] pb-[4.2px] text-[10px] font-semibold uppercase tracking-[0.08em] text-brand-dimmed select-none">
                       메인
                     </p>
                   ) : (
@@ -412,7 +412,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                           onMouseEnter={e => openFlyout(item, e)}
                           onMouseLeave={scheduleFlyoutClose}
                           className={[
-                            'relative flex items-center gap-2.5 mx-2 px-2.5 py-2 rounded-lg',
+                            'relative flex items-center gap-2.5 mx-2 px-2.5 py-[8.4px] rounded-lg',
                             'text-sm transition-all duration-150 group cursor-pointer select-none',
                             isActive
                               ? 'bg-[var(--accent-badge-bg)] text-accent-primary'
@@ -441,7 +441,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                         href={item.path ?? '/'}
                         title={collapsed ? item.name : undefined}
                         className={[
-                          'relative flex items-center gap-2.5 mx-2 px-2.5 py-2 rounded-lg',
+                          'relative flex items-center gap-2.5 mx-2 px-2.5 py-[8.4px] rounded-lg',
                           'text-sm transition-all duration-150 group',
                           isActive
                             ? 'bg-[var(--accent-badge-bg)] text-accent-primary'
@@ -465,7 +465,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               {settingItems.length > 0 && (
                 <div className="mb-1">
                   {!collapsed ? (
-                    <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-brand-dimmed select-none">
+                    <p className="px-4 pt-[12.6px] pb-[4.2px] text-[10px] font-semibold uppercase tracking-[0.08em] text-brand-dimmed select-none">
                       설정
                     </p>
                   ) : (
@@ -478,7 +478,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                       <Link key={item.id} href={item.path ?? '/'}
                         title={collapsed ? item.name : undefined}
                         className={[
-                          'relative flex items-center gap-2.5 mx-2 px-2.5 py-2 rounded-lg',
+                          'relative flex items-center gap-2.5 mx-2 px-2.5 py-[8.4px] rounded-lg',
                           'text-sm transition-all duration-150 group',
                           isActive
                             ? 'bg-[var(--accent-badge-bg)] text-accent-primary'

@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState } from 'react'
 import type { ForecastSchema, ForecastDayData, CalendarMap } from '@/lib/forecast/types'
 import { buildColumnGroups } from '@/lib/forecast/schema'
 import { fmtRn, fmtAdr, fmtRev, fmtOcc } from '@/lib/forecast/format'
+import { useTheme } from '@/contexts/ThemeContext'
 
 interface ForecastTableProps {
   schema:          ForecastSchema
@@ -37,16 +38,6 @@ const HDR_H     = 35   // approximate header row height (px)
 const TOT_REV_W    = 90   // REV column wider for monthly totals ("1,240,000")
 const SEG_COL_W    = TOT_W  // segment metric column width (same as Total)
 const TOT_HDR_BORDER = '1px solid var(--color-border-default)'  // opaque 1px for Total header
-
-const thBase: React.CSSProperties = {
-  borderBottom: BORDER,
-  borderRight:  BORDER,
-  padding:      '8px 10px',
-  fontSize:     '12px',
-  whiteSpace:   'nowrap',
-  color:        TEXT,
-  background:   HEADER_BG,
-}
 
 const tdBase: React.CSSProperties = {
   borderBottom: BORDER,
@@ -108,6 +99,20 @@ function shouldAutoExpand(daily: ForecastDayData, threshold: number): boolean {
 }
 
 export default function ForecastTable({ schema, data, selectedNodeIds, calendar, threshold = 0 }: ForecastTableProps) {
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
+  // 다크모드에서 순수 흰색(#FFF) 대신 off-white로 톤 다운
+  const TEXT = isDark ? 'rgba(255,255,255,0.88)' : 'var(--color-text-primary)'
+  const thBase: React.CSSProperties = {
+    borderBottom: BORDER,
+    borderRight:  BORDER,
+    padding:      '8px 10px',
+    fontSize:     '12px',
+    whiteSpace:   'nowrap',
+    color:        TEXT,
+    background:   HEADER_BG,
+  }
+
   const [manualExpandedDates, setManualExpandedDates] = useState<Set<string>>(new Set())
 
   function toggleExpand(date: string) {
@@ -305,7 +310,7 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                           zIndex:      5,
                         }}
                       >
-                        {metric === 'ADR' ? 'ADR(천)' : metric === 'REV' ? 'REV(백만)' : metric}
+                        {metric}
                       </th>
                     ))}
                   </Fragment>
@@ -331,7 +336,7 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                           zIndex:      4,
                         }}
                       >
-                        {metric === 'ADR' ? 'ADR(천)' : metric === 'REV' ? 'REV(백만)' : metric}
+                        {metric}
                       </th>
                     ))}
                   </Fragment>
@@ -359,7 +364,11 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                 {/* ── FC 행 ── */}
                 <tr
                   onClick={expandable ? () => toggleExpand(row.business_date) : undefined}
-                  style={{ cursor: expandable ? 'pointer' : 'default' }}
+                  style={{
+                    cursor:     expandable ? 'pointer' : 'default',
+                    opacity:    row.is_actual_day ? 0.55 : 1,
+                    transition: 'opacity 0.15s',
+                  }}
                 >
                   {/* 날짜 (sticky) */}
                   <td
@@ -619,7 +628,7 @@ export default function ForecastTable({ schema, data, selectedNodeIds, calendar,
                     const rightBorder = isLast ? BORDER : GROUP_BORDER
                     return (
                       <Fragment key={group.id}>
-                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', fontWeight: 700, color: totRn === 0 ? TERTIARY : TEXT_SEC, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, borderTop: SUM_TOP, position: 'sticky', left: TOT_OCC_L, zIndex: 2 }}>
+                        <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', fontWeight: 700, color: totRn === 0 ? TERTIARY : TEXT, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, borderTop: SUM_TOP, position: 'sticky', left: TOT_OCC_L, zIndex: 2 }}>
                           {fmtOcc(totRn, schema.roomCount * data.length)}
                         </td>
                         <td style={{ ...tdBase, background: SUM_BG, textAlign: 'right', fontWeight: 700, color: totRn === 0 ? TERTIARY : TEXT, width: TOT_W, minWidth: TOT_W, borderRight: BORDER, borderTop: SUM_TOP, position: 'sticky', left: TOT_RN_L, zIndex: 2 }}>

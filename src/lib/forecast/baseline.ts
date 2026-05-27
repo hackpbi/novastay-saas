@@ -13,12 +13,14 @@ export async function fetchBaselineForecast(
   hotelId:   string,
   startDate: string,
   endDate:   string,
+  today?:    string,
 ): Promise<ForecastRpcRow[]> {
   const { data, error } = await (supabase as any)
     .rpc('calculate_baseline_forecast_bulk', {
       p_hotel_id:   hotelId,
       p_start_date: startDate,
       p_end_date:   endDate,
+      ...(today ? { p_today: today } : {}),
     })
     .limit(100000)
   if (error) throw error

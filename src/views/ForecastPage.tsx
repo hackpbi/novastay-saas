@@ -9,6 +9,7 @@ import { fetchForecastSchema } from '@/lib/forecast/schema'
 import { fetchBaselineForecast, transformRpcToTableData } from '@/lib/forecast/baseline'
 import { fetchCalendarRange, calendarToMap } from '@/lib/forecast/calendar'
 import { useHotel } from '@/contexts/HotelContext'
+import { useDateContext } from '@/contexts/DateContext'
 import type { ForecastSchema, ForecastDayData, CalendarMap } from '@/lib/forecast/types'
 
 // ── Month helpers ──────────────────────────────────────────────────────────────
@@ -26,6 +27,7 @@ function monthRange(year: number, month: number) {
 export default function ForecastPage() {
   const { currentHotel } = useHotel()
   const hotelId = currentHotel?.id ?? ''
+  const { otbDate } = useDateContext()
 
   // ── Month state ──────────────────────────────────────────────────────────────
   const [currentMonth, setCurrentMonth] = useState(() => {
@@ -85,11 +87,11 @@ export default function ForecastPage() {
     const { start, end } = monthRange(currentMonth.year, currentMonth.month)
     setDataLoading(true)
     setDataError(null)
-    fetchBaselineForecast(hotelId, start, end)
+    fetchBaselineForecast(hotelId, start, end, otbDate || undefined)
       .then(rows => setData(transformRpcToTableData(rows)))
       .catch(e => setDataError(String(e)))
       .finally(() => setDataLoading(false))
-  }, [hotelId, currentMonth])
+  }, [hotelId, currentMonth, otbDate])
 
   // ── 자동 펼침 임계값 ──────────────────────────────────────────────────────────
   const [threshold, setThreshold] = useState(3)

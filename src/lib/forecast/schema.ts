@@ -92,7 +92,7 @@ export function buildColumnGroups(
   const segmentGroups: ColumnGroup[] = nodes.map(node => {
     if (node.children.length > 0) {
       const subCols: SubColumn[] = [
-        { id: `${node.id}-sum`, label: '(합산)', segCodes: node.segmentationCodes, isSummary: true },
+        { id: `${node.id}-sum`, label: 'Sub Total', segCodes: node.segmentationCodes, isSummary: true },
         ...node.children.map(child => ({
           id:        child.id,
           label:     child.name,
