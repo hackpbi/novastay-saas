@@ -4,12 +4,12 @@ import type { ReactNode } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface ForecastHeaderProps {
-  year:      number
-  month:     number
-  onPrev:    () => void
-  onNext:    () => void
-  onToday:   () => void
-  children?: ReactNode
+  year:       number
+  month:      number
+  onPrev:     () => void
+  onNext:     () => void
+  leftExtra?: ReactNode
+  children?:  ReactNode
 }
 
 const btnBase: React.CSSProperties = {
@@ -27,9 +27,9 @@ const btnBase: React.CSSProperties = {
   transition:     'background 0.15s, color 0.15s',
 }
 
-export default function ForecastHeader({ year, month, onPrev, onNext, onToday, children }: ForecastHeaderProps) {
+export default function ForecastHeader({ year, month, onPrev, onNext, leftExtra, children }: ForecastHeaderProps) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', width: '100%' }}>
       {/* 좌측: 월 selector */}
       <div className="flex items-center gap-2">
         <button
@@ -56,19 +56,14 @@ export default function ForecastHeader({ year, month, onPrev, onNext, onToday, c
           <ChevronRight size={14} />
         </button>
 
-        <button
-          onClick={onToday}
-          style={{ ...btnBase, padding: '4px 10px' }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-secondary)' }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-surface)' }}
-        >
-          오늘
-        </button>
       </div>
 
-      {/* 우측: 세그먼트 필터 + 자동 펼침 슬라이더 */}
+      {/* 월 selector 우측 추가 영역 (KPI 바) */}
+      {leftExtra}
+
+      {/* 우측 끝: 세그먼트 필터 + 컨트롤 */}
       {children && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           {children}
         </div>
       )}

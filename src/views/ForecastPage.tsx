@@ -4,10 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import ForecastTable from '@/components/forecast/ForecastTable'
 import ForecastHeader from '@/components/forecast/ForecastHeader'
 import SegmentFilter from '@/components/forecast/SegmentFilter'
-import SummaryCards from '@/components/forecast/SummaryCards'
+import KpiBar from '@/components/forecast/KpiBar'
+import { Download, Upload } from 'lucide-react'
 import { fetchForecastSchema } from '@/lib/forecast/schema'
 import { fetchBaselineForecast, transformRpcToTableData } from '@/lib/forecast/baseline'
 import { fetchCalendarRange, calendarToMap } from '@/lib/forecast/calendar'
+import { type EditedValues, saveForecastEdits, type SaveEdit } from '@/lib/forecast/save'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import type { ForecastSchema, ForecastDayData, CalendarMap } from '@/lib/forecast/types'
@@ -41,11 +43,6 @@ export default function ForecastPage() {
   const goNext = useCallback(() => setCurrentMonth(p =>
     p.month === 12 ? { year: p.year + 1, month: 1 } : { year: p.year, month: p.month + 1 }
   ), [])
-  const goToday = useCallback(() => {
-    const t = new Date()
-    setCurrentMonth({ year: t.getFullYear(), month: t.getMonth() + 1 })
-  }, [])
-
   // ── Schema fetch (호텔 변경 시에만) ─────────────────────────────────────────
   const [schema,      setSchema]      = useState<ForecastSchema | null>(null)
   const [schemaError, setSchemaError] = useState<string | null>(null)
@@ -93,6 +90,66 @@ export default function ForecastPage() {
       .finally(() => setDataLoading(false))
   }, [hotelId, currentMonth, otbDate])
 
+  // ── 월 FCST 합계 (KPI 바) ────────────────────────────────────────────────────
+  const monthFcst = useMemo(() => {
+    if (!schema) return { occ: 0, adr: 0, rev: 0 }
+    let rn = 0, rev = 0
+    for (const day of data) {
+      for (const code of schema.allSegmentationCodes) {
+        const v = day.values[code]
+        if (v) { rn += v.rn; rev += v.rev }
+      }
+    }
+    const adr = rn > 0 ? rev / rn : 0
+    const occ = schema.roomCount * data.length > 0
+      ? (rn / (schema.roomCount * data.length)) * 100
+      : 0
+    return { occ, adr, rev }
+  }, [data, schema])
+
+  // ── 인라인 편집 state ────────────────────────────────────────────────────────
+  const [editedValues, setEditedValues] = useState<EditedValues>(new Map())
+  const [saving,       setSaving]       = useState(false)
+
+  // 월/호텔 변경 시 편집 상태 초기화
+  useEffect(() => { setEditedValues(new Map()) }, [data])
+
+  const modifiedCount = editedValues.size
+
+  function buildSaveEdits(ev: EditedValues): SaveEdit[] {
+    const edits: SaveEdit[] = []
+    for (const [key, edited] of ev.entries()) {
+      const [businessDate, segmentation] = key.split('::')
+      const day = data.find(d => d.business_date === businessDate)
+      if (!day) continue
+      const original = day.values[segmentation]
+      if (!original) continue
+      edits.push({
+        business_date: businessDate,
+        segmentation,
+        rn:  edited.rn  ?? original.rn,
+        adr: edited.adr ?? original.adr,
+      })
+    }
+    return edits
+  }
+
+  async function handleSave() {
+    if (editedValues.size === 0 || saving) return
+    setSaving(true)
+    try {
+      const updateDate = otbDate || new Date().toISOString().slice(0, 10)
+      const edits      = buildSaveEdits(editedValues)
+      const result     = await saveForecastEdits(hotelId, updateDate, edits)
+      alert(`저장 완료: 총 ${result.saved_count}건 (신규 ${result.inserted_count}, 수정 ${result.updated_count})`)
+      setEditedValues(new Map())
+    } catch (err) {
+      alert(`저장 실패: ${(err as Error).message}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   // ── 자동 펼침 임계값 ──────────────────────────────────────────────────────────
   const [threshold, setThreshold] = useState(3)
 
@@ -122,14 +179,6 @@ export default function ForecastPage() {
   return (
     <div className="animate-fade-in">
 
-      {/* 페이지 제목 (일반 — non-sticky) */}
-      <h1
-        className="text-2xl font-semibold tracking-tight mb-3"
-        style={{ color: 'var(--color-text-primary)' }}
-      >
-        일자별 세그먼트 전망
-      </h1>
-
       {/* ── 상단 sticky 영역 ── */}
       <div
         style={{
@@ -142,13 +191,13 @@ export default function ForecastPage() {
           boxShadow:     '0 2px 4px rgba(0,0,0,0.05)',
         }}
       >
-        {/* 월 selector + 컨트롤 (한 줄) */}
+        {/* 1줄: 월 selector + 세그먼트 필터 + 자동 펼침 + KPI 바 */}
         <ForecastHeader
           year={currentMonth.year}
           month={currentMonth.month}
           onPrev={goPrev}
           onNext={goNext}
-          onToday={goToday}
+          leftExtra={schema && <KpiBar fcst={monthFcst} />}
         >
           {schema && schema.nodes.length > 0 && (
             <>
@@ -159,26 +208,34 @@ export default function ForecastPage() {
                 onAll={selectAll}
                 onReset={selectNone}
               />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 12, color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
                   자동 펼침
                 </span>
                 <input
-                  type="range"
+                  type="number"
                   min={0}
-                  max={10}
-                  step={1}
+                  max={20}
                   value={threshold}
-                  onChange={e => setThreshold(parseInt(e.target.value))}
+                  onChange={e => {
+                    const v = parseInt(e.target.value)
+                    if (!isNaN(v) && v >= 0 && v <= 20) setThreshold(v)
+                  }}
+                  title="OTB가 FC + 이 값 이상이면 자동 펼침"
                   style={{
-                    width:       110,
-                    accentColor: 'var(--color-accent-primary, #00E5A0)',
-                    cursor:      'pointer',
+                    width:        40,
+                    padding:      '3px 6px',
+                    fontSize:     12,
+                    fontWeight:   600,
+                    textAlign:    'center',
+                    border:       '1px solid var(--color-border-default)',
+                    borderRadius: 4,
+                    background:   'var(--color-bg-secondary)',
+                    color:        'var(--color-text-primary)',
                   }}
                 />
                 <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
-                  OTB ≥ FC +{' '}
-                  <strong style={{ color: 'var(--color-text-primary)' }}>{threshold}</strong>실
+                  실
                   {autoCount > 0 && (
                     <span style={{ marginLeft: 6, color: 'var(--color-warning, #F5A623)', fontWeight: 600 }}>
                       ({autoCount}일)
@@ -186,16 +243,97 @@ export default function ForecastPage() {
                   )}
                 </span>
               </div>
+
+              {/* 변경 건수 안내 */}
+              {modifiedCount > 0 && (
+                <div style={{
+                  display:      'flex',
+                  alignItems:   'center',
+                  gap:          4,
+                  padding:      '4px 8px',
+                  fontSize:     11,
+                  fontWeight:   500,
+                  color:        'var(--color-warning, #F5A623)',
+                  background:   'rgba(245, 158, 11, 0.08)',
+                  borderRadius: 4,
+                  whiteSpace:   'nowrap',
+                }}>
+                  ⚠ 변경 {modifiedCount}건 (저장 안 됨)
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    style={{
+                      padding:      '3px 10px',
+                      fontSize:     11,
+                      fontWeight:   600,
+                      background:   'var(--color-accent-primary, #00E5A0)',
+                      color:        '#000',
+                      border:       'none',
+                      borderRadius: 4,
+                      cursor:       saving ? 'wait' : 'pointer',
+                      opacity:      saving ? 0.6 : 1,
+                    }}
+                  >
+                    {saving ? '저장 중...' : '저장'}
+                  </button>
+                </div>
+              )}
+
+              {/* 데이터 액션 */}
+              <div style={{
+                display:     'flex',
+                alignItems:  'center',
+                gap:         6,
+                paddingLeft: 12,
+                borderLeft:  '1px solid var(--color-border-default)',
+              }}>
+                <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap' }}>
+                  데이터
+                </span>
+                <button
+                  title="준비 중인 기능입니다"
+                  style={{
+                    display:      'flex',
+                    alignItems:   'center',
+                    gap:          4,
+                    padding:      '4px 8px',
+                    fontSize:     12,
+                    fontWeight:   500,
+                    cursor:       'pointer',
+                    border:       '1px solid var(--color-border-default)',
+                    borderRadius: 6,
+                    background:   'var(--color-bg-surface)',
+                    color:        'var(--color-text-secondary)',
+                    opacity:      0.6,
+                  }}
+                >
+                  <Download size={13} />
+                  불러오기
+                </button>
+                <button
+                  title="준비 중인 기능입니다"
+                  style={{
+                    display:      'flex',
+                    alignItems:   'center',
+                    gap:          4,
+                    padding:      '4px 8px',
+                    fontSize:     12,
+                    fontWeight:   500,
+                    cursor:       'pointer',
+                    border:       '1px solid var(--color-border-default)',
+                    borderRadius: 6,
+                    background:   'var(--color-bg-surface)',
+                    color:        'var(--color-text-secondary)',
+                    opacity:      0.6,
+                  }}
+                >
+                  <Upload size={13} />
+                  업로드
+                </button>
+              </div>
             </>
           )}
         </ForecastHeader>
-
-        {/* 상단 요약 카드 */}
-        {schema && (
-          <div style={{ marginTop: 12 }}>
-            <SummaryCards schema={schema} data={data} />
-          </div>
-        )}
       </div>
 
       {/* 0개 선택 안내 */}
@@ -243,6 +381,8 @@ export default function ForecastPage() {
               selectedNodeIds={selectedNodeIds}
               calendar={calendar}
               threshold={threshold}
+              editedValues={editedValues}
+              onEditChange={setEditedValues}
             />
           )}
         </div>

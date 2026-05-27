@@ -65,7 +65,7 @@ export default function SegmentFilter({
           transition: 'background 0.15s',
         }}
       >
-        <span>세그먼트</span>
+        <span>Seg</span>
         <span style={{
           fontWeight: 600,
           color: selected < total
@@ -74,7 +74,6 @@ export default function SegmentFilter({
         }}>
           {selected}/{total}
         </span>
-        <span style={{ color: 'var(--color-text-muted)' }}>표시</span>
         <ChevronDown
           size={14}
           style={{
