@@ -8,13 +8,15 @@ import { useTheme } from '@/contexts/ThemeContext'
 import { type EditedValues, makeEditKey } from '@/lib/forecast/save'
 
 interface ForecastTableProps {
-  schema:          ForecastSchema
-  data:            ForecastDayData[]
-  selectedNodeIds: Set<string>
-  calendar?:       CalendarMap
-  threshold?:      number
-  editedValues:    EditedValues
-  onEditChange:    (next: EditedValues) => void
+  schema:                ForecastSchema
+  data:                  ForecastDayData[]
+  selectedNodeIds:       Set<string>
+  calendar?:             CalendarMap
+  threshold?:            number
+  editedValues:          EditedValues
+  onEditChange:          (next: EditedValues) => void
+  editMode?:             'inline' | 'bulk'
+  onOpenBulkEditModal?:  (date: string) => void
 }
 
 const BORDER       = '0.5px solid var(--color-border-default)'
@@ -120,28 +122,33 @@ function shouldAutoExpand(daily: ForecastDayData, threshold: number): boolean {
 // ── EditableCell ─────────────────────────────────────────────────────────────
 
 interface EditableCellProps {
-  value:       number
-  fmt:         (n: number) => string
-  onSave:      (v: number) => void
-  editable:    boolean
-  isModified?: boolean
-  scale?:      number  // divide input for display, multiply on save (default 1)
+  value:          number
+  fmt:            (n: number) => string
+  onSave:         (v: number) => void
+  editable:       boolean
+  isModified?:    boolean
+  editMode?:      'inline' | 'bulk'
+  onBulkClick?:   () => void
 }
 
-function EditableCell({ value, fmt, onSave, editable, isModified, scale = 1 }: EditableCellProps) {
+function EditableCell({ value, fmt, onSave, editable, isModified, editMode = 'inline', onBulkClick }: EditableCellProps) {
   const [editing, setEditing] = useState(false)
   const [input,   setInput]   = useState('')
 
   function startEdit(e: React.MouseEvent) {
     if (!editable) return
     e.stopPropagation()
-    setInput(String(Math.round(value / scale)))
+    if (editMode === 'bulk') {
+      onBulkClick?.()
+      return
+    }
+    setInput(String(Math.round(value)))
     setEditing(true)
   }
 
   function commit() {
     const num = parseFloat(input)
-    if (!isNaN(num) && num >= 0) onSave(Math.round(num * scale))
+    if (!isNaN(num) && num >= 0) onSave(Math.round(num))
     setEditing(false)
   }
 
@@ -149,32 +156,46 @@ function EditableCell({ value, fmt, onSave, editable, isModified, scale = 1 }: E
 
   if (editing) {
     return (
-      <input
-        type="number"
-        value={input}
-        autoFocus
-        onChange={e => setInput(e.target.value)}
-        onBlur={commit}
-        onKeyDown={e => {
-          e.stopPropagation()
-          if (e.key === 'Enter') { e.preventDefault(); commit() }
-          if (e.key === 'Escape') cancel()
-        }}
-        onClick={e => e.stopPropagation()}
-        onFocus={e => e.target.select()}
-        style={{
-          width:        '100%',
-          padding:      '1px 2px',
-          fontSize:     'inherit',
-          textAlign:    'right',
-          border:       '1px solid var(--color-accent-primary, #00E5A0)',
-          borderRadius: 3,
-          background:   'var(--color-bg-primary)',
-          color:        'var(--color-text-primary)',
-          outline:      'none',
-          boxSizing:    'border-box',
-        }}
-      />
+      <>
+        <style>{`
+          .fct-edit::-webkit-inner-spin-button,
+          .fct-edit::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        `}</style>
+        <input
+          type="number"
+          className="fct-edit"
+          value={input}
+          autoFocus
+          onChange={e => setInput(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => {
+            e.stopPropagation()
+            if (e.key === 'Enter') { e.preventDefault(); commit() }
+            if (e.key === 'Escape') cancel()
+          }}
+          onClick={e => e.stopPropagation()}
+          onFocus={e => e.target.select()}
+          style={{
+            width:              `${Math.max(input.length + 1, 4)}ch`,
+            minWidth:           '4ch',
+            maxWidth:           '10ch',
+            padding:            '1px 4px',
+            fontSize:           'inherit',
+            textAlign:          'right',
+            border:             '1px solid var(--color-accent-primary, #00E5A0)',
+            borderRadius:       3,
+            background:         'var(--color-bg-primary)',
+            color:              'var(--color-text-primary)',
+            outline:            'none',
+            boxSizing:          'border-box',
+            position:           'relative',
+            zIndex:             5,
+            boxShadow:          '0 2px 6px rgba(0,0,0,0.15)',
+            MozAppearance:      'textfield',
+            appearance:         'textfield',
+          } as React.CSSProperties}
+        />
+      </>
     )
   }
 
@@ -209,6 +230,8 @@ export default function ForecastTable({
   threshold = 0,
   editedValues,
   onEditChange,
+  editMode = 'inline',
+  onOpenBulkEditModal,
 }: ForecastTableProps) {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
@@ -285,7 +308,7 @@ export default function ForecastTable({
   }, [data, schema, allGroups, editedValues])
 
   return (
-    <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 150px)', minHeight: 200 }}>
+    <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 190px)', minHeight: 200 }}>
       <table
         style={{
           borderCollapse: 'separate',
@@ -632,6 +655,8 @@ export default function ForecastTable({
                                 fmt={fmtRn}
                                 editable={true}
                                 isModified={isRnEdited}
+                                editMode={editMode}
+                                onBulkClick={() => onOpenBulkEditModal?.(row.business_date)}
                                 onSave={v => saveEdit(row.business_date, segCode, 'rn', v)}
                               />
                             ) : fmtRn(sv.rn)}
@@ -651,7 +676,8 @@ export default function ForecastTable({
                                 fmt={fmtAdr}
                                 editable={true}
                                 isModified={isAdrEdited}
-                                scale={1000}
+                                editMode={editMode}
+                                onBulkClick={() => onOpenBulkEditModal?.(row.business_date)}
                                 onSave={v => saveEdit(row.business_date, segCode, 'adr', v)}
                               />
                             ) : fmtAdr(sv.adr)}

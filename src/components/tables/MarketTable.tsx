@@ -31,6 +31,7 @@ export type MarketTableProps = {
   stickyFirstGroup?: boolean
   opaqueBg?:         boolean
   maxHeight?:        string
+  segWidth?:         number
 }
 
 type Schema = {
@@ -195,6 +196,7 @@ function SegCell({
 
 export default function MarketTable({
   hotelId, columns, data, groupHeader, loading, className, year, month, stickyFirstGroup, opaqueBg, maxHeight,
+  segWidth,
 }: MarketTableProps) {
 
   // queryKey에 'full' 추가 — BudgetPage의 minimal 쿼리 캐시와 충돌 방지
@@ -232,7 +234,7 @@ export default function MarketTable({
   const roomCount = hotelDetail?.room_count ?? 0
   const tree      = useMemo(() => buildTree(schemas), [schemas])
 
-  const SEG_WIDTH  = 280
+  const SEG_WIDTH  = segWidth ?? 280
   const tableWidth = useMemo(() => {
     const colsWidth = columns.reduce((sum, col) => sum + parseInt(getColWidth(col)), 0)
     return SEG_WIDTH + colsWidth

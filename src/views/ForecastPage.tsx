@@ -5,14 +5,17 @@ import ForecastTable from '@/components/forecast/ForecastTable'
 import ForecastHeader from '@/components/forecast/ForecastHeader'
 import SegmentFilter from '@/components/forecast/SegmentFilter'
 import KpiBar from '@/components/forecast/KpiBar'
-import { Download, Upload } from 'lucide-react'
+import { Download, Upload, Pencil, ClipboardList, Zap } from 'lucide-react'
 import { fetchForecastSchema } from '@/lib/forecast/schema'
 import { fetchBaselineForecast, transformRpcToTableData } from '@/lib/forecast/baseline'
 import { fetchCalendarRange, calendarToMap } from '@/lib/forecast/calendar'
 import { type EditedValues, saveForecastEdits, type SaveEdit } from '@/lib/forecast/save'
+import { BulkEditModal } from '@/components/forecast/BulkEditModal'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import type { ForecastSchema, ForecastDayData, CalendarMap } from '@/lib/forecast/types'
+import DatePicker from '@/components/DatePicker'
+import { supabase } from '@/lib/supabase'
 
 // ── Month helpers ──────────────────────────────────────────────────────────────
 
@@ -74,21 +77,43 @@ export default function ForecastPage() {
   }, [schema])
   const selectNone = useCallback(() => setSelectedNodeIds(new Set()), [])
 
-  // ── Baseline fetch (월 변경 시마다) ─────────────────────────────────────────
-  const [data,        setData]        = useState<ForecastDayData[]>([])
-  const [dataLoading, setDataLoading] = useState(false)
-  const [dataError,   setDataError]   = useState<string | null>(null)
+  // ── Baseline data state ───────────────────────────────────────────────────────
+  const [data,         setData]         = useState<ForecastDayData[]>([])
+  const [dataError,    setDataError]    = useState<string | null>(null)
+  const [isLoaded,     setIsLoaded]     = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
 
+  // 월/호텔 변경 시 빈 표로 리셋
   useEffect(() => {
-    if (!hotelId) return
-    const { start, end } = monthRange(currentMonth.year, currentMonth.month)
-    setDataLoading(true)
+    setIsLoaded(false)
+    setData([])
     setDataError(null)
-    fetchBaselineForecast(hotelId, start, end, otbDate || undefined)
-      .then(rows => setData(transformRpcToTableData(rows)))
-      .catch(e => setDataError(String(e)))
-      .finally(() => setDataLoading(false))
-  }, [hotelId, currentMonth, otbDate])
+  }, [hotelId, currentMonth])
+
+  async function doFetch() {
+    const { start, end } = monthRange(currentMonth.year, currentMonth.month)
+    const rows = await fetchBaselineForecast(hotelId, start, end, otbDate || undefined)
+    setData(transformRpcToTableData(rows))
+    setIsLoaded(true)
+  }
+
+  async function handleGenerate() {
+    if (isGenerating || !hotelId) return
+    if (isLoaded || editedValues.size > 0) {
+      if (!confirm('기존 데이터가 있습니다. 새롭게 다시 생성하시겠습니까?')) return
+    }
+    setIsGenerating(true)
+    setDataError(null)
+    try {
+      await doFetch()
+      setEditedValues(new Map())
+      setSelectedLoadDate('')
+    } catch (e) {
+      setDataError((e as Error).message ?? String(e))
+    } finally {
+      setIsGenerating(false)
+    }
+  }
 
   // ── 월 FCST 합계 (KPI 바) ────────────────────────────────────────────────────
   const monthFcst = useMemo(() => {
@@ -107,9 +132,48 @@ export default function ForecastPage() {
     return { occ, adr, rev }
   }, [data, schema])
 
+  // ── Budget monthly fetch ─────────────────────────────────────────────────────
+  type BudgetMonthRow = { budget_nights: number; budget_revenue: number }
+  const [budgetMonthRows, setBudgetMonthRows] = useState<BudgetMonthRow[]>([])
+
+  useEffect(() => {
+    if (!hotelId) { setBudgetMonthRows([]); return }
+    ;(async () => {
+      const { data: rows, error } = await (supabase as any).rpc('get_budget_mtd_summary', {
+        p_hotel_id: hotelId,
+        p_year:     currentMonth.year,
+        p_month:    currentMonth.month,
+      })
+      if (!error && rows) setBudgetMonthRows(rows)
+      else setBudgetMonthRows([])
+    })().catch(() => setBudgetMonthRows([]))
+  }, [hotelId, currentMonth.year, currentMonth.month])
+
+  const budgetMonth = useMemo(() => {
+    if (budgetMonthRows.length === 0) return null
+    let nights = 0, revenue = 0
+    for (const r of budgetMonthRows) { nights += r.budget_nights; revenue += r.budget_revenue }
+    return { nights, revenue }
+  }, [budgetMonthRows])
+
+  const vsBudget = useMemo(() => {
+    if (!isLoaded || !budgetMonth || !schema || data.length === 0) return null
+    const bdOcc = schema.roomCount * data.length > 0
+      ? (budgetMonth.nights / (schema.roomCount * data.length)) * 100
+      : 0
+    const bdAdr = budgetMonth.nights > 0 ? budgetMonth.revenue / budgetMonth.nights : 0
+    return {
+      occDiff: monthFcst.occ - bdOcc,
+      adrDiff: monthFcst.adr - bdAdr,
+      revDiff: monthFcst.rev - budgetMonth.revenue,
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded, monthFcst, budgetMonth, schema, data.length])
+
   // ── 인라인 편집 state ────────────────────────────────────────────────────────
   const [editedValues, setEditedValues] = useState<EditedValues>(new Map())
   const [saving,       setSaving]       = useState(false)
+  const [isUploading,  setIsUploading]  = useState(false)
 
   // 월/호텔 변경 시 편집 상태 초기화
   useEffect(() => { setEditedValues(new Map()) }, [data])
@@ -134,6 +198,42 @@ export default function ForecastPage() {
     return edits
   }
 
+  function buildAllSaveEdits(): SaveEdit[] {
+    const edits: SaveEdit[] = []
+    for (const day of data) {
+      if (day.is_actual_day) continue  // 과거 실적 제외
+      for (const [code, value] of Object.entries(day.values)) {
+        if (value.is_actual) continue  // 세그먼트 레벨 actual도 제외
+        edits.push({
+          business_date: day.business_date,
+          segmentation:  code,
+          rn:            value.rn  ?? 0,
+          adr:           value.adr ?? 0,
+        })
+      }
+    }
+    return edits
+  }
+
+  async function handleUpload() {
+    if (data.length === 0 || isUploading || saving) return
+    if (!confirm(`화면의 모든 Forecast를 저장합니다.\n계속하시겠습니까?`)) return
+    setIsUploading(true)
+    try {
+      const edits = buildAllSaveEdits()
+      if (edits.length === 0) { alert('업로드할 데이터가 없습니다.'); return }
+      const updateDate = otbDate || new Date().toISOString().slice(0, 10)
+      const result     = await saveForecastEdits(hotelId, updateDate, edits)
+      alert(`전체 저장 완료\n총 ${result.saved_count}건 (신규 ${result.inserted_count}, 수정 ${result.updated_count})`)
+      setEditedValues(new Map())
+      doFetch().catch(() => {})
+    } catch (err) {
+      alert(`업로드 실패: ${(err as Error).message}`)
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
   async function handleSave() {
     if (editedValues.size === 0 || saving) return
     setSaving(true)
@@ -143,12 +243,41 @@ export default function ForecastPage() {
       const result     = await saveForecastEdits(hotelId, updateDate, edits)
       alert(`저장 완료: 총 ${result.saved_count}건 (신규 ${result.inserted_count}, 수정 ${result.updated_count})`)
       setEditedValues(new Map())
+      doFetch().catch(() => {})
     } catch (err) {
       alert(`저장 실패: ${(err as Error).message}`)
     } finally {
       setSaving(false)
     }
   }
+
+  // ── 편집 모드 ────────────────────────────────────────────────────────────────
+  type EditMode = 'inline' | 'bulk'
+  const [editMode, setEditMode] = useState<EditMode>('inline')
+
+  // ── 일괄수정 모달 ─────────────────────────────────────────────────────────────
+  const [bulkEdit, setBulkEdit] = useState<{
+    isOpen:       boolean
+    selectedDate: string | null
+  }>({ isOpen: false, selectedDate: null })
+
+  const openBulkEditModal  = useCallback((date: string) => {
+    setBulkEdit({ isOpen: true, selectedDate: date })
+  }, [])
+  const closeBulkEditModal = useCallback(() => {
+    setBulkEdit(prev => ({ ...prev, isOpen: false }))
+  }, [])
+  const selectBulkEditDate = useCallback((date: string) => {
+    setBulkEdit(prev => ({ ...prev, selectedDate: date }))
+  }, [])
+
+  const handleBulkApply = useCallback((newEdits: EditedValues) => {
+    setEditedValues(prev => {
+      const next = new Map(prev)
+      for (const [key, val] of newEdits.entries()) next.set(key, val)
+      return next
+    })
+  }, [])
 
   // ── 자동 펼침 임계값 ──────────────────────────────────────────────────────────
   const [threshold, setThreshold] = useState(3)
@@ -173,6 +302,50 @@ export default function ForecastPage() {
       .catch(() => {})
   }, [currentMonth])
 
+  // ── 불러오기 — a05의 update_date 목록 (현재 월) ──────────────────────────────
+  const [loadableDates,    setLoadableDates]    = useState<string[]>([])
+  const [selectedLoadDate, setSelectedLoadDate] = useState<string>('')
+
+  useEffect(() => {
+    if (!hotelId) return
+    const { start, end } = monthRange(currentMonth.year, currentMonth.month)
+    ;(async () => {
+      const { data: rows } = await supabase
+        .from('a05_forecast_daily')
+        .select('update_date')
+        .eq('hotel_id', hotelId)
+        .gte('business_date', start)
+        .lte('business_date', end)
+      if (!rows) return
+      const unique = [...new Set(rows.map((r: { update_date: string }) => r.update_date))]
+      unique.sort((a, b) => b.localeCompare(a))
+      setLoadableDates(unique)
+    })().catch(() => {})
+  }, [hotelId, currentMonth])
+
+  async function handleLoadConfirm(loadDate: string) {
+    if (editedValues.size > 0) {
+      if (!confirm('편집한 내용이 있습니다. 불러오면 사라집니다. 계속하시겠습니까?')) return
+    }
+    setIsGenerating(true)
+    setDataError(null)
+    try {
+      const { start, end } = monthRange(currentMonth.year, currentMonth.month)
+      const rows = await fetchBaselineForecast(hotelId, start, end, otbDate || undefined, loadDate)
+      setData(transformRpcToTableData(rows))
+      setEditedValues(new Map())
+      setIsLoaded(true)
+      setSelectedLoadDate(loadDate)
+    } catch (e) {
+      setDataError(String(e))
+      const msg = (e as Error).message ?? String(e)
+      setDataError(msg)
+      alert(`불러오기 실패: ${msg}`)
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
   // ── Render ───────────────────────────────────────────────────────────────────
   const error = schemaError ?? dataError
 
@@ -191,16 +364,107 @@ export default function ForecastPage() {
           boxShadow:     '0 2px 4px rgba(0,0,0,0.05)',
         }}
       >
-        {/* 1줄: 월 selector + 세그먼트 필터 + 자동 펼침 + KPI 바 */}
+        {/* ── 정보줄: 월 selector + FCST 요약 ── */}
         <ForecastHeader
           year={currentMonth.year}
           month={currentMonth.month}
           onPrev={goPrev}
           onNext={goNext}
-          leftExtra={schema && <KpiBar fcst={monthFcst} />}
-        >
-          {schema && schema.nodes.length > 0 && (
-            <>
+          leftExtra={schema && <KpiBar fcst={monthFcst} vsBudget={vsBudget} isLoaded={isLoaded} />}
+        />
+
+        {/* ── 구분선 ── */}
+        {schema && schema.nodes.length > 0 && (
+          <div style={{ height: 1, background: 'var(--color-border-default)', margin: '10px 0' }} />
+        )}
+
+        {/* ── 액션바: 데이터(좌) / 편집(우) ── */}
+        {schema && schema.nodes.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+
+            {/* 좌: 데이터 소스 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {loadableDates.length > 0 ? (
+                <DatePicker
+                  label="불러오기"
+                  value={selectedLoadDate}
+                  onChange={() => {}}
+                  availableDates={loadableDates}
+                  confirmMode
+                  onConfirm={handleLoadConfirm}
+                />
+              ) : (
+                <button
+                  disabled
+                  title="저장된 forecast가 없습니다"
+                  style={{
+                    display:      'flex',
+                    alignItems:   'center',
+                    gap:          4,
+                    padding:      '4px 8px',
+                    fontSize:     12,
+                    fontWeight:   500,
+                    cursor:       'not-allowed',
+                    border:       '1px solid var(--color-border-default)',
+                    borderRadius: 6,
+                    background:   'var(--color-bg-surface)',
+                    color:        'var(--color-text-tertiary)',
+                    opacity:      0.5,
+                  }}
+                >
+                  <Download size={13} />
+                  불러오기
+                </button>
+              )}
+              <button
+                onClick={handleUpload}
+                disabled={isUploading || saving || data.length === 0}
+                title={isUploading ? '업로드 중...' : '화면 전체를 a05에 저장'}
+                style={{
+                  display:      'flex',
+                  alignItems:   'center',
+                  gap:          4,
+                  padding:      '4px 8px',
+                  fontSize:     12,
+                  fontWeight:   500,
+                  cursor:       isUploading || saving ? 'not-allowed' : 'pointer',
+                  border:       '1px solid var(--color-border-default)',
+                  borderRadius: 6,
+                  background:   'var(--color-bg-surface)',
+                  color:        'var(--color-text-primary)',
+                  opacity:      isUploading || saving || data.length === 0 ? 0.5 : 1,
+                }}
+              >
+                <Upload size={13} />
+                {isUploading ? '업로드 중...' : '업로드'}
+              </button>
+              <button
+                onClick={handleGenerate}
+                disabled={isGenerating || !hotelId}
+                title="baseline + a05 기준으로 자동 생성"
+                style={{
+                  display:      'flex',
+                  alignItems:   'center',
+                  gap:          4,
+                  padding:      '4px 10px',
+                  fontSize:     12,
+                  fontWeight:   600,
+                  cursor:       isGenerating ? 'wait' : 'pointer',
+                  border:       'none',
+                  borderRadius: 6,
+                  background:   'var(--color-accent-primary, #00E5A0)',
+                  color:        '#000',
+                  opacity:      isGenerating ? 0.6 : 1,
+                  whiteSpace:   'nowrap',
+                }}
+              >
+                <Zap size={13} />
+                {isGenerating ? '생성 중...' : '자동 생성'}
+              </button>
+            </div>
+
+            {/* 우: 편집 제어 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <SegmentFilter
                 nodes={schema.nodes}
                 selectedIds={selectedNodeIds}
@@ -243,8 +507,6 @@ export default function ForecastPage() {
                   )}
                 </span>
               </div>
-
-              {/* 변경 건수 안내 */}
               {modifiedCount > 0 && (
                 <div style={{
                   display:      'flex',
@@ -278,62 +540,32 @@ export default function ForecastPage() {
                   </button>
                 </div>
               )}
+              <button
+                onClick={() => setEditMode(prev => prev === 'inline' ? 'bulk' : 'inline')}
+                style={{
+                  display:      'flex',
+                  alignItems:   'center',
+                  gap:          4,
+                  padding:      '4px 10px',
+                  fontSize:     12,
+                  fontWeight:   600,
+                  cursor:       'pointer',
+                  border:       'none',
+                  borderRadius: 6,
+                  background:   editMode === 'inline'
+                    ? 'var(--color-accent-primary, #00E5A0)'
+                    : '#6366F1',
+                  color:        editMode === 'inline' ? '#000' : '#fff',
+                  transition:   'background 0.15s',
+                }}
+              >
+                {editMode === 'inline' ? <Pencil size={13} /> : <ClipboardList size={13} />}
+                {editMode === 'inline' ? '직접수정' : '일괄수정'}
+              </button>
+            </div>
 
-              {/* 데이터 액션 */}
-              <div style={{
-                display:     'flex',
-                alignItems:  'center',
-                gap:         6,
-                paddingLeft: 12,
-                borderLeft:  '1px solid var(--color-border-default)',
-              }}>
-                <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap' }}>
-                  데이터
-                </span>
-                <button
-                  title="준비 중인 기능입니다"
-                  style={{
-                    display:      'flex',
-                    alignItems:   'center',
-                    gap:          4,
-                    padding:      '4px 8px',
-                    fontSize:     12,
-                    fontWeight:   500,
-                    cursor:       'pointer',
-                    border:       '1px solid var(--color-border-default)',
-                    borderRadius: 6,
-                    background:   'var(--color-bg-surface)',
-                    color:        'var(--color-text-secondary)',
-                    opacity:      0.6,
-                  }}
-                >
-                  <Download size={13} />
-                  불러오기
-                </button>
-                <button
-                  title="준비 중인 기능입니다"
-                  style={{
-                    display:      'flex',
-                    alignItems:   'center',
-                    gap:          4,
-                    padding:      '4px 8px',
-                    fontSize:     12,
-                    fontWeight:   500,
-                    cursor:       'pointer',
-                    border:       '1px solid var(--color-border-default)',
-                    borderRadius: 6,
-                    background:   'var(--color-bg-surface)',
-                    color:        'var(--color-text-secondary)',
-                    opacity:      0.6,
-                  }}
-                >
-                  <Upload size={13} />
-                  업로드
-                </button>
-              </div>
-            </>
-          )}
-        </ForecastHeader>
+          </div>
+        )}
       </div>
 
       {/* 0개 선택 안내 */}
@@ -352,7 +584,7 @@ export default function ForecastPage() {
             background: 'var(--color-bg-surface)',
             boxShadow:  'var(--shadow-card)',
             overflow:   'hidden',
-            opacity:    dataLoading ? 0.5 : 1,
+            opacity:    isGenerating ? 0.5 : 1,
             transition: 'opacity 0.2s',
           }}
         >
@@ -374,7 +606,43 @@ export default function ForecastPage() {
             </div>
           )}
 
-          {schema && schema.nodes.length > 0 && (
+          {schema && schema.nodes.length > 0 && !isLoaded && (
+            <div style={{
+              display:        'flex',
+              flexDirection:  'column',
+              alignItems:     'center',
+              justifyContent: 'center',
+              minHeight:      300,
+              gap:            16,
+            }}>
+              <p style={{ fontSize: 14, color: 'var(--color-text-muted)' }}>
+                forecast를 생성하거나 불러오세요
+              </p>
+              <button
+                onClick={handleGenerate}
+                disabled={isGenerating}
+                style={{
+                  display:      'flex',
+                  alignItems:   'center',
+                  gap:          6,
+                  padding:      '10px 20px',
+                  fontSize:     13,
+                  fontWeight:   600,
+                  cursor:       isGenerating ? 'wait' : 'pointer',
+                  border:       'none',
+                  borderRadius: 8,
+                  background:   'var(--color-accent-primary, #00E5A0)',
+                  color:        '#000',
+                  opacity:      isGenerating ? 0.6 : 1,
+                }}
+              >
+                <Zap size={15} />
+                {isGenerating ? '생성 중...' : '자동 생성'}
+              </button>
+            </div>
+          )}
+
+          {schema && schema.nodes.length > 0 && isLoaded && (
             <ForecastTable
               schema={schema}
               data={data}
@@ -383,6 +651,8 @@ export default function ForecastPage() {
               threshold={threshold}
               editedValues={editedValues}
               onEditChange={setEditedValues}
+              editMode={editMode}
+              onOpenBulkEditModal={openBulkEditModal}
             />
           )}
         </div>
@@ -394,6 +664,19 @@ export default function ForecastPage() {
           {error}
         </div>
       )}
+
+      {/* 일괄수정 모달 */}
+      <BulkEditModal
+        isOpen={bulkEdit.isOpen}
+        selectedDate={bulkEdit.selectedDate}
+        onClose={closeBulkEditModal}
+        schema={schema}
+        data={data}
+        editedValues={editedValues}
+        onApply={handleBulkApply}
+        hotelId={hotelId}
+        onSelectDate={selectBulkEditDate}
+      />
     </div>
   )
 }

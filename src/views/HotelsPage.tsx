@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
+import { useHotel } from '@/contexts/HotelContext'
 import {
   Building2, Plus, RefreshCw, Search, ChevronRight,
   CheckCircle, Clock, AlertCircle, XCircle,
@@ -311,6 +312,7 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
 export default function HotelsPage() {
   const router  = useRouter()
   const { profile, loading: authLoading } = useAuth()
+  const { switchHotel } = useHotel()
   const [hotels,       setHotels]       = useState<Hotel[]>([])
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState<string | null>(null)
@@ -532,7 +534,7 @@ export default function HotelsPage() {
                 return (
                   <tr
                     key={hotel.id}
-                    onClick={() => router.push(`/hotels/${hotel.id}`)}
+                    onClick={() => { switchHotel(hotel.id); router.push(`/hotels/${hotel.id}`) }}
                     className="cursor-pointer transition-colors"
                     style={{ borderBottom: '1px solid var(--color-border-subtle)', background: 'var(--color-bg-surface)' }}
                     onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-secondary)')}

@@ -135,6 +135,8 @@ export default function HotelDetailPage({ id }: { id: string }) {
     const fetch = async () => {
       setLoading(true)
       setError(null)
+      setBase(null)
+      setDetail({})
 
       const { data: h, error: e1 } = await (supabase as any)
         .from('m02_hotels')

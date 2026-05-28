@@ -354,7 +354,7 @@ export default function BudgetPage() {
   const [saveTarget,      setSaveTarget]      = useState<'mtd' | 'daily' | 'both'>('mtd')
   const [saveConfirmed,   setSaveConfirmed]   = useState(false)
   const [loadModalOpen,   setLoadModalOpen]   = useState(false)
-  const [loadSource,      setLoadSource]      = useState<'mtd' | 'daily'>('mtd')
+  const [loadSource,      setLoadSource]      = useState<'mtd' | 'daily' | 'yoy_recent'>('mtd')
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
   const [uploadSource,    setUploadSource]    = useState<'mtd' | 'daily'>('mtd')
   const [selectedFile,    setSelectedFile]    = useState<File | null>(null)
@@ -574,7 +574,8 @@ export default function BudgetPage() {
 
   // ── 불러오기 실행 ──────────────────────────────────────────────────────────────
   const handleLoadSubmit = async () => {
-    if (!hotelId || !loadDate) {
+    if (!hotelId) return
+    if (loadSource !== 'yoy_recent' && !loadDate) {
       alert('Budget Date를 선택해주세요.')
       return
     }
@@ -605,7 +606,7 @@ export default function BudgetPage() {
             rev: r.budget_revenue ?? 0,
           }
         })
-      } else {
+      } else if (loadSource === 'daily') {
         const { data, error } = await (supabase as any)
           .from('a03_budget')
           .select('business_date, segmentation, budget_nights, budget_revenue')
@@ -623,6 +624,29 @@ export default function BudgetPage() {
         }
 
         ;(data ?? []).forEach((r: any) => {
+          const month = new Date(r.business_date).getMonth() + 1
+          const seg   = r.segmentation
+          if (!newBudgetData[seg]) newBudgetData[seg] = {}
+          if (!newBudgetData[seg][month]) newBudgetData[seg][month] = { rn: 0, rev: 0 }
+          newBudgetData[seg][month].rn  += r.budget_nights  ?? 0
+          newBudgetData[seg][month].rev += r.budget_revenue ?? 0
+        })
+      } else {
+        // yoy_recent
+        const { data, error } = await (supabase as any)
+          .rpc('a03_yoy_recent_daily', {
+            p_hotel_id: hotelId,
+            p_year:     selectedYear,
+          })
+
+        if (error) throw error
+
+        if (!data || data.length === 0) {
+          alert('동기간 실적 데이터 없음')
+          return
+        }
+
+        ;(data as any[]).forEach((r: any) => {
           const month = new Date(r.business_date).getMonth() + 1
           const seg   = r.segmentation
           if (!newBudgetData[seg]) newBudgetData[seg] = {}
@@ -1552,68 +1576,81 @@ export default function BudgetPage() {
                 className="text-brand-muted hover:opacity-60 transition-opacity text-lg leading-none">✕</button>
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs text-brand-muted mb-2">데이터 소스</p>
-                <div className="flex gap-1 p-1 rounded-xl w-full"
-                  style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-default)' }}>
-                  {(['mtd', 'daily'] as const).map(opt => (
-                    <button key={opt} onClick={() => setLoadSource(opt)}
-                      className="flex-1 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all"
+            {(() => {
+              const isYoyRecent = loadSource === 'yoy_recent'
+              return (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xs text-brand-muted mb-2">데이터 소스</p>
+                    <div className="flex gap-1 p-1 rounded-xl w-full"
+                      style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-default)' }}>
+                      {(['mtd', 'daily', 'yoy_recent'] as const).map(opt => (
+                        <button key={opt} onClick={() => setLoadSource(opt)}
+                          className="flex-1 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all"
+                          style={{
+                            background: loadSource === opt ? 'var(--gradient-cta)' : 'transparent',
+                            color:      loadSource === opt ? '#0A0A0A' : 'var(--color-text-muted)',
+                          }}>
+                          {opt === 'mtd' ? 'MTD' : opt === 'daily' ? 'DAILY' : '동기간'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ opacity: isYoyRecent ? 0.4 : 1, pointerEvents: isYoyRecent ? 'none' : undefined, transition: 'opacity 0.15s' }}>
+                    <p className="text-xs text-brand-muted mb-2">Budget Date</p>
+                    <select
+                      value={loadDate}
+                      onChange={e => setLoadDate(e.target.value)}
+                      disabled={isYoyRecent}
+                      className="w-full px-3 py-1.5 rounded-lg text-sm focus:outline-none"
                       style={{
-                        background: loadSource === opt ? 'var(--gradient-cta)' : 'transparent',
-                        color:      loadSource === opt ? '#0A0A0A' : 'var(--color-text-muted)',
-                      }}>
-                      {opt === 'mtd' ? 'MTD' : 'DAILY'}
-                    </button>
-                  ))}
-                </div>
-              </div>
+                        background: 'var(--color-bg-primary)',
+                        border:     '1px solid var(--color-border-default)',
+                        color:      isYoyRecent ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)',
+                        cursor:     isYoyRecent ? 'not-allowed' : undefined,
+                      }}
+                    >
+                      {availableDates.length === 0 && (
+                        <option value="">저장된 데이터가 없습니다</option>
+                      )}
+                      {availableDates.map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div>
-                <p className="text-xs text-brand-muted mb-2">Budget Date</p>
-                <select
-                  value={loadDate}
-                  onChange={e => setLoadDate(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-lg text-sm focus:outline-none"
-                  style={{
-                    background: 'var(--color-bg-primary)',
-                    border:     '1px solid var(--color-border-default)',
-                    color:      'var(--color-text-primary)',
-                  }}
-                >
-                  {availableDates.length === 0 && (
-                    <option value="">저장된 데이터가 없습니다</option>
-                  )}
-                  {availableDates.map(d => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <p className="text-xs text-brand-muted mb-2">확정 여부</p>
-                <div className="flex gap-1 p-1 rounded-xl w-full"
-                  style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-default)' }}>
-                  <button onClick={() => setLoadConfirmed(false)}
-                    className="flex-1 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all"
-                    style={{
-                      background: !loadConfirmed ? 'var(--gradient-cta)' : 'transparent',
-                      color:      !loadConfirmed ? '#0A0A0A' : 'var(--color-text-muted)',
-                    }}>
-                    미확정
-                  </button>
-                  <button onClick={() => setLoadConfirmed(true)}
-                    className="flex-1 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all"
-                    style={{
-                      background: loadConfirmed ? 'var(--gradient-cta)' : 'transparent',
-                      color:      loadConfirmed ? '#0A0A0A' : 'var(--color-text-muted)',
-                    }}>
-                    확정
-                  </button>
+                  <div style={{ opacity: isYoyRecent ? 0.4 : 1, pointerEvents: isYoyRecent ? 'none' : undefined, transition: 'opacity 0.15s' }}>
+                    <p className="text-xs text-brand-muted mb-2">확정 여부</p>
+                    <div className="flex gap-1 p-1 rounded-xl w-full"
+                      style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-default)' }}>
+                      <button
+                        onClick={() => setLoadConfirmed(false)}
+                        disabled={isYoyRecent}
+                        className="flex-1 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all"
+                        style={{
+                          background: !loadConfirmed ? 'var(--gradient-cta)' : 'transparent',
+                          color:      !loadConfirmed ? '#0A0A0A' : 'var(--color-text-muted)',
+                          cursor:     isYoyRecent ? 'not-allowed' : undefined,
+                        }}>
+                        미확정
+                      </button>
+                      <button
+                        onClick={() => setLoadConfirmed(true)}
+                        disabled={isYoyRecent}
+                        className="flex-1 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all"
+                        style={{
+                          background: loadConfirmed ? 'var(--gradient-cta)' : 'transparent',
+                          color:      loadConfirmed ? '#0A0A0A' : 'var(--color-text-muted)',
+                          cursor:     isYoyRecent ? 'not-allowed' : undefined,
+                        }}>
+                        확정
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              )
+            })()}
 
             {loadSuccess && (
               <div className="flex items-start gap-3 px-4 py-3 rounded-xl"
@@ -1644,14 +1681,14 @@ export default function BudgetPage() {
                   </button>
                   <button
                     onClick={handleLoadDownload}
-                    disabled={!loadDate}
+                    disabled={!loadDate || loadSource === 'yoy_recent'}
                     className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all hover:-translate-y-px disabled:opacity-40"
                     style={{ border: '1px solid var(--color-accent-primary)', color: 'var(--color-accent-primary)' }}>
                     다운로드
                   </button>
                   <button
                     onClick={handleLoadSubmit}
-                    disabled={!loadDate}
+                    disabled={loadSource !== 'yoy_recent' && !loadDate}
                     className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all hover:-translate-y-px disabled:opacity-40"
                     style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
                     불러오기

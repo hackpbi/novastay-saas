@@ -75,13 +75,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     staleTime: 5 * 60 * 1000,
   })
 
-  // OTB: otbDates 로드 후 가장 최근 날짜로 자동 설정
+  // OTB: otbDates 로드 후 또는 otbDate 초기화 후 자동 설정
   useEffect(() => {
     if (otbDates.length === 0) return
-    if (!otbDate) {
+    if (!otbDate || !otbDates.includes(otbDate)) {
       setOtbDate(otbDates[0])
     }
-  }, [otbDates])
+  }, [otbDates, otbDate])
 
   // VS OTB: OTB 날짜 변경 시 자동 재설정
   useEffect(() => {
@@ -92,10 +92,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       return
     }
     const closest = prevDates[0]
-    if (!vsOtbDate || vsOtbDate >= otbDate) {
+    if (!vsOtbDate || vsOtbDate >= otbDate || !otbDates.includes(vsOtbDate)) {
       setVsOtbDate(closest)
     }
-  }, [otbDate, otbDates])
+  }, [otbDate, otbDates, vsOtbDate])
 
   // hotelId 변경 시 OTB / VS OTB 초기화 → 재조회 후 자동 설정
   useEffect(() => {

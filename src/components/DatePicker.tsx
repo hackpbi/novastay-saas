@@ -9,6 +9,9 @@ export interface DatePickerProps {
   onChange:        (v: string) => void
   accent?:         boolean
   availableDates?: string[]
+  confirmMode?:    boolean
+  onConfirm?:      (v: string) => void
+  confirmLabel?:   string
 }
 
 export interface FormDatePickerProps {
@@ -37,9 +40,10 @@ function buildGrid(year: number, month: number): (number | null)[] {
 
 // ─── DatePicker ────────────────────────────────────────────────────────────────
 
-export default function DatePicker({ label, value, onChange, accent = false, availableDates }: DatePickerProps) {
-  const [todayStr,  setTodayStr]  = useState('')
-  const [open,      setOpen]      = useState(false)
+export default function DatePicker({ label, value, onChange, accent = false, availableDates, confirmMode = false, onConfirm, confirmLabel = '불러오기' }: DatePickerProps) {
+  const [todayStr,     setTodayStr]     = useState('')
+  const [open,         setOpen]         = useState(false)
+  const [pendingDate,  setPendingDate]  = useState<string | null>(null)
   const [viewYear,  setViewYear]  = useState(() => new Date().getFullYear())
   const [viewMonth, setViewMonth] = useState(() => new Date().getMonth())
 
@@ -76,6 +80,8 @@ export default function DatePicker({ label, value, onChange, accent = false, ava
     return () => document.removeEventListener('keydown', onKey)
   }, [open])
 
+  useEffect(() => { if (!open) setPendingDate(null) }, [open])
+
   function openCalendar() {
     if (!btnRef.current) return
     const CAL_W = 264
@@ -103,8 +109,12 @@ export default function DatePicker({ label, value, onChange, accent = false, ava
   function selectDay(day: number) {
     const dateStr = toYMD(viewYear, viewMonth, day)
     if (availableDates && availableDates.length > 0 && !availableDates.includes(dateStr)) return
-    onChange(dateStr)
-    setOpen(false)
+    if (confirmMode) {
+      setPendingDate(dateStr)
+    } else {
+      onChange(dateStr)
+      setOpen(false)
+    }
   }
 
   const isDisabled = (dateStr: string) =>
@@ -227,9 +237,11 @@ export default function DatePicker({ label, value, onChange, accent = false, ava
 
               const dateStr    = toYMD(viewYear, viewMonth, day)
               const isSelected = dateStr === value
+              const isPending  = confirmMode && pendingDate === dateStr
               const isToday    = dateStr === todayStr
               const disabled   = isDisabled(dateStr)
               const col        = i % 7
+              const isHighlit  = confirmMode ? isPending : isSelected
 
               return (
                 <button
@@ -240,17 +252,17 @@ export default function DatePicker({ label, value, onChange, accent = false, ava
                   style={
                     disabled
                       ? { opacity: 0.2, cursor: 'not-allowed', pointerEvents: 'none', color: 'var(--color-text-muted)' }
-                      : isSelected
+                      : isHighlit
                         ? { background: 'var(--gradient-cta)', boxShadow: 'var(--accent-btn-glow)', color: '#0A0A0A', fontWeight: 700 }
                         : isToday
                           ? { background: 'var(--accent-badge-bg)', border: '1px solid var(--accent-badge-border)', color: 'var(--color-accent-primary)' }
                           : { color: col === 0 ? 'var(--color-negative)' : col === 6 ? 'var(--color-info)' : 'var(--color-text-secondary)' }
                   }
                   onMouseEnter={e => {
-                    if (!isSelected && !disabled) e.currentTarget.style.background = 'var(--overlay-hover)'
+                    if (!isHighlit && !disabled) e.currentTarget.style.background = 'var(--overlay-hover)'
                   }}
                   onMouseLeave={e => {
-                    if (!isSelected && !disabled) e.currentTarget.style.background = isToday ? 'var(--accent-badge-bg)' : 'transparent'
+                    if (!isHighlit && !disabled) e.currentTarget.style.background = isToday ? 'var(--accent-badge-bg)' : 'transparent'
                   }}
                 >
                   {day}
@@ -269,7 +281,9 @@ export default function DatePicker({ label, value, onChange, accent = false, ava
           >
             <button
               onClick={() => {
-                if (!isDisabled(todayStr)) { onChange(todayStr); setOpen(false) }
+                if (isDisabled(todayStr)) return
+                if (confirmMode) { setPendingDate(todayStr) }
+                else { onChange(todayStr); setOpen(false) }
               }}
               className="text-[11px] font-semibold transition-colors duration-150"
               style={{
@@ -281,14 +295,35 @@ export default function DatePicker({ label, value, onChange, accent = false, ava
               오늘
             </button>
             <span className="text-[10px] text-brand-dimmed font-mono">
-              {value || '날짜 미선택'}
+              {confirmMode ? (pendingDate || value || '날짜 미선택') : (value || '날짜 미선택')}
             </span>
-            <button
-              onClick={() => setOpen(false)}
-              className="text-[11px] text-brand-dimmed hover:text-brand-muted transition-colors duration-150"
-            >
-              닫기
-            </button>
+            {confirmMode ? (
+              <button
+                onClick={() => {
+                  if (pendingDate && onConfirm) { onConfirm(pendingDate); setOpen(false) }
+                }}
+                disabled={!pendingDate}
+                className="text-[11px] font-semibold transition-colors duration-150"
+                style={{
+                  padding:      '4px 10px',
+                  background:   pendingDate ? 'var(--color-accent-primary, #00E5A0)' : 'var(--color-bg-tertiary)',
+                  color:        pendingDate ? '#000' : 'var(--color-text-muted)',
+                  border:       'none',
+                  borderRadius: 5,
+                  cursor:       pendingDate ? 'pointer' : 'not-allowed',
+                  opacity:      pendingDate ? 1 : 0.5,
+                }}
+              >
+                {confirmLabel}
+              </button>
+            ) : (
+              <button
+                onClick={() => setOpen(false)}
+                className="text-[11px] text-brand-dimmed hover:text-brand-muted transition-colors duration-150"
+              >
+                닫기
+              </button>
+            )}
           </div>
         </div>
       )}

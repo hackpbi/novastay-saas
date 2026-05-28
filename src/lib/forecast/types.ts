@@ -73,6 +73,7 @@ export type ForecastRpcRow = {
   ly_otb_snapshot_date:    string | null
   capped:                  boolean
   is_actual:               boolean
+  is_saved:                boolean
 }
 
 export type ForecastSegValue = {

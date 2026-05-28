@@ -55,7 +55,6 @@ export function HotelProvider({ children }: { children: ReactNode }) {
           id, hotel_name, slug, is_active,
           m03_hotel_details (city, star_rating, logo_url)
         `)
-        .eq('is_active', true)
         .order('hotel_name')
 
       const hotelList: CurrentHotel[] = (data ?? []).map((h: any) => ({
