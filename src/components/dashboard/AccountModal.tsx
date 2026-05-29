@@ -222,14 +222,15 @@ function DataTable({
                     className="hover:bg-white/5"
                     style={{ borderBottom: BORDER }}
                   >
-                    <td style={{
-                      ...tdBase,
-                      paddingLeft: 40,
-                      color: row.account_name === '(미지정)'
-                        ? 'var(--brand-dimmed)'
-                        : 'var(--color-text-primary)',
-                    }}>
-                      {row.account_name}
+                    <td style={{ ...tdBase, paddingLeft: 40 }}>
+                      <span style={{ color: 'var(--brand-dimmed)' }}>└ </span>
+                      <span style={{
+                        color: row.account_name === '(미지정)'
+                          ? 'var(--brand-dimmed)'
+                          : 'var(--color-text-primary)',
+                      }}>
+                        {row.account_name}
+                      </span>
                     </td>
                     <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: BORDER }}>
                       <FmtNights n={row.otbNights} />
