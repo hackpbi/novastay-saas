@@ -225,11 +225,11 @@ function DataTable({
                     <td style={{
                       ...tdBase,
                       paddingLeft: 40,
-                      color: row.company === '(미지정)'
+                      color: row.account_name === '(미지정)'
                         ? 'var(--brand-dimmed)'
                         : 'var(--color-text-primary)',
                     }}>
-                      {row.company}
+                      {row.account_name}
                     </td>
                     <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: BORDER }}>
                       <FmtNights n={row.otbNights} />
@@ -330,7 +330,7 @@ export default function AccountModal({
   const filteredGroups = useMemo(() => {
     if (!isSearching) return groups
     return groups
-      .map(g => ({ ...g, rows: g.rows.filter(r => r.company.toLowerCase().includes(query)) }))
+      .map(g => ({ ...g, rows: g.rows.filter(r => r.account_name.toLowerCase().includes(query)) }))
       .filter(g => g.rows.length > 0)
   }, [groups, query, isSearching])
 

@@ -4,7 +4,7 @@ import type { PickupRow } from '@/hooks/usePickupData'
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 export type AccountRow = {
-  company:    string
+  account_name:    string
   otbNights:  number
   otbAdr:     number
   otbRevenue: number
@@ -125,10 +125,10 @@ export function buildAccountTable(args: {
     }
   }
 
-  // ── 3. (segmentation × company) 합산 맵 ─────────────────────────────────────
+  // ── 3. (segmentation × account_name) 합산 맵 ─────────────────────────────────────
   const rawMap = new Map<string, RawStats>()
   for (const r of monthPickup) {
-    const key = `${r.segmentation}::${r.company}`
+    const key = `${r.segmentation}::${r.account_name}`
     let s = rawMap.get(key)
     if (!s) { s = { otbNights: 0, otbRevenue: 0, vsNights: 0, vsRevenue: 0 }; rawMap.set(key, s) }
     s.otbNights  += r.otb_nights    ?? 0
@@ -145,7 +145,7 @@ export function buildAccountTable(args: {
 
     const sep     = rawKey.indexOf('::')
     const segCode = rawKey.slice(0, sep)
-    const company = rawKey.slice(sep + 2)
+    const account_name = rawKey.slice(sep + 2)
 
     const meta: CodeMeta = codeMeta.get(segCode) ?? {
       parentName:       null,
@@ -158,7 +158,7 @@ export function buildAccountTable(args: {
     const vsAdr  = st.vsNights  > 0 ? st.vsRevenue  / st.vsNights  : 0
 
     const row: AccountRow = {
-      company,
+      account_name,
       otbNights:  st.otbNights,
       otbAdr,
       otbRevenue: st.otbRevenue,

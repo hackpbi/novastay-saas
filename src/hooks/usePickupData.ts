@@ -9,7 +9,7 @@ export type PickupRow = {
   sorting1:        string | null
   sorting2:        string | null
   sorting3:        string | null
-  company:         string
+  account_name:    string
   otb_nights:      number
   otb_revenue:     number
   vs_otb_nights:   number
