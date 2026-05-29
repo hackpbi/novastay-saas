@@ -5,11 +5,11 @@ import { supabase } from '@/lib/supabase'
 
 export type PickupRow = {
   business_date:   string
-  room_type_code:  string
   segmentation:    string
   sorting1:        string | null
   sorting2:        string | null
   sorting3:        string | null
+  company:         string
   otb_nights:      number
   otb_revenue:     number
   vs_otb_nights:   number
