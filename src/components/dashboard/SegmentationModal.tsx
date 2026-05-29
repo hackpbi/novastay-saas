@@ -122,17 +122,22 @@ const tdBase: React.CSSProperties = {
 const BORDER_GROUP = '1px solid var(--divider-color)'
 
 function DataRow({ row }: { row: SegTableRow }) {
+  const rowBg = row.color ?? 'var(--color-bg-secondary)'
   return (
     <tr
-      className="hover:bg-white/5"
-      style={{ borderBottom: BORDER_GROUP }}
+      style={{ borderBottom: BORDER_GROUP, background: rowBg }}
+      onMouseEnter={e => {
+        e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${rowBg}`
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.background = rowBg
+      }}
     >
       <td style={{
         ...tdBase,
         paddingLeft:  row.indent ? 28 : 12,
         fontWeight:   row.isBold ? 600 : 400,
         color:        row.fontDarkColor ?? 'var(--color-text-primary)',
-        background:   row.color ?? undefined,
         minWidth:     140,
       }}>
         {row.indent ? (
@@ -207,7 +212,7 @@ function DataTable({ rows, summary }: { rows: SegTableRow[]; summary: SegTableSu
         </tbody>
 
         <tfoot>
-          <tr style={{ borderTop: '2px solid var(--color-accent-primary)' }}>
+          <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: 'var(--color-bg-secondary)' }}>
             <td style={{ ...sumTdBase, paddingLeft: 12 }}>합계 (HOU 제외)</td>
             <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right', borderLeft: BORDER_GROUP }}>
               <FmtNights n={summary.totalNights} />
