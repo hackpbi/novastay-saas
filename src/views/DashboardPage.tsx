@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import { usePickupData } from '@/hooks/usePickupData'
 import { useOtbData } from '@/hooks/useOtbData'
 import { useLyPacing } from '@/hooks/useLyPacing'
+import SegmentationModal from '@/components/dashboard/SegmentationModal'
 import { useHotel } from '@/contexts/HotelContext'
 import { supabase } from '@/lib/supabase'
 
@@ -218,15 +219,17 @@ function MetricRow({ label, value, metric, subValue, tooltip, yoyOverride, yoyLo
 
 // ─── Month Card ─────────────────────────────────────────────────────────────────
 
-function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading }: {
-  data:       MonthData
-  stats:      MonthStats
-  loading:    boolean
-  roomCount:  number
-  yoyStats:   MonthYoyStats
-  yoyLoading: boolean
+function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSegClick }: {
+  data:        MonthData
+  stats:       MonthStats
+  loading:     boolean
+  roomCount:   number
+  yoyStats:    MonthYoyStats
+  yoyLoading:  boolean
+  onSegClick?: (year: number, month: number) => void
 }) {
   const { year, month, occ, adr, rev, forecast, goal, pu, rmAction } = data
+  // occ, adr, rev are mock data used as fallback; stats holds live OTB values
 
   const occValue = loading ? '-' : roomCount === 0 ? '-' : `${stats.occ.toFixed(1)}%`
   const adrValue = loading ? '-' : formatCurrency(stats.adr)
@@ -397,6 +400,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading }: {
         {/* 보조 버튼 컨테이너 — 호버 전 숨김, 호버 시 슬라이드인 */}
         <div className="flex items-center gap-2 overflow-hidden max-w-0 opacity-0 group-hover:max-w-[260px] group-hover:opacity-100 group-hover:ml-2 transition-all duration-300 ease-out">
           <button
+            onClick={() => onSegClick?.(year, month)}
             className="flex items-center gap-1 px-3 py-2.5 rounded-full text-brand-muted text-[11px] font-medium whitespace-nowrap hover:text-brand-text transition-colors duration-150"
             style={{ border: '1px solid var(--ghost-btn-border)' }}
           >
@@ -456,6 +460,7 @@ const PAGE_SIZE = 3
 
 export default function DashboardPage() {
   const [page, setPage] = useState(0)
+  const [segModal, setSegModal] = useState<{ open: boolean; year?: number; month?: number }>({ open: false })
 
   const { currentHotel } = useHotel()
   const hotelId = currentHotel?.id ?? ''
@@ -643,9 +648,18 @@ export default function DashboardPage() {
             roomCount={roomCount}
             yoyStats={getMonthLyStats(m.year, m.month)}
             yoyLoading={lyLoading}
+            onSegClick={(y, mo) => setSegModal({ open: true, year: y, month: mo })}
           />
         ))}
       </div>
+
+      <SegmentationModal
+        open={segModal.open}
+        onClose={() => setSegModal({ open: false })}
+        year={segModal.year ?? 0}
+        month={segModal.month ?? 0}
+        roomCount={roomCount}
+      />
     </div>
   )
 }
