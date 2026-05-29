@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowUp, AlignJustify, User, ChevronLeft, ChevronRight, ArrowLeftRight } from 'lucide-react'
+import { ArrowUp, ArrowDown, AlignJustify, User, ChevronLeft, ChevronRight, ArrowLeftRight } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { usePickupData } from '@/hooks/usePickupData'
 import { useOtbData } from '@/hooks/useOtbData'
@@ -219,14 +219,15 @@ function MetricRow({ label, value, metric, subValue, tooltip, yoyOverride, yoyLo
 
 // ─── Month Card ─────────────────────────────────────────────────────────────────
 
-function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSegClick }: {
-  data:        MonthData
-  stats:       MonthStats
-  loading:     boolean
-  roomCount:   number
-  yoyStats:    MonthYoyStats
-  yoyLoading:  boolean
-  onSegClick?: (year: number, month: number) => void
+function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSegClick, pickupNights }: {
+  data:          MonthData
+  stats:         MonthStats
+  loading:       boolean
+  roomCount:     number
+  yoyStats:      MonthYoyStats
+  yoyLoading:    boolean
+  onSegClick?:   (year: number, month: number) => void
+  pickupNights:  number
 }) {
   const { year, month, occ, adr, rev, forecast, goal, pu, rmAction } = data
   // occ, adr, rev are mock data used as fallback; stats holds live OTB values
@@ -393,8 +394,8 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
             color:      '#0A0A0A',
           }}
         >
-          <ArrowUp size={12} />
-          P/U +{pu} rooms
+          {pickupNights >= 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+          P/U {pickupNights >= 0 ? '+' : ''}{pickupNights} rooms
         </button>
 
         {/* 보조 버튼 컨테이너 — 호버 전 숨김, 호버 시 슬라이드인 */}
@@ -468,6 +469,17 @@ export default function DashboardPage() {
   const { data: pickupData, loading: pickupLoading, otbDate } = usePickupData()
   const { data: otbData } = useOtbData()
   const { data: lyData, loading: lyLoading } = useLyPacing()
+
+  function getMonthPickup(year: number, month: number): number {
+    return pickupData
+      .filter(row => {
+        const d = new Date(row.business_date)
+        return d.getFullYear() === year
+            && d.getMonth() + 1 === month
+            && row.segmentation !== 'HOU'
+      })
+      .reduce((sum, r) => sum + (r.pu_nights ?? 0), 0)
+  }
 
   function getMonthLyStats(year: number, month: number): MonthYoyStats {
     const monthData = lyData.filter(row => {
@@ -649,6 +661,7 @@ export default function DashboardPage() {
             yoyStats={getMonthLyStats(m.year, m.month)}
             yoyLoading={lyLoading}
             onSegClick={(y, mo) => setSegModal({ open: true, year: y, month: mo })}
+            pickupNights={getMonthPickup(m.year, m.month)}
           />
         ))}
       </div>
