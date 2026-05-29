@@ -465,7 +465,10 @@ const PAGE_SIZE = 3
 export default function DashboardPage() {
   const [page, setPage] = useState(0)
   const [segModal,     setSegModal]     = useState<{ open: boolean; year?: number; month?: number }>({ open: false })
-  const [accountModal, setAccountModal] = useState<{ open: boolean; year?: number; month?: number }>({ open: false })
+  const [accountModal, setAccountModal] = useState<{
+    open: boolean; year?: number; month?: number
+    filterSegCodes?: string[]; filterLabel?: string
+  }>({ open: false })
 
   const { currentHotel } = useHotel()
   const hotelId = currentHotel?.id ?? ''
@@ -677,6 +680,12 @@ export default function DashboardPage() {
         year={segModal.year ?? 0}
         month={segModal.month ?? 0}
         roomCount={roomCount}
+        onPickupCellClick={(segCodes, label) => {
+          const y = segModal.year
+          const m = segModal.month
+          setSegModal({ open: false })
+          setAccountModal({ open: true, year: y, month: m, filterSegCodes: segCodes, filterLabel: label })
+        }}
       />
       <AccountModal
         open={accountModal.open}
@@ -684,6 +693,8 @@ export default function DashboardPage() {
         year={accountModal.year ?? 0}
         month={accountModal.month ?? 0}
         roomCount={roomCount}
+        initialFilterSegCodes={accountModal.filterSegCodes}
+        initialFilterLabel={accountModal.filterLabel}
       />
     </div>
   )
