@@ -126,7 +126,7 @@ function DataRow({ row }: { row: SegTableRow }) {
   const rowColor = row.fontDarkColor ?? 'var(--color-text-primary)'
   return (
     <tr
-      style={{ borderBottom: BORDER_GROUP, background: rowBg, color: rowColor }}
+      style={{ borderBottom: BORDER_GROUP, background: rowBg, color: rowColor, fontWeight: row.isBold ? 600 : 400 }}
       onMouseEnter={e => {
         e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${rowBg}`
       }}
@@ -137,7 +137,6 @@ function DataRow({ row }: { row: SegTableRow }) {
       <td style={{
         ...tdBase,
         paddingLeft: row.indent ? 28 : 12,
-        fontWeight:  row.isBold ? 600 : 400,
         minWidth:    140,
       }}>
         {row.indent ? (
