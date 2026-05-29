@@ -135,7 +135,12 @@ function DataRow({ row }: { row: SegTableRow }) {
         background:   row.color ?? undefined,
         minWidth:     140,
       }}>
-        {row.name}
+        {row.indent ? (
+          <>
+            <span style={{ color: 'var(--brand-dimmed)' }}>└ </span>
+            {row.name}
+          </>
+        ) : row.name}
       </td>
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: BORDER_GROUP }}>
         <FmtNights n={row.otbNights} />
