@@ -122,10 +122,11 @@ const tdBase: React.CSSProperties = {
 const BORDER_GROUP = '1px solid var(--divider-color)'
 
 function DataRow({ row }: { row: SegTableRow }) {
-  const rowBg = row.color ?? 'var(--color-bg-secondary)'
+  const rowBg    = row.color         ?? 'var(--color-bg-secondary)'
+  const rowColor = row.fontDarkColor ?? 'var(--color-text-primary)'
   return (
     <tr
-      style={{ borderBottom: BORDER_GROUP, background: rowBg }}
+      style={{ borderBottom: BORDER_GROUP, background: rowBg, color: rowColor }}
       onMouseEnter={e => {
         e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${rowBg}`
       }}
@@ -135,10 +136,9 @@ function DataRow({ row }: { row: SegTableRow }) {
     >
       <td style={{
         ...tdBase,
-        paddingLeft:  row.indent ? 28 : 12,
-        fontWeight:   row.isBold ? 600 : 400,
-        color:        row.fontDarkColor ?? 'var(--color-text-primary)',
-        minWidth:     140,
+        paddingLeft: row.indent ? 28 : 12,
+        fontWeight:  row.isBold ? 600 : 400,
+        minWidth:    140,
       }}>
         {row.indent ? (
           <>
