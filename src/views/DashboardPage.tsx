@@ -5,6 +5,7 @@ import { ArrowUp, AlignJustify, User, ChevronLeft, ChevronRight, ArrowLeftRight 
 import { useQuery } from '@tanstack/react-query'
 import { usePickupData } from '@/hooks/usePickupData'
 import { useOtbData } from '@/hooks/useOtbData'
+import { useLyPacing } from '@/hooks/useLyPacing'
 import { useHotel } from '@/contexts/HotelContext'
 import { supabase } from '@/lib/supabase'
 
@@ -460,31 +461,32 @@ export default function DashboardPage() {
   const hotelId = currentHotel?.id ?? ''
 
   const { data: pickupData, loading: pickupLoading, otbDate } = usePickupData()
-  const { data: otbData, loading: yoyLoading } = useOtbData()
+  const { data: otbData } = useOtbData()
+  const { data: lyData, loading: lyLoading } = useLyPacing()
 
-  function getMonthYoyStats(year: number, month: number): MonthYoyStats {
-    const monthData = otbData.filter(row => {
+  function getMonthLyStats(year: number, month: number): MonthYoyStats {
+    const monthData = lyData.filter(row => {
       const d = new Date(row.business_date)
-      return d.getFullYear() === year && d.getMonth() + 1 === month
+      return d.getFullYear() === year && d.getMonth() + 1 === month && row.segmentation !== 'HOU'
     })
 
-    const totalOtbNights  = monthData.filter(r => r.segmentation !== 'HOU').reduce((sum, r) => sum + (r.otb_nights  ?? 0), 0)
-    const totalActNights  = monthData.filter(r => r.segmentation !== 'HOU').reduce((sum, r) => sum + (r.act_nights  ?? 0), 0)
-    const totalOtbRevenue = monthData.reduce((sum, r) => sum + (r.otb_revenue ?? 0), 0)
-    const totalActRevenue = monthData.reduce((sum, r) => sum + (r.act_revenue ?? 0), 0)
+    const otbNights  = monthData.reduce((sum, r) => sum + (r.otb_nights  ?? 0), 0)
+    const lyNights   = monthData.reduce((sum, r) => sum + (r.ly_nights   ?? 0), 0)
+    const otbRevenue = monthData.reduce((sum, r) => sum + (r.otb_revenue ?? 0), 0)
+    const lyRevenue  = monthData.reduce((sum, r) => sum + (r.ly_revenue  ?? 0), 0)
 
-    const varNightsPct  = totalActNights  > 0 ? ((totalOtbNights  - totalActNights)  / totalActNights  * 100) : null
-    const varRevenuePct = totalActRevenue > 0 ? ((totalOtbRevenue - totalActRevenue) / totalActRevenue * 100) : null
+    const varNightsPct  = lyNights  > 0 ? (otbNights  - lyNights)  / lyNights  * 100 : null
+    const varRevenuePct = lyRevenue > 0 ? (otbRevenue - lyRevenue) / lyRevenue * 100 : null
 
-    const otbAdr = totalOtbNights > 0 ? Math.round(totalOtbRevenue / totalOtbNights) : 0
-    const actAdr = totalActNights > 0 ? Math.round(totalActRevenue / totalActNights) : 0
-    const varAdr = otbAdr - actAdr
+    const otbAdr = otbNights > 0 ? Math.round(otbRevenue / otbNights) : 0
+    const lyAdr  = lyNights  > 0 ? Math.round(lyRevenue  / lyNights)  : 0
+    const varAdr = otbAdr - lyAdr
 
     const byGroup = ['fit', 'group'].map(grp => {
       const grpData = monthData.filter(r => r.sorting2 === grp)
-      const otbN = grpData.filter(r => r.segmentation !== 'HOU').reduce((sum, r) => sum + (r.otb_nights ?? 0), 0)
-      const actN = grpData.filter(r => r.segmentation !== 'HOU').reduce((sum, r) => sum + (r.act_nights ?? 0), 0)
-      const varPct = actN > 0 ? ((otbN - actN) / actN * 100) : null
+      const otbN = grpData.reduce((sum, r) => sum + (r.otb_nights ?? 0), 0)
+      const lyN  = grpData.reduce((sum, r) => sum + (r.ly_nights  ?? 0), 0)
+      const varPct = lyN > 0 ? (otbN - lyN) / lyN * 100 : null
       return { group: grp, varPct }
     })
 
@@ -639,8 +641,8 @@ export default function DashboardPage() {
             stats={getMonthStats(m.year, m.month)}
             loading={pickupLoading}
             roomCount={roomCount}
-            yoyStats={getMonthYoyStats(m.year, m.month)}
-            yoyLoading={yoyLoading}
+            yoyStats={getMonthLyStats(m.year, m.month)}
+            yoyLoading={lyLoading}
           />
         ))}
       </div>
