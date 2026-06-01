@@ -695,6 +695,16 @@ export default function DashboardPage() {
         roomCount={roomCount}
         initialFilterSegCodes={accountModal.filterSegCodes}
         initialFilterLabel={accountModal.filterLabel}
+        onBackToSeg={
+          accountModal.filterSegCodes
+            ? () => {
+                const y = accountModal.year
+                const m = accountModal.month
+                setAccountModal({ open: false })
+                setSegModal({ open: true, year: y, month: m })
+              }
+            : undefined
+        }
       />
     </div>
   )

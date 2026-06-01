@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { X, Search, ChevronDown, ChevronRight } from 'lucide-react'
+import { X, Search, ChevronDown, ChevronRight, ArrowLeft } from 'lucide-react'
 import { useHotel } from '@/contexts/HotelContext'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
 import { usePickupData } from '@/hooks/usePickupData'
@@ -271,7 +271,7 @@ const EMPTY_SUMMARY: AccountTableSummary = {
 
 export default function AccountModal({
   open, onClose, year, month, roomCount,
-  initialFilterSegCodes, initialFilterLabel,
+  initialFilterSegCodes, initialFilterLabel, onBackToSeg,
 }: {
   open:                    boolean
   onClose:                 () => void
@@ -280,6 +280,7 @@ export default function AccountModal({
   roomCount:               number
   initialFilterSegCodes?:  string[]
   initialFilterLabel?:     string
+  onBackToSeg?:            () => void
 }) {
   const { currentHotel } = useHotel()
   const { data: schema, loading: schemaLoading, error: schemaError } = useMarketSchema()
@@ -400,9 +401,35 @@ export default function AccountModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between gap-4 px-6 py-4 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
-          {/* 좌측: 제목 + 필터 칩 */}
+          {/* 좌측: 돌아가기 버튼 + 제목 + 필터 칩 */}
           <div className="shrink-0">
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>Account 비교</h2>
+            <div className="flex items-center gap-2 mb-0.5">
+              {onBackToSeg && filterActive && (
+                <button
+                  onClick={onBackToSeg}
+                  className="flex items-center gap-1 px-2 py-1 rounded-md text-xs transition-colors"
+                  style={{
+                    border:  '1px solid var(--color-border-default)',
+                    color:   'var(--color-text-secondary)',
+                    cursor:  'pointer',
+                    background: 'transparent',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.borderColor = 'var(--color-accent-primary)'
+                    e.currentTarget.style.color = 'var(--color-accent-primary)'
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.borderColor = 'var(--color-border-default)'
+                    e.currentTarget.style.color = 'var(--color-text-secondary)'
+                  }}
+                  aria-label="Segmentation 모달로 돌아가기"
+                >
+                  <ArrowLeft size={14} />
+                  Seg로
+                </button>
+              )}
+              <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>Account 비교</h2>
+            </div>
             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
               <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>
                 {year}년 {month}월 · {currentHotel?.hotel_name ?? ''}
