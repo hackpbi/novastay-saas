@@ -127,6 +127,24 @@ function calcMonthlyAfter(data: ForecastDayData[], tempEdits: EditedValues, room
   }
 }
 
+// ── Monthly OTB helper ────────────────────────────────────────────────────────
+
+function calcMonthlyOtb(data: ForecastDayData[], roomCount: number) {
+  let totalRn = 0, totalRev = 0
+  for (const day of data) {
+    for (const orig of Object.values(day.values)) {
+      totalRn  += orig.otb_rn
+      totalRev += orig.otb_rev
+    }
+  }
+  const days = data.length
+  return {
+    rn: totalRn, rev: totalRev,
+    adr: totalRn > 0 ? totalRev / totalRn : 0,
+    occ: roomCount > 0 && days > 0 ? (totalRn / (roomCount * days)) * 100 : 0,
+  }
+}
+
 // ── Gap helpers ───────────────────────────────────────────────────────────────
 
 function gapColor(v: number): string {
@@ -559,6 +577,83 @@ function MonthlyImpactCard({
   )
 }
 
+// ── StatusCard ────────────────────────────────────────────────────────────────
+
+function StatusSection({
+  label, otbOcc, otbAdr, otbRev, fcOcc, fcAdr, fcRev,
+}: {
+  label:  string
+  otbOcc: number; otbAdr: number; otbRev: number
+  fcOcc:  number; fcAdr:  number; fcRev:  number
+}) {
+  const gapOcc = fcOcc - otbOcc
+  const gapAdr = fcAdr - otbAdr
+  const gapRev = fcRev - otbRev
+  const cell: React.CSSProperties = { fontSize: 10, lineHeight: 1.65 }
+  return (
+    <>
+      <div style={{ fontSize: 9, color: 'var(--color-text-tertiary)', marginBottom: 3 }}>{label}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '26px 1fr 1fr 1fr', gap: '1px 0' }}>
+        <span />
+        <span style={{ fontSize: 9, color: 'var(--color-text-tertiary)', textAlign: 'right' }}>OTB</span>
+        <span style={{ fontSize: 9, color: 'var(--color-text-tertiary)', textAlign: 'right' }}>FCST</span>
+        <span style={{ fontSize: 9, color: 'var(--color-text-tertiary)', textAlign: 'right' }}>GAP</span>
+
+        <span style={{ ...cell, color: 'var(--color-text-secondary)' }}>OCC</span>
+        <span style={{ ...cell, color: 'var(--color-text-tertiary)', textAlign: 'right' }}>{otbOcc.toFixed(1)}%</span>
+        <span style={{ ...cell, color: 'var(--color-text-primary)',   textAlign: 'right' }}>{fcOcc.toFixed(1)}%</span>
+        <span style={{ ...cell, color: gapColor(gapOcc), fontWeight: 600, textAlign: 'right' }}>{fmtGapPct(gapOcc)}</span>
+
+        <span style={{ ...cell, color: 'var(--color-text-secondary)' }}>ADR</span>
+        <span style={{ ...cell, color: 'var(--color-text-tertiary)', textAlign: 'right' }}>{Math.round(otbAdr / 1000)}K</span>
+        <span style={{ ...cell, color: 'var(--color-text-primary)',   textAlign: 'right' }}>{Math.round(fcAdr / 1000)}K</span>
+        <span style={{ ...cell, color: gapColor(gapAdr), fontWeight: 600, textAlign: 'right' }}>{fmtGap(gapAdr, 'k')}K</span>
+
+        <span style={{ ...cell, color: 'var(--color-text-secondary)' }}>REV</span>
+        <span style={{ ...cell, color: 'var(--color-text-tertiary)', textAlign: 'right' }}>{(otbRev / 1_000_000).toFixed(1)}M</span>
+        <span style={{ ...cell, color: 'var(--color-text-primary)',   textAlign: 'right' }}>{(fcRev / 1_000_000).toFixed(1)}M</span>
+        <span style={{ ...cell, color: gapColor(gapRev), fontWeight: 600, textAlign: 'right' }}>{fmtGap(gapRev, 'm')}M</span>
+      </div>
+    </>
+  )
+}
+
+function StatusCard({
+  dayLabel, monthLabel,
+  dayOtb, dayFcst, monthOtb, monthFcst,
+}: {
+  dayLabel:   string
+  monthLabel: string
+  dayOtb:   { occ: number; adr: number; totalRev: number }
+  dayFcst:  { occ: number; adr: number; totalRev: number }
+  monthOtb:  { occ: number; adr: number; rev: number }
+  monthFcst: { occ: number; adr: number; rev: number }
+}) {
+  return (
+    <div style={{
+      background:   'var(--color-bg-elevated)',
+      border:       '1px solid var(--color-border-default)',
+      borderRadius: 8,
+      padding:      '10px 12px',
+    }}>
+      <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', fontWeight: 500, marginBottom: 8 }}>
+        📊 현황
+      </div>
+      <StatusSection
+        label={`일별 · ${dayLabel}`}
+        otbOcc={dayOtb.occ} otbAdr={dayOtb.adr} otbRev={dayOtb.totalRev}
+        fcOcc={dayFcst.occ} fcAdr={dayFcst.adr} fcRev={dayFcst.totalRev}
+      />
+      <div style={{ height: 1, background: 'var(--color-border-default)', margin: '8px 0' }} />
+      <StatusSection
+        label={monthLabel}
+        otbOcc={monthOtb.occ} otbAdr={monthOtb.adr} otbRev={monthOtb.rev}
+        fcOcc={monthFcst.occ} fcAdr={monthFcst.adr} fcRev={monthFcst.rev}
+      />
+    </div>
+  )
+}
+
 // ── DailyTab ──────────────────────────────────────────────────────────────────
 
 interface DailyTabProps {
@@ -667,7 +762,7 @@ function DailyTab({ schema, day, selectedDate, tempEdits, setTempEdits, hotelId 
           hotelId={hotelId}
           columns={columns}
           data={tableData}
-          segWidth={431}
+          segWidth={220}
         />
       </div>
     </div>
@@ -739,6 +834,16 @@ export function BulkEditModal({
     const after  = calcMonthlyAfter(data, tempEdits, schema.roomCount)
     return { before, after }
   }, [data, tempEdits, schema])
+
+  const statusKpi = useMemo(() => {
+    if (!day || !schema || data.length === 0) return null
+    return {
+      dayOtb:    calcOtbMetrics(day, schema.roomCount),
+      dayFcst:   calcDailyMetrics(day, new Map() as EditedValues, selectedDate ?? '', schema.roomCount),
+      monthOtb:  calcMonthlyOtb(data, schema.roomCount),
+      monthFcst: calcMonthlyBefore(data, schema.roomCount),
+    }
+  }, [day, data, schema, selectedDate])
 
   const [pendingDate, setPendingDate] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -887,7 +992,17 @@ export function BulkEditModal({
               </div>
 
               {/* 우측: 영향 패널 */}
-              <div style={{ width: 200, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {statusKpi && (
+                  <StatusCard
+                    dayLabel={day?.day_label ?? selectedDate ?? ''}
+                    monthLabel={`월별 · ${parseInt(selectedDate!.split('-')[1])}월 전체`}
+                    dayOtb={statusKpi.dayOtb}
+                    dayFcst={statusKpi.dayFcst}
+                    monthOtb={statusKpi.monthOtb}
+                    monthFcst={statusKpi.monthFcst}
+                  />
+                )}
                 <DailyImpactCard kpi={dailyKpi} isOverCapacity={dailyKpi?.after.isOverCapacity ?? false} />
 
                 <MonthlyImpactCard selectedDate={selectedDate} kpi={monthlyKpi} />
