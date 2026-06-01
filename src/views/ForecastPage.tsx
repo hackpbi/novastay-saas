@@ -5,12 +5,13 @@ import ForecastTable from '@/components/forecast/ForecastTable'
 import ForecastHeader from '@/components/forecast/ForecastHeader'
 import SegmentFilter from '@/components/forecast/SegmentFilter'
 import KpiBar from '@/components/forecast/KpiBar'
-import { Download, Upload, Pencil, ClipboardList, Zap } from 'lucide-react'
+import { Download, Upload, Pencil, ClipboardList, Zap, TrendingUp } from 'lucide-react'
 import { fetchForecastSchema } from '@/lib/forecast/schema'
 import { fetchBaselineForecast, transformRpcToTableData } from '@/lib/forecast/baseline'
 import { fetchCalendarRange, calendarToMap } from '@/lib/forecast/calendar'
 import { type EditedValues, saveForecastEdits, type SaveEdit } from '@/lib/forecast/save'
 import { BulkEditModal } from '@/components/forecast/BulkEditModal'
+import { ForecastGraphModal } from '@/components/forecast/ForecastGraphModal'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import type { ForecastSchema, ForecastDayData, CalendarMap } from '@/lib/forecast/types'
@@ -261,6 +262,8 @@ export default function ForecastPage() {
     selectedDate: string | null
   }>({ isOpen: false, selectedDate: null })
 
+  const [graphModalOpen, setGraphModalOpen] = useState(false)
+
   const openBulkEditModal  = useCallback((date: string) => {
     setBulkEdit({ isOpen: true, selectedDate: date })
   }, [])
@@ -460,6 +463,28 @@ export default function ForecastPage() {
               >
                 <Zap size={13} />
                 {isGenerating ? '생성 중...' : '자동 생성'}
+              </button>
+              <button
+                onClick={() => setGraphModalOpen(true)}
+                disabled={!isLoaded || data.length === 0}
+                title={!isLoaded ? 'forecast를 먼저 생성하세요' : 'OTB vs FCST 그래프'}
+                style={{
+                  display:      'flex',
+                  alignItems:   'center',
+                  gap:          4,
+                  padding:      '4px 8px',
+                  fontSize:     12,
+                  fontWeight:   500,
+                  cursor:       !isLoaded ? 'not-allowed' : 'pointer',
+                  border:       '1px solid var(--color-border-default)',
+                  borderRadius: 6,
+                  background:   'var(--color-bg-surface)',
+                  color:        !isLoaded ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)',
+                  opacity:      !isLoaded || data.length === 0 ? 0.5 : 1,
+                }}
+              >
+                <TrendingUp size={13} />
+                그래프
               </button>
             </div>
 
@@ -663,6 +688,18 @@ export default function ForecastPage() {
         <div className="text-xs text-center mt-2" style={{ color: 'var(--color-text-danger, #ef4444)' }}>
           {error}
         </div>
+      )}
+
+      {/* 그래프 모달 */}
+      {schema && (
+        <ForecastGraphModal
+          isOpen={graphModalOpen}
+          onClose={() => setGraphModalOpen(false)}
+          data={data}
+          schema={schema}
+          year={currentMonth.year}
+          month={currentMonth.month}
+        />
       )}
 
       {/* 일괄수정 모달 */}
