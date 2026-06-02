@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { X, ChevronLeft, ChevronRight, ChevronDown, Search, ArrowLeft } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight, ChevronDown, Search, ArrowLeft, Calendar } from 'lucide-react'
 import { useHotel } from '@/contexts/HotelContext'
 import { useTheme } from '@/contexts/ThemeContext'
+import { useDateContext } from '@/contexts/DateContext'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
 import { usePickupData } from '@/hooks/usePickupData'
 import {
@@ -144,6 +145,10 @@ export default function MonthlyPickupAccountModal({
   const { currentHotel }                         = useHotel()
   const { theme }                                = useTheme()
   const isDark                                   = theme === 'dark'
+  const { otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate } = useDateContext()
+  const days = otbDate && vsOtbDate
+    ? Math.round((new Date(otbDate).getTime() - new Date(vsOtbDate).getTime()) / 86400000)
+    : 0
   const { data: schema, loading: schemaLoading } = useMarketSchema()
   const { data: pickup, loading: pickupLoading } = usePickupData()
 
@@ -310,6 +315,31 @@ export default function MonthlyPickupAccountModal({
                   </span>
                 </div>
               )}
+
+              {/* OTB / vsOTB picker */}
+              <div className="flex items-center gap-2 mt-1.5">
+                <Calendar size={12} style={{ color: 'var(--brand-dimmed)', flexShrink: 0 }} />
+                <select
+                  value={otbDate}
+                  onChange={e => setOtbDate(e.target.value)}
+                  className="rounded-md text-xs"
+                  style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)', padding: '2px 6px' }}
+                >
+                  {otbDates.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+                <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>vs</span>
+                <select
+                  value={vsOtbDate}
+                  onChange={e => setVsOtbDate(e.target.value)}
+                  className="rounded-md text-xs"
+                  style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)', padding: '2px 6px' }}
+                >
+                  {otbDates.filter(d => d < otbDate).map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+                <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>
+                  {days > 0 ? `${days}일간` : '당일'} 픽업 현황
+                </span>
+              </div>
             </div>
           </div>
 
