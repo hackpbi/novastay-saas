@@ -1,162 +1,148 @@
 import type { MarketSchemaRow } from '@/hooks/useMarketSchema'
 import type { PickupRow } from '@/hooks/usePickupData'
 
+// ─── Types ──────────────────────────────────────────────────────────────────────
+
+export type MonthlyPickupCell = {
+  pickupNights:  number    // ΔR-N  (otb - vsOtb)
+  pickupAdr:     number    // ΔADR  (otbAdr - vsAdr)
+  pickupRevenue: number    // ΔREV  (otbRev - vsRev)
+}
+
 export type SegTableRow = {
-  id:             string
-  name:           string
-  level:          'main' | 'mid' | 'sub'
-  isBold:         boolean
-  color:          string | null   // deprecated
-  bgDarkColor:    string | null
-  bgLightColor:   string | null
-  fontLightColor: string | null
-  fontDarkColor:  string | null
-  indent:         number       // sub=1, main/mid=0
-  otbNights:      number
-  otbAdr:         number
-  otbRevenue:     number
-  puNights:       number
-  puAdr:          number       // otbAdr - vsOtbAdr
-  puRevenue:      number
+  id:                string
+  name:              string
+  level:             'main' | 'mid' | 'sub'
+  isBold:            boolean
+  bgDarkColor:       string | null
+  bgLightColor:      string | null
+  fontDarkColor:     string | null
+  fontLightColor:    string | null
+  indent:            number         // sub=1, main/mid=0
+  segmentationCodes: string[]       // Account 필터링용
+  monthlyPickup:     Record<string, MonthlyPickupCell>  // key: 'YYYY-MM'
 }
 
 export type SegTableSummary = {
-  totalNights:  number
-  totalAdr:     number
-  totalRevenue: number
-  puNights:     number
-  puAdr:        number
-  puRevenue:    number
-  occ:          number
-  revpar:       number
+  monthlyTotals: Record<string, MonthlyPickupCell & {
+    occ:    number    // pickupNights / (roomCount × daysInMonth) × 100
+    revpar: number    // pickupRevenue / (roomCount × daysInMonth)
+  }>
+  grandTotal: MonthlyPickupCell
 }
 
-type CodeStats = {
+// ─── Internal ──────────────────────────────────────────────────────────────────
+
+type RawStats = {
   otbNights:  number
   otbRevenue: number
   vsNights:   number
   vsRevenue:  number
-  puNights:   number
-  puRevenue:  number
 }
 
-function emptyStats(): CodeStats {
-  return { otbNights: 0, otbRevenue: 0, vsNights: 0, vsRevenue: 0, puNights: 0, puRevenue: 0 }
+function emptyRaw(): RawStats {
+  return { otbNights: 0, otbRevenue: 0, vsNights: 0, vsRevenue: 0 }
 }
 
-function addStats(acc: CodeStats, s: CodeStats): void {
+function addRaw(acc: RawStats, s: RawStats): void {
   acc.otbNights  += s.otbNights
   acc.otbRevenue += s.otbRevenue
   acc.vsNights   += s.vsNights
   acc.vsRevenue  += s.vsRevenue
-  acc.puNights   += s.puNights
-  acc.puRevenue  += s.puRevenue
 }
+
+function toCell(raw: RawStats): MonthlyPickupCell {
+  const otbAdr = raw.otbNights > 0 ? raw.otbRevenue / raw.otbNights : 0
+  const vsAdr  = raw.vsNights  > 0 ? raw.vsRevenue  / raw.vsNights  : 0
+  return {
+    pickupNights:  raw.otbNights  - raw.vsNights,
+    pickupAdr:     otbAdr - vsAdr,
+    pickupRevenue: raw.otbRevenue - raw.vsRevenue,
+  }
+}
+
+// ─── Main function ──────────────────────────────────────────────────────────────
 
 export function buildSegTable(args: {
   schema:    MarketSchemaRow[]
   pickup:    PickupRow[]
-  year:      number
-  month:     number
   roomCount: number
-}): { rows: SegTableRow[]; summary: SegTableSummary } {
-  const { schema, pickup, year, month, roomCount } = args
+}): { rows: SegTableRow[]; summary: SegTableSummary; monthKeys: string[] } {
+  const { schema, pickup, roomCount } = args
 
-  // ── 1. 해당 월 픽업 데이터 필터 ──────────────────────────────────────────────
-  const monthPickup = pickup.filter(r => {
-    const d = new Date(r.business_date)
-    return d.getFullYear() === year && d.getMonth() + 1 === month
-  })
+  // 1. monthKeys
+  const monthKeys = Array.from(new Set(
+    pickup.map(r => r.business_date.slice(0, 7))
+  )).sort()
 
-  // ── 2. segmentation 코드별 합산 맵 ──────────────────────────────────────────
-  const segMap = new Map<string, CodeStats>()
-  for (const r of monthPickup) {
-    const code = r.segmentation
-    if (!segMap.has(code)) segMap.set(code, emptyStats())
-    const s = segMap.get(code)!
-    s.otbNights  += r.otb_nights    ?? 0
-    s.otbRevenue += r.otb_revenue   ?? 0
-    s.vsNights   += r.vs_otb_nights  ?? 0
-    s.vsRevenue  += r.vs_otb_revenue ?? 0
-    s.puNights   += r.pu_nights     ?? 0
-    s.puRevenue  += r.pu_revenue    ?? 0
+  // 2. (segCode × monthKey) 합산 맵
+  const rawMap = new Map<string, RawStats>()
+  for (const r of pickup) {
+    const mk  = r.business_date.slice(0, 7)
+    const key = `${r.segmentation}::${mk}`
+    let s = rawMap.get(key)
+    if (!s) { s = emptyRaw(); rawMap.set(key, s) }
+    s.otbNights  += r.otb_nights      ?? 0
+    s.otbRevenue += r.otb_revenue     ?? 0
+    s.vsNights   += r.vs_otb_nights   ?? 0
+    s.vsRevenue  += r.vs_otb_revenue  ?? 0
   }
 
-  // ── 3. schema 행별 집계 ──────────────────────────────────────────────────────
-  // 코드 배열 → segMap 합산
-  function aggregateCodes(codes: string[]): CodeStats {
-    const acc = emptyStats()
+  // 3. codes 배열 + monthKey → MonthlyPickupCell
+  function aggregateCodes(codes: string[], mk: string): MonthlyPickupCell {
+    const acc = emptyRaw()
     for (const code of codes) {
-      const s = segMap.get(code)
-      if (s) addStats(acc, s)
+      const s = rawMap.get(`${code}::${mk}`)
+      if (s) addRaw(acc, s)
     }
-    return acc
+    return toCell(acc)
   }
 
-  const rowStatsMap = new Map<string, CodeStats>()
-
-  // mid/sub: 자체 segmentation 코드에서 집계
-  for (const s of schema) {
-    if (s.level !== 'main') {
-      rowStatsMap.set(s.id, aggregateCodes(s.segmentation))
+  // 4. SegTableRow 생성
+  function makeRow(s: MarketSchemaRow, codes: string[]): SegTableRow {
+    const monthlyPickup: Record<string, MonthlyPickupCell> = {}
+    for (const mk of monthKeys) {
+      monthlyPickup[mk] = aggregateCodes(codes, mk)
     }
-  }
-
-  // main: 모든 sub 자식들의 segmentation 코드 합산 (raw 집계)
-  for (const s of schema) {
-    if (s.level === 'main') {
-      const childCodes = schema
-        .filter(c => c.parent_id === s.id)
-        .flatMap(c => c.segmentation)
-      rowStatsMap.set(s.id, aggregateCodes(childCodes))
-    }
-  }
-
-  // ── 4. SegTableRow 생성 함수 ─────────────────────────────────────────────────
-  function makeRow(s: MarketSchemaRow): SegTableRow {
-    const st    = rowStatsMap.get(s.id) ?? emptyStats()
-    const otbAdr = st.otbNights > 0 ? Math.round(st.otbRevenue / st.otbNights) : 0
-    const vsAdr  = st.vsNights  > 0 ? Math.round(st.vsRevenue  / st.vsNights)  : 0
     return {
-      id:             s.id,
-      name:           s.name,
-      level:          s.level,
-      isBold:         s.is_bold,
-      color:          s.color,
-      bgDarkColor:    s.bg_dark_color,
-      bgLightColor:   s.bg_light_color,
-      fontLightColor: s.font_light_color,
-      fontDarkColor:  s.font_dark_color,
-      indent:         s.level === 'sub' ? 1 : 0,
-      otbNights:      st.otbNights,
-      otbAdr,
-      otbRevenue:     st.otbRevenue,
-      puNights:       st.puNights,
-      puAdr:          otbAdr - vsAdr,
-      puRevenue:      st.puRevenue,
+      id:                s.id,
+      name:              s.name,
+      level:             s.level,
+      isBold:            s.is_bold,
+      bgDarkColor:       s.bg_dark_color  ?? null,
+      bgLightColor:      s.bg_light_color ?? null,
+      fontDarkColor:     s.font_dark_color  ?? null,
+      fontLightColor:    s.font_light_color ?? null,
+      indent:            s.level === 'sub' ? 1 : 0,
+      segmentationCodes: codes,
+      monthlyPickup,
     }
   }
 
-  // ── 5. 정렬: 상위(parent_id=null) order_index순, main 뒤에 자식 sub 붙임 ──
+  // 5. 정렬: top-level order_index순, main 다음에 자식 sub
   const topLevel = schema
     .filter(s => s.parent_id === null)
     .sort((a, b) => a.order_index - b.order_index)
 
-  const ordered: MarketSchemaRow[] = []
+  const ordered: Array<[MarketSchemaRow, string[]]> = []
   for (const top of topLevel) {
-    ordered.push(top)
     if (top.level === 'main') {
       const children = schema
         .filter(c => c.parent_id === top.id)
         .sort((a, b) => a.order_index - b.order_index)
-      ordered.push(...children)
+      const mainCodes = children.flatMap(c => c.segmentation)
+      ordered.push([top, mainCodes])
+      for (const child of children) {
+        ordered.push([child, child.segmentation])
+      }
+    } else {
+      ordered.push([top, top.segmentation])
     }
   }
 
-  const rows = ordered.map(makeRow)
+  const rows = ordered.map(([s, codes]) => makeRow(s, codes))
 
-  // ── 6. summary (HOU 제외) ────────────────────────────────────────────────────
-  // HOU 관련 코드 식별: schema.segmentation에 'HOU' 포함된 행의 모든 코드
+  // 6. summary (HOU 제외)
   const houCodes = new Set<string>()
   for (const s of schema) {
     if (s.segmentation.includes('HOU')) {
@@ -164,26 +150,32 @@ export function buildSegTable(args: {
     }
   }
 
-  const totals = emptyStats()
-  for (const [code, st] of segMap.entries()) {
-    if (!houCodes.has(code)) addStats(totals, st)
+  const monthlyTotals: SegTableSummary['monthlyTotals'] = {}
+  for (const mk of monthKeys) {
+    const acc = emptyRaw()
+    for (const [mapKey, s] of rawMap.entries()) {
+      const sep = mapKey.indexOf('::')
+      const code    = mapKey.slice(0, sep)
+      const monthKey = mapKey.slice(sep + 2)
+      if (monthKey !== mk || houCodes.has(code)) continue
+      addRaw(acc, s)
+    }
+    const cell = toCell(acc)
+    const [yearStr, monthStr] = mk.split('-')
+    const daysInMonth = new Date(parseInt(yearStr), parseInt(monthStr), 0).getDate()
+    const denom = roomCount * daysInMonth
+    monthlyTotals[mk] = {
+      ...cell,
+      occ:    denom > 0 ? (cell.pickupNights  / denom) * 100 : 0,
+      revpar: denom > 0 ?  cell.pickupRevenue / denom        : 0,
+    }
   }
 
-  const totalAdr = totals.otbNights > 0 ? Math.round(totals.otbRevenue / totals.otbNights) : 0
-  const vsAdr    = totals.vsNights  > 0 ? Math.round(totals.vsRevenue  / totals.vsNights)  : 0
-  const daysInMonth = new Date(year, month, 0).getDate()
-  const denominator = roomCount * daysInMonth
-
-  const summary: SegTableSummary = {
-    totalNights:  totals.otbNights,
-    totalAdr,
-    totalRevenue: totals.otbRevenue,
-    puNights:     totals.puNights,
-    puAdr:        totalAdr - vsAdr,
-    puRevenue:    totals.puRevenue,
-    occ:    denominator > 0 ? (totals.otbNights / denominator) * 100 : 0,
-    revpar: denominator > 0 ? totals.otbRevenue / denominator        : 0,
+  const grandTotal: MonthlyPickupCell = {
+    pickupNights:  Object.values(monthlyTotals).reduce((s, m) => s + m.pickupNights,  0),
+    pickupAdr:     0,
+    pickupRevenue: Object.values(monthlyTotals).reduce((s, m) => s + m.pickupRevenue, 0),
   }
 
-  return { rows, summary }
+  return { rows, summary: { monthlyTotals, grandTotal }, monthKeys }
 }
