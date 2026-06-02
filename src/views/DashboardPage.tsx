@@ -463,7 +463,7 @@ export default function DashboardPage() {
   const [segModal,     setSegModal]     = useState<{ open: boolean; year?: number; month?: number }>({ open: false })
   const [monthlyPickupSegOpen,       setMonthlyPickupSegOpen]       = useState(false)
   const [monthlyPickupAccountModal,  setMonthlyPickupAccountModal]  = useState<{
-    open: boolean; filterSegCodes?: string[]; filterMonthKey?: string; filterLabel?: string
+    open: boolean; filterSegCodes?: string[]; filterMonthKey?: string; filterLabel?: string; initialViewMode?: 'monthly' | 'total'
   }>({ open: false })
   const [accountModal, setAccountModal] = useState<{
     open: boolean; year?: number; month?: number
@@ -697,7 +697,13 @@ export default function DashboardPage() {
         roomCount={roomCount}
         onPickupCellClick={(segCodes, monthKey, label) => {
           setMonthlyPickupSegOpen(false)
-          setMonthlyPickupAccountModal({ open: true, filterSegCodes: segCodes, filterMonthKey: monthKey, filterLabel: label })
+          setMonthlyPickupAccountModal({
+            open: true,
+            filterSegCodes:  segCodes,
+            filterMonthKey:  monthKey ?? undefined,
+            filterLabel:     label,
+            initialViewMode: monthKey === null ? 'total' : 'monthly',
+          })
         }}
       />
       <MonthlyPickupAccountModal
@@ -707,6 +713,7 @@ export default function DashboardPage() {
         initialFilterSegCodes={monthlyPickupAccountModal.filterSegCodes}
         initialFilterMonthKey={monthlyPickupAccountModal.filterMonthKey}
         initialFilterLabel={monthlyPickupAccountModal.filterLabel}
+        initialViewMode={monthlyPickupAccountModal.initialViewMode}
         onBackToSeg={() => {
           setMonthlyPickupAccountModal({ open: false })
           setMonthlyPickupSegOpen(true)

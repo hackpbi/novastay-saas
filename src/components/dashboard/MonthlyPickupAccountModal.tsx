@@ -132,7 +132,7 @@ function Skeleton() {
 
 export default function MonthlyPickupAccountModal({
   open, onClose, roomCount,
-  initialFilterSegCodes, initialFilterMonthKey, initialFilterLabel,
+  initialFilterSegCodes, initialFilterMonthKey, initialFilterLabel, initialViewMode,
   onBackToSeg,
 }: {
   open:                    boolean
@@ -141,6 +141,7 @@ export default function MonthlyPickupAccountModal({
   initialFilterSegCodes?:  string[]
   initialFilterMonthKey?:  string
   initialFilterLabel?:     string
+  initialViewMode?:        'monthly' | 'total'
   onBackToSeg?:            () => void
 }) {
   const { currentHotel }                         = useHotel()
@@ -156,7 +157,7 @@ export default function MonthlyPickupAccountModal({
   const [pageIndex,     setPageIndex]     = useState(0)
   const [searchQuery,   setSearchQuery]   = useState('')
   const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(new Set())
-  const [viewMode,      setViewMode]      = useState<'monthly' | 'total'>('total')
+  const [viewMode,      setViewMode]      = useState<'monthly' | 'total'>(initialViewMode ?? 'total')
   const [filterCleared, setFilterCleared] = useState(false)
 
   const loading = schemaLoading || pickupLoading
@@ -231,7 +232,10 @@ export default function MonthlyPickupAccountModal({
 
   // reset on open / filter cleared
   useEffect(() => {
-    if (open) { setPageIndex(0); setSearchQuery(''); setFilterCleared(false) }
+    if (open) {
+      setPageIndex(0); setSearchQuery(''); setFilterCleared(false)
+      if (!initialFilterMonthKey) setViewMode(initialViewMode ?? 'total')
+    }
   }, [open])
 
   useEffect(() => {

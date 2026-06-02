@@ -120,7 +120,7 @@ export default function MonthlyPickupSegModal({
   open:               boolean
   onClose:            () => void
   roomCount:          number
-  onPickupCellClick?: (segCodes: string[], monthKey: string, label: string) => void
+  onPickupCellClick?: (segCodes: string[], monthKey: string | null, label: string) => void
 }) {
   const { currentHotel }                                  = useHotel()
   const { theme }                                         = useTheme()
@@ -312,7 +312,7 @@ export default function MonthlyPickupSegModal({
                     const rowBg    = (isDark ? row.bgDarkColor  : row.bgLightColor)  ?? 'var(--color-bg-secondary)'
                     const rowColor = (isDark ? row.fontDarkColor : row.fontLightColor) ?? 'var(--color-text-primary)'
                     const isHou    = houRowIds.has(row.id)
-                    const clickable = viewMode === 'monthly' && !!onPickupCellClick && !isHou && row.segmentationCodes.length > 0
+                    const clickable = !!onPickupCellClick && !isHou && row.segmentationCodes.length > 0
 
                     return (
                       <tr
@@ -337,7 +337,11 @@ export default function MonthlyPickupSegModal({
                             return <MonthCells key={mk} cell={cell} clickable={clickable} onClick={handleClick} />
                           })
                         ) : (
-                          <MonthCells cell={row.totalPickup} clickable={false} />
+                          <MonthCells
+                            cell={row.totalPickup}
+                            clickable={clickable}
+                            onClick={clickable ? () => onPickupCellClick!(row.segmentationCodes, null, `${row.name} · 전체`) : undefined}
+                          />
                         )}
                       </tr>
                     )
