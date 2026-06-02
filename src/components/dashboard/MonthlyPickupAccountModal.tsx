@@ -200,9 +200,13 @@ export default function MonthlyPickupAccountModal({
   // auto-collapse on open / groups change
   useEffect(() => {
     if (!open) return
-    setCollapsedKeys(new Set(visibleGroups.map(g => g.key)))
+    if (isFilterMode && !filterCleared) {
+      setCollapsedKeys(new Set())  // 필터 진입 시 모두 펼침
+    } else {
+      setCollapsedKeys(new Set(visibleGroups.map(g => g.key)))  // 전체 모드: 모두 접힘
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, visibleGroups.length])
+  }, [open, isFilterMode, filterCleared, visibleGroups.length])
 
   // search → auto-expand
   const effectiveCollapsedKeys = searchQuery.trim() ? new Set<string>() : collapsedKeys
@@ -478,7 +482,12 @@ export default function MonthlyPickupAccountModal({
                 <tfoot>
                   {/* 합계 */}
                   <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: 'var(--color-bg-secondary)' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)' }}>합계 (HOU 제외)</td>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                      합계 (HOU 제외)
+                      {isFilterMode && !filterCleared && (
+                        <span style={{ fontSize: 10, color: 'var(--brand-dimmed)', marginLeft: 4 }}>※ 전체 기준</span>
+                      )}
+                    </td>
                     {visiblePageMonths.map(mk => (
                       <MonthCells key={mk} cell={summary.monthlyTotals[mk] ?? ZERO_CELL} />
                     ))}
