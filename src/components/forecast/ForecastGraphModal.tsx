@@ -23,14 +23,15 @@ function fmtYAxis(v: number, metric: Metric): string {
 }
 
 export function ForecastGraphModal({
-  isOpen, onClose, data, schema, year, month,
+  isOpen, onClose, data, schema, year, month, onDateClick,
 }: {
-  isOpen:  boolean
-  onClose: () => void
-  data:    ForecastDayData[]
-  schema:  ForecastSchema
-  year:    number
-  month:   number
+  isOpen:       boolean
+  onClose:      () => void
+  data:         ForecastDayData[]
+  schema:       ForecastSchema
+  year:         number
+  month:        number
+  onDateClick?: (date: string) => void
 }) {
   const [metric, setMetric] = useState<Metric>('occ')
 
@@ -55,7 +56,8 @@ export function ForecastGraphModal({
       const rc = schema.roomCount
       const [, mm, dd] = day.business_date.split('-')
       return {
-        date:   `${parseInt(mm)}/${parseInt(dd)}`,
+        date:     `${parseInt(mm)}/${parseInt(dd)}`,
+        fullDate: day.business_date,
         otbOcc: rc > 0 ? (otbRn / rc) * 100 : 0,
         otbAdr: otbRn > 0 ? otbRev / otbRn : 0,
         otbRev,
@@ -68,7 +70,8 @@ export function ForecastGraphModal({
 
   const points = useMemo(() =>
     chartData.map(d => ({
-      date: d.date,
+      date:     d.date,
+      fullDate: d.fullDate,
       FCST: metric === 'occ' ? d.fcOcc  : metric === 'adr' ? d.fcAdr  : d.fcRev,
       OTB:  metric === 'occ' ? d.otbOcc : metric === 'adr' ? d.otbAdr : d.otbRev,
     })),
@@ -87,7 +90,7 @@ export function ForecastGraphModal({
       <div
         className="relative rounded-2xl flex flex-col w-full"
         style={{
-          maxWidth:   820,
+          maxWidth:   1300,
           background: 'var(--color-bg-surface)',
           border:     '1px solid var(--color-border-default)',
           boxShadow:  'var(--shadow-card)',
@@ -139,9 +142,18 @@ export function ForecastGraphModal({
         </div>
 
         {/* Chart */}
-        <div className="px-4 pt-5 pb-4" style={{ height: 360 }}>
+        <div className="px-4 pt-5 pb-4" style={{ height: 500, cursor: onDateClick ? 'pointer' : 'default' }}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={points} margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
+            <LineChart
+              data={points}
+              margin={{ top: 4, right: 16, left: 4, bottom: 4 }}
+              onClick={(chartData: any) => {
+                const label = chartData?.activeLabel
+                if (!label) return
+                const point = points.find(p => p.date === label)
+                if (point?.fullDate && onDateClick) onDateClick(point.fullDate)
+              }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-default, #2a2a2a)" />
               <XAxis
                 dataKey="date"

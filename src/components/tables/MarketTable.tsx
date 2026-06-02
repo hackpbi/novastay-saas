@@ -32,6 +32,15 @@ export type MarketTableProps = {
   opaqueBg?:         boolean
   maxHeight?:        string
   segWidth?:         number
+  mode?:               'dark' | 'light'
+  highlightLevel?:     'main' | 'mid' | 'sub' | null
+  levelStyleOverride?: Partial<Record<'main' | 'mid' | 'sub', {
+    bg_dark_color:    string
+    bg_light_color:   string
+    font_dark_color:  string
+    font_light_color: string
+    is_bold:          boolean
+  }>>
 }
 
 type Schema = {
@@ -43,6 +52,8 @@ type Schema = {
   segmentation:     string[] | null
   order_index:      number
   color:            string | null
+  bg_dark_color:    string | null
+  bg_light_color:   string | null
   font_dark_color:  string | null
   font_light_color: string | null
   is_bold:          boolean
@@ -196,7 +207,7 @@ function SegCell({
 
 export default function MarketTable({
   hotelId, columns, data, groupHeader, loading, className, year, month, stickyFirstGroup, opaqueBg, maxHeight,
-  segWidth,
+  segWidth, mode, highlightLevel, levelStyleOverride,
 }: MarketTableProps) {
 
   // queryKey에 'full' 추가 — BudgetPage의 minimal 쿼리 캐시와 충돌 방지
@@ -249,9 +260,15 @@ export default function MarketTable({
       : bg
 
   const { theme } = useTheme()
-  const isDark    = theme === 'dark'
-  const fontColor = (item: Schema, fallback: string) =>
-    isDark ? (item.font_dark_color ?? fallback) : (item.font_light_color ?? fallback)
+  const isDark    = mode ? mode === 'dark' : theme === 'dark'
+  const styleOf   = (item: Schema): Schema =>
+    levelStyleOverride?.[item.level]
+      ? { ...item, ...levelStyleOverride[item.level] }
+      : item
+  const fontColor = (item: Schema, fallback: string) => {
+    const s = styleOf(item)
+    return isDark ? (s.font_dark_color ?? fallback) : (s.font_light_color ?? fallback)
+  }
 
   const daysInMonth    = year && month ? new Date(year, month, 0).getDate() : 0
   const availableRooms = roomCount * daysInMonth
@@ -278,9 +295,14 @@ export default function MarketTable({
     })
   }
 
-  // color + 불투명도 헬퍼: opaqueBg=true면 순색, 아니면 13% 투명
-  const rowBg = (color: string | null, fallback: string) =>
-    color ? (opaqueBg ? color : `${color}22`) : fallback
+  // 배경색: 모드별 bg_dark_color/bg_light_color, 없으면 기존 color 로 폴백
+  const bgColor = (item: Schema, fallback: string) => {
+    const s = styleOf(item)
+    const c = isDark ? (s.bg_dark_color ?? s.color)
+                     : (s.bg_light_color ?? s.color)
+    if (!c) return fallback
+    return opaqueBg ? c : `${c}22`
+  }
 
   // ── Sticky first-group helpers ────────────────────────────────────────────────
   const stickyGroupCols = stickyFirstGroup && hasGroups ? (groupSpans[0]?.span ?? 0) : 0
@@ -416,11 +438,11 @@ export default function MarketTable({
                   {/* 대분류 */}
                   {(() => {
                     const rowId  = `main-${group.parent.id}`
-                    const mainBg = rowBg(group.parent.color, 'var(--color-bg-secondary)')
+                    const mainBg = bgColor(group.parent, 'var(--color-bg-secondary)')
                     const bg     = hoverBg(rowId, mainBg)
                     return (
                       <tr
-                        style={{ borderTop: '1px solid var(--color-border-default)', fontWeight: group.parent.is_bold ? 700 : 600 }}
+                        style={{ borderTop: '1px solid var(--color-border-default)', fontWeight: styleOf(group.parent).is_bold ? 700 : 600, ...(highlightLevel === 'main' ? { boxShadow: 'inset 0 0 0 2px var(--color-accent-primary)' } : {}) }}
                         onMouseEnter={() => setHoveredRowId(rowId)}
                         onMouseLeave={() => setHoveredRowId(null)}
                       >
@@ -457,7 +479,8 @@ export default function MarketTable({
                       <tr key={child.id}
                         style={{
                           borderBottom: ci < group.children.length - 1 ? '1px solid var(--color-border-subtle)' : 'none',
-                          fontWeight: child.is_bold ? 600 : 400,
+                          fontWeight: styleOf(child).is_bold ? 600 : 400,
+                          ...(highlightLevel === 'sub' ? { boxShadow: 'inset 0 0 0 2px var(--color-accent-primary)' } : {}),
                         }}
                         onMouseEnter={() => setHoveredRowId(rowId)}
                         onMouseLeave={() => setHoveredRowId(null)}
@@ -499,11 +522,11 @@ export default function MarketTable({
             // 중분류
             const mid   = item.data
             const rowId = `mid-${mid.id}`
-            const midBg = rowBg(mid.color, 'var(--color-bg-secondary)')
+            const midBg = bgColor(mid, 'var(--color-bg-secondary)')
             const bg    = hoverBg(rowId, midBg)
             return (
               <tr key={mid.id}
-                style={{ borderTop: '1px solid var(--color-border-default)', fontWeight: mid.is_bold ? 600 : 400 }}
+                style={{ borderTop: '1px solid var(--color-border-default)', fontWeight: styleOf(mid).is_bold ? 600 : 400, ...(highlightLevel === 'mid' ? { boxShadow: 'inset 0 0 0 2px var(--color-accent-primary)' } : {}) }}
                 onMouseEnter={() => setHoveredRowId(rowId)}
                 onMouseLeave={() => setHoveredRowId(null)}
               >

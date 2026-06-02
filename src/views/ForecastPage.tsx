@@ -699,6 +699,10 @@ export default function ForecastPage() {
           schema={schema}
           year={currentMonth.year}
           month={currentMonth.month}
+          onDateClick={(date) => {
+            setGraphModalOpen(false)
+            openBulkEditModal(date)
+          }}
         />
       )}
 
