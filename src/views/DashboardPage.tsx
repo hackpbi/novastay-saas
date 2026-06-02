@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowUp, ArrowDown, AlignJustify, User, ChevronLeft, ChevronRight, ArrowLeftRight } from 'lucide-react'
+import { ArrowUp, ArrowDown, AlignJustify, User, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { usePickupData } from '@/hooks/usePickupData'
 import { useOtbData } from '@/hooks/useOtbData'
@@ -401,7 +401,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
         </button>
 
         {/* 보조 버튼 컨테이너 — 호버 전 숨김, 호버 시 슬라이드인 */}
-        <div className="flex items-center gap-2 overflow-hidden max-w-0 opacity-0 group-hover:max-w-[260px] group-hover:opacity-100 group-hover:ml-2 transition-all duration-300 ease-out">
+        <div className="flex items-center gap-2 overflow-hidden max-w-0 opacity-0 group-hover:max-w-[200px] group-hover:opacity-100 group-hover:ml-2 transition-all duration-300 ease-out">
           <button
             onClick={() => onSegClick?.(year, month)}
             className="flex items-center gap-1 px-3 py-2.5 rounded-full text-brand-muted text-[11px] font-medium whitespace-nowrap hover:text-brand-text transition-colors duration-150"
@@ -417,13 +417,6 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
           >
             <User size={11} />
             Account
-          </button>
-          <button
-            className="flex items-center gap-1 px-3 py-2.5 rounded-full text-brand-muted text-[11px] font-medium whitespace-nowrap hover:text-brand-text transition-colors duration-150"
-            style={{ border: '1px solid var(--ghost-btn-border)' }}
-          >
-            <ArrowLeftRight size={11} />
-            vs LY
           </button>
         </div>
       </div>
