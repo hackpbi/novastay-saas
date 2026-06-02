@@ -9,6 +9,7 @@ import { useLyPacing } from '@/hooks/useLyPacing'
 import SegmentationModal from '@/components/dashboard/SegmentationModal'
 import AccountModal      from '@/components/dashboard/AccountModal'
 import { useHotel } from '@/contexts/HotelContext'
+import { useDateContext } from '@/contexts/DateContext'
 import { supabase } from '@/lib/supabase'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -466,7 +467,12 @@ export default function DashboardPage() {
   const { currentHotel } = useHotel()
   const hotelId = currentHotel?.id ?? ''
 
+  const { vsOtbDate } = useDateContext()
   const { data: pickupData, loading: pickupLoading, otbDate } = usePickupData()
+
+  const pickupDays = otbDate && vsOtbDate
+    ? Math.round((new Date(otbDate).getTime() - new Date(vsOtbDate).getTime()) / 86400000)
+    : 0
   const { data: otbData } = useOtbData()
   const { data: lyData, loading: lyLoading } = useLyPacing()
 
@@ -581,7 +587,7 @@ export default function DashboardPage() {
           <div className="h-5 w-80 rounded animate-pulse" style={{ background: 'var(--color-bg-tertiary)' }} />
         ) : (
           <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-            오늘 ({otbDate}) 기준 1일간&nbsp;
+            오늘 ({otbDate}) 기준 {pickupDays > 0 ? `${pickupDays}일간` : '당일'}&nbsp;
             총&nbsp;
             <span style={{ color: totalPuNights >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600 }}>
               {formatPu(totalPuNights, 'nights')}실
