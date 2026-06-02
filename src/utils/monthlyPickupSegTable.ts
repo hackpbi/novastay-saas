@@ -21,6 +21,7 @@ export type MonthlyPickupSegRow = {
   indent:            number
   segmentationCodes: string[]
   monthlyPickup:     Record<string, MonthlyPickupCell>
+  totalPickup:       MonthlyPickupCell
 }
 
 export type MonthlyPickupSegSummary = {
@@ -28,6 +29,7 @@ export type MonthlyPickupSegSummary = {
     occ:    number
     revpar: number
   }>
+  grandTotal: MonthlyPickupCell & { occ: number; revpar: number }
 }
 
 // ─── Internal ──────────────────────────────────────────────────────────────────
@@ -123,6 +125,19 @@ export function buildMonthlyPickupSegTable(args: {
     for (const mk of monthKeys) {
       monthlyPickup[mk] = getCell(codes, mk)
     }
+    // totalPickup: raw 전체 월 누적 → 가중평균 ADR
+    const totalRaw = emptyRaw()
+    for (const mk of monthKeys) {
+      for (const code of codes) {
+        const raw = rawMap.get(`${code}::${mk}`)
+        if (raw) {
+          totalRaw.otbNights  += raw.otbNights
+          totalRaw.otbRevenue += raw.otbRevenue
+          totalRaw.vsNights   += raw.vsNights
+          totalRaw.vsRevenue  += raw.vsRevenue
+        }
+      }
+    }
     return {
       id:                s.id,
       name:              s.name,
@@ -135,6 +150,7 @@ export function buildMonthlyPickupSegTable(args: {
       indent:            s.level === 'sub' ? 1 : 0,
       segmentationCodes: codes,
       monthlyPickup,
+      totalPickup:       toCell(totalRaw),
     }
   }
 
@@ -186,5 +202,34 @@ export function buildMonthlyPickupSegTable(args: {
     }
   }
 
-  return { rows, summary: { monthlyTotals }, monthKeys }
+  // grandTotal: non-HOU raw 전체 월 누적 → 가중평균 ADR + occ/revpar
+  const grandRaw = emptyRaw()
+  for (const row of nonHouRows) {
+    if (row.level === 'main') continue
+    for (const mk of monthKeys) {
+      for (const code of row.segmentationCodes) {
+        const raw = rawMap.get(`${code}::${mk}`)
+        if (raw) {
+          grandRaw.otbNights  += raw.otbNights
+          grandRaw.otbRevenue += raw.otbRevenue
+          grandRaw.vsNights   += raw.vsNights
+          grandRaw.vsRevenue  += raw.vsRevenue
+        }
+      }
+    }
+  }
+  let totalDays = 0
+  for (const mk of monthKeys) {
+    const [y, m] = mk.split('-').map(Number)
+    totalDays += new Date(y, m, 0).getDate()
+  }
+  const grandDenom = roomCount * totalDays
+  const grandCell  = toCell(grandRaw)
+  const grandTotal = {
+    ...grandCell,
+    occ:    grandDenom > 0 ? (grandCell.pickupNights  / grandDenom) * 100 : 0,
+    revpar: grandDenom > 0 ?  grandCell.pickupRevenue / grandDenom         : 0,
+  }
+
+  return { rows, summary: { monthlyTotals, grandTotal }, monthKeys }
 }

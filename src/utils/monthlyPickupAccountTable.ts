@@ -7,6 +7,7 @@ import type { MonthlyPickupCell } from './monthlyPickupSegTable'
 export type MonthlyPickupAccountRow = {
   account_name:  string
   monthlyPickup: Record<string, MonthlyPickupCell>
+  totalPickup:   MonthlyPickupCell
 }
 
 export type MonthlyPickupAccountGroup = {
@@ -17,6 +18,7 @@ export type MonthlyPickupAccountGroup = {
   isHou:            boolean
   rows:             MonthlyPickupAccountRow[]
   monthlyTotals:    Record<string, MonthlyPickupCell>
+  totalPickup:      MonthlyPickupCell
 }
 
 export type MonthlyPickupAccountSummary = {
@@ -24,6 +26,7 @@ export type MonthlyPickupAccountSummary = {
     occ:    number
     revpar: number
   }>
+  grandTotal:   MonthlyPickupCell & { occ: number; revpar: number }
   accountCount: number
   groupCount:   number
 }
@@ -148,6 +151,7 @@ export function buildMonthlyPickupAccountTable(args: {
         isHou:            meta.isHou,
         rows:             [],
         monthlyTotals:    {},
+        totalPickup:      zeroCell(),
       }
       groupMap.set(gKey, g)
     }
@@ -157,25 +161,38 @@ export function buildMonthlyPickupAccountTable(args: {
     if (!acctRow) {
       const mp: Record<string, MonthlyPickupCell> = {}
       for (const m of monthKeys) mp[m] = zeroCell()
-      acctRow = { account_name: acctName, monthlyPickup: mp }
+      acctRow = { account_name: acctName, monthlyPickup: mp, totalPickup: zeroCell() }
       g.rows.push(acctRow)
     }
 
     acctRow.monthlyPickup[mk] = toCell(st)
   }
 
-  // Step E: group monthlyTotals 계산 + rows 정렬
+  // Step E-pre: (acctName) 전체 월 raw 누적 맵 — totalPickup 가중평균 ADR용
+  const acctTotalRaw = new Map<string, RawStats>()
+  for (const [rawKey, st] of rawMap.entries()) {
+    const parts    = rawKey.split('::')
+    const acctName = parts[1]
+    let a = acctTotalRaw.get(acctName)
+    if (!a) { a = emptyRaw(); acctTotalRaw.set(acctName, a) }
+    a.otbNights  += st.otbNights;  a.otbRevenue += st.otbRevenue
+    a.vsNights   += st.vsNights;   a.vsRevenue  += st.vsRevenue
+  }
+
+  // Step E: group monthlyTotals / totalPickup 계산 + rows 정렬
   for (const g of groupMap.values()) {
-    // rows 정렬: 전체 월 pickupNights 합 내림차순
-    g.rows.sort((a, b) => {
-      const sumA = monthKeys.reduce((s, mk) => s + (a.monthlyPickup[mk]?.pickupNights ?? 0), 0)
-      const sumB = monthKeys.reduce((s, mk) => s + (b.monthlyPickup[mk]?.pickupNights ?? 0), 0)
-      return Math.abs(sumB) - Math.abs(sumA)
-    })
+    // row totalPickup
+    for (const row of g.rows) {
+      const raw = acctTotalRaw.get(row.account_name) ?? emptyRaw()
+      row.totalPickup = toCell(raw)
+    }
+
+    // rows 정렬: totalPickup.pickupNights 절대값 내림차순
+    g.rows.sort((a, b) => Math.abs(b.totalPickup.pickupNights) - Math.abs(a.totalPickup.pickupNights))
 
     // group monthlyTotals
     for (const mk of monthKeys) {
-      let nights = 0, revenue = 0, otbN = 0, otbR = 0, vsN = 0, vsR = 0
+      let nights = 0, revenue = 0
       for (const row of g.rows) {
         const cell = row.monthlyPickup[mk] ?? zeroCell()
         nights  += cell.pickupNights
@@ -183,6 +200,15 @@ export function buildMonthlyPickupAccountTable(args: {
       }
       g.monthlyTotals[mk] = { pickupNights: nights, pickupAdr: 0, pickupRevenue: revenue }
     }
+
+    // group totalPickup: rows totalPickup raw 누적 (acctTotalRaw 재사용)
+    const gRaw = emptyRaw()
+    for (const row of g.rows) {
+      const raw = acctTotalRaw.get(row.account_name) ?? emptyRaw()
+      gRaw.otbNights  += raw.otbNights;  gRaw.otbRevenue += raw.otbRevenue
+      gRaw.vsNights   += raw.vsNights;   gRaw.vsRevenue  += raw.vsRevenue
+    }
+    g.totalPickup = toCell(gRaw)
   }
 
   // Step F: groups 정렬 (schemaSortKey → segmentationName)
@@ -199,6 +225,8 @@ export function buildMonthlyPickupAccountTable(args: {
     summaryTotals[mk] = { pickupNights: 0, pickupAdr: 0, pickupRevenue: 0, occ: 0, revpar: 0 }
   }
 
+  const grandRaw = emptyRaw()
+
   for (const g of groups) {
     accountCount += g.rows.length
     if (g.isHou) continue
@@ -206,6 +234,13 @@ export function buildMonthlyPickupAccountTable(args: {
       const cell = g.monthlyTotals[mk] ?? zeroCell()
       summaryTotals[mk].pickupNights  += cell.pickupNights
       summaryTotals[mk].pickupRevenue += cell.pickupRevenue
+    }
+    // grandTotal raw 누적
+    const raw = acctTotalRaw  // reuse per-account map
+    for (const row of g.rows) {
+      const r = raw.get(row.account_name) ?? emptyRaw()
+      grandRaw.otbNights  += r.otbNights;  grandRaw.otbRevenue += r.otbRevenue
+      grandRaw.vsNights   += r.vsNights;   grandRaw.vsRevenue  += r.vsRevenue
     }
   }
 
@@ -218,10 +253,24 @@ export function buildMonthlyPickupAccountTable(args: {
     tot.revpar = denom > 0 ?  tot.pickupRevenue / denom         : 0
   }
 
+  let totalDays = 0
+  for (const mk of monthKeys) {
+    const [y, m] = mk.split('-').map(Number)
+    totalDays += new Date(y, m, 0).getDate()
+  }
+  const grandDenom = roomCount * totalDays
+  const grandCell  = toCell(grandRaw)
+  const grandTotal = {
+    ...grandCell,
+    occ:    grandDenom > 0 ? (grandCell.pickupNights  / grandDenom) * 100 : 0,
+    revpar: grandDenom > 0 ?  grandCell.pickupRevenue / grandDenom         : 0,
+  }
+
   return {
     groups,
     summary: {
       monthlyTotals: summaryTotals,
+      grandTotal,
       accountCount,
       groupCount: groups.length,
     },

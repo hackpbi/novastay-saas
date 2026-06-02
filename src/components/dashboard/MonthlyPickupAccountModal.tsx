@@ -162,7 +162,7 @@ export default function MonthlyPickupAccountModal({
   const { groups, summary, monthKeys } = useMemo(
     () => !loading && schema.length > 0
       ? buildMonthlyPickupAccountTable({ schema, pickup, roomCount })
-      : { groups: [], summary: { monthlyTotals: {}, accountCount: 0, groupCount: 0 }, monthKeys: [] },
+      : { groups: [], summary: { monthlyTotals: {}, grandTotal: { pickupNights: 0, pickupAdr: 0, pickupRevenue: 0, occ: 0, revpar: 0 }, accountCount: 0, groupCount: 0 }, monthKeys: [] },
     [schema, pickup, roomCount, loading],
   )
 

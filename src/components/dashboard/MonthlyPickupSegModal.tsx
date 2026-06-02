@@ -136,7 +136,7 @@ export default function MonthlyPickupSegModal({
 
   const { rows, summary, monthKeys } = !loading && schema.length > 0
     ? buildMonthlyPickupSegTable({ schema, pickup, roomCount })
-    : { rows: [], summary: { monthlyTotals: {} }, monthKeys: [] }
+    : { rows: [], summary: { monthlyTotals: {}, grandTotal: { pickupNights: 0, pickupAdr: 0, pickupRevenue: 0, occ: 0, revpar: 0 } }, monthKeys: [] }
 
   const totalPages    = Math.ceil(monthKeys.length / PAGE_SIZE)
   const visibleMonths = monthKeys.slice(pageIndex * PAGE_SIZE, pageIndex * PAGE_SIZE + PAGE_SIZE)
