@@ -156,7 +156,7 @@ export default function MonthlyPickupAccountModal({
   const [pageIndex,     setPageIndex]     = useState(0)
   const [searchQuery,   setSearchQuery]   = useState('')
   const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(new Set())
-  const [viewMode,      setViewMode]      = useState<'monthly' | 'total'>('monthly')
+  const [viewMode,      setViewMode]      = useState<'monthly' | 'total'>('total')
   const [filterCleared, setFilterCleared] = useState(false)
 
   const loading = schemaLoading || pickupLoading
@@ -364,6 +364,42 @@ export default function MonthlyPickupAccountModal({
               </button>
             )}
 
+            {/* Pagination — 슬라이드인/아웃 */}
+            {!isSingleMonth && totalPages > 1 && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 2, overflow: 'hidden',
+                maxWidth:  viewMode === 'monthly' ? '140px' : '0px',
+                opacity:   viewMode === 'monthly' ? 1 : 0,
+                transform: viewMode === 'monthly' ? 'translateX(0)' : 'translateX(-10px)',
+                transition: 'max-width 280ms cubic-bezier(0.22,1,0.36,1), opacity 220ms ease, transform 280ms cubic-bezier(0.22,1,0.36,1)',
+                pointerEvents: viewMode === 'monthly' ? 'auto' : 'none',
+              }}>
+                <button
+                  onClick={() => setPageIndex(i => Math.max(0, i - 1))}
+                  disabled={pageIndex === 0}
+                  className="px-1.5 py-1 rounded transition-colors disabled:opacity-30"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                  onMouseEnter={e => { if (pageIndex > 0) (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-accent-primary)' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-text-secondary)' }}
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <span className="text-xs" style={{ color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+                  {pageIndex + 1}/{totalPages}
+                </span>
+                <button
+                  onClick={() => setPageIndex(i => Math.min(totalPages - 1, i + 1))}
+                  disabled={pageIndex === totalPages - 1}
+                  className="px-1.5 py-1 rounded transition-colors disabled:opacity-30"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                  onMouseEnter={e => { if (pageIndex < totalPages - 1) (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-accent-primary)' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-text-secondary)' }}
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            )}
+
             {/* View mode toggle */}
             {(() => {
               const isToggleDisabled = !!effectiveMonthKey
@@ -380,35 +416,6 @@ export default function MonthlyPickupAccountModal({
                 </div>
               )
             })()}
-
-            {/* Pagination */}
-            {viewMode === 'monthly' && !isSingleMonth && totalPages > 1 && (
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setPageIndex(i => Math.max(0, i - 1))}
-                  disabled={pageIndex === 0}
-                  className="p-1 rounded transition-colors disabled:opacity-30"
-                  style={{ color: 'var(--color-text-secondary)' }}
-                  onMouseEnter={e => { if (pageIndex > 0) (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-accent-primary)' }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-text-secondary)' }}
-                >
-                  <ChevronLeft size={14} />
-                </button>
-                <span className="text-xs px-1" style={{ color: 'var(--color-text-secondary)' }}>
-                  {pageIndex + 1} / {totalPages}
-                </span>
-                <button
-                  onClick={() => setPageIndex(i => Math.min(totalPages - 1, i + 1))}
-                  disabled={pageIndex === totalPages - 1}
-                  className="p-1 rounded transition-colors disabled:opacity-30"
-                  style={{ color: 'var(--color-text-secondary)' }}
-                  onMouseEnter={e => { if (pageIndex < totalPages - 1) (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-accent-primary)' }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-text-secondary)' }}
-                >
-                  <ChevronRight size={14} />
-                </button>
-              </div>
-            )}
 
             <button
               onClick={onClose}
