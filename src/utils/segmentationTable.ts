@@ -6,7 +6,9 @@ export type SegTableRow = {
   name:           string
   level:          'main' | 'mid' | 'sub'
   isBold:         boolean
-  color:          string | null
+  color:          string | null   // deprecated
+  bgDarkColor:    string | null
+  bgLightColor:   string | null
   fontLightColor: string | null
   fontDarkColor:  string | null
   indent:         number       // sub=1, main/mid=0
@@ -121,6 +123,8 @@ export function buildSegTable(args: {
       level:          s.level,
       isBold:         s.is_bold,
       color:          s.color,
+      bgDarkColor:    s.bg_dark_color,
+      bgLightColor:   s.bg_light_color,
       fontLightColor: s.font_light_color,
       fontDarkColor:  s.font_dark_color,
       indent:         s.level === 'sub' ? 1 : 0,

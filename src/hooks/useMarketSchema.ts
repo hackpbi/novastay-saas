@@ -9,7 +9,9 @@ export type MarketSchemaRow = {
   level:            'main' | 'mid' | 'sub'
   parent_id:        string | null
   order_index:      number
-  color:            string | null
+  color:            string | null   // deprecated: use bg_dark_color / bg_light_color
+  bg_dark_color:    string | null
+  bg_light_color:   string | null
   is_bold:          boolean
   font_light_color: string | null
   font_dark_color:  string | null

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { X, Search, ChevronDown, ChevronRight, ArrowLeft } from 'lucide-react'
 import { useHotel } from '@/contexts/HotelContext'
+import { useTheme } from '@/contexts/ThemeContext'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
 import { usePickupData } from '@/hooks/usePickupData'
 import { buildAccountTable, type AccountGroup, type AccountTableSummary } from '@/utils/accountTable'
@@ -112,26 +113,30 @@ function GroupHeaderRow({ group, collapsed, onToggle }: {
   collapsed: boolean
   onToggle:  () => void
 }) {
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
   const { totals: t } = group
   const label = group.parentName
     ? `${group.parentName} · ${group.segmentationName}`
     : group.segmentationName
+  const headerBg    = (isDark ? group.bgDarkColor  : group.bgLightColor)  ?? 'var(--color-bg-elevated)'
+  const headerColor = (isDark ? group.fontDarkColor : group.fontLightColor) ?? 'var(--color-text-primary)'
 
   return (
     <tr
       onClick={onToggle} tabIndex={0}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle() } }}
       className="cursor-pointer hover:bg-white/5 focus:outline-none focus:bg-white/5"
-      style={{ borderTop: BORDER, background: 'var(--color-bg-elevated)' }}
+      style={{ borderTop: BORDER, background: headerBg, color: headerColor }}
     >
       <td style={{ ...tdBase, paddingLeft: 12 }}>
         <div className="flex items-center gap-2">
           {collapsed
-            ? <ChevronRight size={14} style={{ color: 'var(--color-text-secondary)', flexShrink: 0 }} />
-            : <ChevronDown  size={14} style={{ color: 'var(--color-text-secondary)', flexShrink: 0 }} />
+            ? <ChevronRight size={14} style={{ color: headerColor, flexShrink: 0, opacity: 0.7 }} />
+            : <ChevronDown  size={14} style={{ color: headerColor, flexShrink: 0, opacity: 0.7 }} />
           }
-          <span style={{ fontWeight: 600, color: 'var(--color-text-primary)', fontSize: 13 }}>{label}</span>
-          <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>{group.rows.length}개</span>
+          <span style={{ fontWeight: 600, fontSize: 13 }}>{label}</span>
+          <span style={{ fontSize: 11, opacity: 0.6 }}>{group.rows.length}개</span>
         </div>
       </td>
       {/* fontWeight: 600 on td — Delta spans inherit this */}
@@ -159,13 +164,35 @@ function GroupHeaderRow({ group, collapsed, onToggle }: {
 
 // ─── Data Table ─────────────────────────────────────────────────────────────────
 
-function DataTable({ groups, summary, collapsedKeys, onToggle, isSearching }: {
+function DataTable({ groups, summary, collapsedKeys, onToggle, isSearching, year, month, roomCount }: {
   groups:        AccountGroup[]
   summary:       AccountTableSummary
   collapsedKeys: Set<string>
   onToggle:      (key: string) => void
   isSearching:   boolean
+  year:          number
+  month:         number
+  roomCount:     number
 }) {
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const capacity    = roomCount * daysInMonth
+  const otbOcc    = summary.occ
+  const otbRevpar = summary.revpar
+  const puOcc     = capacity > 0 ? (summary.puNights  / capacity) * 100  : 0
+  const puRevpar  = capacity > 0 ?  summary.puRevenue / capacity          : 0
+
+  const puColor = (v: number) =>
+    v > 0.001 ? 'var(--color-accent-primary, #00E5A0)'
+    : v < -0.001 ? 'var(--color-text-danger, #ef4444)'
+    : 'var(--brand-dimmed)'
+
+  const fmtPuOcc = (v: number) =>
+    v === 0 ? '0.0%' : (v > 0 ? '+' : '') + v.toFixed(1) + '%'
+  const fmtPuRevpar = (v: number) => {
+    const k = Math.round(v / 1000)
+    return k === 0 ? '0k' : (k > 0 ? '+' : '') + k + 'k'
+  }
+
   const sumTd: React.CSSProperties = {
     ...tdBase, fontWeight: 600, color: 'var(--color-text-primary)', paddingTop: 10, paddingBottom: 10,
   }
@@ -250,13 +277,26 @@ function DataTable({ groups, summary, collapsedKeys, onToggle, isSearching }: {
               <DeltaRev v={summary.puRevenue} />
             </td>
           </tr>
+          <tr style={{ borderTop: '1px solid var(--divider-color)', background: 'var(--color-bg-secondary)' }}>
+            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '10px 12px' }}>OCC</td>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: 'var(--color-text-primary)', borderLeft: BORDER }}>
+              {otbOcc.toFixed(1)}%
+            </td>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: puColor(puOcc), borderLeft: BORDER }}>
+              {fmtPuOcc(puOcc)}
+            </td>
+          </tr>
+          <tr style={{ borderTop: '1px solid var(--divider-color)', background: 'var(--color-bg-secondary)' }}>
+            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '10px 12px' }}>RevPAR</td>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: 'var(--color-text-primary)', borderLeft: BORDER }}>
+              {Math.round(otbRevpar / 1000)}k
+            </td>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: puColor(puRevpar), borderLeft: BORDER }}>
+              {fmtPuRevpar(puRevpar)}
+            </td>
+          </tr>
         </tfoot>
       </table>
-
-      <div className="flex gap-3 mt-4">
-        <StatCard label="OCC"    value={`${summary.occ.toFixed(1)}%`} />
-        <StatCard label="RevPAR" value={`${Math.round(summary.revpar / 1000)}k`} />
-      </div>
     </div>
   )
 }
@@ -508,6 +548,9 @@ export default function AccountModal({
               collapsedKeys={collapsedKeys}
               onToggle={toggleGroup}
               isSearching={isSearching}
+              year={year}
+              month={month}
+              roomCount={roomCount}
             />
           )}
         </div>

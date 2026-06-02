@@ -19,6 +19,10 @@ export type AccountGroup = {
   segmentationName: string
   schemaSortKey:    number
   isHou:            boolean
+  bgDarkColor:      string | null
+  bgLightColor:     string | null
+  fontDarkColor:    string | null
+  fontLightColor:   string | null
   rows:             AccountRow[]
   totals: {
     otbNights:  number
@@ -57,6 +61,10 @@ type CodeMeta = {
   segmentationName: string
   schemaSortKey:    number
   isHou:            boolean
+  bgDarkColor:      string | null
+  bgLightColor:     string | null
+  fontDarkColor:    string | null
+  fontLightColor:   string | null
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -121,7 +129,16 @@ export function buildAccountTable(args: {
 
     const isHou = s.segmentation.includes('HOU')
     for (const code of s.segmentation) {
-      codeMeta.set(code, { parentName, segmentationName: s.name, schemaSortKey, isHou })
+      codeMeta.set(code, {
+        parentName,
+        segmentationName: s.name,
+        schemaSortKey,
+        isHou,
+        bgDarkColor:   s.bg_dark_color  ?? null,
+        bgLightColor:  s.bg_light_color ?? null,
+        fontDarkColor: s.font_dark_color  ?? null,
+        fontLightColor:s.font_light_color ?? null,
+      })
     }
   }
 
@@ -152,6 +169,10 @@ export function buildAccountTable(args: {
       segmentationName: `(미정의) ${segCode}`,
       schemaSortKey:    99999,
       isHou:            false,
+      bgDarkColor:      null,
+      bgLightColor:     null,
+      fontDarkColor:    null,
+      fontLightColor:   null,
     }
 
     const otbAdr = st.otbNights > 0 ? st.otbRevenue / st.otbNights : 0
@@ -179,6 +200,10 @@ export function buildAccountTable(args: {
         segmentationName: meta.segmentationName,
         schemaSortKey:    meta.schemaSortKey,
         isHou:            meta.isHou,
+        bgDarkColor:      meta.bgDarkColor,
+        bgLightColor:     meta.bgLightColor,
+        fontDarkColor:    meta.fontDarkColor,
+        fontLightColor:   meta.fontLightColor,
         rows:             [],
         totals:           { otbNights: 0, otbAdr: 0, otbRevenue: 0, puNights: 0, puAdr: 0, puRevenue: 0 },
       }

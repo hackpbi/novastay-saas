@@ -3,6 +3,7 @@
 import { useEffect, useMemo } from 'react'
 import { X } from 'lucide-react'
 import { useHotel } from '@/contexts/HotelContext'
+import { useTheme } from '@/contexts/ThemeContext'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
 import { usePickupData } from '@/hooks/usePickupData'
 import { buildSegTable, type SegTableRow, type SegTableSummary } from '@/utils/segmentationTable'
@@ -118,8 +119,10 @@ function DataRow({ row, schema, houRowIds, onPickupCellClick }: {
   houRowIds:         Set<string>
   onPickupCellClick?: (segCodes: string[], label: string) => void
 }) {
-  const rowBg    = row.color         ?? 'var(--color-bg-secondary)'
-  const rowColor = row.fontDarkColor ?? 'var(--color-text-primary)'
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
+  const rowBg    = (isDark ? row.bgDarkColor  : row.bgLightColor)  ?? 'var(--color-bg-secondary)'
+  const rowColor = (isDark ? row.fontDarkColor : row.fontLightColor) ?? 'var(--color-text-primary)'
 
   const isHou      = houRowIds.has(row.id)
   const segCodes   = getSegCodes(row, schema)
@@ -171,13 +174,35 @@ function DataRow({ row, schema, houRowIds, onPickupCellClick }: {
 
 // ─── DataTable ─────────────────────────────────────────────────────────────────
 
-function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick }: {
+function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, year, month, roomCount }: {
   rows:               SegTableRow[]
   summary:            SegTableSummary
   schema:             MarketSchemaRow[]
   houRowIds:          Set<string>
   onPickupCellClick?: (segCodes: string[], label: string) => void
+  year:               number
+  month:              number
+  roomCount:          number
 }) {
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const capacity    = roomCount * daysInMonth
+  const otbOcc     = summary.occ    // already computed in buildSegTable
+  const otbRevpar  = summary.revpar
+  const puOcc      = capacity > 0 ? (summary.puNights  / capacity) * 100  : 0
+  const puRevpar   = capacity > 0 ?  summary.puRevenue / capacity          : 0
+
+  const puColor = (v: number) =>
+    v > 0.001 ? 'var(--color-accent-primary, #00E5A0)'
+    : v < -0.001 ? 'var(--color-text-danger, #ef4444)'
+    : 'var(--brand-dimmed)'
+
+  const fmtPuOcc = (v: number) =>
+    v === 0 ? '0.0%' : (v > 0 ? '+' : '') + v.toFixed(1) + '%'
+  const fmtPuRevpar = (v: number) => {
+    const k = Math.round(v / 1000)
+    return k === 0 ? '0k' : (k > 0 ? '+' : '') + k + 'k'
+  }
+
   const sumTdBase: React.CSSProperties = {
     ...tdBase, fontWeight: 600, color: 'var(--color-text-primary)', paddingTop: 10, paddingBottom: 10,
   }
@@ -235,13 +260,26 @@ function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick }: {
               <DeltaRev v={summary.puRevenue} />
             </td>
           </tr>
+          <tr style={{ borderTop: '1px solid var(--divider-color)', background: 'var(--color-bg-secondary)' }}>
+            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '10px 12px' }}>OCC</td>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: 'var(--color-text-primary)', borderLeft: BORDER_GROUP }}>
+              {otbOcc.toFixed(1)}%
+            </td>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: puColor(puOcc), borderLeft: BORDER_GROUP }}>
+              {fmtPuOcc(puOcc)}
+            </td>
+          </tr>
+          <tr style={{ borderTop: '1px solid var(--divider-color)', background: 'var(--color-bg-secondary)' }}>
+            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '10px 12px' }}>RevPAR</td>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: 'var(--color-text-primary)', borderLeft: BORDER_GROUP }}>
+              {Math.round(otbRevpar / 1000)}k
+            </td>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: puColor(puRevpar), borderLeft: BORDER_GROUP }}>
+              {fmtPuRevpar(puRevpar)}
+            </td>
+          </tr>
         </tfoot>
       </table>
-
-      <div className="flex gap-3 mt-4">
-        <StatCard label="OCC"    value={`${summary.occ.toFixed(1)}%`} />
-        <StatCard label="RevPAR" value={`${Math.round(summary.revpar / 1000)}k`} />
-      </div>
     </div>
   )
 }
@@ -344,6 +382,9 @@ export default function SegmentationModal({
               schema={schema}
               houRowIds={houRowIds}
               onPickupCellClick={onPickupCellClick}
+              year={year}
+              month={month}
+              roomCount={roomCount}
             />
           )}
         </div>
