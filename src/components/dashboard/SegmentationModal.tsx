@@ -4,9 +4,11 @@ import { useEffect, useMemo } from 'react'
 import { X } from 'lucide-react'
 import { useHotel } from '@/contexts/HotelContext'
 import { useTheme } from '@/contexts/ThemeContext'
+import { useDateContext } from '@/contexts/DateContext'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
 import { usePickupData } from '@/hooks/usePickupData'
 import { buildSegTable, type SegTableRow, type SegTableSummary } from '@/utils/segmentationTable'
+import DatePicker from '@/components/DatePicker'
 
 // ─── Number formatters ─────────────────────────────────────────────────────────
 
@@ -303,6 +305,10 @@ export default function SegmentationModal({
   onPickupCellClick?: (segCodes: string[], label: string) => void
 }) {
   const { currentHotel } = useHotel()
+  const { otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate } = useDateContext()
+  const days = otbDate && vsOtbDate
+    ? Math.round((new Date(otbDate).getTime() - new Date(vsOtbDate).getTime()) / 86400000)
+    : 0
   const { data: schema, loading: schemaLoading, error: schemaError } = useMarketSchema()
   const { data: pickup, loading: pickupLoading } = usePickupData()
 
@@ -361,6 +367,25 @@ export default function SegmentationModal({
             <p className="text-xs mt-0.5" style={{ color: 'var(--brand-dimmed)' }}>
               {year}년 {month}월 · {currentHotel?.hotel_name ?? ''}
             </p>
+            <div className="flex items-center gap-2 mt-2">
+              <DatePicker
+                label="OTB"
+                value={otbDate}
+                onChange={setOtbDate}
+                accent
+                availableDates={otbDates}
+              />
+              <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>vs</span>
+              <DatePicker
+                label="vs OTB"
+                value={vsOtbDate}
+                onChange={setVsOtbDate}
+                availableDates={otbDates.filter(d => d < otbDate)}
+              />
+              <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>
+                {days === 0 ? '당일' : `${days}일간`} 픽업 현황 입니다.
+              </span>
+            </div>
           </div>
           <button onClick={onClose} className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1" aria-label="닫기">
             <X size={22} />
