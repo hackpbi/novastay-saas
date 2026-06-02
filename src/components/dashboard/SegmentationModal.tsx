@@ -1,31 +1,24 @@
 'use client'
 
-import { useEffect, useMemo } from 'react'
-import { X } from 'lucide-react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useHotel } from '@/contexts/HotelContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useDateContext } from '@/contexts/DateContext'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
 import { usePickupData } from '@/hooks/usePickupData'
-import { buildSegTable, type SegTableRow, type SegTableSummary } from '@/utils/segmentationTable'
+import {
+  buildSegTable,
+  type SegTableRow,
+  type SegTableSummary,
+  type MonthlyPickupCell,
+} from '@/utils/segmentationTable'
 import DatePicker from '@/components/DatePicker'
 
-// ─── Number formatters ─────────────────────────────────────────────────────────
+// ─── Formatters ────────────────────────────────────────────────────────────────
 
 function Dash() {
   return <span style={{ color: 'var(--brand-dimmed)' }}>—</span>
-}
-
-function FmtNights({ n }: { n: number }) {
-  return n === 0 ? <Dash /> : <>{n.toLocaleString('ko-KR')}</>
-}
-
-function FmtAdr({ n }: { n: number }) {
-  return n === 0 ? <Dash /> : <>{Math.round(n / 1000)}k</>
-}
-
-function FmtRev({ n }: { n: number }) {
-  return n === 0 ? <Dash /> : <>{(n / 1_000_000).toFixed(1)}M</>
 }
 
 function DeltaNights({ v }: { v: number }) {
@@ -49,24 +42,6 @@ function DeltaRev({ v }: { v: number }) {
   return <span className={cls}>{m > 0 ? '+' : ''}{m.toFixed(1)}M</span>
 }
 
-// ─── StatCard ──────────────────────────────────────────────────────────────────
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex-1 p-3 rounded-lg" style={{ background: 'var(--color-bg-elevated)' }}>
-      <p style={{
-        fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
-        letterSpacing: '0.07em', color: 'var(--color-text-secondary)', marginBottom: 4,
-      }}>
-        {label}
-      </p>
-      <p style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono, monospace)' }}>
-        {value}
-      </p>
-    </div>
-  )
-}
-
 // ─── Skeleton ──────────────────────────────────────────────────────────────────
 
 function Skeleton() {
@@ -79,27 +54,44 @@ function Skeleton() {
   )
 }
 
-// ─── Table constants ────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 3
 
 const thBase: React.CSSProperties = {
   fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
   letterSpacing: '0.07em', color: 'var(--color-text-secondary)',
-  padding: '6px 10px', background: 'var(--color-bg-elevated)', whiteSpace: 'nowrap',
+  padding: '6px 8px', background: 'var(--color-bg-elevated)', whiteSpace: 'nowrap',
 }
 
 const tdBase: React.CSSProperties = {
-  padding: '6px 10px', verticalAlign: 'middle',
+  padding: '6px 8px', verticalAlign: 'middle',
 }
 
-const BORDER_GROUP = '1px solid var(--divider-color)'
+const BORDER = '1px solid var(--divider-color)'
 
-// ─── Seg code / label helpers ──────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getSegCodes(row: SegTableRow, schema: MarketSchemaRow[]): string[] {
-  if (row.level === 'main') {
-    return schema.filter(s => s.parent_id === row.id).flatMap(s => s.segmentation)
-  }
-  return schema.find(s => s.id === row.id)?.segmentation ?? []
+function formatYYYYMM(mk: string): string {
+  const [y, m] = mk.split('-')
+  return `${y}.${m}`
+}
+
+function puColor(v: number): string {
+  return v > 0.001 ? 'var(--color-accent-primary, #00E5A0)'
+    : v < -0.001 ? 'var(--color-text-danger, #ef4444)'
+    : 'var(--brand-dimmed)'
+}
+
+function fmtOcc(v: number): string {
+  if (Math.abs(v) < 0.001) return '0.0%'
+  return (v > 0 ? '+' : '') + v.toFixed(1) + '%'
+}
+
+function fmtRevpar(v: number): string {
+  const k = Math.round(v / 1000)
+  if (k === 0) return '0k'
+  return (k > 0 ? '+' : '') + k + 'k'
 }
 
 function getRowLabel(row: SegTableRow, schema: MarketSchemaRow[]): string {
@@ -115,170 +107,172 @@ function getRowLabel(row: SegTableRow, schema: MarketSchemaRow[]): string {
 
 // ─── DataRow ──────────────────────────────────────────────────────────────────
 
-function DataRow({ row, schema, houRowIds, onPickupCellClick }: {
+function DataRow({ row, schema, visibleMonths, houRowIds, onPickupCellClick }: {
   row:               SegTableRow
   schema:            MarketSchemaRow[]
+  visibleMonths:     string[]
   houRowIds:         Set<string>
-  onPickupCellClick?: (segCodes: string[], label: string) => void
+  onPickupCellClick?: (segCodes: string[], monthKey: string, label: string) => void
 }) {
   const { theme } = useTheme()
-  const isDark = theme === 'dark'
+  const isDark   = theme === 'dark'
   const rowBg    = (isDark ? row.bgDarkColor  : row.bgLightColor)  ?? 'var(--color-bg-secondary)'
   const rowColor = (isDark ? row.fontDarkColor : row.fontLightColor) ?? 'var(--color-text-primary)'
 
-  const isHou      = houRowIds.has(row.id)
-  const segCodes   = getSegCodes(row, schema)
-  const label      = getRowLabel(row, schema)
-  const clickable  = !!onPickupCellClick && !isHou && segCodes.length > 0
-  const handlePickup = clickable ? () => onPickupCellClick!(segCodes, label) : undefined
-
-  const puTd = (extra: React.CSSProperties): React.CSSProperties => ({
-    ...tdBase, textAlign: 'right', cursor: clickable ? 'pointer' : 'default', ...extra,
-  })
+  const isHou     = houRowIds.has(row.id)
+  const baseLabel = getRowLabel(row, schema)
+  const canClick  = !!onPickupCellClick && !isHou && row.segmentationCodes.length > 0
 
   return (
     <tr
-      style={{ borderBottom: BORDER_GROUP, background: rowBg, color: rowColor, fontWeight: row.isBold ? 600 : 400 }}
-      onMouseEnter={e => {
-        e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${rowBg}`
-      }}
+      style={{ borderBottom: BORDER, background: rowBg, color: rowColor, fontWeight: row.isBold ? 600 : 400 }}
+      onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(var(--overlay-hover),var(--overlay-hover)),${rowBg}` }}
       onMouseLeave={e => { e.currentTarget.style.background = rowBg }}
     >
-      <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140 }}>
+      {/* Segmentation 이름 */}
+      <td style={{ ...tdBase, paddingLeft: row.indent ? 24 : 10, minWidth: 130 }}>
         {row.indent ? (
-          <>
-            <span style={{ color: 'var(--brand-dimmed)' }}>└ </span>
-            {row.name}
-          </>
+          <><span style={{ color: 'var(--brand-dimmed)' }}>└ </span>{row.name}</>
         ) : row.name}
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: BORDER_GROUP }}>
-        <FmtNights n={row.otbNights} />
-      </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}>
-        <FmtAdr n={row.otbAdr} />
-      </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: BORDER_GROUP }}>
-        <FmtRev n={row.otbRevenue} />
-      </td>
-      <td className="font-mono" style={puTd({ borderLeft: BORDER_GROUP })} onClick={handlePickup}>
-        <DeltaNights v={row.puNights} />
-      </td>
-      <td className="font-mono" style={puTd({})} onClick={handlePickup}>
-        <DeltaAdr v={row.puAdr} />
-      </td>
-      <td className="font-mono" style={puTd({})} onClick={handlePickup}>
-        <DeltaRev v={row.puRevenue} />
-      </td>
+
+      {/* 월별 3컬럼씩 */}
+      {visibleMonths.map(mk => {
+        const cell  = row.monthlyPickup[mk] ?? { pickupNights: 0, pickupAdr: 0, pickupRevenue: 0 }
+        const label = `${baseLabel} · ${formatYYYYMM(mk)}`
+        const handleClick = canClick ? () => onPickupCellClick!(row.segmentationCodes, mk, label) : undefined
+        const cur: React.CSSProperties = {
+          ...tdBase, textAlign: 'right',
+          cursor: canClick ? 'pointer' : 'default',
+        }
+        return (
+          <React.Fragment key={mk}>
+            <td className="font-mono" style={{ ...cur, borderLeft: BORDER }} onClick={handleClick}>
+              <DeltaNights v={cell.pickupNights} />
+            </td>
+            <td className="font-mono" style={cur} onClick={handleClick}>
+              <DeltaAdr v={cell.pickupAdr} />
+            </td>
+            <td className="font-mono" style={cur} onClick={handleClick}>
+              <DeltaRev v={cell.pickupRevenue} />
+            </td>
+          </React.Fragment>
+        )
+      })}
     </tr>
   )
 }
 
 // ─── DataTable ─────────────────────────────────────────────────────────────────
 
-function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, year, month, roomCount }: {
-  rows:               SegTableRow[]
-  summary:            SegTableSummary
-  schema:             MarketSchemaRow[]
-  houRowIds:          Set<string>
-  onPickupCellClick?: (segCodes: string[], label: string) => void
-  year:               number
-  month:              number
-  roomCount:          number
+function DataTable({ rows, summary, schema, houRowIds, visibleMonths, onPickupCellClick }: {
+  rows:              SegTableRow[]
+  summary:           SegTableSummary
+  schema:            MarketSchemaRow[]
+  houRowIds:         Set<string>
+  visibleMonths:     string[]
+  onPickupCellClick?: (segCodes: string[], monthKey: string, label: string) => void
 }) {
-  const daysInMonth = new Date(year, month, 0).getDate()
-  const capacity    = roomCount * daysInMonth
-  const otbOcc     = summary.occ    // already computed in buildSegTable
-  const otbRevpar  = summary.revpar
-  const puOcc      = capacity > 0 ? (summary.puNights  / capacity) * 100  : 0
-  const puRevpar   = capacity > 0 ?  summary.puRevenue / capacity          : 0
-
-  const puColor = (v: number) =>
-    v > 0.001 ? 'var(--color-accent-primary, #00E5A0)'
-    : v < -0.001 ? 'var(--color-text-danger, #ef4444)'
-    : 'var(--brand-dimmed)'
-
-  const fmtPuOcc = (v: number) =>
-    v === 0 ? '0.0%' : (v > 0 ? '+' : '') + v.toFixed(1) + '%'
-  const fmtPuRevpar = (v: number) => {
-    const k = Math.round(v / 1000)
-    return k === 0 ? '0k' : (k > 0 ? '+' : '') + k + 'k'
+  const sumTd: React.CSSProperties = {
+    ...tdBase, fontWeight: 600, color: 'var(--color-text-primary)',
   }
 
-  const sumTdBase: React.CSSProperties = {
-    ...tdBase, fontWeight: 600, color: 'var(--color-text-primary)', paddingTop: 8, paddingBottom: 8,
-  }
   return (
     <div>
       <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+
+        {/* ── 헤더 ── */}
         <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+          {/* 상단: 월 라벨 */}
           <tr>
             <th style={{ ...thBase, textAlign: 'left' }}>Segmentation</th>
-            <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER_GROUP }}>현재 OTB</th>
-            <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER_GROUP }}>Pickup vs OTB</th>
+            {visibleMonths.map(mk => (
+              <th key={mk} colSpan={3}
+                style={{ ...thBase, textAlign: 'center', borderLeft: BORDER }}>
+                {formatYYYYMM(mk)}
+              </th>
+            ))}
           </tr>
+          {/* 하단: ΔR-N ΔADR ΔREV */}
           <tr>
-            <th style={{ ...thBase, textAlign: 'left', borderBottom: BORDER_GROUP }} />
-            <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER_GROUP, borderBottom: BORDER_GROUP }}>R-N</th>
-            <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER_GROUP }}>ADR</th>
-            <th style={{ ...thBase, textAlign: 'right', borderRight: BORDER_GROUP, borderBottom: BORDER_GROUP }}>REV</th>
-            <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER_GROUP, borderBottom: BORDER_GROUP }}>ΔR-N</th>
-            <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER_GROUP }}>ΔADR</th>
-            <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER_GROUP }}>ΔREV</th>
+            <th style={{ ...thBase, textAlign: 'left', borderBottom: BORDER }} />
+            {visibleMonths.map(mk => (
+              <React.Fragment key={mk}>
+                <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>ΔR-N</th>
+                <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>
+                <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔREV</th>
+              </React.Fragment>
+            ))}
           </tr>
         </thead>
 
+        {/* ── 본문 ── */}
         <tbody>
           {rows.map(row => (
             <DataRow
               key={row.id}
               row={row}
               schema={schema}
+              visibleMonths={visibleMonths}
               houRowIds={houRowIds}
               onPickupCellClick={onPickupCellClick}
             />
           ))}
         </tbody>
 
+        {/* ── 합계 / OCC / RevPAR ── */}
         <tfoot>
+          {/* 합계 */}
           <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: 'var(--color-bg-secondary)' }}>
-            <td style={{ ...sumTdBase, paddingLeft: 12 }}>합계 (HOU 제외)</td>
-            <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right', borderLeft: BORDER_GROUP }}>
-              <FmtNights n={summary.totalNights} />
-            </td>
-            <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right' }}>
-              <FmtAdr n={summary.totalAdr} />
-            </td>
-            <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right', borderRight: BORDER_GROUP }}>
-              <FmtRev n={summary.totalRevenue} />
-            </td>
-            <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right', borderLeft: BORDER_GROUP }}>
-              <DeltaNights v={summary.puNights} />
-            </td>
-            <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right' }}>
-              <DeltaAdr v={summary.puAdr} />
-            </td>
-            <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right' }}>
-              <DeltaRev v={summary.puRevenue} />
-            </td>
+            <td style={{ ...sumTd, paddingLeft: 10 }}>합계 (HOU 제외)</td>
+            {visibleMonths.map(mk => {
+              const t = summary.monthlyTotals[mk] ?? { pickupNights: 0, pickupAdr: 0, pickupRevenue: 0 }
+              return (
+                <React.Fragment key={mk}>
+                  <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderLeft: BORDER }}>
+                    <DeltaNights v={t.pickupNights} />
+                  </td>
+                  <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}>
+                    <DeltaAdr v={t.pickupAdr} />
+                  </td>
+                  <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}>
+                    <DeltaRev v={t.pickupRevenue} />
+                  </td>
+                </React.Fragment>
+              )
+            })}
           </tr>
-          <tr style={{ borderTop: '1px solid var(--divider-color)', background: 'var(--color-bg-secondary)' }}>
-            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '8px 12px' }}>OCC</td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'center', paddingTop: 8, paddingBottom: 8, fontWeight: 600, color: 'var(--color-text-primary)', borderLeft: BORDER_GROUP }}>
-              {otbOcc.toFixed(1)}%
+
+          {/* OCC */}
+          <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
+            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '8px 10px' }}>
+              OCC
             </td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'center', paddingTop: 8, paddingBottom: 8, fontWeight: 600, color: puColor(puOcc), borderLeft: BORDER_GROUP }}>
-              {fmtPuOcc(puOcc)}
-            </td>
+            {visibleMonths.map(mk => {
+              const occ = summary.monthlyTotals[mk]?.occ ?? 0
+              return (
+                <td key={mk} colSpan={3} className="font-mono"
+                  style={{ textAlign: 'center', paddingTop: 8, paddingBottom: 8, fontWeight: 600, color: puColor(occ), borderLeft: BORDER }}>
+                  {fmtOcc(occ)}
+                </td>
+              )
+            })}
           </tr>
-          <tr style={{ borderTop: '1px solid var(--divider-color)', background: 'var(--color-bg-secondary)' }}>
-            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '8px 12px' }}>RevPAR</td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'center', paddingTop: 8, paddingBottom: 8, fontWeight: 600, color: 'var(--color-text-primary)', borderLeft: BORDER_GROUP }}>
-              {Math.round(otbRevpar / 1000)}k
+
+          {/* RevPAR */}
+          <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
+            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '8px 10px' }}>
+              Rev.PAR
             </td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'center', paddingTop: 8, paddingBottom: 8, fontWeight: 600, color: puColor(puRevpar), borderLeft: BORDER_GROUP }}>
-              {fmtPuRevpar(puRevpar)}
-            </td>
+            {visibleMonths.map(mk => {
+              const revpar = summary.monthlyTotals[mk]?.revpar ?? 0
+              return (
+                <td key={mk} colSpan={3} className="font-mono"
+                  style={{ textAlign: 'center', paddingTop: 8, paddingBottom: 8, fontWeight: 600, color: puColor(revpar), borderLeft: BORDER }}>
+                  {fmtRevpar(revpar)}
+                </td>
+              )
+            })}
           </tr>
         </tfoot>
       </table>
@@ -289,9 +283,8 @@ function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, year, 
 // ─── Modal ─────────────────────────────────────────────────────────────────────
 
 const EMPTY_SUMMARY: SegTableSummary = {
-  totalNights: 0, totalAdr: 0, totalRevenue: 0,
-  puNights: 0, puAdr: 0, puRevenue: 0,
-  occ: 0, revpar: 0,
+  monthlyTotals: {},
+  grandTotal:    { pickupNights: 0, pickupAdr: 0, pickupRevenue: 0 },
 }
 
 export default function SegmentationModal({
@@ -299,26 +292,27 @@ export default function SegmentationModal({
 }: {
   open:               boolean
   onClose:            () => void
-  year:               number
-  month:              number
+  year?:              number
+  month?:             number
   roomCount:          number
-  onPickupCellClick?: (segCodes: string[], label: string) => void
+  onPickupCellClick?: (segCodes: string[], monthKey: string, label: string) => void
 }) {
   const { currentHotel } = useHotel()
   const { otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate } = useDateContext()
   const days = otbDate && vsOtbDate
     ? Math.round((new Date(otbDate).getTime() - new Date(vsOtbDate).getTime()) / 86400000)
     : 0
+
   const { data: schema, loading: schemaLoading, error: schemaError } = useMarketSchema()
   const { data: pickup, loading: pickupLoading } = usePickupData()
 
   const loading = schemaLoading || pickupLoading
 
-  const { rows, summary } = useMemo(
+  const { rows, summary, monthKeys } = useMemo(
     () => !loading && schema.length > 0
-      ? buildSegTable({ schema, pickup, year, month, roomCount })
-      : { rows: [], summary: EMPTY_SUMMARY },
-    [schema, pickup, year, month, roomCount, loading],
+      ? buildSegTable({ schema, pickup, roomCount })
+      : { rows: [], summary: EMPTY_SUMMARY, monthKeys: [] },
+    [schema, pickup, roomCount, loading],
   )
 
   const houRowIds = useMemo(() => {
@@ -328,6 +322,21 @@ export default function SegmentationModal({
     }
     return ids
   }, [schema])
+
+  const [pageIndex, setPageIndex] = useState(0)
+  const totalPages    = Math.max(1, Math.ceil(monthKeys.length / PAGE_SIZE))
+  const visibleMonths = monthKeys.slice(pageIndex * PAGE_SIZE, pageIndex * PAGE_SIZE + PAGE_SIZE)
+
+  // year/month가 있으면 해당 페이지로 초기화
+  useEffect(() => {
+    if (!open) return
+    if (year !== undefined && month !== undefined && monthKeys.length > 0) {
+      const target = `${year}-${String(month).padStart(2, '0')}`
+      const idx    = monthKeys.indexOf(target)
+      if (idx >= 0) { setPageIndex(Math.floor(idx / PAGE_SIZE)); return }
+    }
+    setPageIndex(0)
+  }, [open, year, month, monthKeys])
 
   useEffect(() => {
     if (!open) return
@@ -344,6 +353,13 @@ export default function SegmentationModal({
 
   if (!open) return null
 
+  const subtitle =
+    year !== undefined && month !== undefined
+      ? `${year}년 ${month}월 · ${currentHotel?.hotel_name ?? ''}`
+      : monthKeys.length > 0
+        ? `${formatYYYYMM(monthKeys[0])} ~ ${formatYYYYMM(monthKeys[monthKeys.length - 1])} · ${currentHotel?.hotel_name ?? ''}`
+        : currentHotel?.hotel_name ?? ''
+
   const error = schemaError
 
   return (
@@ -355,8 +371,8 @@ export default function SegmentationModal({
       />
 
       <div
-        className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-4xl"
-        style={{ maxHeight: '88vh', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
+        className="relative rounded-2xl overflow-hidden flex flex-col w-[95vw] max-w-5xl"
+        style={{ maxHeight: '90vh', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-4 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
@@ -365,31 +381,51 @@ export default function SegmentationModal({
               Segmentation 비교
             </h2>
             <p className="text-xs mt-0.5" style={{ color: 'var(--brand-dimmed)' }}>
-              {year}년 {month}월 · {currentHotel?.hotel_name ?? ''}
+              {subtitle}
             </p>
             <div className="flex items-center gap-2 mt-2">
-              <DatePicker
-                label="OTB"
-                value={otbDate}
-                onChange={setOtbDate}
-                accent
-                availableDates={otbDates}
-              />
+              <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} accent availableDates={otbDates} />
               <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>vs</span>
-              <DatePicker
-                label="vs OTB"
-                value={vsOtbDate}
-                onChange={setVsOtbDate}
-                availableDates={otbDates.filter(d => d < otbDate)}
-              />
+              <DatePicker label="vs OTB" value={vsOtbDate} onChange={setVsOtbDate} availableDates={otbDates.filter(d => d < otbDate)} />
               <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>
                 {days === 0 ? '당일' : `${days}일간`} 픽업 현황 입니다.
               </span>
             </div>
           </div>
-          <button onClick={onClose} className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1" aria-label="닫기">
-            <X size={22} />
-          </button>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {/* 페이지네이션 */}
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPageIndex(p => Math.max(0, p - 1))}
+                  disabled={pageIndex === 0}
+                  className="text-brand-muted hover:text-accent-primary transition-colors disabled:opacity-30 p-0.5"
+                  aria-label="이전 3개월"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <span className="text-xs" style={{ color: 'var(--color-text-secondary)', minWidth: 48, textAlign: 'center' }}>
+                  {pageIndex + 1} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setPageIndex(p => Math.min(totalPages - 1, p + 1))}
+                  disabled={pageIndex === totalPages - 1}
+                  className="text-brand-muted hover:text-accent-primary transition-colors disabled:opacity-30 p-0.5"
+                  aria-label="다음 3개월"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            )}
+            <button
+              onClick={onClose}
+              className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1"
+              aria-label="닫기"
+            >
+              <X size={22} />
+            </button>
+          </div>
         </div>
 
         {/* Body */}
@@ -399,17 +435,15 @@ export default function SegmentationModal({
           ) : error ? (
             <p className="text-center py-12 text-sm" style={{ color: 'var(--brand-dimmed)' }}>데이터를 불러오지 못했습니다.</p>
           ) : rows.length === 0 ? (
-            <p className="text-center py-12 text-sm" style={{ color: 'var(--brand-dimmed)' }}>이 기간에 표시할 segmentation 데이터가 없습니다.</p>
+            <p className="text-center py-12 text-sm" style={{ color: 'var(--brand-dimmed)' }}>표시할 segmentation 데이터가 없습니다.</p>
           ) : (
             <DataTable
               rows={rows}
               summary={summary}
               schema={schema}
               houRowIds={houRowIds}
+              visibleMonths={visibleMonths}
               onPickupCellClick={onPickupCellClick}
-              year={year}
-              month={month}
-              roomCount={roomCount}
             />
           )}
         </div>

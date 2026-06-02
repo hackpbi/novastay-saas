@@ -676,10 +676,10 @@ export default function DashboardPage() {
       <SegmentationModal
         open={segModal.open}
         onClose={() => setSegModal({ open: false })}
-        year={segModal.year ?? 0}
-        month={segModal.month ?? 0}
+        year={segModal.year}
+        month={segModal.month}
         roomCount={roomCount}
-        onPickupCellClick={(segCodes, label) => {
+        onPickupCellClick={(segCodes, _monthKey, label) => {
           const y = segModal.year
           const m = segModal.month
           setSegModal({ open: false })
