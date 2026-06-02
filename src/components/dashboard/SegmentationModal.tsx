@@ -86,7 +86,7 @@ const thBase: React.CSSProperties = {
 }
 
 const tdBase: React.CSSProperties = {
-  padding: '8px 10px', verticalAlign: 'middle',
+  padding: '6px 10px', verticalAlign: 'middle',
 }
 
 const BORDER_GROUP = '1px solid var(--divider-color)'
@@ -204,11 +204,11 @@ function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, year, 
   }
 
   const sumTdBase: React.CSSProperties = {
-    ...tdBase, fontWeight: 600, color: 'var(--color-text-primary)', paddingTop: 10, paddingBottom: 10,
+    ...tdBase, fontWeight: 600, color: 'var(--color-text-primary)', paddingTop: 8, paddingBottom: 8,
   }
   return (
     <div>
-      <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
+      <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
         <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
           <tr>
             <th style={{ ...thBase, textAlign: 'left' }}>Segmentation</th>
@@ -261,20 +261,20 @@ function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, year, 
             </td>
           </tr>
           <tr style={{ borderTop: '1px solid var(--divider-color)', background: 'var(--color-bg-secondary)' }}>
-            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '10px 12px' }}>OCC</td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: 'var(--color-text-primary)', borderLeft: BORDER_GROUP }}>
+            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '8px 12px' }}>OCC</td>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'center', paddingTop: 8, paddingBottom: 8, fontWeight: 600, color: 'var(--color-text-primary)', borderLeft: BORDER_GROUP }}>
               {otbOcc.toFixed(1)}%
             </td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: puColor(puOcc), borderLeft: BORDER_GROUP }}>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'center', paddingTop: 8, paddingBottom: 8, fontWeight: 600, color: puColor(puOcc), borderLeft: BORDER_GROUP }}>
               {fmtPuOcc(puOcc)}
             </td>
           </tr>
           <tr style={{ borderTop: '1px solid var(--divider-color)', background: 'var(--color-bg-secondary)' }}>
-            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '10px 12px' }}>RevPAR</td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: 'var(--color-text-primary)', borderLeft: BORDER_GROUP }}>
+            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '8px 12px' }}>RevPAR</td>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'center', paddingTop: 8, paddingBottom: 8, fontWeight: 600, color: 'var(--color-text-primary)', borderLeft: BORDER_GROUP }}>
               {Math.round(otbRevpar / 1000)}k
             </td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: puColor(puRevpar), borderLeft: BORDER_GROUP }}>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'center', paddingTop: 8, paddingBottom: 8, fontWeight: 600, color: puColor(puRevpar), borderLeft: BORDER_GROUP }}>
               {fmtPuRevpar(puRevpar)}
             </td>
           </tr>
