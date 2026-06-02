@@ -6,8 +6,10 @@ import { useQuery } from '@tanstack/react-query'
 import { usePickupData } from '@/hooks/usePickupData'
 import { useOtbData } from '@/hooks/useOtbData'
 import { useLyPacing } from '@/hooks/useLyPacing'
-import SegmentationModal from '@/components/dashboard/SegmentationModal'
-import AccountModal      from '@/components/dashboard/AccountModal'
+import SegmentationModal          from '@/components/dashboard/SegmentationModal'
+import AccountModal               from '@/components/dashboard/AccountModal'
+import MonthlyPickupSegModal      from '@/components/dashboard/MonthlyPickupSegModal'
+import MonthlyPickupAccountModal  from '@/components/dashboard/MonthlyPickupAccountModal'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import { supabase } from '@/lib/supabase'
@@ -459,6 +461,10 @@ const PAGE_SIZE = 3
 export default function DashboardPage() {
   const [page, setPage] = useState(0)
   const [segModal,     setSegModal]     = useState<{ open: boolean; year?: number; month?: number }>({ open: false })
+  const [monthlyPickupSegOpen,       setMonthlyPickupSegOpen]       = useState(false)
+  const [monthlyPickupAccountModal,  setMonthlyPickupAccountModal]  = useState<{
+    open: boolean; filterSegCodes?: string[]; filterMonthKey?: string; filterLabel?: string
+  }>({ open: false })
   const [accountModal, setAccountModal] = useState<{
     open: boolean; year?: number; month?: number
     filterSegCodes?: string[]; filterLabel?: string
@@ -589,17 +595,29 @@ export default function DashboardPage() {
           <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
             오늘 ({otbDate}) 기준 {pickupDays > 0 ? `${pickupDays}일간` : '당일'}&nbsp;
             총&nbsp;
-            <span style={{ color: totalPuNights >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600 }}>
+            <button
+              onClick={() => setMonthlyPickupSegOpen(true)}
+              title="월별 픽업 추이 보기"
+              style={{ color: totalPuNights >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
+            >
               {formatPu(totalPuNights, 'nights')}실
-            </span>
+            </button>
             ,&nbsp;ADR&nbsp;
-            <span style={{ color: totalPuAdr >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600 }}>
+            <button
+              onClick={() => setMonthlyPickupSegOpen(true)}
+              title="월별 픽업 추이 보기"
+              style={{ color: totalPuAdr >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
+            >
               {formatPu(totalPuAdr, 'currency')}
-            </span>
+            </button>
             ,&nbsp;REV&nbsp;
-            <span style={{ color: totalPuRevenue >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600 }}>
+            <button
+              onClick={() => setMonthlyPickupSegOpen(true)}
+              title="월별 픽업 추이 보기"
+              style={{ color: totalPuRevenue >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
+            >
               {formatPu(totalPuRevenue, 'currency')}
-            </span>
+            </button>
             &nbsp;픽업 되었습니다.
           </p>
         )}
@@ -672,6 +690,28 @@ export default function DashboardPage() {
           />
         ))}
       </div>
+
+      <MonthlyPickupSegModal
+        open={monthlyPickupSegOpen}
+        onClose={() => setMonthlyPickupSegOpen(false)}
+        roomCount={roomCount}
+        onPickupCellClick={(segCodes, monthKey, label) => {
+          setMonthlyPickupSegOpen(false)
+          setMonthlyPickupAccountModal({ open: true, filterSegCodes: segCodes, filterMonthKey: monthKey, filterLabel: label })
+        }}
+      />
+      <MonthlyPickupAccountModal
+        open={monthlyPickupAccountModal.open}
+        onClose={() => setMonthlyPickupAccountModal({ open: false })}
+        roomCount={roomCount}
+        initialFilterSegCodes={monthlyPickupAccountModal.filterSegCodes}
+        initialFilterMonthKey={monthlyPickupAccountModal.filterMonthKey}
+        initialFilterLabel={monthlyPickupAccountModal.filterLabel}
+        onBackToSeg={() => {
+          setMonthlyPickupAccountModal({ open: false })
+          setMonthlyPickupSegOpen(true)
+        }}
+      />
 
       <SegmentationModal
         open={segModal.open}
