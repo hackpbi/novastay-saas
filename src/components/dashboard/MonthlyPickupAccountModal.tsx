@@ -155,6 +155,7 @@ export default function MonthlyPickupAccountModal({
   const [pageIndex,     setPageIndex]     = useState(0)
   const [searchQuery,   setSearchQuery]   = useState('')
   const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(new Set())
+  const [viewMode,      setViewMode]      = useState<'monthly' | 'total'>('monthly')
   const [filterCleared, setFilterCleared] = useState(false)
 
   const loading = schemaLoading || pickupLoading
@@ -377,8 +378,25 @@ export default function MonthlyPickupAccountModal({
               </button>
             )}
 
+            {/* View mode toggle */}
+            {(() => {
+              const isToggleDisabled = !!effectiveMonthKey
+              return (
+                <div className="flex rounded-md overflow-hidden" style={{ border: '1px solid var(--color-border-default)', background: 'var(--color-bg-elevated)', opacity: isToggleDisabled ? 0.4 : 1 }}>
+                  {(['monthly', 'total'] as const).map(mode => (
+                    <button key={mode}
+                      onClick={() => { if (!isToggleDisabled) setViewMode(mode) }}
+                      className="px-2.5 py-1 text-xs transition-colors"
+                      style={{ cursor: isToggleDisabled ? 'not-allowed' : 'pointer', background: viewMode === mode ? 'var(--color-accent-primary)' : 'transparent', color: viewMode === mode ? '#0A0A0A' : 'var(--color-text-secondary)' }}>
+                      {mode === 'monthly' ? '월별' : '합계'}
+                    </button>
+                  ))}
+                </div>
+              )
+            })()}
+
             {/* Pagination */}
-            {!isSingleMonth && totalPages > 1 && (
+            {viewMode === 'monthly' && !isSingleMonth && totalPages > 1 && (
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => setPageIndex(i => Math.max(0, i - 1))}
@@ -437,18 +455,30 @@ export default function MonthlyPickupAccountModal({
                 <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                   <tr>
                     <th style={{ ...thBase, textAlign: 'left' }} rowSpan={2}>Account</th>
-                    {visiblePageMonths.map(mk => (
-                      <th key={mk} colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: BORDER }}>
-                        {formatYYYYMM(mk)}
+                    {viewMode === 'monthly' ? (
+                      visiblePageMonths.map(mk => (
+                        <th key={mk} colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: BORDER }}>
+                          {formatYYYYMM(mk)}
+                        </th>
+                      ))
+                    ) : (
+                      <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: BORDER }}>
+                        전체 ({formatYYYYMM(monthKeys[0] ?? '')} ~ {formatYYYYMM(monthKeys[monthKeys.length - 1] ?? '')})
                       </th>
-                    ))}
+                    )}
                   </tr>
                   <tr>
-                    {visiblePageMonths.map(mk => ([
-                      <th key={`${mk}-rn`}  style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>ΔR-N</th>,
-                      <th key={`${mk}-adr`} style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>,
-                      <th key={`${mk}-rev`} style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>ΔREV</th>,
-                    ]))}
+                    {viewMode === 'monthly' ? (
+                      visiblePageMonths.map(mk => ([
+                        <th key={`${mk}-rn`}  style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>ΔR-N</th>,
+                        <th key={`${mk}-adr`} style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>,
+                        <th key={`${mk}-rev`} style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>ΔREV</th>,
+                      ]))
+                    ) : ([
+                      <th key="total-rn"  style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>ΔR-N</th>,
+                      <th key="total-adr" style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>,
+                      <th key="total-rev" style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>ΔREV</th>,
+                    ])}
                   </tr>
                 </thead>
 
@@ -480,9 +510,13 @@ export default function MonthlyPickupAccountModal({
                               <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>({group.rows.length}개)</span>
                             </div>
                           </td>
-                          {visiblePageMonths.map(mk => (
-                            <MonthCells key={mk} cell={group.monthlyTotals[mk] ?? ZERO_CELL} />
-                          ))}
+                          {viewMode === 'monthly' ? (
+                            visiblePageMonths.map(mk => (
+                              <MonthCells key={mk} cell={group.monthlyTotals[mk] ?? ZERO_CELL} />
+                            ))
+                          ) : (
+                            <MonthCells cell={group.totalPickup} />
+                          )}
                         </tr>
 
                         {/* Account 행들 */}
@@ -499,9 +533,13 @@ export default function MonthlyPickupAccountModal({
                                 ? <span style={{ color: 'var(--brand-dimmed)' }}>(미지정)</span>
                                 : row.account_name}
                             </td>
-                            {visiblePageMonths.map(mk => (
-                              <MonthCells key={mk} cell={row.monthlyPickup[mk] ?? ZERO_CELL} />
-                            ))}
+                            {viewMode === 'monthly' ? (
+                              visiblePageMonths.map(mk => (
+                                <MonthCells key={mk} cell={row.monthlyPickup[mk] ?? ZERO_CELL} />
+                              ))
+                            ) : (
+                              <MonthCells cell={row.totalPickup} />
+                            )}
                           </tr>
                         ))}
                       </>
@@ -518,27 +556,43 @@ export default function MonthlyPickupAccountModal({
                         <span style={{ fontSize: 10, color: 'var(--brand-dimmed)', marginLeft: 4 }}>※ 전체 기준</span>
                       )}
                     </td>
-                    {visiblePageMonths.map(mk => (
-                      <MonthCells key={mk} cell={summary.monthlyTotals[mk] ?? ZERO_CELL} />
-                    ))}
+                    {viewMode === 'monthly' ? (
+                      visiblePageMonths.map(mk => (
+                        <MonthCells key={mk} cell={summary.monthlyTotals[mk] ?? ZERO_CELL} />
+                      ))
+                    ) : (
+                      <MonthCells cell={summary.grandTotal} />
+                    )}
                   </tr>
                   {/* OCC */}
                   <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)' }}>OCC</td>
-                    {visiblePageMonths.map(mk => (
-                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER }}>
-                        <FmtOcc n={summary.monthlyTotals[mk]?.occ ?? 0} />
+                    {viewMode === 'monthly' ? (
+                      visiblePageMonths.map(mk => (
+                        <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER }}>
+                          <FmtOcc n={summary.monthlyTotals[mk]?.occ ?? 0} />
+                        </td>
+                      ))
+                    ) : (
+                      <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER }}>
+                        <FmtOcc n={summary.grandTotal.occ} />
                       </td>
-                    ))}
+                    )}
                   </tr>
                   {/* RevPAR */}
                   <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)' }}>RevPAR</td>
-                    {visiblePageMonths.map(mk => (
-                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER }}>
-                        <FmtRevpar n={summary.monthlyTotals[mk]?.revpar ?? 0} />
+                    {viewMode === 'monthly' ? (
+                      visiblePageMonths.map(mk => (
+                        <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER }}>
+                          <FmtRevpar n={summary.monthlyTotals[mk]?.revpar ?? 0} />
+                        </td>
+                      ))
+                    ) : (
+                      <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER }}>
+                        <FmtRevpar n={summary.grandTotal.revpar} />
                       </td>
-                    ))}
+                    )}
                   </tr>
                 </tfoot>
               </table>
