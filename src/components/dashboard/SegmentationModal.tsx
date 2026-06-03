@@ -92,7 +92,7 @@ const tdBase: React.CSSProperties = {
 }
 
 const BORDER_GROUP = '1px solid var(--divider-color)'
-const DOUBLE_GROUP = '3px double var(--color-border-default)'
+const DOUBLE_GROUP = '3px double rgba(255, 255, 255, 0.25)'
 
 // ─── Seg code / label helpers ──────────────────────────────────────────────────
 

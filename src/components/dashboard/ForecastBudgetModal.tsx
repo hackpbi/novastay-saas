@@ -25,7 +25,7 @@ const tdBase: React.CSSProperties = {
   padding: '6px 10px', verticalAlign: 'middle',
 }
 const BORDER = '1px solid var(--divider-color)'
-const DOUBLE = '3px double var(--color-border-default)'
+const DOUBLE = '3px double rgba(255, 255, 255, 0.25)'
 
 const ZERO_MONTHLY: FcstBudgetMonthly = {
   fcst:   { nights: 0, adr: 0, revenue: 0 },

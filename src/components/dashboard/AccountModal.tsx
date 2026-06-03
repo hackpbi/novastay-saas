@@ -88,7 +88,7 @@ const thBase: React.CSSProperties = {
 const tdBase: React.CSSProperties = { padding: '7px 10px', verticalAlign: 'middle' }
 
 const BORDER = '1px solid var(--divider-color)'
-const DOUBLE = '3px double var(--color-border-default)'
+const DOUBLE = '3px double rgba(255, 255, 255, 0.25)'
 
 // ─── Filter helper ──────────────────────────────────────────────────────────────
 
