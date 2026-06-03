@@ -16,6 +16,7 @@ import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import { useFcstDateContext } from '@/contexts/FcstDateContext'
 import { useLatestConfirmedBudgetDate } from '@/hooks/useLatestConfirmedBudgetDate'
+import ForecastBudgetModal from '@/components/dashboard/ForecastBudgetModal'
 import { useForecastMonthly, type ForecastMonthlyRow } from '@/hooks/useForecastMonthly'
 import { useBudgetMonthly, type BudgetMonthlyRow } from '@/hooks/useBudgetMonthly'
 import { supabase } from '@/lib/supabase'
@@ -263,7 +264,7 @@ function getAchievementColor(pct: number | null): string {
 
 // ─── Month Card ─────────────────────────────────────────────────────────────────
 
-function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSegClick, onAccountClick, pickupNights, onLyClick }: {
+function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSegClick, onAccountClick, pickupNights, onLyClick, onAchievementClick }: {
   data:             MonthData
   stats:            MonthStats
   loading:          boolean
@@ -273,7 +274,8 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
   onSegClick?:      (year: number, month: number) => void
   onAccountClick?:  (year: number, month: number) => void
   pickupNights:     number
-  onLyClick?:       (year: number, month: number) => void
+  onLyClick?:              (year: number, month: number) => void
+  onAchievementClick?:     (year: number, month: number) => void
 }) {
   const { year, month, occ, adr, rev, forecast, budget, pu, rmAction } = data
 
@@ -383,17 +385,35 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
           <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}>{fmtFcAdr(budget?.adr)}</div>
           <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}>{fmtFcRevenue(budget?.revenue)}</div>
           {/* 달성 행 */}
-          {['달성', 'occ', 'adr', 'rev'].map((key, i) => {
+          {(['달성', achievementOcc, achievementAdr, achievementRev] as const).map((val, i) => {
             const borderTop = '1px solid var(--color-border-default)'
             const pt = '7px'
             if (i === 0) return (
-              <div key={key} style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)', borderTop, paddingTop: pt }}>달성</div>
+              <div key="달성" style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)', borderTop, paddingTop: pt }}>달성</div>
             )
-            const val = i === 1 ? achievementOcc : i === 2 ? achievementAdr : achievementRev
+            const pct = val as number | null
+            const clickable = pct !== null && !!onAchievementClick
             return (
-              <div key={key} className="font-mono" style={{ fontSize: 12, fontWeight: 600, textAlign: 'right', color: getAchievementColor(val), borderTop, paddingTop: pt }}>
-                {fmtFcPct(val)}
-              </div>
+              <button
+                key={i}
+                onClick={clickable ? () => onAchievementClick!(year, month) : undefined}
+                disabled={!clickable}
+                title={clickable ? 'FCST vs BUDGET 비교 보기' : undefined}
+                className="font-mono"
+                style={{
+                  fontSize: 12, fontWeight: 600, textAlign: 'right',
+                  color: getAchievementColor(pct),
+                  borderTop, paddingTop: pt,
+                  background: 'transparent', border: 'none',
+                  padding: `${pt} 6px 0`, margin: 0,
+                  cursor: clickable ? 'pointer' : 'default',
+                  borderRadius: 4, transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => { if (clickable) e.currentTarget.style.background = 'var(--color-bg-elevated)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+              >
+                {fmtFcPct(pct)}
+              </button>
             )
           })}
         </div>
@@ -474,6 +494,9 @@ export default function DashboardPage() {
   const [page, setPage] = useState(0)
   const [segModal,     setSegModal]     = useState<{ open: boolean; year?: number; month?: number }>({ open: false })
   const [monthlyPickupSegOpen,       setMonthlyPickupSegOpen]       = useState(false)
+  const [forecastBudgetModal,        setForecastBudgetModal]        = useState<{
+    open: boolean; monthKey?: string
+  }>({ open: false })
   const [lyComparisonSegModal,       setLyComparisonSegModal]       = useState<{
     open: boolean; monthKey?: string
   }>({ open: false })
@@ -767,10 +790,22 @@ export default function DashboardPage() {
               const monthKey = `${year}-${String(month).padStart(2, '0')}`
               setLyComparisonSegModal({ open: true, monthKey })
             }}
+            onAchievementClick={(year, month) => {
+              const monthKey = `${year}-${String(month).padStart(2, '0')}`
+              setForecastBudgetModal({ open: true, monthKey })
+            }}
             pickupNights={getMonthPickup(m.year, m.month)}
           />
         ))}
       </div>
+
+      <ForecastBudgetModal
+        open={forecastBudgetModal.open}
+        onClose={() => setForecastBudgetModal({ open: false })}
+        roomCount={roomCount}
+        year={cardYear}
+        initialMonthKey={forecastBudgetModal.monthKey}
+      />
 
       <LyComparisonSegModal
         open={lyComparisonSegModal.open}
