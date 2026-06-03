@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 export type LyPacingRow = {
   business_date:   string
   segmentation:    string
+  account_name:    string | null
   sorting1:        string | null
   sorting2:        string | null
   sorting3:        string | null
