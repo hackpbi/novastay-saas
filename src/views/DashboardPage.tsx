@@ -361,24 +361,24 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
       </div>
 
 
-      {/* ── Forecasting (FC / BGT / 달성 매트릭스) ── */}
+      {/* ── Forecasting (FCST / BUDGET / 달성 매트릭스) ── */}
       <div className="mx-4 mt-2 rounded-xl p-3.5" style={{ background: 'var(--forecast-bg)', border: '1px solid var(--forecast-border)' }}>
         <div style={{ fontSize: 10, letterSpacing: '1.5px', fontWeight: 500, color: 'var(--color-accent-primary)', marginBottom: 10, textTransform: 'uppercase' }}>
           Forecasting
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr 1fr', gap: '8px 10px', alignItems: 'center' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '58px 1fr 1fr 1fr', gap: '8px 10px', alignItems: 'center' }}>
           {/* 헤더 */}
           <div />
           {['OCC', 'ADR', 'REV'].map(h => (
             <div key={h} style={{ fontSize: 9, color: 'var(--brand-dimmed)', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{h}</div>
           ))}
-          {/* FC 행 */}
-          <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)' }}>FC</div>
+          {/* FCST 행 */}
+          <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)' }}>FCST</div>
           <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}>{fmtFcOcc(forecast?.occ)}</div>
           <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}>{fmtFcAdr(forecast?.adr)}</div>
           <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}>{fmtFcRevenue(forecast?.revenue)}</div>
-          {/* BGT 행 */}
-          <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)' }}>BGT</div>
+          {/* BUDGET 행 */}
+          <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)' }}>BUDGET</div>
           <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}>{fmtFcOcc(budget?.occ)}</div>
           <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}>{fmtFcAdr(budget?.adr)}</div>
           <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}>{fmtFcRevenue(budget?.revenue)}</div>
