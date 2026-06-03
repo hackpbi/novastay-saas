@@ -1,16 +1,15 @@
 'use client'
 
-import { useEffect, useMemo } from 'react'
-import { X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useHotel } from '@/contexts/HotelContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useMarketSchema } from '@/hooks/useMarketSchema'
 import { useLyPacing } from '@/hooks/useLyPacing'
 import {
   buildLyComparisonSegTable,
-  type LyComparisonSegRow,
-  type LyComparisonCell,
 } from '@/utils/lyComparisonSegTable'
+import type { LyComparisonMonthly } from '@/utils/lyComparisonSegTable'
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -26,113 +25,88 @@ const BORDER = '1px solid var(--divider-color)'
 
 // ─── Format helpers ────────────────────────────────────────────────────────────
 
-function Dash() {
-  return <span style={{ color: 'var(--brand-dimmed)' }}>—</span>
+function formatYYYYMM(key: string): string {
+  return key.replace('-', '.')
 }
+
+function Dash() { return <span style={{ color: 'var(--brand-dimmed)' }}>—</span> }
 
 function FmtNights({ n }: { n: number }) {
   if (n === 0) return <Dash />
   return <>{n.toLocaleString('ko-KR')}</>
 }
-
 function FmtAdr({ n }: { n: number }) {
   if (Math.abs(n) < 500) return <Dash />
   return <>{Math.round(n / 1000)}k</>
 }
-
 function FmtRevenue({ n }: { n: number }) {
   if (Math.abs(n) < 50_000) return <Dash />
   return <>{(n / 1_000_000).toFixed(1)}M</>
 }
-
 function FmtGapNights({ n }: { n: number }) {
   if (n === 0) return <Dash />
-  const sign  = n > 0 ? '+' : ''
+  const sign = n > 0 ? '+' : ''
   const color = n > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{n.toLocaleString('ko-KR')}</span>
 }
-
+function FmtGapAdr({ n }: { n: number }) {
+  if (Math.abs(n) < 500) return <Dash />
+  const k = Math.round(n / 1000)
+  const sign = k > 0 ? '+' : ''
+  const color = k > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
+  return <span style={{ color }}>{sign}{k}k</span>
+}
 function FmtGapRevenue({ n }: { n: number }) {
   if (Math.abs(n) < 50_000) return <Dash />
-  const m     = (n / 1_000_000).toFixed(1)
-  const sign  = n > 0 ? '+' : ''
+  const m = (n / 1_000_000).toFixed(1)
+  const sign = n > 0 ? '+' : ''
   const color = n > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{m}M</span>
 }
-
 function FmtOcc({ n }: { n: number }) {
   if (Math.abs(n) < 0.1) return <Dash />
   return <>{n.toFixed(1)}%</>
 }
-
 function FmtGapPct({ n }: { n: number }) {
   if (Math.abs(n) < 0.1) return <Dash />
-  const sign  = n > 0 ? '+' : ''
+  const sign = n > 0 ? '+' : ''
   const color = n > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{n.toFixed(1)}%p</span>
 }
-
 function FmtRevpar({ n }: { n: number }) {
   if (Math.abs(n) < 500) return <Dash />
   return <>{Math.round(n / 1000)}k</>
 }
-
 function FmtGapRevpar({ n }: { n: number }) {
   if (Math.abs(n) < 500) return <Dash />
-  const k     = Math.round(n / 1000)
-  const sign  = k > 0 ? '+' : ''
+  const k = Math.round(n / 1000)
+  const sign = k > 0 ? '+' : ''
   const color = k > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{k}k</span>
 }
 
 // ─── Cell group components ─────────────────────────────────────────────────────
 
-function OtbCells({ cell }: { cell: LyComparisonCell }) {
-  return (
-    <>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: BORDER }}>
-        <FmtNights n={cell.nights} />
-      </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}>
-        <FmtAdr n={cell.adr} />
-      </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: BORDER }}>
-        <FmtRevenue n={cell.revenue} />
-      </td>
-    </>
-  )
-}
-
-function LyCells({ cell }: { cell: LyComparisonCell }) {
-  return (
-    <>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}>
-        <FmtNights n={cell.nights} />
-      </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}>
-        <FmtAdr n={cell.adr} />
-      </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: BORDER }}>
-        <FmtRevenue n={cell.revenue} />
-      </td>
-    </>
-  )
-}
-
-function GapCells({ gap, clickable, onClick }: {
-  gap: { nights: number; revenue: number }
+function MonthCells({ m, clickable, onGapClick }: {
+  m: LyComparisonMonthly
   clickable: boolean
-  onClick?: () => void
+  onGapClick?: () => void
 }) {
   const cursor = clickable ? 'pointer' : 'default'
   return (
     <>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', cursor }} onClick={onClick}>
-        <FmtGapNights n={gap.nights} />
-      </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', cursor }} onClick={onClick}>
-        <FmtGapRevenue n={gap.revenue} />
-      </td>
+      {/* OTB */}
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: BORDER }}><FmtNights n={m.otb.nights} /></td>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}><FmtAdr n={m.otb.adr} /></td>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: BORDER }}><FmtRevenue n={m.otb.revenue} /></td>
+      {/* LY */}
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}><FmtNights n={m.ly.nights} /></td>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}><FmtAdr n={m.ly.adr} /></td>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: BORDER }}><FmtRevenue n={m.ly.revenue} /></td>
+      {/* GAP */}
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', cursor }} onClick={onGapClick}><FmtGapNights n={m.gap.nights} /></td>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', cursor }} onClick={onGapClick}><FmtGapAdr n={m.gap.adr} /></td>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', cursor }} onClick={onGapClick}><FmtGapRevenue n={m.gap.revenue} /></td>
     </>
   )
 }
@@ -149,32 +123,44 @@ function Skeleton() {
   )
 }
 
+// ─── Nav button helper ─────────────────────────────────────────────────────────
+
+function NavBtn({ onClick, disabled, children }: { onClick: () => void; disabled: boolean; children: React.ReactNode }) {
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      background: 'transparent', border: '1px solid var(--color-border-default)', borderRadius: 6,
+      padding: '4px 8px', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1,
+      color: 'var(--color-text-secondary)', display: 'inline-flex', alignItems: 'center',
+    }}>
+      {children}
+    </button>
+  )
+}
+
 // ─── Modal ─────────────────────────────────────────────────────────────────────
 
 export default function LyComparisonSegModal({
-  open, onClose, roomCount, onAccountDrillDown,
+  open, onClose, roomCount, initialMonthKey, onAccountDrillDown,
 }: {
   open:                boolean
   onClose:             () => void
   roomCount:           number
-  onAccountDrillDown?: (segCodes: string[], label: string) => void
+  initialMonthKey?:    string
+  onAccountDrillDown?: (segCodes: string[], monthKey: string, label: string) => void
 }) {
   const { currentHotel }                                 = useHotel()
   const { theme }                                        = useTheme()
   const isDark                                           = theme === 'dark'
   const { data: schema, loading: schemaLoading }         = useMarketSchema()
   const { data: lyPacing, loading: lyLoading }           = useLyPacing()
+  const [currentMonthIndex, setCurrentMonthIndex]        = useState(0)
 
   const loading = schemaLoading || lyLoading
 
-  const { rows, summary } = useMemo(
+  const { rows, summary, monthKeys } = useMemo(
     () => !loading && schema.length > 0
       ? buildLyComparisonSegTable({ schema, lyPacing, roomCount })
-      : { rows: [], summary: {
-          otb: { nights: 0, adr: 0, revenue: 0, occ: 0, revpar: 0 },
-          ly:  { nights: 0, adr: 0, revenue: 0, occ: 0, revpar: 0 },
-          gap: { nights: 0, revenue: 0, occDiff: 0, revparDiff: 0 },
-        }},
+      : { rows: [], summary: { monthly: {} }, monthKeys: [] },
     [schema, lyPacing, roomCount, loading],
   )
 
@@ -187,15 +173,16 @@ export default function LyComparisonSegModal({
     return ids
   }, [schema])
 
-  // 날짜 범위 라벨
-  const { startLabel, endLabel } = useMemo(() => {
-    const months = [...new Set(lyPacing.map(r => r.business_date.slice(0, 7)))].sort()
-    const fmt = (ym: string) => ym.replace('-', '.')
-    return {
-      startLabel: months.length > 0 ? fmt(months[0]) : '',
-      endLabel:   months.length > 0 ? fmt(months[months.length - 1]) : '',
+  // 열릴 때 월 인덱스 초기화
+  useEffect(() => {
+    if (!open || monthKeys.length === 0) return
+    if (initialMonthKey) {
+      const idx = monthKeys.indexOf(initialMonthKey)
+      setCurrentMonthIndex(idx >= 0 ? idx : 0)
+    } else {
+      setCurrentMonthIndex(0)
     }
-  }, [lyPacing])
+  }, [open, initialMonthKey, monthKeys])
 
   // body scroll lock
   useEffect(() => {
@@ -214,37 +201,56 @@ export default function LyComparisonSegModal({
 
   if (!open) return null
 
+  const currentMonthKey = monthKeys[currentMonthIndex] ?? ''
+  const sumMonth        = summary.monthly[currentMonthKey]
+
   const sumTd: React.CSSProperties = {
     ...tdBase, fontWeight: 600, color: 'var(--color-text-primary)', paddingTop: 8, paddingBottom: 8,
   }
 
+  const ZERO_MONTHLY: LyComparisonMonthly = {
+    otb: { nights: 0, adr: 0, revenue: 0 },
+    ly:  { nights: 0, adr: 0, revenue: 0 },
+    gap: { nights: 0, adr: 0, revenue: 0 },
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 backdrop-blur-sm"
-        style={{ background: 'rgba(0,0,0,0.6)' }}
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose} />
 
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-5xl"
         style={{ maxHeight: '88vh', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
-        <div className="flex items-start justify-between px-6 py-4 shrink-0" style={{ borderBottom: BORDER }}>
+        <div className="flex items-center justify-between px-6 py-4 shrink-0" style={{ borderBottom: BORDER }}>
+          {/* Left: title */}
           <div>
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>
               전년 동기간 비교
             </h2>
             <p className="text-xs mt-0.5" style={{ color: 'var(--brand-dimmed)' }}>
-              {startLabel && endLabel ? `${startLabel} ~ ${endLabel} · ` : ''}{currentHotel?.hotel_name ?? ''}
+              {currentHotel?.hotel_name ?? ''}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1"
-            aria-label="닫기"
-          >
+
+          {/* Center: month nav */}
+          {monthKeys.length > 0 && (
+            <div className="flex items-center gap-3">
+              <NavBtn onClick={() => setCurrentMonthIndex(i => Math.max(0, i - 1))} disabled={currentMonthIndex === 0}>
+                <ChevronLeft size={14} />
+              </NavBtn>
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-text-primary)', minWidth: 80, textAlign: 'center' }}>
+                {formatYYYYMM(currentMonthKey)}
+              </span>
+              <NavBtn onClick={() => setCurrentMonthIndex(i => Math.min(monthKeys.length - 1, i + 1))} disabled={currentMonthIndex === monthKeys.length - 1}>
+                <ChevronRight size={14} />
+              </NavBtn>
+            </div>
+          )}
+
+          {/* Right: close */}
+          <button onClick={onClose} className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1" aria-label="닫기">
             <X size={22} />
           </button>
         </div>
@@ -253,10 +259,10 @@ export default function LyComparisonSegModal({
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <Skeleton />
+          ) : monthKeys.length === 0 ? (
+            <p className="text-center py-12 text-sm" style={{ color: 'var(--brand-dimmed)' }}>월 데이터가 없습니다.</p>
           ) : rows.length === 0 ? (
-            <p className="text-center py-12 text-sm" style={{ color: 'var(--brand-dimmed)' }}>
-              표시할 LY 비교 데이터가 없습니다.
-            </p>
+            <p className="text-center py-12 text-sm" style={{ color: 'var(--brand-dimmed)' }}>표시할 LY 비교 데이터가 없습니다.</p>
           ) : (
             <div className="px-6 py-4">
               <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
@@ -266,7 +272,7 @@ export default function LyComparisonSegModal({
                     <th style={{ ...thBase, textAlign: 'left' }} rowSpan={2}>Segmentation</th>
                     <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: BORDER }}>현재 OTB</th>
                     <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderRight: BORDER }}>작년 OTB</th>
-                    <th colSpan={2} style={{ ...thBase, textAlign: 'center' }}>GAP</th>
+                    <th colSpan={3} style={{ ...thBase, textAlign: 'center' }}>GAP</th>
                   </tr>
                   <tr>
                     <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>R-N</th>
@@ -276,6 +282,7 @@ export default function LyComparisonSegModal({
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ADR</th>
                     <th style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>REV</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔR-N</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔREV</th>
                   </tr>
                 </thead>
@@ -286,27 +293,22 @@ export default function LyComparisonSegModal({
                     const rowColor = (isDark ? row.fontDarkColor : row.fontLightColor) ?? 'var(--color-text-primary)'
                     const isHou    = houRowIds.has(row.id)
                     const clickable = !!onAccountDrillDown && !isHou && row.segmentationCodes.length > 0
+                    const m        = row.monthly[currentMonthKey] ?? ZERO_MONTHLY
 
                     return (
                       <tr
                         key={row.id}
                         style={{ borderBottom: BORDER, background: rowBg, color: rowColor, fontWeight: row.isBold ? 600 : 400 }}
-                        onMouseEnter={e => {
-                          e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${rowBg}`
-                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${rowBg}` }}
                         onMouseLeave={e => { e.currentTarget.style.background = rowBg }}
                       >
                         <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140 }}>
-                          {row.indent ? (
-                            <><span style={{ color: 'var(--brand-dimmed)' }}>└ </span>{row.name}</>
-                          ) : row.name}
+                          {row.indent ? <><span style={{ color: 'var(--brand-dimmed)' }}>└ </span>{row.name}</> : row.name}
                         </td>
-                        <OtbCells cell={row.otb} />
-                        <LyCells  cell={row.ly} />
-                        <GapCells
-                          gap={row.gap}
+                        <MonthCells
+                          m={m}
                           clickable={clickable}
-                          onClick={clickable ? () => onAccountDrillDown!(row.segmentationCodes, row.name) : undefined}
+                          onGapClick={clickable ? () => onAccountDrillDown!(row.segmentationCodes, currentMonthKey, row.name) : undefined}
                         />
                       </tr>
                     )
@@ -317,55 +319,44 @@ export default function LyComparisonSegModal({
                   {/* 합계 */}
                   <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: 'var(--color-bg-secondary)' }}>
                     <td style={{ ...sumTd, paddingLeft: 12 }}>합계 (HOU 제외)</td>
-                    <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderLeft: BORDER }}>
-                      <FmtNights n={summary.otb.nights} />
-                    </td>
-                    <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}>
-                      <FmtAdr n={summary.otb.adr} />
-                    </td>
-                    <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderRight: BORDER }}>
-                      <FmtRevenue n={summary.otb.revenue} />
-                    </td>
-                    <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}>
-                      <FmtNights n={summary.ly.nights} />
-                    </td>
-                    <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}>
-                      <FmtAdr n={summary.ly.adr} />
-                    </td>
-                    <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderRight: BORDER }}>
-                      <FmtRevenue n={summary.ly.revenue} />
-                    </td>
-                    <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}>
-                      <FmtGapNights n={summary.gap.nights} />
-                    </td>
-                    <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}>
-                      <FmtGapRevenue n={summary.gap.revenue} />
-                    </td>
+                    {sumMonth ? (
+                      <>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderLeft: BORDER }}><FmtNights n={sumMonth.otb.nights} /></td>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtAdr n={sumMonth.otb.adr} /></td>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderRight: BORDER }}><FmtRevenue n={sumMonth.otb.revenue} /></td>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtNights n={sumMonth.ly.nights} /></td>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtAdr n={sumMonth.ly.adr} /></td>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderRight: BORDER }}><FmtRevenue n={sumMonth.ly.revenue} /></td>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtGapNights n={sumMonth.gap.nights} /></td>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtGapAdr n={sumMonth.gap.adr} /></td>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtGapRevenue n={sumMonth.gap.revenue} /></td>
+                      </>
+                    ) : <td colSpan={9} />}
                   </tr>
                   {/* OCC */}
                   <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)' }}>OCC</td>
                     <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER }}>
-                      <FmtOcc n={summary.otb.occ} />
+                      <FmtOcc n={sumMonth?.otb.occ ?? 0} />
                     </td>
                     <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600 }}>
-                      <FmtOcc n={summary.ly.occ} />
+                      <FmtOcc n={sumMonth?.ly.occ ?? 0} />
                     </td>
-                    <td colSpan={2} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600 }}>
-                      <FmtGapPct n={summary.gap.occDiff} />
+                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600 }}>
+                      <FmtGapPct n={sumMonth?.gap.occDiff ?? 0} />
                     </td>
                   </tr>
-                  {/* RevPAR */}
+                  {/* Rev.PAR */}
                   <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)' }}>RevPAR</td>
                     <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER }}>
-                      <FmtRevpar n={summary.otb.revpar} />
+                      <FmtRevpar n={sumMonth?.otb.revpar ?? 0} />
                     </td>
                     <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600 }}>
-                      <FmtRevpar n={summary.ly.revpar} />
+                      <FmtRevpar n={sumMonth?.ly.revpar ?? 0} />
                     </td>
-                    <td colSpan={2} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600 }}>
-                      <FmtGapRevpar n={summary.gap.revparDiff} />
+                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600 }}>
+                      <FmtGapRevpar n={sumMonth?.gap.revparDiff ?? 0} />
                     </td>
                   </tr>
                 </tfoot>
