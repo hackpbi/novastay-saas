@@ -398,7 +398,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
 
       {/* ── Action buttons ── */}
       {/* group: P/U 호버 시 보조 버튼 슬라이드인 */}
-      <div className="px-4 pb-4 flex items-center group">
+      <div className="px-4 pb-4 flex items-center group" style={{ marginTop: 14 }}>
         {/* 메인 버튼 — 카드 전체 너비 */}
         <button
           className="flex-1 flex items-center justify-center gap-1.5 rounded-full py-2.5 text-[12px] font-bold transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0"
