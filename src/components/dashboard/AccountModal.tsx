@@ -88,6 +88,7 @@ const thBase: React.CSSProperties = {
 const tdBase: React.CSSProperties = { padding: '7px 10px', verticalAlign: 'middle' }
 
 const BORDER = '1px solid var(--divider-color)'
+const DOUBLE = '3px double var(--color-border-default)'
 
 // ─── Filter helper ──────────────────────────────────────────────────────────────
 
@@ -129,7 +130,7 @@ function GroupHeaderRow({ group, collapsed, onToggle }: {
       className="cursor-pointer hover:bg-white/5 focus:outline-none focus:bg-white/5"
       style={{ borderTop: BORDER, background: headerBg, color: headerColor }}
     >
-      <td style={{ ...tdBase, paddingLeft: 12 }}>
+      <td style={{ ...tdBase, paddingLeft: 12, borderRight: DOUBLE }}>
         <div className="flex items-center gap-2">
           {collapsed
             ? <ChevronRight size={14} style={{ color: headerColor, flexShrink: 0, opacity: 0.7 }} />
@@ -140,13 +141,13 @@ function GroupHeaderRow({ group, collapsed, onToggle }: {
         </div>
       </td>
       {/* fontWeight: 600 on td — Delta spans inherit this */}
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600, borderLeft: BORDER }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600 }}>
         <FmtNights n={t.otbNights} />
       </td>
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600 }}>
         <FmtAdr n={t.otbAdr} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600, borderRight: BORDER }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600, borderRight: DOUBLE }}>
         <FmtRev n={t.otbRevenue} />
       </td>
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600, borderLeft: BORDER }}>
@@ -201,15 +202,15 @@ function DataTable({ groups, summary, collapsedKeys, onToggle, isSearching, year
       <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
         <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
           <tr>
-            <th style={{ ...thBase, textAlign: 'left', minWidth: 200 }}>Account</th>
-            <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER }}>현재 OTB</th>
-            <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER }}>Pickup vs OTB</th>
+            <th style={{ ...thBase, textAlign: 'left', minWidth: 200, borderRight: DOUBLE }}>Account</th>
+            <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderRight: DOUBLE }}>현재 OTB</th>
+            <th colSpan={3} style={{ ...thBase, textAlign: 'center' }}>Pickup vs OTB</th>
           </tr>
           <tr>
-            <th style={{ ...thBase, textAlign: 'left', borderBottom: BORDER }} />
-            <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>R-N</th>
+            <th style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE, borderBottom: BORDER }} />
+            <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>R-N</th>
             <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ADR</th>
-            <th style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>REV</th>
+            <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE, borderBottom: BORDER }}>REV</th>
             <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>ΔR-N</th>
             <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>
             <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔREV</th>
@@ -224,19 +225,19 @@ function DataTable({ groups, summary, collapsedKeys, onToggle, isSearching, year
                 <GroupHeaderRow key={`hdr-${g.key}`} group={g} collapsed={isCollapsed} onToggle={() => onToggle(g.key)} />
                 {!isCollapsed && g.rows.map((row, i) => (
                   <tr key={`${g.key}-${i}`} className="hover:bg-white/5" style={{ borderBottom: BORDER }}>
-                    <td style={{ ...tdBase, paddingLeft: 40 }}>
+                    <td style={{ ...tdBase, paddingLeft: 40, borderRight: DOUBLE }}>
                       <span style={{ color: 'var(--brand-dimmed)' }}>└ </span>
                       <span style={{ color: row.account_name === '(미지정)' ? 'var(--brand-dimmed)' : 'var(--color-text-primary)' }}>
                         {row.account_name}
                       </span>
                     </td>
-                    <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: BORDER }}>
+                    <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}>
                       <FmtNights n={row.otbNights} />
                     </td>
                     <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}>
                       <FmtAdr n={row.otbAdr} />
                     </td>
-                    <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: BORDER }}>
+                    <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: DOUBLE }}>
                       <FmtRev n={row.otbRevenue} />
                     </td>
                     <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: BORDER }}>
@@ -257,14 +258,14 @@ function DataTable({ groups, summary, collapsedKeys, onToggle, isSearching, year
 
         <tfoot>
           <tr style={{ borderTop: '2px solid var(--color-accent-primary)' }}>
-            <td style={{ ...sumTd, paddingLeft: 12 }}>합계 (HOU 제외)</td>
-            <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderLeft: BORDER }}>
+            <td style={{ ...sumTd, paddingLeft: 12, borderRight: DOUBLE }}>합계 (HOU 제외)</td>
+            <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}>
               <FmtNights n={summary.totalNights} />
             </td>
             <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}>
               <FmtAdr n={summary.totalAdr} />
             </td>
-            <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderRight: BORDER }}>
+            <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderRight: DOUBLE }}>
               <FmtRev n={summary.totalRevenue} />
             </td>
             <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderLeft: BORDER }}>
@@ -278,20 +279,20 @@ function DataTable({ groups, summary, collapsedKeys, onToggle, isSearching, year
             </td>
           </tr>
           <tr style={{ borderTop: '1px solid var(--divider-color)', background: 'var(--color-bg-secondary)' }}>
-            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '10px 12px' }}>OCC</td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: 'var(--color-text-primary)', borderLeft: BORDER }}>
+            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '10px 12px', borderRight: DOUBLE }}>OCC</td>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: DOUBLE }}>
               {otbOcc.toFixed(1)}%
             </td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: puColor(puOcc), borderLeft: BORDER }}>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: puColor(puOcc) }}>
               {fmtPuOcc(puOcc)}
             </td>
           </tr>
           <tr style={{ borderTop: '1px solid var(--divider-color)', background: 'var(--color-bg-secondary)' }}>
-            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '10px 12px' }}>RevPAR</td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: 'var(--color-text-primary)', borderLeft: BORDER }}>
+            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '10px 12px', borderRight: DOUBLE }}>RevPAR</td>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: DOUBLE }}>
               {Math.round(otbRevpar / 1000)}k
             </td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: puColor(puRevpar), borderLeft: BORDER }}>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: puColor(puRevpar) }}>
               {fmtPuRevpar(puRevpar)}
             </td>
           </tr>
