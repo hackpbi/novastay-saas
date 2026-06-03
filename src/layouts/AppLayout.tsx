@@ -9,6 +9,8 @@ import DatePicker from '@/components/DatePicker'
 import { useAuth } from '@/contexts/AuthContext'
 import { useHotel } from '@/contexts/HotelContext'
 import { DateContext } from '@/contexts/DateContext'
+import { FcstDateContext } from '@/contexts/FcstDateContext'
+import { useForecastDates } from '@/hooks/useForecastDates'
 import { supabase } from '@/lib/supabase'
 import type { ReactNode } from 'react'
 
@@ -75,6 +77,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     staleTime: 5 * 60 * 1000,
   })
 
+  // FCST dates
+  const { data: fcstDates = [] } = useForecastDates(hotelId || undefined)
+
+  // FCST: fcstDates 로드 후 초기값 자동 설정
+  useEffect(() => {
+    if (fcstDates.length > 0 && !fcstDate) {
+      setFcstDate(fcstDates[0])
+    }
+  }, [fcstDates, fcstDate])
+
   // OTB: otbDates 로드 후 또는 otbDate 초기화 후 자동 설정
   useEffect(() => {
     if (otbDates.length === 0) return
@@ -140,7 +152,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <div className="w-px h-4" style={{ background: 'var(--color-border-default)' }} />
               <DatePicker label="OTB"    value={otbDate}   onChange={setOtbDate}   accent availableDates={otbDates} />
               <DatePicker label="vs OTB" value={vsOtbDate} onChange={setVsOtbDate} availableDates={otbDates.filter(d => d < otbDate)} />
-              <DatePicker label="FCST"   value={fcstDate}  onChange={setFcstDate}  />
+              <DatePicker label="FCST"   value={fcstDate}  onChange={setFcstDate}  availableDates={fcstDates} />
               <DatePicker label="HK"     value={hkDate}    onChange={setHkDate}    />
             </div>
 
@@ -234,7 +246,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <main className="flex-1 overflow-y-auto p-6">
           <div key={pathname} className="w-full animate-page-enter" style={{ maxWidth: 1320 }}>
             <DateContext.Provider value={{ otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate }}>
-              {children}
+              <FcstDateContext.Provider value={{ fcstDate, fcstDates, setFcstDate }}>
+                {children}
+              </FcstDateContext.Provider>
             </DateContext.Provider>
           </div>
         </main>

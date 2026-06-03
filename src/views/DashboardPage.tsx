@@ -14,6 +14,7 @@ import LyComparisonSegModal       from '@/components/dashboard/LyComparisonSegMo
 import LyComparisonAccountModal   from '@/components/dashboard/LyComparisonAccountModal'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
+import { useFcstDateContext } from '@/contexts/FcstDateContext'
 import { supabase } from '@/lib/supabase'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -499,6 +500,7 @@ export default function DashboardPage() {
   const hotelId = currentHotel?.id ?? ''
 
   const { vsOtbDate } = useDateContext()
+  const { fcstDate, fcstDates } = useFcstDateContext()
   const { data: pickupData, loading: pickupLoading, otbDate } = usePickupData()
 
   const pickupDays = otbDate && vsOtbDate
