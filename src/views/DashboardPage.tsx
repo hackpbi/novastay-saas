@@ -10,6 +10,8 @@ import SegmentationModal          from '@/components/dashboard/SegmentationModal
 import AccountModal               from '@/components/dashboard/AccountModal'
 import MonthlyPickupSegModal      from '@/components/dashboard/MonthlyPickupSegModal'
 import MonthlyPickupAccountModal  from '@/components/dashboard/MonthlyPickupAccountModal'
+import LyComparisonSegModal       from '@/components/dashboard/LyComparisonSegModal'
+import LyComparisonAccountModal   from '@/components/dashboard/LyComparisonAccountModal'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import { supabase } from '@/lib/supabase'
@@ -131,9 +133,9 @@ function formatPu(n: number, type: 'nights' | 'currency'): string {
 
 // ─── Sub-components ─────────────────────────────────────────────────────────────
 
-function ChangeTag({ value, unit }: { value: number; unit: string }) {
+function ChangeTag({ value, unit, onClick }: { value: number; unit: string; onClick?: () => void }) {
   const pos = value >= 0
-  return (
+  const inner = (
     <span
       className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[12px] font-semibold leading-none ${
         pos ? 'text-status-positive' : 'text-status-negative'
@@ -146,12 +148,24 @@ function ChangeTag({ value, unit }: { value: number; unit: string }) {
       {pos ? '▲' : '▼'}&nbsp;{Math.abs(value)}{unit}
     </span>
   )
+  if (!onClick) return inner
+  return (
+    <button
+      onClick={onClick}
+      title="전년 동기간 비교 보기"
+      style={{ background: 'transparent', border: 'none', padding: '2px 4px', cursor: 'pointer', borderRadius: 4, transition: 'background 0.15s', display: 'inline-flex' }}
+      onMouseEnter={e => e.currentTarget.style.background = 'var(--color-bg-elevated)'}
+      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+    >
+      {inner}
+    </button>
+  )
 }
 
 function SubMetric({ label, value }: { label: string; value: number }) {
   const pos = value >= 0
   return (
-    <span className="text-[11px] whitespace-nowrap">
+    <span className="text-[10px] whitespace-nowrap" style={{ opacity: 0.65 }}>
       <span className="text-brand-dimmed">{label} </span>
       <span className={pos ? 'text-status-positive' : 'text-status-negative'}>
         {pos ? '▲' : '▼'}{Math.abs(value)}%
@@ -160,7 +174,7 @@ function SubMetric({ label, value }: { label: string; value: number }) {
   )
 }
 
-function MetricRow({ label, value, metric, subValue, tooltip, yoyOverride, yoyLoading }: {
+function MetricRow({ label, value, metric, subValue, tooltip, yoyOverride, yoyLoading, onLyClick }: {
   label:       string
   value:       string
   metric:      MetricData
@@ -168,6 +182,7 @@ function MetricRow({ label, value, metric, subValue, tooltip, yoyOverride, yoyLo
   tooltip?:    string
   yoyOverride?: { value: number | null; unit: string; fitPct?: number | null; grpPct?: number | null; showFitGrp?: boolean }
   yoyLoading?: boolean
+  onLyClick?:  () => void
 }) {
   return (
     <div
@@ -197,7 +212,7 @@ function MetricRow({ label, value, metric, subValue, tooltip, yoyOverride, yoyLo
         ) : yoyOverride ? (
           <>
             {yoyOverride.value !== null
-              ? <ChangeTag value={yoyOverride.value} unit={yoyOverride.unit} />
+              ? <ChangeTag value={yoyOverride.value} unit={yoyOverride.unit} onClick={onLyClick} />
               : <span className="text-[11px] text-brand-dimmed">-</span>
             }
             {yoyOverride.showFitGrp && (
@@ -209,7 +224,7 @@ function MetricRow({ label, value, metric, subValue, tooltip, yoyOverride, yoyLo
           </>
         ) : (
           <>
-            <ChangeTag value={metric.yoy} unit={metric.yoyUnit} />
+            <ChangeTag value={metric.yoy} unit={metric.yoyUnit} onClick={onLyClick} />
             <div className="flex items-center gap-2 justify-end">
               <SubMetric label="FIT" value={metric.fit} />
               <SubMetric label="GRP" value={metric.grp} />
@@ -223,7 +238,7 @@ function MetricRow({ label, value, metric, subValue, tooltip, yoyOverride, yoyLo
 
 // ─── Month Card ─────────────────────────────────────────────────────────────────
 
-function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSegClick, onAccountClick, pickupNights }: {
+function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSegClick, onAccountClick, pickupNights, onLyClick }: {
   data:             MonthData
   stats:            MonthStats
   loading:          boolean
@@ -233,6 +248,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
   onSegClick?:      (year: number, month: number) => void
   onAccountClick?:  (year: number, month: number) => void
   pickupNights:     number
+  onLyClick?:       () => void
 }) {
   const { year, month, occ, adr, rev, forecast, goal, pu, rmAction } = data
   // occ, adr, rev are mock data used as fallback; stats holds live OTB values
@@ -285,6 +301,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
             showFitGrp: true,
           }}
           yoyLoading={yoyLoading}
+          onLyClick={onLyClick}
         />
         <MetricRow
           label="ADR"
@@ -297,6 +314,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
             showFitGrp: false,
           }}
           yoyLoading={yoyLoading}
+          onLyClick={onLyClick}
         />
         <MetricRow
           label="REV"
@@ -311,6 +329,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
             showFitGrp: true,
           }}
           yoyLoading={yoyLoading}
+          onLyClick={onLyClick}
         />
       </div>
 
@@ -462,6 +481,10 @@ export default function DashboardPage() {
   const [page, setPage] = useState(0)
   const [segModal,     setSegModal]     = useState<{ open: boolean; year?: number; month?: number }>({ open: false })
   const [monthlyPickupSegOpen,       setMonthlyPickupSegOpen]       = useState(false)
+  const [lyComparisonSegOpen,        setLyComparisonSegOpen]        = useState(false)
+  const [lyComparisonAccountModal,   setLyComparisonAccountModal]   = useState<{
+    open: boolean; filterSegCodes?: string[]; filterLabel?: string
+  }>({ open: false })
   const [monthlyPickupAccountModal,  setMonthlyPickupAccountModal]  = useState<{
     open: boolean; filterSegCodes?: string[]; filterMonthKey?: string; filterLabel?: string; initialViewMode?: 'monthly' | 'total'
   }>({ open: false })
@@ -686,10 +709,33 @@ export default function DashboardPage() {
             yoyLoading={lyLoading}
             onSegClick={(y, mo) => setSegModal({ open: true, year: y, month: mo })}
             onAccountClick={(y, mo) => setAccountModal({ open: true, year: y, month: mo })}
+            onLyClick={() => setLyComparisonSegOpen(true)}
             pickupNights={getMonthPickup(m.year, m.month)}
           />
         ))}
       </div>
+
+      <LyComparisonSegModal
+        open={lyComparisonSegOpen}
+        onClose={() => setLyComparisonSegOpen(false)}
+        roomCount={roomCount}
+        onAccountDrillDown={(segCodes, label) => {
+          setLyComparisonSegOpen(false)
+          setLyComparisonAccountModal({ open: true, filterSegCodes: segCodes, filterLabel: label })
+        }}
+      />
+      <LyComparisonAccountModal
+        open={lyComparisonAccountModal.open}
+        onClose={() => setLyComparisonAccountModal({ open: false })}
+        roomCount={roomCount}
+        initialFilterSegCodes={lyComparisonAccountModal.filterSegCodes}
+        initialFilterLabel={lyComparisonAccountModal.filterLabel}
+        onBackToSeg={
+          lyComparisonAccountModal.filterSegCodes
+            ? () => { setLyComparisonAccountModal({ open: false }); setLyComparisonSegOpen(true) }
+            : undefined
+        }
+      />
 
       <MonthlyPickupSegModal
         open={monthlyPickupSegOpen}
