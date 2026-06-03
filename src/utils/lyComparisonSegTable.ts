@@ -9,6 +9,16 @@ export type LyComparisonCell = {
   revenue: number
 }
 
+export type LyComparisonMonthly = {
+  otb:  LyComparisonCell
+  ly:   LyComparisonCell
+  gap:  {
+    nights:  number   // otb.nights - ly.nights
+    adr:     number   // otb.adr - ly.adr (가중평균끼리의 차)
+    revenue: number   // otb.revenue - ly.revenue
+  }
+}
+
 export type LyComparisonSegRow = {
   id:                string
   name:              string
@@ -20,15 +30,15 @@ export type LyComparisonSegRow = {
   fontLightColor:    string | null
   indent:            number
   segmentationCodes: string[]
-  otb:  LyComparisonCell
-  ly:   LyComparisonCell
-  gap:  { nights: number; revenue: number }
+  monthly:           Record<string, LyComparisonMonthly>
 }
 
 export type LyComparisonSegSummary = {
-  otb:  LyComparisonCell & { occ: number; revpar: number }
-  ly:   LyComparisonCell & { occ: number; revpar: number }
-  gap:  { nights: number; revenue: number; occDiff: number; revparDiff: number }
+  monthly: Record<string, {
+    otb:  LyComparisonCell & { occ: number; revpar: number }
+    ly:   LyComparisonCell & { occ: number; revpar: number }
+    gap:  { nights: number; adr: number; revenue: number; occDiff: number; revparDiff: number }
+  }>
 }
 
 // ─── Internal ──────────────────────────────────────────────────────────────────
@@ -44,11 +54,33 @@ function emptyRaw(): RawStats {
   return { otbNights: 0, otbRevenue: 0, lyNights: 0, lyRevenue: 0 }
 }
 
-function toCell(nights: number, revenue: number): LyComparisonCell {
+function zeroMonthly(): LyComparisonMonthly {
   return {
-    nights,
-    adr:     nights > 0 ? revenue / nights : 0,
-    revenue,
+    otb: { nights: 0, adr: 0, revenue: 0 },
+    ly:  { nights: 0, adr: 0, revenue: 0 },
+    gap: { nights: 0, adr: 0, revenue: 0 },
+  }
+}
+
+function toMonthly(raw: RawStats): LyComparisonMonthly {
+  const otb: LyComparisonCell = {
+    nights:  raw.otbNights,
+    adr:     raw.otbNights > 0 ? raw.otbRevenue / raw.otbNights : 0,
+    revenue: raw.otbRevenue,
+  }
+  const ly: LyComparisonCell = {
+    nights:  raw.lyNights,
+    adr:     raw.lyNights > 0 ? raw.lyRevenue / raw.lyNights : 0,
+    revenue: raw.lyRevenue,
+  }
+  return {
+    otb,
+    ly,
+    gap: {
+      nights:  otb.nights  - ly.nights,
+      adr:     otb.adr     - ly.adr,
+      revenue: otb.revenue - ly.revenue,
+    },
   }
 }
 
@@ -59,39 +91,46 @@ export function buildLyComparisonSegTable(args: {
   lyPacing:  LyPacingRow[]
   roomCount: number
 }): {
-  rows:    LyComparisonSegRow[]
-  summary: LyComparisonSegSummary
+  rows:      LyComparisonSegRow[]
+  summary:   LyComparisonSegSummary
+  monthKeys: string[]
 } {
   const { schema, lyPacing, roomCount } = args
 
-  // Step A: segCode 단위 raw 누적 (business_date / account_name 무관)
+  // Step A: monthKeys
+  const monthKeys = Array.from(new Set(
+    lyPacing.map(r => r.business_date.slice(0, 7))
+  )).sort()
+
+  // Step B: (segCode × monthKey) raw 합산
   const rawMap = new Map<string, RawStats>()
   for (const r of lyPacing) {
-    const code = r.segmentation
-    let s = rawMap.get(code)
-    if (!s) { s = emptyRaw(); rawMap.set(code, s) }
+    const mk  = r.business_date.slice(0, 7)
+    const key = `${r.segmentation}::${mk}`
+    let s = rawMap.get(key)
+    if (!s) { s = emptyRaw(); rawMap.set(key, s) }
     s.otbNights  += r.otb_nights  ?? 0
     s.otbRevenue += r.otb_revenue ?? 0
     s.lyNights   += r.ly_nights   ?? 0
     s.lyRevenue  += r.ly_revenue  ?? 0
   }
 
-  // Step B: codes 집합의 raw 합산 헬퍼
-  function aggregateCodes(codes: string[]): RawStats {
+  // Step C: codes 집합 + monthKey → raw 합산 헬퍼
+  function getMonthly(codes: string[], mk: string): LyComparisonMonthly {
     const acc = emptyRaw()
     for (const code of codes) {
-      const s = rawMap.get(code)
-      if (s) {
-        acc.otbNights  += s.otbNights
-        acc.otbRevenue += s.otbRevenue
-        acc.lyNights   += s.lyNights
-        acc.lyRevenue  += s.lyRevenue
+      const raw = rawMap.get(`${code}::${mk}`)
+      if (raw) {
+        acc.otbNights  += raw.otbNights
+        acc.otbRevenue += raw.otbRevenue
+        acc.lyNights   += raw.lyNights
+        acc.lyRevenue  += raw.lyRevenue
       }
     }
-    return acc
+    return toMonthly(acc)
   }
 
-  // Step C: HOU 코드 식별
+  // HOU 코드 식별
   const houCodes = new Set<string>()
   for (const s of schema) {
     if (s.segmentation.includes('HOU')) {
@@ -99,11 +138,12 @@ export function buildLyComparisonSegTable(args: {
     }
   }
 
-  // Step D: rows 생성 헬퍼
+  // Step D: row 생성 헬퍼
   function makeRow(s: MarketSchemaRow, codes: string[]): LyComparisonSegRow {
-    const raw = aggregateCodes(codes)
-    const otb = toCell(raw.otbNights, raw.otbRevenue)
-    const ly  = toCell(raw.lyNights,  raw.lyRevenue)
+    const monthly: Record<string, LyComparisonMonthly> = {}
+    for (const mk of monthKeys) {
+      monthly[mk] = getMonthly(codes, mk)
+    }
     return {
       id:                s.id,
       name:              s.name,
@@ -115,9 +155,7 @@ export function buildLyComparisonSegTable(args: {
       fontLightColor:    s.font_light_color ?? null,
       indent:            s.level === 'sub' ? 1 : 0,
       segmentationCodes: codes,
-      otb,
-      ly,
-      gap: { nights: otb.nights - ly.nights, revenue: otb.revenue - ly.revenue },
+      monthly,
     }
   }
 
@@ -138,45 +176,50 @@ export function buildLyComparisonSegTable(args: {
         rows.push(makeRow(child, child.segmentation))
       }
     } else {
-      // mid
       rows.push(makeRow(top, top.segmentation))
     }
   }
 
-  // Step F: summary (HOU 제외) — leaf (mid/sub) rows のみ合算 (main は二重カウント防止)
+  // Step F: summary.monthly (HOU 제외, leaf rows만 합산)
   const nonHouLeafRows = rows.filter(row =>
     row.level !== 'main' &&
     !row.segmentationCodes.some(c => houCodes.has(c))
   )
-  const sumRaw = emptyRaw()
-  for (const row of nonHouLeafRows) {
-    sumRaw.otbNights  += row.otb.nights
-    sumRaw.otbRevenue += row.otb.revenue
-    sumRaw.lyNights   += row.ly.nights
-    sumRaw.lyRevenue  += row.ly.revenue
+
+  const summaryMonthly: LyComparisonSegSummary['monthly'] = {}
+  for (const mk of monthKeys) {
+    const acc = emptyRaw()
+    for (const row of nonHouLeafRows) {
+      for (const code of row.segmentationCodes) {
+        const raw = rawMap.get(`${code}::${mk}`)
+        if (raw) {
+          acc.otbNights  += raw.otbNights
+          acc.otbRevenue += raw.otbRevenue
+          acc.lyNights   += raw.lyNights
+          acc.lyRevenue  += raw.lyRevenue
+        }
+      }
+    }
+    const m = toMonthly(acc)
+    const [y, mo]     = mk.split('-').map(Number)
+    const daysInMonth  = new Date(y, mo, 0).getDate()
+    const denom        = roomCount * daysInMonth
+    const otbOcc     = denom > 0 ? (m.otb.nights / denom) * 100 : 0
+    const otbRevpar  = denom > 0 ?  m.otb.revenue / denom        : 0
+    const lyOcc      = denom > 0 ? (m.ly.nights   / denom) * 100 : 0
+    const lyRevpar   = denom > 0 ?  m.ly.revenue  / denom        : 0
+    summaryMonthly[mk] = {
+      otb: { ...m.otb, occ: otbOcc,  revpar: otbRevpar },
+      ly:  { ...m.ly,  occ: lyOcc,   revpar: lyRevpar  },
+      gap: {
+        nights:     m.gap.nights,
+        adr:        m.gap.adr,
+        revenue:    m.gap.revenue,
+        occDiff:    otbOcc  - lyOcc,
+        revparDiff: otbRevpar - lyRevpar,
+      },
+    }
   }
 
-  // OCC / RevPAR 분모: lyPacing의 unique business_date 수
-  const totalDays = new Set(lyPacing.map(r => r.business_date)).size
-  const denom = roomCount * totalDays
-
-  const sumOtb = toCell(sumRaw.otbNights, sumRaw.otbRevenue)
-  const sumLy  = toCell(sumRaw.lyNights,  sumRaw.lyRevenue)
-  const otbOcc    = denom > 0 ? (sumOtb.nights / denom) * 100 : 0
-  const otbRevpar = denom > 0 ?  sumOtb.revenue / denom        : 0
-  const lyOcc     = denom > 0 ? (sumLy.nights  / denom) * 100 : 0
-  const lyRevpar  = denom > 0 ?  sumLy.revenue / denom         : 0
-
-  const summary: LyComparisonSegSummary = {
-    otb: { ...sumOtb, occ: otbOcc, revpar: otbRevpar },
-    ly:  { ...sumLy,  occ: lyOcc,  revpar: lyRevpar  },
-    gap: {
-      nights:     sumOtb.nights  - sumLy.nights,
-      revenue:    sumOtb.revenue - sumLy.revenue,
-      occDiff:    otbOcc - lyOcc,
-      revparDiff: otbRevpar - lyRevpar,
-    },
-  }
-
-  return { rows, summary }
+  return { rows, summary: { monthly: summaryMonthly }, monthKeys }
 }
