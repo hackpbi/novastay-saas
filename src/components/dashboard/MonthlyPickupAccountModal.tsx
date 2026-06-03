@@ -234,7 +234,11 @@ export default function MonthlyPickupAccountModal({
   useEffect(() => {
     if (open) {
       setPageIndex(0); setSearchQuery(''); setFilterCleared(false)
-      if (!initialFilterMonthKey) setViewMode(initialViewMode ?? 'total')
+      if (initialFilterMonthKey) {
+        setViewMode('monthly')  // 단일 월 필터는 항상 월별 뷰
+      } else {
+        setViewMode(initialViewMode ?? 'total')
+      }
     }
   }, [open])
 
