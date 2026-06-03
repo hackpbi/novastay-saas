@@ -27,6 +27,7 @@ const tdBase: React.CSSProperties = {
   padding: '6px 10px', verticalAlign: 'middle',
 }
 const BORDER = '1px solid var(--divider-color)'
+const DOUBLE = '3px double var(--color-border-default)'
 
 // ─── Format helpers ────────────────────────────────────────────────────────────
 
@@ -90,10 +91,11 @@ function Skeleton({ cols }: { cols: number }) {
 
 // ─── Month cell group ──────────────────────────────────────────────────────────
 
-function MonthCells({ cell, clickable, onClick }: {
+function MonthCells({ cell, clickable, onClick, isLast }: {
   cell:      MonthlyPickupCell
   clickable: boolean
   onClick?:  () => void
+  isLast?:   boolean
 }) {
   const cursor = clickable ? 'pointer' : 'default'
   const td: React.CSSProperties = { ...tdBase, textAlign: 'right', cursor }
@@ -105,7 +107,7 @@ function MonthCells({ cell, clickable, onClick }: {
       <td className="font-mono" style={td} onClick={onClick}>
         <FmtPickupAdr n={cell.pickupAdr} />
       </td>
-      <td className="font-mono" style={td} onClick={onClick}>
+      <td className="font-mono" style={{ ...td, borderRight: isLast ? undefined : DOUBLE }} onClick={onClick}>
         <FmtPickupRevenue n={cell.pickupRevenue} />
       </td>
     </>
@@ -281,8 +283,8 @@ export default function MonthlyPickupSegModal({
                   <tr>
                     <th style={{ ...thBase, textAlign: 'left' }} rowSpan={2}>Segmentation</th>
                     {viewMode === 'monthly' ? (
-                      visibleMonths.map(mk => (
-                        <th key={mk} colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: BORDER }}>
+                      visibleMonths.map((mk, idx) => (
+                        <th key={mk} colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: idx < visibleMonths.length - 1 ? DOUBLE : BORDER }}>
                           {formatYYYYMM(mk)}
                         </th>
                       ))
@@ -294,10 +296,10 @@ export default function MonthlyPickupSegModal({
                   </tr>
                   <tr>
                     {viewMode === 'monthly' ? (
-                      visibleMonths.map(mk => ([
+                      visibleMonths.map((mk, idx) => ([
                         <th key={`${mk}-rn`}  style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>ΔR-N</th>,
                         <th key={`${mk}-adr`} style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>,
-                        <th key={`${mk}-rev`} style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>ΔREV</th>,
+                        <th key={`${mk}-rev`} style={{ ...thBase, textAlign: 'right', borderRight: idx < visibleMonths.length - 1 ? DOUBLE : BORDER, borderBottom: BORDER }}>ΔREV</th>,
                       ]))
                     ) : ([
                       <th key="total-rn"  style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>ΔR-N</th>,
@@ -329,12 +331,12 @@ export default function MonthlyPickupSegModal({
                           ) : row.name}
                         </td>
                         {viewMode === 'monthly' ? (
-                          visibleMonths.map(mk => {
+                          visibleMonths.map((mk, idx) => {
                             const cell = row.monthlyPickup[mk] ?? { pickupNights: 0, pickupAdr: 0, pickupRevenue: 0 }
                             const handleClick = clickable
                               ? () => onPickupCellClick!(row.segmentationCodes, mk, `${row.name} · ${formatYYYYMM(mk)}`)
                               : undefined
-                            return <MonthCells key={mk} cell={cell} clickable={clickable} onClick={handleClick} />
+                            return <MonthCells key={mk} cell={cell} clickable={clickable} onClick={handleClick} isLast={idx === visibleMonths.length - 1} />
                           })
                         ) : (
                           <MonthCells
@@ -353,8 +355,8 @@ export default function MonthlyPickupSegModal({
                   <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: 'var(--color-bg-secondary)' }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)' }}>합계 (HOU 제외)</td>
                     {viewMode === 'monthly' ? (
-                      visibleMonths.map(mk => (
-                        <MonthCells key={mk} cell={summary.monthlyTotals[mk] ?? { pickupNights: 0, pickupAdr: 0, pickupRevenue: 0 }} clickable={false} />
+                      visibleMonths.map((mk, idx) => (
+                        <MonthCells key={mk} cell={summary.monthlyTotals[mk] ?? { pickupNights: 0, pickupAdr: 0, pickupRevenue: 0 }} clickable={false} isLast={idx === visibleMonths.length - 1} />
                       ))
                     ) : (
                       <MonthCells cell={summary.grandTotal} clickable={false} />

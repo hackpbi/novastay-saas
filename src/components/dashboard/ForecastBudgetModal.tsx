@@ -25,6 +25,7 @@ const tdBase: React.CSSProperties = {
   padding: '6px 10px', verticalAlign: 'middle',
 }
 const BORDER = '1px solid var(--divider-color)'
+const DOUBLE = '3px double var(--color-border-default)'
 
 const ZERO_MONTHLY: FcstBudgetMonthly = {
   fcst:   { nights: 0, adr: 0, revenue: 0 },
@@ -113,11 +114,11 @@ function RowCells({ m }: { m: FcstBudgetMonthly }) {
       {/* FCST */}
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: BORDER }}><FmtNights n={m.fcst.nights} /></td>
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}><FmtAdr n={m.fcst.adr} /></td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: BORDER }}><FmtRevenue n={m.fcst.revenue} /></td>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: DOUBLE }}><FmtRevenue n={m.fcst.revenue} /></td>
       {/* BUDGET */}
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}><FmtNights n={m.budget.nights} /></td>
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}><FmtAdr n={m.budget.adr} /></td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: BORDER }}><FmtRevenue n={m.budget.revenue} /></td>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: DOUBLE }}><FmtRevenue n={m.budget.revenue} /></td>
       {/* GAP */}
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}><FmtGapNights n={m.gap.nights} /></td>
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}><FmtGapAdr n={m.gap.adr} /></td>
@@ -266,17 +267,17 @@ export default function ForecastBudgetModal({
                 <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                   <tr>
                     <th style={{ ...thBase, textAlign: 'left' }} rowSpan={2}>Segmentation</th>
-                    <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: BORDER }}>FCST</th>
-                    <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderRight: BORDER }}>BUDGET</th>
+                    <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: DOUBLE }}>FCST</th>
+                    <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderRight: DOUBLE }}>BUDGET</th>
                     <th colSpan={3} style={{ ...thBase, textAlign: 'center' }}>GAP</th>
                   </tr>
                   <tr>
                     <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>R-N</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ADR</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>REV</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE, borderBottom: BORDER }}>REV</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>R-N</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ADR</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>REV</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE, borderBottom: BORDER }}>REV</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔR-N</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔREV</th>

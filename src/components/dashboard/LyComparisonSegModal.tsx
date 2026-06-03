@@ -22,6 +22,7 @@ const tdBase: React.CSSProperties = {
   padding: '6px 10px', verticalAlign: 'middle',
 }
 const BORDER = '1px solid var(--divider-color)'
+const DOUBLE = '3px double var(--color-border-default)'
 
 // ─── Format helpers ────────────────────────────────────────────────────────────
 
@@ -98,11 +99,11 @@ function MonthCells({ m, clickable, onGapClick }: {
       {/* OTB */}
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: BORDER }}><FmtNights n={m.otb.nights} /></td>
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}><FmtAdr n={m.otb.adr} /></td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: BORDER }}><FmtRevenue n={m.otb.revenue} /></td>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: DOUBLE }}><FmtRevenue n={m.otb.revenue} /></td>
       {/* LY */}
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}><FmtNights n={m.ly.nights} /></td>
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}><FmtAdr n={m.ly.adr} /></td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: BORDER }}><FmtRevenue n={m.ly.revenue} /></td>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: DOUBLE }}><FmtRevenue n={m.ly.revenue} /></td>
       {/* GAP */}
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right', cursor }} onClick={onGapClick}><FmtGapNights n={m.gap.nights} /></td>
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right', cursor }} onClick={onGapClick}><FmtGapAdr n={m.gap.adr} /></td>
@@ -270,17 +271,17 @@ export default function LyComparisonSegModal({
                 <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                   <tr>
                     <th style={{ ...thBase, textAlign: 'left' }} rowSpan={2}>Segmentation</th>
-                    <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: BORDER }}>현재 OTB</th>
-                    <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderRight: BORDER }}>작년 OTB</th>
+                    <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: DOUBLE }}>현재 OTB</th>
+                    <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderRight: DOUBLE }}>작년 OTB</th>
                     <th colSpan={3} style={{ ...thBase, textAlign: 'center' }}>GAP</th>
                   </tr>
                   <tr>
                     <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>R-N</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ADR</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>REV</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE, borderBottom: BORDER }}>REV</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>R-N</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ADR</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>REV</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE, borderBottom: BORDER }}>REV</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔR-N</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔREV</th>
@@ -323,10 +324,10 @@ export default function LyComparisonSegModal({
                       <>
                         <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderLeft: BORDER }}><FmtNights n={sumMonth.otb.nights} /></td>
                         <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtAdr n={sumMonth.otb.adr} /></td>
-                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderRight: BORDER }}><FmtRevenue n={sumMonth.otb.revenue} /></td>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderRight: DOUBLE }}><FmtRevenue n={sumMonth.otb.revenue} /></td>
                         <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtNights n={sumMonth.ly.nights} /></td>
                         <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtAdr n={sumMonth.ly.adr} /></td>
-                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderRight: BORDER }}><FmtRevenue n={sumMonth.ly.revenue} /></td>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderRight: DOUBLE }}><FmtRevenue n={sumMonth.ly.revenue} /></td>
                         <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtGapNights n={sumMonth.gap.nights} /></td>
                         <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtGapAdr n={sumMonth.gap.adr} /></td>
                         <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtGapRevenue n={sumMonth.gap.revenue} /></td>

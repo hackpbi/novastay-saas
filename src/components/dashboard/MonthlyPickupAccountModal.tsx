@@ -27,6 +27,7 @@ const tdBase: React.CSSProperties = {
   padding: '6px 10px', verticalAlign: 'middle',
 }
 const BORDER = '1px solid var(--divider-color)'
+const DOUBLE = '3px double var(--color-border-default)'
 const ZERO_CELL: MonthlyPickupCell = { pickupNights: 0, pickupAdr: 0, pickupRevenue: 0 }
 
 // ─── Format helpers ────────────────────────────────────────────────────────────
@@ -79,7 +80,7 @@ function FmtRevpar({ n }: { n: number }) {
 
 // ─── Month cells ───────────────────────────────────────────────────────────────
 
-function MonthCells({ cell }: { cell: MonthlyPickupCell }) {
+function MonthCells({ cell, isLast }: { cell: MonthlyPickupCell; isLast?: boolean }) {
   return (
     <>
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: BORDER }}>
@@ -88,7 +89,7 @@ function MonthCells({ cell }: { cell: MonthlyPickupCell }) {
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}>
         <FmtPickupAdr n={cell.pickupAdr} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: isLast ? undefined : DOUBLE }}>
         <FmtPickupRevenue n={cell.pickupRevenue} />
       </td>
     </>
@@ -457,8 +458,8 @@ export default function MonthlyPickupAccountModal({
                   <tr>
                     <th style={{ ...thBase, textAlign: 'left' }} rowSpan={2}>Account</th>
                     {viewMode === 'monthly' ? (
-                      visiblePageMonths.map(mk => (
-                        <th key={mk} colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: BORDER }}>
+                      visiblePageMonths.map((mk, idx) => (
+                        <th key={mk} colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: idx < visiblePageMonths.length - 1 ? DOUBLE : BORDER }}>
                           {formatYYYYMM(mk)}
                         </th>
                       ))
@@ -470,10 +471,10 @@ export default function MonthlyPickupAccountModal({
                   </tr>
                   <tr>
                     {viewMode === 'monthly' ? (
-                      visiblePageMonths.map(mk => ([
+                      visiblePageMonths.map((mk, idx) => ([
                         <th key={`${mk}-rn`}  style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>ΔR-N</th>,
                         <th key={`${mk}-adr`} style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>,
-                        <th key={`${mk}-rev`} style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>ΔREV</th>,
+                        <th key={`${mk}-rev`} style={{ ...thBase, textAlign: 'right', borderRight: idx < visiblePageMonths.length - 1 ? DOUBLE : BORDER, borderBottom: BORDER }}>ΔREV</th>,
                       ]))
                     ) : ([
                       <th key="total-rn"  style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>ΔR-N</th>,
@@ -511,7 +512,7 @@ export default function MonthlyPickupAccountModal({
                           </td>
                           {viewMode === 'monthly' ? (
                             visiblePageMonths.map(mk => (
-                              <MonthCells key={mk} cell={group.monthlyTotals[mk] ?? ZERO_CELL} />
+                              <MonthCells key={mk} cell={group.monthlyTotals[mk] ?? ZERO_CELL} isLast={visiblePageMonths.indexOf(mk) === visiblePageMonths.length - 1} />
                             ))
                           ) : (
                             <MonthCells cell={group.totalPickup} />
@@ -534,7 +535,7 @@ export default function MonthlyPickupAccountModal({
                             </td>
                             {viewMode === 'monthly' ? (
                               visiblePageMonths.map(mk => (
-                                <MonthCells key={mk} cell={row.monthlyPickup[mk] ?? ZERO_CELL} />
+                                <MonthCells key={mk} cell={row.monthlyPickup[mk] ?? ZERO_CELL} isLast={visiblePageMonths.indexOf(mk) === visiblePageMonths.length - 1} />
                               ))
                             ) : (
                               <MonthCells cell={row.totalPickup} />
@@ -557,7 +558,7 @@ export default function MonthlyPickupAccountModal({
                     </td>
                     {viewMode === 'monthly' ? (
                       visiblePageMonths.map(mk => (
-                        <MonthCells key={mk} cell={summary.monthlyTotals[mk] ?? ZERO_CELL} />
+                        <MonthCells key={mk} cell={summary.monthlyTotals[mk] ?? ZERO_CELL} isLast={visiblePageMonths.indexOf(mk) === visiblePageMonths.length - 1} />
                       ))
                     ) : (
                       <MonthCells cell={summary.grandTotal} />
