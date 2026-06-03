@@ -34,8 +34,8 @@ interface MonthData {
   occ: MetricData
   adr: MetricData
   rev: MetricData
-  forecast: { occ: number; adr: number; adrUnit: string; rev: number; revUnit: string }
-  goal: { pct: number; target: number; targetUnit: string; otb: number; fc: number }
+  forecast?: { occ: number | null; adr: number | null; revenue: number | null }
+  budget?:   { occ: number | null; adr: number | null; revenue: number | null }
   pu: number
   rmAction: string | null
 }
@@ -55,8 +55,7 @@ const MONTHS: MonthData[] = [
     occ: { current: 60.2, unit: '%', yoy: -4.6, yoyUnit: '%', fit: -1,  grp: -29 },
     adr: { current: 129,  unit: 'k', yoy: -1,   yoyUnit: 'k', fit:  0,  grp:  -9 },
     rev: { current: 167.4,unit: 'M', yoy: -13.6,yoyUnit: 'M', fit: -1,  grp: -35 },
-    forecast: { occ: 63.3, adr: 125, adrUnit: 'k', rev: 171,   revUnit: 'M' },
-    goal: { pct: 71, target: 197, targetUnit: 'M', otb: 60, fc: 63 },
+    forecast: { occ: 63.3, adr: 125_000, revenue: 171_000_000 },
     pu: 6, rmAction: null,
   },
   {
@@ -64,8 +63,7 @@ const MONTHS: MonthData[] = [
     occ: { current: 34.3, unit: '%', yoy: -3.4, yoyUnit: '%', fit:  27, grp: -57 },
     adr: { current: 152,  unit: 'k', yoy:  3,   yoyUnit: 'k', fit:  -6, grp:  -6 },
     rev: { current: 116.7,unit: 'M', yoy: -9.6, yoyUnit: 'M', fit:  20, grp: -59 },
-    forecast: { occ: 61.6, adr: 132, adrUnit: 'k', rev: 181.7, revUnit: 'M' },
-    goal: { pct: 80, target: 272, targetUnit: 'M', otb: 34, fc: 62 },
+    forecast: { occ: 61.6, adr: 132_000, revenue: 181_700_000 },
     pu: 3, rmAction: null,
   },
   {
@@ -73,8 +71,7 @@ const MONTHS: MonthData[] = [
     occ: { current: 18.8, unit: '%', yoy:  8.7, yoyUnit: '%', fit:  96, grp:  77 },
     adr: { current: 119,  unit: 'k', yoy: -15,  yoyUnit: 'k', fit:  -1, grp: -23 },
     rev: { current: 48.5, unit: 'M', yoy:  19.0,yoyUnit: 'M', fit:  94, grp:  37 },
-    forecast: { occ: 60.3, adr: 118, adrUnit: 'k', rev: 153.2, revUnit: 'M' },
-    goal: { pct: 88, target: 227, targetUnit: 'M', otb: 19, fc: 60 },
+    forecast: { occ: 60.3, adr: 118_000, revenue: 153_200_000 },
     pu: 7, rmAction: null,
   },
   {
@@ -82,8 +79,7 @@ const MONTHS: MonthData[] = [
     occ: { current: 12.1, unit: '%', yoy:  15.3,yoyUnit: '%', fit:  42, grp: -12 },
     adr: { current: 145,  unit: 'k', yoy:  8,   yoyUnit: 'k', fit:   5, grp: -15 },
     rev: { current: 31.2, unit: 'M', yoy:  24.5,yoyUnit: 'M', fit:  38, grp: -18 },
-    forecast: { occ: 72.1, adr: 148, adrUnit: 'k', rev: 189.3, revUnit: 'M' },
-    goal: { pct: 43, target: 312, targetUnit: 'M', otb: 12, fc: 72 },
+    forecast: { occ: 72.1, adr: 148_000, revenue: 189_300_000 },
     pu: 12, rmAction: '성수기 요금 전략을 검토하세요.',
   },
   {
@@ -91,8 +87,7 @@ const MONTHS: MonthData[] = [
     occ: { current: 8.4,  unit: '%', yoy:  22.1,yoyUnit: '%', fit:  67, grp:  31 },
     adr: { current: 168,  unit: 'k', yoy:  12,  yoyUnit: 'k', fit:   8, grp:  -7 },
     rev: { current: 22.8, unit: 'M', yoy:  31.2,yoyUnit: 'M', fit:  71, grp:  -9 },
-    forecast: { occ: 78.5, adr: 172, adrUnit: 'k', rev: 241.6, revUnit: 'M' },
-    goal: { pct: 31, target: 398, targetUnit: 'M', otb: 8,  fc: 79 },
+    forecast: { occ: 78.5, adr: 172_000, revenue: 241_600_000 },
     pu: 18, rmAction: null,
   },
   {
@@ -100,8 +95,7 @@ const MONTHS: MonthData[] = [
     occ: { current: 4.2,  unit: '%', yoy:  -2.8,yoyUnit: '%', fit:  15, grp: -44 },
     adr: { current: 135,  unit: 'k', yoy:  -5,  yoyUnit: 'k', fit:  -3, grp: -18 },
     rev: { current: 8.9,  unit: 'M', yoy:  -4.1,yoyUnit: 'M', fit:  22, grp: -51 },
-    forecast: { occ: 65.8, adr: 142, adrUnit: 'k', rev: 177.4, revUnit: 'M' },
-    goal: { pct: 18, target: 356, targetUnit: 'M', otb: 4,  fc: 66 },
+    forecast: { occ: 65.8, adr: 142_000, revenue: 177_400_000 },
     pu: 24, rmAction: null,
   },
 ]
@@ -239,6 +233,33 @@ function MetricRow({ label, value, metric, subValue, tooltip, yoyOverride, yoyLo
 
 // ─── Month Card ─────────────────────────────────────────────────────────────────
 
+// ─── Forecasting helpers ───────────────────────────────────────────────────────
+
+function fmtFcOcc(n: number | null | undefined): string {
+  if (n == null) return '-'
+  return `${n.toFixed(1)}%`
+}
+function fmtFcAdr(n: number | null | undefined): string {
+  if (n == null) return '-'
+  return `${Math.round(n / 1000)}k`
+}
+function fmtFcRevenue(n: number | null | undefined): string {
+  if (n == null) return '-'
+  return `${(n / 1_000_000).toFixed(1)}M`
+}
+function fmtFcPct(n: number | null): string {
+  if (n == null) return '-'
+  return `${n.toFixed(1)}%`
+}
+function getAchievementColor(pct: number | null): string {
+  if (pct === null) return 'var(--brand-dimmed)'
+  if (pct >= 100) return 'var(--color-positive)'
+  if (pct >= 95)  return '#ffc857'
+  return 'var(--color-negative)'
+}
+
+// ─── Month Card ─────────────────────────────────────────────────────────────────
+
 function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSegClick, onAccountClick, pickupNights, onLyClick }: {
   data:             MonthData
   stats:            MonthStats
@@ -251,7 +272,11 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
   pickupNights:     number
   onLyClick?:       (year: number, month: number) => void
 }) {
-  const { year, month, occ, adr, rev, forecast, goal, pu, rmAction } = data
+  const { year, month, occ, adr, rev, forecast, budget, pu, rmAction } = data
+
+  const achievementOcc = forecast?.occ && budget?.occ ? (forecast.occ / budget.occ) * 100 : null
+  const achievementAdr = forecast?.adr && budget?.adr ? (forecast.adr / budget.adr) * 100 : null
+  const achievementRev = forecast?.revenue && budget?.revenue ? (forecast.revenue / budget.revenue) * 100 : null
   // occ, adr, rev are mock data used as fallback; stats holds live OTB values
 
   const occValue = loading ? '-' : roomCount === 0 ? '-' : `${stats.occ.toFixed(1)}%`
@@ -261,8 +286,6 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
   const fitPct = yoyStats.byGroup.find(g => g.group === 'fit')?.varPct ?? null
   const grpPct = yoyStats.byGroup.find(g => g.group === 'group')?.varPct ?? null
 
-  const otbBarPct  = Math.min((goal.otb / goal.pct) * 100, 100)
-  const fcBarExtra = Math.max(0, Math.min(((goal.fc - goal.otb) / goal.pct) * 100, 100 - otbBarPct))
 
   return (
     <div
@@ -335,75 +358,41 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
       </div>
 
 
-      {/* ── Forecasting ── */}
-      <div
-        className="mx-4 mt-2 rounded-xl p-3.5"
-        style={{
-          background: 'var(--forecast-bg)',
-          border:     '1px solid var(--forecast-border)',
-        }}
-      >
-        <div className="flex items-center gap-2 mb-2.5">
-          <span className="text-[10px] font-bold text-accent-primary tracking-[0.12em] uppercase">
-            Forecasting
-          </span>
-          <div className="flex-1 h-px" style={{ background: 'var(--forecast-line)' }} />
+      {/* ── Forecasting (FC / BGT / 달성 매트릭스) ── */}
+      <div className="mx-4 mt-2 rounded-xl p-3.5" style={{ background: 'var(--forecast-bg)', border: '1px solid var(--forecast-border)' }}>
+        <div style={{ fontSize: 10, letterSpacing: '1.5px', fontWeight: 500, color: 'var(--color-accent-primary)', marginBottom: 10, textTransform: 'uppercase' }}>
+          Forecasting
         </div>
-        <div className="grid grid-cols-3 gap-1 text-center">
-          {[
-            { label: 'OCC', value: `${forecast.occ}%` },
-            { label: 'ADR', value: `${forecast.adr}${forecast.adrUnit}` },
-            { label: 'REV', value: `${forecast.rev}${forecast.revUnit}` },
-          ].map(({ label, value }) => (
-            <div key={label}>
-              <p className="text-[9px] text-brand-muted mb-0.5 uppercase tracking-wider">{label}</p>
-              <p className="font-mono text-sm font-semibold text-accent-primary">{value}</p>
-            </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr 1fr', gap: '8px 10px', alignItems: 'center' }}>
+          {/* 헤더 */}
+          <div />
+          {['OCC', 'ADR', 'REV'].map(h => (
+            <div key={h} style={{ fontSize: 9, color: 'var(--brand-dimmed)', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{h}</div>
           ))}
-        </div>
-      </div>
-
-      {/* ── Goal ── */}
-      <div className="px-5 py-3.5">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] font-semibold text-brand-dimmed tracking-widest uppercase">Goal</span>
-          <div className="flex items-center gap-1.5">
-            <span className="font-mono text-base font-bold" style={{ color: 'var(--color-text-primary)' }}>
-              {goal.pct}%
-            </span>
-            <span className="text-[10px] text-brand-dimmed">/ 목표 {goal.target}{goal.targetUnit}</span>
-          </div>
-        </div>
-
-        <div className="h-2 rounded-full bg-bg-elevated overflow-hidden">
-          <div className="h-full flex">
-            <div
-              className="h-full rounded-l-full transition-all duration-700"
-              style={{ width: `${otbBarPct}%`, background: 'var(--color-info)' }}
-            />
-            <div
-              className="h-full transition-all duration-700"
-              style={{
-                width:        `${fcBarExtra}%`,
-                background:   'var(--color-accent-primary)',
-                borderRadius: fcBarExtra > 0 ? '0 2px 2px 0' : 0,
-              }}
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between mt-1.5">
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1 text-[10px] text-brand-muted">
-              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'var(--color-info)' }} />
-              OTB {goal.otb}%
-            </span>
-            <span className="flex items-center gap-1 text-[10px] text-brand-muted">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent-primary shrink-0" />
-              FC {goal.fc}%
-            </span>
-          </div>
-          <span className="text-[10px] text-brand-dimmed">목표 {goal.target}{goal.targetUnit}</span>
+          {/* FC 행 */}
+          <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)' }}>FC</div>
+          <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}>{fmtFcOcc(forecast?.occ)}</div>
+          <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}>{fmtFcAdr(forecast?.adr)}</div>
+          <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}>{fmtFcRevenue(forecast?.revenue)}</div>
+          {/* BGT 행 */}
+          <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)' }}>BGT</div>
+          <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}>{fmtFcOcc(budget?.occ)}</div>
+          <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}>{fmtFcAdr(budget?.adr)}</div>
+          <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}>{fmtFcRevenue(budget?.revenue)}</div>
+          {/* 달성 행 */}
+          {['달성', 'occ', 'adr', 'rev'].map((key, i) => {
+            const borderTop = '1px solid var(--color-border-default)'
+            const pt = '7px'
+            if (i === 0) return (
+              <div key={key} style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)', borderTop, paddingTop: pt }}>달성</div>
+            )
+            const val = i === 1 ? achievementOcc : i === 2 ? achievementAdr : achievementRev
+            return (
+              <div key={key} className="font-mono" style={{ fontSize: 12, fontWeight: 600, textAlign: 'right', color: getAchievementColor(val), borderTop, paddingTop: pt }}>
+                {fmtFcPct(val)}
+              </div>
+            )
+          })}
         </div>
       </div>
 
