@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { ArrowUp, ArrowDown, AlignJustify, User, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { usePickupData } from '@/hooks/usePickupData'
@@ -15,6 +15,9 @@ import LyComparisonAccountModal   from '@/components/dashboard/LyComparisonAccou
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import { useFcstDateContext } from '@/contexts/FcstDateContext'
+import { useLatestConfirmedBudgetDate } from '@/hooks/useLatestConfirmedBudgetDate'
+import { useForecastMonthly, type ForecastMonthlyRow } from '@/hooks/useForecastMonthly'
+import { useBudgetMonthly, type BudgetMonthlyRow } from '@/hooks/useBudgetMonthly'
 import { supabase } from '@/lib/supabase'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -554,6 +557,64 @@ export default function DashboardPage() {
   })
   const roomCount = hotelDetail?.room_count ?? 0
 
+  // ── Forecast / Budget 월별 집계 ──────────────────────────────────────────────
+  const { data: budgetDate = null } = useLatestConfirmedBudgetDate(hotelId || undefined)
+
+  // 카드가 보여주는 연도 (otbDate 기준 첫 번째 월)
+  const cardYear = otbDate ? new Date(otbDate).getFullYear() : new Date().getFullYear()
+
+  const { data: forecastRows = [] } = useForecastMonthly({
+    hotelId: hotelId || undefined,
+    year:    cardYear,
+    updateDate: fcstDate || null,
+  })
+
+  const { data: budgetRows = [] } = useBudgetMonthly({
+    hotelId: hotelId || undefined,
+    year:    cardYear,
+    updateDate: budgetDate,
+  })
+
+  type MonthForecast = { occ: number | null; adr: number | null; revenue: number | null }
+
+  function aggregateByMonth(
+    rows: (ForecastMonthlyRow | BudgetMonthlyRow)[],
+    nightsKey: 'forecast_nights' | 'budget_nights',
+    revenueKey: 'forecast_revenue' | 'budget_revenue',
+    rc: number,
+    yr: number,
+  ): Record<number, MonthForecast> {
+    const acc: Record<number, { nights: number; revenue: number }> = {}
+    for (const r of rows) {
+      const n = (r as any)[nightsKey] as number
+      const v = (r as any)[revenueKey] as number
+      if (!acc[r.month_num]) acc[r.month_num] = { nights: 0, revenue: 0 }
+      acc[r.month_num].nights  += n
+      acc[r.month_num].revenue += v
+    }
+    const result: Record<number, MonthForecast> = {}
+    for (const [mStr, sum] of Object.entries(acc)) {
+      const m           = Number(mStr)
+      const daysInMonth = new Date(yr, m, 0).getDate()
+      result[m] = {
+        occ:     rc > 0 && sum.nights > 0 ? (sum.nights / (rc * daysInMonth)) * 100 : null,
+        adr:     sum.nights > 0 ? sum.revenue / sum.nights : null,
+        revenue: sum.revenue > 0 ? sum.revenue : null,
+      }
+    }
+    return result
+  }
+
+  const forecastByMonth = useMemo(
+    () => aggregateByMonth(forecastRows, 'forecast_nights', 'forecast_revenue', roomCount, cardYear),
+    [forecastRows, roomCount, cardYear],
+  )
+
+  const budgetByMonth = useMemo(
+    () => aggregateByMonth(budgetRows, 'budget_nights', 'budget_revenue', roomCount, cardYear),
+    [budgetRows, roomCount, cardYear],
+  )
+
   function getMonthStats(year: number, month: number): MonthStats {
     const monthData = otbData.filter(row => {
       const d = new Date(row.business_date)
@@ -694,7 +755,7 @@ export default function DashboardPage() {
         {visibleMonths.map(m => (
           <MonthCard
             key={`${m.year}-${m.month}`}
-            data={m}
+            data={{ ...m, forecast: forecastByMonth[m.month], budget: budgetByMonth[m.month] }}
             stats={getMonthStats(m.year, m.month)}
             loading={pickupLoading}
             roomCount={roomCount}
