@@ -375,6 +375,8 @@ export default function BudgetPage() {
   const [isDirectEdit,    setIsDirectEdit]    = useState(true)
   const [modalSeg,        setModalSeg]        = useState<string | null>(null)
   const [segNameMap,      setSegNameMap]      = useState<Record<string, string>>({})
+  const [autoLoading,     setAutoLoading]     = useState(false)
+  const [autoLoadPopup,   setAutoLoadPopup]   = useState<{ date: string } | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -394,6 +396,85 @@ export default function BudgetPage() {
       })
   }, [hotelId])
 
+  // ── 자동 로딩 (mount + year 변경 시) ─────────────────────────────────────────
+  const applyMtdRows = (rows: any[]) => {
+    const newData: BudgetMonthData = {}
+    rows.forEach((r: any) => {
+      if (!newData[r.segmentation]) newData[r.segmentation] = {}
+      newData[r.segmentation][r.month] = { rn: r.budget_nights ?? 0, rev: r.budget_revenue ?? 0 }
+    })
+    setBudgetData(newData)
+  }
+
+  useEffect(() => {
+    if (!hotelId) return
+    setAutoLoadPopup(null)
+    setAutoLoading(true)
+
+    ;(async () => {
+      try {
+        // 1순위: 확정 MTD 최신 update_date 조회
+        const { data: confirmedDates } = await (supabase as any)
+          .from('a04_budget_mtd')
+          .select('update_date')
+          .eq('hotel_id', hotelId)
+          .eq('year', selectedYear)
+          .eq('confirmed', true)
+          .order('update_date', { ascending: false })
+          .limit(1)
+
+        if (confirmedDates && confirmedDates.length > 0) {
+          const latestDate = confirmedDates[0].update_date
+          const { data: rows } = await (supabase as any)
+            .from('a04_budget_mtd')
+            .select('year, month, segmentation, budget_nights, budget_revenue')
+            .eq('hotel_id',    hotelId)
+            .eq('year',        selectedYear)
+            .eq('update_date', latestDate)
+            .eq('confirmed',   true)
+          if (rows && rows.length > 0) { applyMtdRows(rows); return }
+        }
+
+        // 2순위: 미확정 MTD 최신 update_date 조회
+        const { data: unconfirmedDates } = await (supabase as any)
+          .from('a04_budget_mtd')
+          .select('update_date')
+          .eq('hotel_id', hotelId)
+          .eq('year', selectedYear)
+          .eq('confirmed', false)
+          .order('update_date', { ascending: false })
+          .limit(1)
+
+        if (unconfirmedDates && unconfirmedDates.length > 0) {
+          setAutoLoadPopup({ date: unconfirmedDates[0].update_date })
+        }
+        // 3순위: 둘 다 없으면 빈 표 유지
+      } catch (e) {
+        console.error('자동 로딩 오류:', e)
+      } finally {
+        setAutoLoading(false)
+      }
+    })()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hotelId, selectedYear])
+
+  const handleAutoLoadConfirm = async () => {
+    if (!autoLoadPopup) return
+    try {
+      const { data: rows } = await (supabase as any)
+        .from('a04_budget_mtd')
+        .select('year, month, segmentation, budget_nights, budget_revenue')
+        .eq('hotel_id',    hotelId)
+        .eq('year',        selectedYear)
+        .eq('update_date', autoLoadPopup.date)
+        .eq('confirmed',   false)
+      if (rows && rows.length > 0) applyMtdRows(rows)
+    } catch (e) {
+      console.error('미확정 자동 로딩 오류:', e)
+    } finally {
+      setAutoLoadPopup(null)
+    }
+  }
 
   useEffect(() => {
     if (!loadModalOpen || !hotelId) return
@@ -1535,6 +1616,33 @@ export default function BudgetPage() {
       )}
 
 
+      {/* ── 자동 로딩 — 미확정 데이터 확인 팝업 ── */}
+      {autoLoadPopup && (
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setAutoLoadPopup(null)} />
+          <div className="relative rounded-2xl p-6 w-full max-w-sm space-y-4"
+            style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-elevated)' }}>
+            <p className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>확정 데이터 없음</p>
+            <p className="text-sm" style={{ color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
+              {selectedYear}년 확정 예산 데이터가 없습니다.<br />
+              미확정 최근 데이터({autoLoadPopup.date})를 불러올까요?
+            </p>
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setAutoLoadPopup(null)}
+                className="flex-1 py-2 rounded-lg text-sm hover:opacity-80 transition-all"
+                style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}>
+                취소
+              </button>
+              <button onClick={handleAutoLoadConfirm}
+                className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all hover:-translate-y-px"
+                style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
+                불러오기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── 데이터 삭제 확인 모달 ── */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4">
@@ -2207,6 +2315,12 @@ export default function BudgetPage() {
       )}
 
     <div className="space-y-5 animate-fade-in">
+      {autoLoading && (
+        <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+          <span className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin inline-block" style={{ borderColor: 'var(--color-accent-primary)', borderTopColor: 'transparent' }} />
+          예산 데이터 자동 로딩 중...
+        </div>
+      )}
 
       {/* ── 에러 배너 ── */}
       {saveError && (

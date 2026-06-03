@@ -248,7 +248,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
   onSegClick?:      (year: number, month: number) => void
   onAccountClick?:  (year: number, month: number) => void
   pickupNights:     number
-  onLyClick?:       () => void
+  onLyClick?:       (year: number, month: number) => void
 }) {
   const { year, month, occ, adr, rev, forecast, goal, pu, rmAction } = data
   // occ, adr, rev are mock data used as fallback; stats holds live OTB values
@@ -301,7 +301,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
             showFitGrp: true,
           }}
           yoyLoading={yoyLoading}
-          onLyClick={onLyClick}
+          onLyClick={onLyClick ? () => onLyClick(year, month) : undefined}
         />
         <MetricRow
           label="ADR"
@@ -314,7 +314,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
             showFitGrp: false,
           }}
           yoyLoading={yoyLoading}
-          onLyClick={onLyClick}
+          onLyClick={onLyClick ? () => onLyClick(year, month) : undefined}
         />
         <MetricRow
           label="REV"
@@ -329,7 +329,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
             showFitGrp: true,
           }}
           yoyLoading={yoyLoading}
-          onLyClick={onLyClick}
+          onLyClick={onLyClick ? () => onLyClick(year, month) : undefined}
         />
       </div>
 
@@ -481,9 +481,11 @@ export default function DashboardPage() {
   const [page, setPage] = useState(0)
   const [segModal,     setSegModal]     = useState<{ open: boolean; year?: number; month?: number }>({ open: false })
   const [monthlyPickupSegOpen,       setMonthlyPickupSegOpen]       = useState(false)
-  const [lyComparisonSegOpen,        setLyComparisonSegOpen]        = useState(false)
+  const [lyComparisonSegModal,       setLyComparisonSegModal]       = useState<{
+    open: boolean; monthKey?: string
+  }>({ open: false })
   const [lyComparisonAccountModal,   setLyComparisonAccountModal]   = useState<{
-    open: boolean; filterSegCodes?: string[]; filterLabel?: string
+    open: boolean; monthKey?: string; filterSegCodes?: string[]; filterLabel?: string
   }>({ open: false })
   const [monthlyPickupAccountModal,  setMonthlyPickupAccountModal]  = useState<{
     open: boolean; filterSegCodes?: string[]; filterMonthKey?: string; filterLabel?: string; initialViewMode?: 'monthly' | 'total'
@@ -709,30 +711,38 @@ export default function DashboardPage() {
             yoyLoading={lyLoading}
             onSegClick={(y, mo) => setSegModal({ open: true, year: y, month: mo })}
             onAccountClick={(y, mo) => setAccountModal({ open: true, year: y, month: mo })}
-            onLyClick={() => setLyComparisonSegOpen(true)}
+            onLyClick={(year, month) => {
+              const monthKey = `${year}-${String(month).padStart(2, '0')}`
+              setLyComparisonSegModal({ open: true, monthKey })
+            }}
             pickupNights={getMonthPickup(m.year, m.month)}
           />
         ))}
       </div>
 
       <LyComparisonSegModal
-        open={lyComparisonSegOpen}
-        onClose={() => setLyComparisonSegOpen(false)}
+        open={lyComparisonSegModal.open}
+        onClose={() => setLyComparisonSegModal({ open: false })}
         roomCount={roomCount}
-        onAccountDrillDown={(segCodes, label) => {
-          setLyComparisonSegOpen(false)
-          setLyComparisonAccountModal({ open: true, filterSegCodes: segCodes, filterLabel: label })
+        initialMonthKey={lyComparisonSegModal.monthKey}
+        onAccountDrillDown={(segCodes, monthKey, label) => {
+          setLyComparisonSegModal({ open: false })
+          setLyComparisonAccountModal({ open: true, monthKey, filterSegCodes: segCodes, filterLabel: label })
         }}
       />
       <LyComparisonAccountModal
         open={lyComparisonAccountModal.open}
         onClose={() => setLyComparisonAccountModal({ open: false })}
         roomCount={roomCount}
+        initialMonthKey={lyComparisonAccountModal.monthKey}
         initialFilterSegCodes={lyComparisonAccountModal.filterSegCodes}
         initialFilterLabel={lyComparisonAccountModal.filterLabel}
         onBackToSeg={
           lyComparisonAccountModal.filterSegCodes
-            ? () => { setLyComparisonAccountModal({ open: false }); setLyComparisonSegOpen(true) }
+            ? (monthKey) => {
+                setLyComparisonAccountModal({ open: false })
+                setLyComparisonSegModal({ open: true, monthKey })
+              }
             : undefined
         }
       />
