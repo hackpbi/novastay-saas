@@ -486,9 +486,7 @@ export default function MonthlyPickupAccountModal({
                 <tbody>
                   {visibleGroups.map(group => {
                     const collapsed = effectiveCollapsedKeys.has(group.key)
-                    const label     = group.parentName
-                      ? `${group.parentName} · ${group.segmentationName}`
-                      : group.segmentationName
+                    const label     = group.segmentationName
 
                     return (
                       <>
