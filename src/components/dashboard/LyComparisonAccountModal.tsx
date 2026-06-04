@@ -202,6 +202,15 @@ export default function LyComparisonAccountModal({
       g = g.map(group => ({ ...group, rows: group.rows.filter(r => r.account_name.toLowerCase().includes(q)) }))
            .filter(group => group.rows.length > 0)
     }
+
+    // 빈 데이터 필터: 모든 월에서 OTB nights = 0 AND LY nights = 0 인 행 제거
+    g = g.map(group => ({
+      ...group,
+      rows: group.rows.filter(r =>
+        Object.values(r.monthly).some(m => m.otb.nights > 0 || m.ly.nights > 0)
+      ),
+    })).filter(group => group.rows.length > 0)
+
     return g
   }, [groups, effectiveSegCodes, searchQuery, schema])
 
