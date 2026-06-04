@@ -4,8 +4,9 @@ import React, { useState, useMemo, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Plus, Trash2,
-  Loader2, X, Save, GripVertical, Pencil, Palette, RefreshCw,
+  Loader2, X, Save, GripVertical, Pencil, Palette, RefreshCw, Pipette,
 } from 'lucide-react'
+import { HexColorPicker } from 'react-colorful'
 import {
   DndContext, type DragEndEvent, PointerSensor,
   useSensor, useSensors, closestCenter,
@@ -174,35 +175,95 @@ function LevelBadge({ level }: { level: SchemaLevel }) {
 
 // ── Excel Color Picker ────────────────────────────────────────────────────────
 
+// SVG 스포이드 커서 (URL 인코딩)
+const DROPPER_CURSOR = 'url("data:image/svg+xml;utf8,' + encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg>`
+) + '") 2 18, crosshair'
+
+function rgbToHex(rgb: string): string | null {
+  const m = rgb.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/)
+  if (!m) return null
+  return '#' + [m[1], m[2], m[3]].map(n => Number(n).toString(16).padStart(2, '0')).join('')
+}
+
 function ExcelColorPicker({ value, onChange, openUp }: { value: string; onChange: (v: string) => void; openUp?: boolean }) {
   const [open,       setOpen]       = useState(false)
-  const [customMode, setCustomMode] = useState(false)
-  const [hexInput,   setHexInput]   = useState(value)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => { setHexInput(value) }, [value])
+  const [pos,        setPos]        = useState({ top: 0, left: 0 })
+  const [showCustom, setShowCustom] = useState(false)
+  const btnRef   = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const cleanupRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     if (!open) return
     function onDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false); setCustomMode(false)
-      }
+      const t = e.target as Node
+      if (!document.body.contains(t)) return
+      if (panelRef.current?.contains(t) || btnRef.current?.contains(t)) return
+      setOpen(false)
     }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
   }, [open])
 
-  const apply = (color: string) => { onChange(color); setOpen(false); setCustomMode(false) }
-  const handleHex = (v: string) => {
-    setHexInput(v)
-    if (/^#[0-9A-Fa-f]{6}$/.test(v)) onChange(v)
+  // unmount cleanup
+  useEffect(() => () => { cleanupRef.current?.() }, [])
+
+  const apply = (color: string) => { onChange(color); setOpen(false) }
+
+  const startEyedrop = () => {
+    setOpen(false)
+    document.body.style.cursor = DROPPER_CURSOR
+
+    const onClick = (e: MouseEvent) => {
+      e.preventDefault(); e.stopPropagation()
+      let el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null
+      let hex: string | null = null
+      while (el && !hex) {
+        const bg = getComputedStyle(el).backgroundColor
+        if (bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)') {
+          hex = rgbToHex(bg)
+        }
+        el = el.parentElement
+      }
+      if (hex) onChange(hex)
+      cleanup()
+    }
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') cleanup()
+    }
+
+    const cleanup = () => {
+      document.removeEventListener('click', onClick, true)
+      document.removeEventListener('keydown', onKeyDown, true)
+      document.body.style.cursor = ''
+      cleanupRef.current = null
+    }
+
+    cleanupRef.current = cleanup
+    document.addEventListener('click',   onClick,   { capture: true, once: true })
+    document.addEventListener('keydown', onKeyDown, { capture: true })
+  }
+
+  const handleOpen = () => {
+    if (!btnRef.current) { setOpen(o => !o); return }
+    const r  = btnRef.current.getBoundingClientRect()
+    const pw = 220
+    const ph = showCustom ? 550 : 350
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const left = Math.max(8, Math.min(r.left, vw - pw - 8))
+    const top  = (openUp || r.bottom + ph + 6 > vh) ? r.top - ph - 6 : r.bottom + 6
+    setPos({ top, left })
+    setOpen(o => !o)
   }
 
   return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+    <div style={{ position: 'relative', display: 'inline-block' }}>
       <button
-        onClick={() => { setOpen(o => !o); setCustomMode(false) }}
+        ref={btnRef}
+        onClick={handleOpen}
         style={{
           width: 32, height: 32, flexShrink: 0, cursor: 'pointer', borderRadius: 6,
           background: value || 'transparent',
@@ -210,13 +271,16 @@ function ExcelColorPicker({ value, onChange, openUp }: { value: string; onChange
         }}
       />
       {open && (
-        <div style={{
-          position: 'absolute', ...(openUp ? { bottom: '100%', marginBottom: 4 } : { top: '100%', marginTop: 4 }), left: 0, zIndex: 10000,
-          padding: 12, borderRadius: 12,
-          background: 'var(--color-bg-elevated)',
-          border: '1px solid var(--color-border-default)',
-          boxShadow: 'var(--shadow-elevated)',
-        }}>
+        <div
+          ref={panelRef}
+          style={{
+            position: 'fixed', top: pos.top, left: pos.left, zIndex: 99999,
+            padding: 12, borderRadius: 12, minWidth: 200,
+            background: 'var(--color-bg-elevated)',
+            border: '1px solid var(--color-border-default)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          }}
+        >
           <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: 5 }}>테마 색</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 16px)', gap: 2 }}>
             {THEME_ROWS.map((color, i) => (
@@ -251,30 +315,49 @@ function ExcelColorPicker({ value, onChange, openUp }: { value: string; onChange
             채우기 없음(N)
           </button>
 
-          {!customMode ? (
-            <button onClick={() => setCustomMode(true)}
-              className="w-full mt-1 text-left transition-colors"
-              style={{ fontSize: 11, padding: '5px 6px', borderRadius: 4, color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-default)', background: 'transparent' }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'var(--overlay-hover)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-              다른 색(M)...
-            </button>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
-              <div style={{ width: 18, height: 18, background: value, border: '1px solid var(--color-border-default)', borderRadius: 3, flexShrink: 0 }} />
-              <input
-                type="text" value={hexInput} maxLength={7} placeholder="#000000" autoFocus
-                onChange={e => handleHex(e.target.value)}
-                onBlur={() => { if (!/^#[0-9A-Fa-f]{6}$/.test(hexInput)) setHexInput(value) }}
-                onKeyDown={e => { if (e.key === 'Enter' && /^#[0-9A-Fa-f]{6}$/.test(hexInput)) apply(hexInput) }}
-                style={{
-                  flex: 1, fontSize: 11, padding: '3px 6px', borderRadius: 4, fontFamily: 'monospace',
-                  background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-default)',
-                  color: 'var(--color-text-primary)', outline: 'none',
-                }}
-              />
+          {/* 다른 색: 자체 스펙트럼 패널 토글 */}
+          <button onClick={() => setShowCustom(v => !v)}
+            className="w-full mt-1 text-left transition-colors"
+            style={{ fontSize: 11, padding: '5px 6px', borderRadius: 4, color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-default)', background: 'transparent' }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--overlay-hover)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+            다른 색(M)...
+          </button>
+
+          {showCustom && (
+            <div style={{ marginTop: 8 }}>
+              <style>{`.react-colorful { width: 100% !important; height: 150px !important; border-radius: 6px !important; } .react-colorful__pointer { width: 20px !important; height: 20px !important; }`}</style>
+              <HexColorPicker color={value || '#000000'} onChange={v => onChange(v)} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                <button
+                  onClick={startEyedrop}
+                  aria-label="스포이드"
+                  style={{
+                    width: 28, height: 28, borderRadius: 6, flexShrink: 0,
+                    border: '1px solid var(--color-border-default)',
+                    background: 'transparent', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: 'var(--color-text-secondary)',
+                  }}
+                >
+                  <Pipette size={14} />
+                </button>
+                <input
+                  type="text"
+                  value={value}
+                  onChange={e => onChange(e.target.value)}
+                  style={{
+                    flex: 1, fontSize: 12, padding: '6px 8px', borderRadius: 6,
+                    background: 'var(--color-bg-tertiary)',
+                    border: '1px solid var(--color-border-default)',
+                    color: 'var(--color-text-primary)',
+                    outline: 'none',
+                  }}
+                />
+              </div>
             </div>
           )}
+
         </div>
       )}
     </div>
@@ -319,7 +402,7 @@ function fRev(n: number) { return (n / 1_000_000).toFixed(1) }
 
 // ── Market Preview Table ──────────────────────────────────────────────────────
 
-function MarketPreviewTable({ tree, isDark, overrides = {}, highlightLevel }: { tree: SchemaTree; isDark: boolean; overrides?: Partial<Record<SchemaLevel, { bgDark: string|null; bgLight: string|null; dark: string|null; light: string|null; bold: boolean } | null>>; highlightLevel?: 'main' | 'mid' | 'sub' | null }) {
+function MarketPreviewTable({ tree, isDark, overrides = {} }: { tree: SchemaTree; isDark: boolean; overrides?: Partial<Record<SchemaLevel, { bgDark: string|null; bgLight: string|null; dark: string|null; light: string|null; bold: boolean } | null>> }) {
   const T = isDark
     ? { cardBg: '#111827', panelBg: '#0E1117', headBg: '#0F1623', border: '#1E2535',
         borderSubtle: 'rgba(255,255,255,0.06)', textPri: '#E2E8F0', textSec: '#94A3B8',
@@ -405,7 +488,7 @@ function MarketPreviewTable({ tree, isDark, overrides = {}, highlightLevel }: { 
                 const mainW     = getIsBold(item) ? 700 : 600
                 return (
                   <React.Fragment key={item.id}>
-                    <tr style={{ background: getBg(item), borderTop: `1px solid ${T.border}`, ...(highlightLevel === 'main' ? { outline: `2px solid ${T.accent}`, outlineOffset: '-2px' } : {}) }}>
+                    <tr style={{ background: getBg(item), borderTop: `1px solid ${T.border}` }}>
                       <td className="px-3 py-2"
                         style={{ color: mainColor, fontWeight: mainW }}>
                         {item.name}
@@ -419,7 +502,7 @@ function MarketPreviewTable({ tree, isDark, overrides = {}, highlightLevel }: { 
                       const childColor = fontColor(child, child.color ?? T.accent)
                       const childW     = getIsBold(child) ? 600 : 400
                       return (
-                        <tr key={child.id} style={{ background: getBg(child), borderBottom: `1px dashed ${T.borderSubtle}`, ...(highlightLevel === 'sub' ? { outline: `2px solid ${T.accent}`, outlineOffset: '-2px' } : {}) }}>
+                        <tr key={child.id} style={{ background: getBg(child), borderBottom: `1px dashed ${T.borderSubtle}` }}>
                           <td style={{ paddingLeft: 12, color: childColor, fontWeight: childW, fontSize: 12 }}>
                             <span style={{ color: T.textMuted, marginRight: 4, fontSize: 11 }}>└</span>
                             {child.name}
@@ -438,7 +521,7 @@ function MarketPreviewTable({ tree, isDark, overrides = {}, highlightLevel }: { 
               const midColor = fontColor(item, T.textPri)
               const midW     = getIsBold(item) ? 600 : 400
               return (
-                <tr key={item.id} style={{ background: getBg(item), borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, ...(highlightLevel === 'mid' ? { outline: `2px solid ${T.accent}`, outlineOffset: '-2px' } : {}) }}>
+                <tr key={item.id} style={{ background: getBg(item), borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}` }}>
                   <td className="px-3 py-2"
                     style={{ color: midColor, fontWeight: midW }}>
                     {item.name}
@@ -1218,52 +1301,55 @@ export default function MarketCodeManagementPage() {
                             <React.Fragment key={item.id}>
                               <SortableRow id={item.id}>
                                 {(handleProps) => (<>
-                                  <td className="w-7 px-2 py-3.5 text-brand-dimmed cursor-grab"
+                                  <td className="w-7 px-2 py-3 text-brand-dimmed cursor-grab"
                                     style={{ background: mainBg }} {...handleProps}>
                                     <GripVertical size={13} />
                                   </td>
-                                  <td className="w-16 px-1 py-3.5" style={{ background: mainBg }}>
+                                  <td className="w-16 px-1 py-3" style={{ background: mainBg }}>
                                     <LevelBadge level="main" />
                                   </td>
-                                  <td className={`px-3 py-3.5 text-sm ${editorBold(item) ? 'font-bold' : 'font-semibold'}`}
+                                  <td className={`px-3 py-3 text-sm ${editorBold(item) ? 'font-bold' : 'font-semibold'}`}
                                     style={{ color: fontColor(item, 'var(--color-text-primary)'), background: mainBg }}>
                                     {item.name}
                                   </td>
-                                  <td className="px-2 py-3.5" style={{ background: mainBg }}>
+                                  <td className="px-2 py-3" style={{ background: mainBg }}>
                                     <SchemaActions schema={item} />
                                   </td>
                                 </>)}
                               </SortableRow>
 
                               <SortableContext items={subIdMap[item.id] ?? []} strategy={verticalListSortingStrategy}>
-                                {group.children.map(child => (
+                                {group.children.map(child => {
+                                  const subBg = editorBg('sub')
+                                  return (
                                   <React.Fragment key={child.id}>
                                     <SortableRow id={child.id}>
                                       {(handleProps) => (<>
-                                        <td className="w-7 px-2 py-3 text-brand-dimmed cursor-grab"
-                                          style={{ borderBottom: '1px solid var(--color-border-subtle)' }} {...handleProps}>
+                                        <td className="w-7 px-2 py-2.5 text-brand-dimmed cursor-grab"
+                                          style={{ borderBottom: '1px solid var(--color-border-subtle)', background: subBg }} {...handleProps}>
                                           <GripVertical size={13} />
                                         </td>
-                                        <td className="w-16 px-1 py-3"
-                                          style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
+                                        <td className="w-16 px-1 py-2.5"
+                                          style={{ borderBottom: '1px solid var(--color-border-subtle)', background: subBg }}>
                                           <LevelBadge level="sub" />
                                         </td>
-                                        <td className={`px-3 py-3 text-sm ${editorBold(child) ? 'font-bold' : 'font-normal'}`}
-                                          style={{ paddingLeft: 28, color: fontColor(child, 'var(--color-text-secondary)'), borderBottom: '1px solid var(--color-border-subtle)' }}>
+                                        <td className={`px-3 py-2.5 text-sm ${editorBold(child) ? 'font-bold' : 'font-normal'}`}
+                                          style={{ paddingLeft: 28, color: fontColor(child, 'var(--color-text-secondary)'), borderBottom: '1px solid var(--color-border-subtle)', background: subBg }}>
                                           <span className="inline-flex items-center gap-0 flex-wrap">
                                             <span className="text-brand-dimmed mr-1.5 text-xs">└</span>
                                             {child.name}
                                             <InlineSegTags schema={child} />
                                           </span>
                                         </td>
-                                        <td className="px-2 py-3"
-                                          style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
+                                        <td className="px-2 py-2.5"
+                                          style={{ borderBottom: '1px solid var(--color-border-subtle)', background: subBg }}>
                                           <SchemaActions schema={child} />
                                         </td>
                                       </>)}
                                     </SortableRow>
                                   </React.Fragment>
-                                ))}
+                                  )
+                                })}
                               </SortableContext>
                             </React.Fragment>
                           )
@@ -1275,22 +1361,22 @@ export default function MarketCodeManagementPage() {
                           <React.Fragment key={item.id}>
                             <SortableRow id={item.id}>
                               {(handleProps) => (<>
-                                <td className="w-7 px-2 py-3.5 text-brand-dimmed cursor-grab"
+                                <td className="w-7 px-2 py-3 text-brand-dimmed cursor-grab"
                                   style={{ borderBottom: '1px solid var(--color-border-subtle)', background: midBg }} {...handleProps}>
                                   <GripVertical size={13} />
                                 </td>
-                                <td className="w-16 px-1 py-3.5"
+                                <td className="w-16 px-1 py-3"
                                   style={{ borderBottom: '1px solid var(--color-border-subtle)', background: midBg }}>
                                   <LevelBadge level="mid" />
                                 </td>
-                                <td className={`px-3 py-3.5 text-sm ${editorBold(item) ? 'font-bold' : 'font-semibold'}`}
+                                <td className={`px-3 py-3 text-sm ${editorBold(item) ? 'font-bold' : 'font-semibold'}`}
                                   style={{ color: fontColor(item, 'var(--color-text-primary)'), borderBottom: '1px solid var(--color-border-subtle)', background: midBg }}>
                                   <span className="inline-flex items-center flex-wrap gap-0">
                                     {item.name}
                                     <InlineSegTags schema={item} />
                                   </span>
                                 </td>
-                                <td className="px-2 py-3.5"
+                                <td className="px-2 py-3"
                                   style={{ borderBottom: '1px solid var(--color-border-subtle)', background: midBg }}>
                                   <SchemaActions schema={item} />
                                 </td>
@@ -1355,10 +1441,10 @@ export default function MarketCodeManagementPage() {
           <div className="p-4" style={{ background: 'var(--color-bg-primary)' }}>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <MarketPreviewTable tree={tree} isDark={false} overrides={previewOverrides} highlightLevel={selectedLevel} />
+                <MarketPreviewTable tree={tree} isDark={false} overrides={previewOverrides} />
               </div>
               <div>
-                <MarketPreviewTable tree={tree} isDark={true} overrides={previewOverrides} highlightLevel={selectedLevel} />
+                <MarketPreviewTable tree={tree} isDark={true} overrides={previewOverrides} />
               </div>
             </div>
             <div className="flex gap-2 mt-4">
