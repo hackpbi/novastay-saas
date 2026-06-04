@@ -203,16 +203,20 @@ export default function LyComparisonAccountModal({
            .filter(group => group.rows.length > 0)
     }
 
-    // 빈 데이터 필터: 모든 월에서 OTB nights = 0 AND LY nights = 0 인 행 제거
-    g = g.map(group => ({
-      ...group,
-      rows: group.rows.filter(r =>
-        Object.values(r.monthly).some(m => m.otb.nights > 0 || m.ly.nights > 0)
-      ),
-    })).filter(group => group.rows.length > 0)
+    // 빈 데이터 필터: 현재 보는 월의 OTB nights > 0 OR LY nights > 0 인 행만 표시
+    if (currentMonthKey) {
+      g = g.map(group => ({
+        ...group,
+        rows: group.rows.filter(r => {
+          const cell = r.monthly[currentMonthKey]
+          if (!cell) return false
+          return cell.otb.nights > 0 || cell.ly.nights > 0
+        }),
+      })).filter(group => group.rows.length > 0)
+    }
 
     return g
-  }, [groups, effectiveSegCodes, searchQuery, schema])
+  }, [groups, effectiveSegCodes, searchQuery, schema, currentMonthKey])
 
   // 초기 접힘 상태
   useEffect(() => {
