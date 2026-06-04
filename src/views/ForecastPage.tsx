@@ -260,12 +260,13 @@ export default function ForecastPage() {
   const [bulkEdit, setBulkEdit] = useState<{
     isOpen:       boolean
     selectedDate: string | null
-  }>({ isOpen: false, selectedDate: null })
+    fromGraph:    boolean
+  }>({ isOpen: false, selectedDate: null, fromGraph: false })
 
   const [graphModalOpen, setGraphModalOpen] = useState(false)
 
-  const openBulkEditModal  = useCallback((date: string) => {
-    setBulkEdit({ isOpen: true, selectedDate: date })
+  const openBulkEditModal  = useCallback((date: string, fromGraph = false) => {
+    setBulkEdit({ isOpen: true, selectedDate: date, fromGraph })
   }, [])
   const closeBulkEditModal = useCallback(() => {
     setBulkEdit(prev => ({ ...prev, isOpen: false }))
@@ -280,7 +281,12 @@ export default function ForecastPage() {
       for (const [key, val] of newEdits.entries()) next.set(key, val)
       return next
     })
-  }, [])
+    // 그래프에서 진입했으면 적용 후 그래프로 복귀
+    if (bulkEdit.fromGraph) {
+      setBulkEdit({ isOpen: false, selectedDate: null, fromGraph: false })
+      setGraphModalOpen(true)
+    }
+  }, [bulkEdit.fromGraph])
 
   // ── 자동 펼침 임계값 ──────────────────────────────────────────────────────────
   const [threshold, setThreshold] = useState(3)
@@ -701,7 +707,7 @@ export default function ForecastPage() {
           month={currentMonth.month}
           onDateClick={(date) => {
             setGraphModalOpen(false)
-            openBulkEditModal(date)
+            openBulkEditModal(date, true)
           }}
         />
       )}

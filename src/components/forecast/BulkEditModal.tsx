@@ -8,6 +8,19 @@ import type { ForecastSchema, ForecastDayData } from '@/lib/forecast/types'
 import MarketTable, { type MarketTableColumn, type MarketTableData } from '@/components/tables/MarketTable'
 import { useDateContext } from '@/contexts/DateContext'
 import { ConfirmDialog } from '@/components/forecast/ConfirmDialog'
+import { supabase } from '@/lib/supabase'
+
+// ── LY 타입 ───────────────────────────────────────────────────────────────────
+
+type LyRow = {
+  segmentation: string
+  ly_date:      string
+  ly_rn:        number
+  ly_adr:       number
+  ly_revenue:   number
+}
+
+type LyMap = Record<string, LyRow>  // segmentation code → LyRow
 
 export type BulkEditTab = 'daily' | 'weekday'
 
@@ -16,16 +29,19 @@ const TABLE_SCALE     = 0.78  // 표 축소율 — 여기만 바꾸면 됨
 
 // 컬럼 폭 — buildColumns width + TotalOccRow grid 둘 다 이 값으로 정렬
 const COL = {
-  SEG:     280,
-  FC_RN:    80,
-  FC_ADR:  110,
-  FC_REV:   90,
-  OTB_RN:   80,
-  OTB_ADR:  90,
-  OTB_REV:  90,
-  GAP_RN:   70,
-  GAP_ADR:  80,
-  GAP_REV:  80,
+  SEG:     240,
+  FC_RN:   100,
+  FC_ADR:  130,
+  FC_REV:  110,
+  OTB_RN:   95,
+  OTB_ADR: 110,
+  OTB_REV: 110,
+  GAP_RN:   85,
+  GAP_ADR: 100,
+  GAP_REV: 100,
+  LY_RN:    85,
+  LY_ADR:  100,
+  LY_REV:  100,
 } as const
 
 const GRID_TEMPLATE = [
@@ -33,6 +49,7 @@ const GRID_TEMPLATE = [
   COL.FC_RN,  COL.FC_ADR,  COL.FC_REV,
   COL.OTB_RN, COL.OTB_ADR, COL.OTB_REV,
   COL.GAP_RN, COL.GAP_ADR, COL.GAP_REV,
+  COL.LY_RN,  COL.LY_ADR,  COL.LY_REV,
 ].map(w => `${w}px`).join(' ')
 
 export interface BulkEditModalProps {
@@ -257,6 +274,7 @@ function buildMarketTableData(
   day:          ForecastDayData,
   tempEdits:    EditedValues,
   selectedDate: string,
+  lyMap:        LyMap,
 ): MarketTableData {
   const result: MarketTableData = {}
   for (const [code, orig] of Object.entries(day.values)) {
@@ -264,16 +282,18 @@ function buildMarketTableData(
     const fcRn  = ed?.rn  ?? orig.rn
     const fcAdr = ed?.adr ?? orig.adr
     const fcRev = fcRn * fcAdr
+    const ly    = lyMap[code]
     result[code] = {
       rn:      fcRn,
-      adr:     fcAdr,   // raw KRW — computeCell derives adr from rev/rn anyway
+      adr:     fcAdr,
       rev:     fcRev,
       otb_rn:  orig.otb_rn,
       otb_rev: orig.otb_rev,
       gap_rn:  fcRn  - orig.otb_rn,
       gap_rev: fcRev - orig.otb_rev,
-      // gap_adr: NOT stored — computeCell derives from gap_rev/gap_rn for parent rows
-      //          render() overrides for leaf rows with simple fc_adr - otb_adr
+      // LY — ly_adr は computeCell が ly_rev/ly_rn から自動計算
+      ly_rn:  ly?.ly_rn  ?? 0,
+      ly_rev: ly?.ly_revenue ?? 0,
     }
   }
   return result
@@ -374,6 +394,18 @@ function buildColumns(
         const gapRev = fcRn * fcAdr - orig.otb_rev
         return <span style={{ color: gapColor(gapRev) }}>{fmtGap(gapRev, 'm')}</span>
       },
+    },
+
+    // ── LY 컬럼 (읽기 전용) ──────────────────────────────────────────────────
+    {
+      key: 'ly_rn', label: 'RN', type: 'number', group: 'LY · 작년', width: `${COL.LY_RN}px`,
+    },
+    {
+      key: 'ly_adr', label: 'ADR', type: 'adr', group: 'LY · 작년', width: `${COL.LY_ADR}px`,
+      // ly_adr → computeCell이 ly_rev/ly_rn으로 자동 계산 (endsWith('_adr') 패턴)
+    },
+    {
+      key: 'ly_rev', label: 'REV', type: 'currency', group: 'LY · 작년', width: `${COL.LY_REV}px`,
     },
   ]
 }
@@ -663,9 +695,10 @@ interface DailyTabProps {
   tempEdits:    EditedValues
   setTempEdits: (next: EditedValues) => void
   hotelId:      string
+  lyMap:        LyMap
 }
 
-function DailyTab({ schema, day, selectedDate, tempEdits, setTempEdits, hotelId }: DailyTabProps) {
+function DailyTab({ schema, day, selectedDate, tempEdits, setTempEdits, hotelId, lyMap }: DailyTabProps) {
   const [activeCell, setActiveCell] = useState<ActiveCell>(null)
 
   // 편집 가능 셀 순서 — 표 시각 순서와 동일 (schema.nodes orderIndex 기준)
@@ -703,8 +736,8 @@ function DailyTab({ schema, day, selectedDate, tempEdits, setTempEdits, hotelId 
   )
 
   const tableData = useMemo(
-    () => buildMarketTableData(day, tempEdits, selectedDate),
-    [day, tempEdits, selectedDate],
+    () => buildMarketTableData(day, tempEdits, selectedDate, lyMap),
+    [day, tempEdits, selectedDate, lyMap],
   )
 
   return (
@@ -743,6 +776,31 @@ function DailyTab({ schema, day, selectedDate, tempEdits, setTempEdits, hotelId 
           border-left: 2px solid var(--color-border-default) !important;
         }
 
+        /* ── LY 컬럼 (11,12,13): 흐림 + 파란 음영 ── */
+        .mtnf tbody td:nth-child(11),
+        .mtnf tbody td:nth-child(12),
+        .mtnf tbody td:nth-child(13) {
+          color: var(--color-text-tertiary) !important;
+          background: rgba(100,149,237,0.04) !important;
+        }
+        .mtnf tbody tr:hover td:nth-child(11),
+        .mtnf tbody tr:hover td:nth-child(12),
+        .mtnf tbody tr:hover td:nth-child(13) {
+          background: linear-gradient(var(--overlay-hover), var(--overlay-hover)), rgba(100,149,237,0.04) !important;
+        }
+        .mtnf thead tr:last-child th:nth-child(11),
+        .mtnf thead tr:last-child th:nth-child(12),
+        .mtnf thead tr:last-child th:nth-child(13) {
+          background: rgba(100,149,237,0.04) !important;
+        }
+
+        /* ── 그룹 경계 굵은선: LY 시작(11) ── */
+        .mtnf thead tr:first-child th:nth-child(5),
+        .mtnf thead tr:last-child th:nth-child(11),
+        .mtnf tbody td:nth-child(11) {
+          border-left: 2px solid var(--color-border-default) !important;
+        }
+
         /* ── 그룹 헤더 행 스타일 ── */
         .mtnf thead tr:first-child th:nth-child(2) {
           border-bottom: 2px solid var(--color-accent-primary) !important;
@@ -756,13 +814,18 @@ function DailyTab({ schema, day, selectedDate, tempEdits, setTempEdits, hotelId 
           color: var(--color-text-secondary) !important;
           border-bottom: 1px solid var(--color-border-subtle) !important;
         }
+        .mtnf thead tr:first-child th:nth-child(5) {
+          color: var(--color-text-tertiary) !important;
+          background: rgba(100,149,237,0.04) !important;
+          border-bottom: 1px solid var(--color-border-subtle) !important;
+        }
       `}</style>
       <div className="mtnf" style={{ zoom: TABLE_SCALE }}>
         <MarketTable
           hotelId={hotelId}
           columns={columns}
           data={tableData}
-          segWidth={220}
+          segWidth={COL.SEG}
         />
       </div>
     </div>
@@ -781,6 +844,9 @@ export function BulkEditModal({
   onSelectDate,
 }: BulkEditModalProps) {
   const [tempEdits, setTempEdits] = useState<EditedValues>(new Map())
+  const [lyMap,     setLyMap]     = useState<LyMap>({})
+  const [lyLoading, setLyLoading] = useState(false)
+  const [lyDate,    setLyDate]    = useState<string | null>(null)
 
   // Initialize tempEdits from existing editedValues for this date
   useEffect(() => {
@@ -792,6 +858,29 @@ export function BulkEditModal({
     setTempEdits(initial)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, selectedDate])  // editedValues excluded: don't reset mid-edit
+
+  // LY fetch — 일자(selectedDate) 변경 시 재fetch
+  useEffect(() => {
+    if (!isOpen || !selectedDate || !hotelId) return
+    let cancelled = false
+    setLyLoading(true)
+    ;(supabase as any)
+      .rpc('get_ly_for_modal', { p_hotel_id: hotelId, p_business_date: selectedDate })
+      .then(({ data: rows, error }: any) => {
+        if (cancelled) return
+        if (!error && rows && rows.length > 0) {
+          const map: LyMap = {}
+          for (const r of rows) map[r.segmentation] = r
+          setLyMap(map)
+          setLyDate(rows[0]?.ly_date ?? null)
+        } else {
+          setLyMap({})
+          setLyDate(null)
+        }
+        setLyLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [isOpen, selectedDate, hotelId])
 
   // ESC to close
   useEffect(() => {
@@ -923,6 +1012,18 @@ export function BulkEditModal({
     setTempEdits(next)
   }
 
+  function handleCopyLyToFc() {
+    if (!day || !selectedDate || day.is_actual_day) return
+    if (!confirm('LY(작년) 값을 FC로 복사합니다.\n기존 FC 편집값은 덮어쓰입니다. 계속하시겠습니까?')) return
+    const next = new Map(tempEdits)
+    for (const code of Object.keys(day.values)) {
+      const ly = lyMap[code]
+      if (!ly) continue  // LY 없는 세그 건너뜀
+      next.set(makeEditKey(selectedDate, code), { rn: ly.ly_rn, adr: Math.round(ly.ly_adr) })
+    }
+    setTempEdits(next)
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
@@ -932,7 +1033,7 @@ export function BulkEditModal({
         aria-modal="true"
         aria-label="일괄수정"
         className="relative w-full bg-ns-bg border border-ns-border rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.4)] overflow-hidden flex flex-col"
-        style={{ maxWidth: 1200, maxHeight: '90vh' }}
+        style={{ maxWidth: 1480, maxHeight: '90vh' }}
       >
         {/* Header — 날짜 이동 + X */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-ns-border flex-shrink-0">
@@ -988,6 +1089,7 @@ export function BulkEditModal({
                   tempEdits={tempEdits}
                   setTempEdits={setTempEdits}
                   hotelId={hotelId}
+                  lyMap={lyMap}
                 />
               </div>
 
@@ -1009,12 +1111,13 @@ export function BulkEditModal({
 
                 {/* 버튼 영역 — 패널 맨 아래 */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 'auto' }}>
+                  <div style={{ display: 'flex', gap: 6 }}>
                   <button
                     onClick={handleCopyOtbToFc}
                     disabled={!day || day.is_actual_day}
                     title={day?.is_actual_day ? '과거 일자는 복사할 수 없습니다' : '현재 일자의 OTB 값을 FC로 복사'}
                     style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                       padding: '5px 10px', fontSize: 12, fontWeight: 500,
                       border: '0.5px solid var(--color-border-secondary)',
                       borderRadius: 6,
@@ -1025,8 +1128,31 @@ export function BulkEditModal({
                     }}
                   >
                     <Copy size={13} />
-                    OTB → FC 복사
+                    OTB → FC
                   </button>
+                  <button
+                    onClick={handleCopyLyToFc}
+                    disabled={!day || day.is_actual_day || Object.keys(lyMap).length === 0}
+                    title={
+                      day?.is_actual_day ? '과거 일자는 복사할 수 없습니다'
+                      : Object.keys(lyMap).length === 0 ? 'LY 데이터가 없습니다'
+                      : '현재 일자의 LY(작년) 값을 FC로 복사'
+                    }
+                    style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                      padding: '5px 10px', fontSize: 12, fontWeight: 500,
+                      border: '0.5px solid var(--color-border-secondary)',
+                      borderRadius: 6,
+                      background: 'var(--color-bg-surface)',
+                      color: 'var(--color-text-primary)',
+                      cursor: (!day || day.is_actual_day || Object.keys(lyMap).length === 0) ? 'not-allowed' : 'pointer',
+                      opacity: (!day || day.is_actual_day || Object.keys(lyMap).length === 0) ? 0.3 : 1,
+                    }}
+                  >
+                    <Copy size={13} />
+                    LY → FC
+                  </button>
+                  </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button
                       onClick={onClose}
