@@ -456,7 +456,7 @@ export default function MonthlyPickupAccountModal({
                 {/* 헤더 2단 */}
                 <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                   <tr>
-                    <th style={{ ...thBase, textAlign: 'left' }} rowSpan={2}>Account</th>
+                    <th style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE }} rowSpan={2}>Account</th>
                     {viewMode === 'monthly' ? (
                       visiblePageMonths.map((mk, idx) => (
                         <th key={mk} colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: idx < visiblePageMonths.length - 1 ? DOUBLE : BORDER }}>
@@ -550,7 +550,7 @@ export default function MonthlyPickupAccountModal({
                 <tfoot>
                   {/* 합계 */}
                   <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: 'var(--color-bg-secondary)' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: DOUBLE }}>
                       합계 (HOU 제외)
                       {isFilterMode && !filterCleared && (
                         <span style={{ fontSize: 10, color: 'var(--brand-dimmed)', marginLeft: 4 }}>※ 전체 기준</span>
@@ -566,10 +566,10 @@ export default function MonthlyPickupAccountModal({
                   </tr>
                   {/* OCC */}
                   <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)' }}>OCC</td>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: DOUBLE }}>OCC</td>
                     {viewMode === 'monthly' ? (
-                      visiblePageMonths.map(mk => (
-                        <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER }}>
+                      visiblePageMonths.map((mk, idx) => (
+                        <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER, borderRight: idx < visiblePageMonths.length - 1 ? DOUBLE : undefined }}>
                           <FmtOcc n={summary.monthlyTotals[mk]?.occ ?? 0} />
                         </td>
                       ))
@@ -581,10 +581,10 @@ export default function MonthlyPickupAccountModal({
                   </tr>
                   {/* RevPAR */}
                   <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)' }}>RevPAR</td>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: DOUBLE }}>RevPAR</td>
                     {viewMode === 'monthly' ? (
-                      visiblePageMonths.map(mk => (
-                        <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER }}>
+                      visiblePageMonths.map((mk, idx) => (
+                        <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER, borderRight: idx < visiblePageMonths.length - 1 ? DOUBLE : undefined }}>
                           <FmtRevpar n={summary.monthlyTotals[mk]?.revpar ?? 0} />
                         </td>
                       ))

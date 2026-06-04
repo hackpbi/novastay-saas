@@ -266,7 +266,7 @@ export default function ForecastBudgetModal({
               <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
                 <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                   <tr>
-                    <th style={{ ...thBase, textAlign: 'left' }} rowSpan={2}>Segmentation</th>
+                    <th style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE }} rowSpan={2}>Segmentation</th>
                     <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: DOUBLE }}>FCST</th>
                     <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderRight: DOUBLE }}>BUDGET</th>
                     <th colSpan={3} style={{ ...thBase, textAlign: 'center' }}>GAP</th>
@@ -297,7 +297,7 @@ export default function ForecastBudgetModal({
                         onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${rowBg}` }}
                         onMouseLeave={e => { e.currentTarget.style.background = rowBg }}
                       >
-                        <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140 }}>
+                        <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: DOUBLE }}>
                           {row.indent ? <><span style={{ color: 'var(--brand-dimmed)' }}>└ </span>{row.name}</> : row.name}
                         </td>
                         <RowCells m={m} />
@@ -309,13 +309,13 @@ export default function ForecastBudgetModal({
                 <tfoot>
                   {/* 합계 */}
                   <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: 'var(--color-bg-secondary)' }}>
-                    <td style={{ ...sumTd, paddingLeft: 12 }}>합계 (HOU 제외)</td>
+                    <td style={{ ...sumTd, paddingLeft: 12, borderRight: DOUBLE }}>합계 (HOU 제외)</td>
                     {sumMonth ? <RowCells m={{ fcst: sumMonth.fcst, budget: sumMonth.budget, gap: sumMonth.gap }} /> : <td colSpan={9} />}
                   </tr>
                   {/* 달성 */}
                   {sumMonth && (
                     <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
-                      <td style={labelTd}>달성</td>
+                      <td style={{ ...labelTd, borderRight: DOUBLE }}>달성</td>
                       <td colSpan={3} style={{ padding: '8px 10px', borderLeft: BORDER }} />
                       <td colSpan={3} style={{ padding: '8px 10px' }} />
                       <td className="font-mono" style={{ textAlign: 'right', padding: '8px 10px', fontWeight: 600 }}>
@@ -331,11 +331,11 @@ export default function ForecastBudgetModal({
                   )}
                   {/* OCC */}
                   <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
-                    <td style={labelTd}>OCC</td>
-                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER }}>
+                    <td style={{ ...labelTd, borderRight: DOUBLE }}>OCC</td>
+                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER, borderRight: DOUBLE }}>
                       <FmtOcc n={sumMonth?.fcst.occ ?? 0} />
                     </td>
-                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600 }}>
+                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderRight: DOUBLE }}>
                       <FmtOcc n={sumMonth?.budget.occ ?? 0} />
                     </td>
                     <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600 }}>
@@ -344,11 +344,11 @@ export default function ForecastBudgetModal({
                   </tr>
                   {/* RevPAR */}
                   <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
-                    <td style={labelTd}>RevPAR</td>
-                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER }}>
+                    <td style={{ ...labelTd, borderRight: DOUBLE }}>RevPAR</td>
+                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER, borderRight: DOUBLE }}>
                       <FmtRevpar n={sumMonth?.fcst.revpar ?? 0} />
                     </td>
-                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600 }}>
+                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderRight: DOUBLE }}>
                       <FmtRevpar n={sumMonth?.budget.revpar ?? 0} />
                     </td>
                     <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600 }}>

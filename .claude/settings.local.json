@@ -30,7 +30,10 @@
       "Bash(findstr \"scripts\")",
       "Bash(node -e \"const p = require\\('./package.json'\\); console.log\\(p.dependencies['recharts'] ?? 'NOT INSTALLED'\\)\")",
       "PowerShell(npx tsc --noEmit 2>&1)",
-      "Bash(npm i *)"
+      "Bash(npm i *)",
+      "Bash(grep -v \"//\\\\|font\\\\|color\\\\|text\\\\|background\\\\|border-\\\\|margin\\\\|padding:\")",
+      "Bash(grep -v \"//\\\\|font\\\\|color\\\\|background\\\\|borderTop\\\\|uppercase\\\\|letter\")",
+      "Bash(grep -v \"//\\\\|font\\\\|color\\\\|background\")"
     ]
   }
 }
