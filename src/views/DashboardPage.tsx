@@ -130,6 +130,15 @@ function formatPu(n: number, type: 'nights' | 'currency'): string {
   return `${sign}${n.toLocaleString('ko-KR')}`
 }
 
+// 숫자 부분과 단위를 분리 (1.5배 강조용)
+function formatPuParts(n: number, type: 'nights' | 'currency'): { num: string; unit: string } {
+  const sign = n >= 0 ? '+' : ''
+  if (type === 'nights') return { num: `${sign}${n.toLocaleString('ko-KR')}`, unit: '실' }
+  if (Math.abs(n) >= 1_000_000) return { num: `${sign}${(n / 1_000_000).toFixed(1)}`, unit: 'M' }
+  if (Math.abs(n) >= 1_000)     return { num: `${sign}${(n / 1_000).toFixed(0)}`,     unit: 'k' }
+  return { num: `${sign}${n.toLocaleString('ko-KR')}`, unit: '' }
+}
+
 // ─── Sub-components ─────────────────────────────────────────────────────────────
 
 function ChangeTag({ value, unit, onClick }: { value: number; unit: string; onClick?: () => void }) {
@@ -693,32 +702,39 @@ export default function DashboardPage() {
           <div className="h-5 w-80 rounded animate-pulse" style={{ background: 'var(--color-bg-tertiary)' }} />
         ) : (
           <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-            오늘 ({otbDate}) 기준 {pickupDays > 0 ? `${pickupDays}일간` : '당일'}&nbsp;
-            총&nbsp;
+            오늘 ({otbDate}) 기준{' '}
+            {pickupDays > 0 ? (
+              <span style={{ color: 'var(--color-accent-primary)' }}>
+                <span style={{ fontSize: '1.5em', fontWeight: 700 }}>{pickupDays}</span>일간
+              </span>
+            ) : (
+              <span style={{ color: 'var(--color-accent-primary)' }}>당일</span>
+            )}
+            {' '}6개월 실적은 총{' '}
             <button
               onClick={() => setMonthlyPickupSegOpen(true)}
               title="월별 픽업 추이 보기"
               style={{ color: totalPuNights >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
             >
-              {formatPu(totalPuNights, 'nights')}실
+              {(() => { const { num, unit } = formatPuParts(totalPuNights, 'nights'); return <><span style={{ fontSize: '1.5em' }}>{num}</span>{unit}</> })()}
             </button>
-            ,&nbsp;ADR&nbsp;
+            ,{' '}ADR{' '}
             <button
               onClick={() => setMonthlyPickupSegOpen(true)}
               title="월별 픽업 추이 보기"
               style={{ color: totalPuAdr >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
             >
-              {formatPu(totalPuAdr, 'currency')}
+              {(() => { const { num, unit } = formatPuParts(totalPuAdr, 'currency'); return <><span style={{ fontSize: '1.5em' }}>{num}</span>{unit}</> })()}
             </button>
-            ,&nbsp;REV&nbsp;
+            ,{' '}REV{' '}
             <button
               onClick={() => setMonthlyPickupSegOpen(true)}
               title="월별 픽업 추이 보기"
               style={{ color: totalPuRevenue >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
             >
-              {formatPu(totalPuRevenue, 'currency')}
+              {(() => { const { num, unit } = formatPuParts(totalPuRevenue, 'currency'); return <><span style={{ fontSize: '1.5em' }}>{num}</span>{unit}</> })()}
             </button>
-            &nbsp;픽업 되었습니다.
+            {' '}픽업 되었습니다.
           </p>
         )}
       </div>
