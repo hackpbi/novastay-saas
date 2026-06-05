@@ -59,13 +59,16 @@ export function buildSegTable(args: {
   year:      number
   month:     number
   roomCount: number
+  day?:      number
 }): { rows: SegTableRow[]; summary: SegTableSummary } {
-  const { schema, pickup, year, month, roomCount } = args
+  const { schema, pickup, year, month, roomCount, day } = args
 
-  // ── 1. 해당 월 픽업 데이터 필터 ──────────────────────────────────────────────
+  // ── 1. 해당 월(또는 특정 일) 픽업 데이터 필터 ────────────────────────────────
   const monthPickup = pickup.filter(r => {
     const d = new Date(r.business_date)
-    return d.getFullYear() === year && d.getMonth() + 1 === month
+    if (d.getFullYear() !== year || d.getMonth() + 1 !== month) return false
+    if (day !== undefined) return d.getDate() === day
+    return true
   })
 
   // ── 2. segmentation 코드별 합산 맵 ──────────────────────────────────────────
@@ -172,7 +175,8 @@ export function buildSegTable(args: {
   const totalAdr = totals.otbNights > 0 ? Math.round(totals.otbRevenue / totals.otbNights) : 0
   const vsAdr    = totals.vsNights  > 0 ? Math.round(totals.vsRevenue  / totals.vsNights)  : 0
   const daysInMonth = new Date(year, month, 0).getDate()
-  const denominator = roomCount * daysInMonth
+  const days        = day !== undefined ? 1 : daysInMonth   // 단일 날짜면 1일
+  const denominator = roomCount * days
 
   const summary: SegTableSummary = {
     totalNights:  totals.otbNights,

@@ -177,7 +177,7 @@ function DataRow({ row, schema, houRowIds, onPickupCellClick }: {
 
 // ─── DataTable ─────────────────────────────────────────────────────────────────
 
-function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, year, month, roomCount }: {
+function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, year, month, day, roomCount }: {
   rows:               SegTableRow[]
   summary:            SegTableSummary
   schema:             MarketSchemaRow[]
@@ -185,11 +185,13 @@ function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, year, 
   onPickupCellClick?: (segCodes: string[], label: string) => void
   year:               number
   month:              number
+  day?:               number
   roomCount:          number
 }) {
   const daysInMonth = new Date(year, month, 0).getDate()
-  const capacity    = roomCount * daysInMonth
-  const otbOcc     = summary.occ    // already computed in buildSegTable
+  const days        = day !== undefined ? 1 : daysInMonth
+  const capacity    = roomCount * days
+  const otbOcc     = summary.occ    // already computed in buildSegTable (day-aware)
   const otbRevpar  = summary.revpar
   const puOcc      = capacity > 0 ? (summary.puNights  / capacity) * 100  : 0
   const puRevpar   = capacity > 0 ?  summary.puRevenue / capacity          : 0
@@ -296,12 +298,13 @@ const EMPTY_SUMMARY: SegTableSummary = {
 }
 
 export default function SegmentationModal({
-  open, onClose, year, month, roomCount, onPickupCellClick,
+  open, onClose, year, month, day, roomCount, onPickupCellClick,
 }: {
   open:               boolean
   onClose:            () => void
   year:               number
   month:              number
+  day?:               number
   roomCount:          number
   onPickupCellClick?: (segCodes: string[], label: string) => void
 }) {
@@ -317,9 +320,9 @@ export default function SegmentationModal({
 
   const { rows, summary } = useMemo(
     () => !loading && schema.length > 0
-      ? buildSegTable({ schema, pickup, year, month, roomCount })
+      ? buildSegTable({ schema, pickup, year, month, roomCount, day })
       : { rows: [], summary: EMPTY_SUMMARY },
-    [schema, pickup, year, month, roomCount, loading],
+    [schema, pickup, year, month, day, roomCount, loading],
   )
 
   const houRowIds = useMemo(() => {
@@ -366,7 +369,7 @@ export default function SegmentationModal({
               Segmentation 비교
             </h2>
             <p className="text-xs mt-0.5" style={{ color: 'var(--brand-dimmed)' }}>
-              {year}년 {month}월 · {currentHotel?.hotel_name ?? ''}
+              {year}년 {month}월{day !== undefined ? ` ${day}일` : ''} · {currentHotel?.hotel_name ?? ''}
             </p>
             <div className="flex items-center gap-2 mt-2">
               <DatePicker
@@ -410,6 +413,7 @@ export default function SegmentationModal({
               onPickupCellClick={onPickupCellClick}
               year={year}
               month={month}
+              day={day}
               roomCount={roomCount}
             />
           )}

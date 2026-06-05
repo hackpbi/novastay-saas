@@ -12,7 +12,9 @@ import { FormDatePicker } from '@/components/DatePicker'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useHotel } from '@/contexts/HotelContext'
+import { useDateContext } from '@/contexts/DateContext'
 import PageShell from '@/components/PageShell'
+import SegmentationModal from '@/components/dashboard/SegmentationModal'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -76,12 +78,13 @@ interface OtbRow {
   business_date: string
   room_type_code: string
   nights:        number
+  status?:       string | null
 }
 
 interface CalendarEvent {
-  date:         string
-  holiday_name: string | null
-  is_holiday:   boolean
+  date:       string
+  event:      string | null
+  is_holiday: boolean
 }
 
 interface RateHistory {
@@ -210,6 +213,14 @@ function OccBar({ pct }: { pct: number | null }) {
       <span className="text-xs font-mono" style={{ color }}>{pct.toFixed(0)}%</span>
     </div>
   )
+}
+
+// ── PackageItem ────────────────────────────────────────────────────────────────
+
+interface PackageItem {
+  id:   string
+  name: string
+  rate: number | null
 }
 
 // ── StrategyModal ──────────────────────────────────────────────────────────────
@@ -354,8 +365,14 @@ function PromotionModal({ hotelId, strategyId, profileId, roomTypes, onClose, on
   const [maxStay,        setMaxStay]        = useState<number | null>(null)
   const [stayUnlimited,  setStayUnlimited]  = useState(false)
   const [saleUnlimited,  setSaleUnlimited]  = useState(false)
+  const [packages,       setPackages]       = useState<PackageItem[]>([])
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+
+  const addPkg    = () => setPackages(prev => [...prev, { id: crypto.randomUUID(), name: '', rate: null }])
+  const removePkg = (id: string) => setPackages(prev => prev.filter(p => p.id !== id))
+  const updatePkg = (id: string, key: keyof PackageItem, value: any) =>
+    setPackages(prev => prev.map(p => p.id === id ? { ...p, [key]: value } : p))
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
   const inputCls = 'w-full rounded-lg px-3 py-2 text-sm outline-none'
   const inputStyle = { background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }
@@ -367,7 +384,7 @@ function PromotionModal({ hotelId, strategyId, profileId, roomTypes, onClose, on
     if (!stayUnlimited && form.stay_start && form.stay_end && form.stay_end < form.stay_start) { setErr('투숙 종료일은 시작일 이후여야 합니다.'); return }
     setSaving(true); setErr(null)
     try {
-      const { error } = await (supabase as any)
+      const { data: promo, error } = await (supabase as any)
         .from('s03_rate_promotion')
         .insert({
           hotel_id:        hotelId,
@@ -385,7 +402,24 @@ function PromotionModal({ hotelId, strategyId, profileId, roomTypes, onClose, on
           sale_end:        saleUnlimited ? null : (form.sale_end   || null),
           status:          form.status,
         })
+        .select('id').single()
       if (error) throw error
+
+      // 패키지 insert (할인 방식 무관)
+      const validPkgs = packages.filter(p => p.name.trim())
+      if (validPkgs.length > 0) {
+        const { error: pkgErr } = await (supabase as any)
+          .from('s04_rate_package')
+          .insert(validPkgs.map((p, i) => ({
+            hotel_id:    hotelId,
+            strategy_id: strategyId,
+            name:        p.name.trim(),
+            add_on_rate: p.rate ?? 0,
+            sort_order:  i,
+            status:      'active',
+          })))
+        if (pkgErr) throw pkgErr
+      }
       onCreated()
     } catch (e: any) { setErr(e.message) } finally { setSaving(false) }
   }
@@ -492,21 +526,61 @@ function PromotionModal({ hotelId, strategyId, profileId, roomTypes, onClose, on
                 <option value="pct">% 할인 (정률)</option>
                 <option value="amount">금액 할인 (정액)</option>
                 <option value="fixed">고정 요금</option>
-                <option value="addon">add-on (패키지)</option>
               </select>
             </div>
             <div>
               <label className="text-xs text-brand-muted mb-1 block">
-                {form.discount_type === 'addon' ? '패키지 금액 (원)' : form.discount_type === 'pct' ? '할인율 (%) *' : '할인값 *'}
+                {form.discount_type === 'pct' ? '할인율 (%) *' : '할인값 *'}
               </label>
               <input type="number" className={inputCls} style={inputStyle}
                 value={form.discount_value} onChange={e => set('discount_value', e.target.value)}
-                placeholder={form.discount_type === 'addon' ? '예: 30000' : form.discount_type === 'pct' ? '예: 10' : '예: 50000'} />
+                placeholder={form.discount_type === 'pct' ? '예: 10' : '예: 50000'} />
             </div>
           </div>
-          {form.discount_type === 'addon' && (
-            <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>BAR Rate에 해당 금액을 추가하여 패키지 요금으로 제공합니다.</p>
-          )}
+
+          {/* 패키지 섹션 (항상 표시) */}
+          <div style={{ borderTop: '0.5px solid var(--color-border-default)', paddingTop: 12 }}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold" style={{ color: 'var(--color-text-secondary)' }}>패키지 (선택)</span>
+              <button onClick={addPkg}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium"
+                style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)', background: 'transparent' }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--overlay-hover)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                <Plus size={11} /> 패키지 추가
+              </button>
+            </div>
+            <div className="space-y-2">
+              {packages.map((pkg, idx) => (
+                <div key={pkg.id} className="p-3 rounded-xl space-y-2"
+                  style={{ background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-default)' }}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-medium" style={{ color: 'var(--color-text-muted)' }}>패키지 {idx + 1}</span>
+                    <button onClick={() => removePkg(pkg.id)} className="p-1 rounded"
+                      style={{ color: '#E24B4A', background: 'transparent' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(226,75,74,0.1)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-brand-muted mb-0.5 block">패키지명 *</label>
+                    <input className="w-full rounded-lg outline-none"
+                      style={{ ...inputStyle, fontSize: 12, padding: '6px 10px' }}
+                      value={pkg.name} onChange={e => updatePkg(pkg.id, 'name', e.target.value)}
+                      placeholder="예: 조식포함" />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-brand-muted mb-0.5 block">금액 (원)</label>
+                    <input type="number" min={0} className="w-full rounded-lg outline-none"
+                      style={{ ...inputStyle, fontSize: 12, padding: '6px 10px' }}
+                      value={pkg.rate ?? ''} onChange={e => updatePkg(pkg.id, 'rate', e.target.value ? Number(e.target.value) : null)}
+                      placeholder="예: 30000" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
 
           {/* 투숙 기간 */}
           <div>
@@ -546,22 +620,31 @@ function PromotionModal({ hotelId, strategyId, profileId, roomTypes, onClose, on
             </label>
           </div>
 
-          {/* 상태 */}
-          <div>
-            <label className="text-xs text-brand-muted mb-1 block">상태</label>
-            <select className={inputCls} style={inputStyle} value={form.status} onChange={e => set('status', e.target.value)}>
-              <option value="active">활성</option>
-              <option value="inactive">비활성</option>
-            </select>
-          </div>
         </div>
-        <div className="flex justify-end gap-2 px-6 py-4" style={{ borderTop: '1px solid var(--color-border-default)' }}>
-          <button onClick={onClose} className="px-4 py-2 text-xs text-brand-muted">취소</button>
-          <button onClick={submit} disabled={saving}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold disabled:opacity-50"
-            style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
-            {saving ? <Loader2 size={12} className="animate-spin" /> : <Tag size={12} />}추가
-          </button>
+        <div className="flex items-center justify-between gap-2 px-6 py-4" style={{ borderTop: '1px solid var(--color-border-default)' }}>
+          {/* 상태 토글 */}
+          <div style={{ display: 'inline-flex', borderRadius: 'var(--border-radius-md)', overflow: 'hidden', border: '0.5px solid var(--color-border-secondary)' }}>
+            {(['active', 'inactive'] as const).map(s => (
+              <button key={s} onClick={() => set('status', s)}
+                style={{
+                  padding: '5px 16px', fontSize: 12, fontWeight: form.status === s ? 500 : 400,
+                  background: form.status === s ? '#00E5A0' : 'transparent',
+                  color: form.status === s ? '#04342C' : 'var(--color-text-secondary)',
+                  border: 'none', cursor: 'pointer',
+                  borderLeft: s === 'inactive' ? '0.5px solid var(--color-border-secondary)' : 'none',
+                }}>
+                {s === 'active' ? '활성' : '비활성'}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} className="px-4 py-2 text-xs text-brand-muted">취소</button>
+            <button onClick={submit} disabled={saving}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold disabled:opacity-50"
+              style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
+              {saving ? <Loader2 size={12} className="animate-spin" /> : <Tag size={12} />}추가
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -573,6 +656,7 @@ function PromotionModal({ hotelId, strategyId, profileId, roomTypes, onClose, on
 export default function RateStrategyPage() {
   const { profile }      = useAuth()
   const { currentHotel } = useHotel()
+  const { vsOtbDate }    = useDateContext()
   const queryClient      = useQueryClient()
   const hotelId          = currentHotel?.id ?? ''
   const profileId        = profile?.id ?? ''
@@ -606,6 +690,7 @@ export default function RateStrategyPage() {
   const [baseFlash,       setBaseFlash]       = useState<Record<string, 'saving' | 'success' | 'error'>>({})
   const [lastRpaTime,     setLastRpaTime]     = useState<string | null>(null)
   const [rpaSending,      setRpaSending]      = useState(false)
+  const [segModalDate,    setSegModalDate]    = useState<string | null>(null)
 
   // col mode: change / 2night / 3night / promoId
   const [colMode, setColMode] = useState<Record<string, ChangeMode>>({
@@ -726,6 +811,62 @@ export default function RateStrategyPage() {
   const tableStart = stayStart || `${viewYear}-${padM}-01`
   const tableEnd   = stayEnd   || getKSTEndOfMonth(`${viewYear}-${padM}-01`)
 
+  // OCC + 픽업 데이터 (get_pickup_data RPC)
+  // vsOtbDate 없으면 otbDate 를 fallback으로 사용 → pu_nights=0, otb_nights만 유효
+  const minOtbDate = otbDates[otbDates.length - 1] ?? ''
+  const { data: pickupRows = [] } = useQuery<{ business_date: string; otb_nights: number; pu_nights: number }[]>({
+    queryKey: ['rate_strategy_pickup', hotelId, otbDate, vsOtbDate, tableStart, tableEnd],
+    queryFn: async () => {
+      if (!hotelId || !otbDate || !minOtbDate) return []
+      const { data, error } = await (supabase as any)
+        .rpc('get_pickup_data', {
+          p_hotel_id:    hotelId,
+          p_otb_date:    otbDate,
+          p_vs_otb_date: vsOtbDate || otbDate,  // fallback: vs=base → pu_nights=0
+          p_min_date:    minOtbDate,
+        })
+      if (error) throw error
+      return (data ?? []).filter((r: any) =>
+        !tableStart || !tableEnd || (r.business_date >= tableStart && r.business_date <= tableEnd)
+      )
+    },
+    enabled: !!hotelId && !!otbDate && !!minOtbDate,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // occMap: business_date → 합산 otb_nights / roomCount * 100
+  const pickupOccMap = useMemo(() => {
+    const nightsMap: Record<string, number> = {}
+    for (const r of pickupRows) {
+      nightsMap[r.business_date] = (nightsMap[r.business_date] ?? 0) + (r.otb_nights ?? 0)
+    }
+    return nightsMap
+  }, [pickupRows])
+
+  // pickupMap: business_date → 합산 pu_nights
+  const pickupMap = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const r of pickupRows) {
+      map[r.business_date] = (map[r.business_date] ?? 0) + ((r as any).pu_nights ?? 0)
+    }
+    return map
+  }, [pickupRows])
+
+  // segPickupMap: business_date → { fit: number; grp: number }
+  // sorting2 실제값: 'fit', 'group'
+  const segPickupMap = useMemo(() => {
+    const map: Record<string, { fit: number; grp: number }> = {}
+    for (const r of pickupRows as any[]) {
+      const d   = r.business_date
+      const seg = r.sorting2 as string | null
+      const pu  = r.pu_nights ?? 0
+      if (!map[d]) map[d] = { fit: 0, grp: 0 }
+      if (seg === 'fit')   map[d].fit += pu
+      if (seg === 'group') map[d].grp += pu
+    }
+    return map
+  }, [pickupRows])
+
   // BAR Rate 업로드 이력 날짜 목록 (최근 4회)
   const { data: uploadDates = [] } = useQuery<string[]>({
     queryKey: ['bar-upload-dates', effectiveStratId],
@@ -769,14 +910,15 @@ export default function RateStrategyPage() {
   const stayEndEff0   = tableEnd
 
   const { data: calendarEvents = [] } = useQuery<CalendarEvent[]>({
-    queryKey: ['c07_public_calendar', stayStartEff0, stayEndEff0],
+    queryKey: ['c06_calendar', stayStartEff0, stayEndEff0],
     queryFn: async () => {
       if (!stayStartEff0 || !stayEndEff0) return []
       const { data, error } = await (supabase as any)
-        .from('c07_public_calendar')
-        .select('date, holiday_name, is_holiday')
+        .from('c06_calendar')
+        .select('date, event, is_holiday')
         .gte('date', stayStartEff0)
         .lte('date', stayEndEff0)
+        .not('event', 'is', null)
       if (error) throw error
       return data ?? []
     },
@@ -784,51 +926,29 @@ export default function RateStrategyPage() {
     staleTime: 60 * 60 * 1000,
   })
 
-  // OTB data for OCC
   const stayStartEff = tableStart
   const stayEndEff   = tableEnd
-
-  const { data: otbRows = [] } = useQuery<OtbRow[]>({
-    queryKey: ['r02_otb', hotelId, otbDate, stayStartEff, stayEndEff],
-    queryFn: async () => {
-      if (!otbDate || !stayStartEff || !stayEndEff) return []
-      const { data, error } = await (supabase as any)
-        .from('r02_otb')
-        .select('business_date, room_type_code, nights')
-        .eq('hotel_id', hotelId)
-        .eq('update_date', otbDate)
-        .gte('business_date', stayStartEff)
-        .lte('business_date', stayEndEff)
-      if (error) throw error
-      return data
-    },
-    enabled: !!hotelId && !!otbDate && !!stayStartEff && !!stayEndEff,
-    staleTime: 5 * 60 * 1000,
-  })
 
   // ── Derived Data ────────────────────────────────────────────────────────────
 
   const dates = stayStartEff && stayEndEff ? getDateRange(stayStartEff, stayEndEff) : []
   const displayRTs = showAllTypes ? roomTypes : roomTypes.filter(rt => rt.room_type_code === selRoomType)
 
-  // OCC map: date → occ%
+  // OCC map: date → occ% (get_pickup_data의 otb_nights 기반)
   const occMap = useMemo(() => {
     const map: Record<string, number> = {}
     if (!roomCount) return map
-    const nightsMap: Record<string, number> = {}
-    for (const r of otbRows) {
-      nightsMap[r.business_date] = (nightsMap[r.business_date] ?? 0) + r.nights
-    }
-    for (const [d, nights] of Object.entries(nightsMap)) {
+    for (const [d, nights] of Object.entries(pickupOccMap)) {
       map[d] = (nights / roomCount) * 100
     }
     return map
-  }, [otbRows, roomCount])
+  }, [pickupOccMap, roomCount])
 
-  // event map: date → CalendarEvent[]
+  // event map: date → CalendarEvent[] (event 빈값/null문자열 제외)
   const eventMap = useMemo(() => {
     const map: Record<string, CalendarEvent[]> = {}
     for (const ev of calendarEvents) {
+      if (!ev.event || ev.event.trim() === '' || ev.event.toLowerCase() === 'null') continue
       if (!map[ev.date]) map[ev.date] = []
       map[ev.date].push(ev)
     }
@@ -883,14 +1003,7 @@ export default function RateStrategyPage() {
     return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
   }, [occMap])
 
-  const avgAdr = useMemo(() => {
-    let nights = 0, rev = 0
-    for (const r of otbRows) {
-      nights += r.nights
-      // rev not available in simplified query — skip ADR
-    }
-    return nights > 0 ? null : null // placeholder
-  }, [otbRows])
+  const avgAdr = null
 
   // ── Save Rate Cell ──────────────────────────────────────────────────────────
 
@@ -1280,6 +1393,7 @@ export default function RateStrategyPage() {
           </div>
         </div>
 
+
         {filterDivider}
 
         {/* 투숙기간 */}
@@ -1457,6 +1571,7 @@ export default function RateStrategyPage() {
                     <th className="px-3 py-2.5 text-left font-semibold text-brand-muted uppercase tracking-wide"
                       style={{ borderRight: DIVIDER }}>
                       OCC
+                      {vsOtbDate && <span style={{ fontSize: 9, color: 'var(--color-text-muted)', marginLeft: 3, fontWeight: 400 }}>vs {vsOtbDate}</span>}
                     </th>
                     {/* D-N 이력 컬럼 헤더 */}
                     {histDates.length > 0 && displayRTs.map(rt =>
@@ -1522,7 +1637,7 @@ export default function RateStrategyPage() {
                     const dow         = getDayNum(date)
                     const isFri       = dow === 5
                     const isSat       = dow === 6
-                    const namedEvents = (eventMap[date] ?? []).filter(ev => ev.holiday_name)
+                    const namedEvents = (eventMap[date] ?? []).filter(ev => ev.event && ev.event.trim() !== '' && ev.event.toLowerCase() !== 'null')
                     const visibleEvts = namedEvents.slice(0, 2)
                     const extraEvts   = namedEvents.length - visibleEvts.length
                     const hasEvent    = namedEvents.length > 0
@@ -1545,52 +1660,84 @@ export default function RateStrategyPage() {
                             )} className="cursor-pointer" />
                         </td>
                         {/* 날짜 */}
-                        <td className="px-3 py-1.5 whitespace-nowrap sticky left-8 z-10"
-                          style={{ background: rowBg, borderRight: DIVIDER, minWidth: 90 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <span className="font-mono text-xs"
-                              style={{ color: 'var(--color-text-primary)', fontWeight: hasEvent ? 700 : 600 }}>
-                              {date.slice(5)}
-                            </span>
-                            <span className="text-[11px]"
-                              style={{ color: weekend ? 'var(--color-accent-primary)' : 'var(--color-text-muted)', fontWeight: hasEvent ? 700 : 400 }}>
-                              {getDow(date)}
-                            </span>
-                            {(isFri || isSat) && (
-                              <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#00E5A0', display: 'inline-block', flexShrink: 0 }} />
-                            )}
-                            {namedEvents.length > 0 && (
-                              <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#E24B4A', display: 'inline-block', flexShrink: 0 }} />
-                            )}
-                            {visibleEvts.map((ev, i) => (
-                              <span key={i} title={ev.holiday_name!}
-                                style={{
-                                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                  width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
-                                  fontSize: 9, fontWeight: 600,
-                                  background: ev.is_holiday ? 'rgba(226,75,74,0.15)' : 'rgba(0,184,255,0.15)',
-                                  color:      ev.is_holiday ? '#E24B4A' : '#185FA5',
-                                }}>
-                                {ev.holiday_name!.slice(0, 2)}
+                        <td className="px-3 py-2 whitespace-nowrap sticky left-8 z-10"
+                          style={{ background: rowBg, borderRight: DIVIDER, minWidth: 100 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            {/* 왼쪽: 날짜 + 요일 + 금토 점 */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-primary)' }}>
+                                {date.slice(5)}
                               </span>
-                            ))}
-                            {extraEvts > 0 && (
-                              <span title={`+${extraEvts}개`}
-                                style={{
-                                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                  width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
-                                  fontSize: 9, fontWeight: 600,
-                                  background: 'var(--color-bg-tertiary)', color: 'var(--color-text-muted)',
-                                }}>
-                                +
+                              <span style={{ fontSize: 10, color: (isFri || isSat) ? '#00B883' : 'var(--color-text-secondary)' }}>
+                                {getDow(date)}
                               </span>
+                              {(isFri || isSat) && (
+                                <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#00E5A0', display: 'inline-block', flexShrink: 0 }} />
+                              )}
+                            </div>
+                            {/* 오른쪽: 이벤트 뱃지 */}
+                            {visibleEvts.length > 0 && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                {visibleEvts.map((ev, i) => (
+                                  <span key={i} title={ev.event!}
+                                    style={{
+                                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                      width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                                      fontSize: 9, fontWeight: 600,
+                                      background: ev.is_holiday ? 'rgba(232,75,74,0.15)' : 'rgba(24,95,165,0.15)',
+                                      color:      ev.is_holiday ? '#E24B4A' : '#185FA5',
+                                    }}>
+                                    {ev.event!.slice(0, 2)}
+                                  </span>
+                                ))}
+                              </div>
                             )}
                           </div>
                         </td>
                         {/* OCC */}
-                        <td className="px-3 py-2" style={{ borderRight: DIVIDER }}>
-                          <OccBar pct={occ} />
-                        </td>
+                        {(() => {
+                          const barW     = occ != null ? Math.min(100, Math.max(0, occ)) : 0
+                          const barColor = occ != null
+                            ? occ >= 80 ? '#00B883' : occ >= 60 ? '#F6AD55' : '#E24B4A'
+                            : 'var(--color-bg-tertiary)'
+                          const seg      = vsOtbDate ? segPickupMap[date] : null
+                          const fitPu    = seg?.fit ?? 0
+                          const grpPu    = seg?.grp ?? 0
+                          const hasPu    = fitPu !== 0 || grpPu !== 0
+                          return (
+                            <td className="px-3 py-2"
+                              onClick={seg ? () => setSegModalDate(date) : undefined}
+                              style={{ borderRight: DIVIDER, cursor: seg ? 'pointer' : 'default', minWidth: 130 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                                {/* 왼쪽: 바 + % */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                  <div style={{ width: `${barW * 0.48}px`, height: 4, borderRadius: 2, background: barColor, flexShrink: 0 }} />
+                                  <span style={{ fontSize: 12, fontWeight: 500, color: occ != null ? barColor : 'var(--color-text-muted)' }}>
+                                    {occ != null ? `${occ.toFixed(0)}%` : '—'}
+                                  </span>
+                                </div>
+                                {/* 오른쪽: FIT | GRP 구분선 포함 */}
+                                {vsOtbDate && (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0 }}>
+                                    <span style={{
+                                      fontSize: 10, fontWeight: 500, whiteSpace: 'nowrap', paddingRight: 5,
+                                      color: fitPu > 0 ? '#00B883' : fitPu < 0 ? '#E24B4A' : 'var(--color-text-secondary)',
+                                    }}>
+                                      FIT{fitPu > 0 ? '▲' : fitPu < 0 ? '▼' : '—'}{fitPu !== 0 ? Math.abs(fitPu) : ''}
+                                    </span>
+                                    <div style={{ width: 1, height: 12, background: 'var(--color-border-default)', flexShrink: 0 }} />
+                                    <span style={{
+                                      fontSize: 10, fontWeight: 500, whiteSpace: 'nowrap', paddingLeft: 5,
+                                      color: grpPu > 0 ? '#00B883' : grpPu < 0 ? '#E24B4A' : 'var(--color-text-secondary)',
+                                    }}>
+                                      GRP{grpPu > 0 ? '▲' : grpPu < 0 ? '▼' : '—'}{grpPu !== 0 ? Math.abs(grpPu) : ''}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          )
+                        })()}
                         {/* D-N 이력 셀 (읽기 전용) */}
                         {histDates.length > 0 && displayRTs.map(rt =>
                           histDates.map((ud, i) => {
@@ -1894,6 +2041,23 @@ export default function RateStrategyPage() {
           </div>
         </div>
       )}
+
+      {/* Segmentation 모달 (OCC 픽업 클릭) */}
+      {segModalDate && (() => {
+        const y = Number(segModalDate.slice(0, 4))
+        const m = Number(segModalDate.slice(5, 7))
+        const d = Number(segModalDate.slice(8, 10))
+        return (
+          <SegmentationModal
+            open={true}
+            onClose={() => setSegModalDate(null)}
+            year={y}
+            month={m}
+            day={d}
+            roomCount={roomCount}
+          />
+        )
+      })()}
 
       {showStratModal && (
         <StrategyModal hotelId={hotelId} profileId={profileId}
