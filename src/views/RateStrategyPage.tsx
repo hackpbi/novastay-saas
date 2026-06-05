@@ -5,8 +5,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, ChevronDown, X, Save, Tag, Loader2, Send,
   CheckSquare, Square, TrendingUp, TrendingDown,
-  Minus, Activity,
+  Minus, Activity, Trash2,
 } from 'lucide-react'
+import * as XLSX from 'xlsx'
+import { FormDatePicker } from '@/components/DatePicker'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useHotel } from '@/contexts/HotelContext'
@@ -15,7 +17,7 @@ import PageShell from '@/components/PageShell'
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type StrategyStatus = 'draft' | 'active' | 'inactive'
-type DiscountType   = 'pct' | 'amount' | 'fixed'
+type DiscountType   = 'pct' | 'amount' | 'fixed' | 'addon'
 type ChangeMode     = '%' | '+-' | 'direct'
 
 interface Strategy {
@@ -39,12 +41,14 @@ interface RateDetail {
   hotel_id:       string
   strategy_id:    string
   room_type_code: string
+  date_type:      string
   stay_date:      string
-  rate_code:      string
+  stay_start:     string | null
+  stay_end:       string | null
   rack_rate:      number | null
   new_rate:       number | null
-  change_mode:    ChangeMode | null
-  change_value:   number | null
+  diff:           number | null
+  diff_pct:       number | null
   memo:           string | null
 }
 
@@ -65,12 +69,37 @@ interface RoomType {
   room_type_code:        string
   room_type_description: string
   no_rooms:              number | null
+  surcharge:             number | null
 }
 
 interface OtbRow {
   business_date: string
   room_type_code: string
   nights:        number
+}
+
+interface CalendarEvent {
+  date:         string
+  holiday_name: string | null
+  is_holiday:   boolean
+}
+
+interface RateHistory {
+  stay_date:      string
+  room_type_code: string
+  rack_rate:      number
+  uploaded_at:    string
+}
+
+interface RatePackage {
+  id:          string
+  hotel_id:    string
+  strategy_id: string
+  name:        string
+  description: string | null
+  add_on_rate: number
+  status:      string
+  sort_order:  number
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -83,18 +112,39 @@ const fmtShort = (n: number | null | undefined) =>
 
 function getDateRange(start: string, end: string): string[] {
   const dates: string[] = []
-  const cur = new Date(start + 'T00:00:00')
-  const last = new Date(end + 'T00:00:00')
-  while (cur <= last) {
-    dates.push(cur.toISOString().slice(0, 10))
-    cur.setDate(cur.getDate() + 1)
+  const [sy, sm, sd] = start.split('-').map(Number)
+  const [ey, em, ed] = end.split('-').map(Number)
+  let y = sy, m = sm, d = sd
+  while (true) {
+    const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    dates.push(dateStr)
+    if (y === ey && m === em && d === ed) break
+    const next = new Date(y, m - 1, d + 1)  // 로컬 시간 기준 다음날
+    y = next.getFullYear()
+    m = next.getMonth() + 1
+    d = next.getDate()
   }
   return dates
 }
 
 const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토']
 const getDow = (d: string) => DAY_LABELS[new Date(d + 'T00:00:00').getDay()]
-const isWeekend = (d: string) => { const w = new Date(d + 'T00:00:00').getDay(); return w === 0 || w === 6 }
+const getDayNum = (d: string) => new Date(d + 'T00:00:00').getDay()
+const isWeekend = (d: string) => { const w = getDayNum(d); return w === 5 || w === 6 }
+
+function endOfMonthStr(dateStr: string): string {
+  const [year, month] = dateStr.split('-').map(Number)
+  const lastDay = new Date(year, month, 0).getDate()
+  return `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+}
+const getKSTEndOfMonth = endOfMonthStr
+
+function getKSTDateString(): string {
+  const now  = new Date()
+  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000
+  const kst   = new Date(utcMs + 9 * 60 * 60000)
+  return `${kst.getFullYear()}-${String(kst.getMonth() + 1).padStart(2, '0')}-${String(kst.getDate()).padStart(2, '0')}`
+}
 
 function calcNewRate(rack: number, mode: ChangeMode, val: number): number {
   if (mode === '%')      return Math.round(rack * (1 + val / 100))
@@ -172,24 +222,45 @@ function StrategyModal({ hotelId, profileId, onClose, onCreated }: {
     name: '', description: '',
     sale_start: '', sale_end: '',
     stay_start: '', stay_end: '',
-    status: 'draft' as StrategyStatus,
   })
+  const [stayUnlimited, setStayUnlimited] = useState(false)
+  const [saleUnlimited, setSaleUnlimited] = useState(false)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+
   const inputCls = 'w-full rounded-lg px-3 py-2 text-sm outline-none'
   const inputStyle = { background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }
 
   async function submit() {
-    if (!form.name || !form.stay_start || !form.stay_end) { setErr('전략 이름과 투숙기간은 필수입니다.'); return }
+    if (!form.name.trim()) { setErr('전략 이름은 필수입니다.'); return }
+    if (!stayUnlimited) {
+      if (!form.stay_start) { setErr('투숙 시작일은 필수입니다.'); return }
+      if (!form.stay_end)   { setErr('투숙 종료일은 필수입니다.'); return }
+      if (form.stay_end < form.stay_start) { setErr('투숙 종료일은 시작일 이후여야 합니다.'); return }
+    }
+    if (!saleUnlimited && form.sale_start && form.sale_end && form.sale_end < form.sale_start) {
+      setErr('판매 종료일은 판매 시작일 이후여야 합니다.'); return
+    }
     setSaving(true); setErr(null)
     try {
-      const { data, error } = await (supabase as any)
+      const { data: strategy, error } = await (supabase as any)
         .from('s01_rate_strategy')
-        .insert({ ...form, hotel_id: hotelId, created_by: profileId, updated_by: profileId })
+        .insert({
+          hotel_id:    hotelId,
+          name:        form.name.trim(),
+          description: form.description || null,
+          stay_start:  stayUnlimited ? null : form.stay_start,
+          stay_end:    stayUnlimited ? null : form.stay_end,
+          sale_start:  saleUnlimited ? null : (form.sale_start || null),
+          sale_end:    saleUnlimited ? null : (form.sale_end   || null),
+          status:      'draft',
+          created_by:  profileId,
+          updated_by:  profileId,
+        })
         .select().single()
       if (error) throw error
-      onCreated(data)
+      onCreated(strategy)
     } catch (e: any) { setErr(e.message) } finally { setSaving(false) }
   }
 
@@ -202,23 +273,53 @@ function StrategyModal({ hotelId, profileId, onClose, onCreated }: {
           <p className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>전략 생성</p>
           <button onClick={onClose} className="text-brand-muted hover:text-brand-text"><X size={18} /></button>
         </div>
-        <div className="px-6 py-4 space-y-3 overflow-y-auto max-h-[70vh]">
+        <div className="px-6 py-4 space-y-3 overflow-y-auto max-h-[75vh]">
           {err && <p className="text-xs text-status-negative px-3 py-2 rounded-lg" style={{ background: 'var(--negative-bg)' }}>{err}</p>}
-          <div><label className="text-xs text-brand-muted mb-1 block">전략 이름 *</label>
-            <input className={inputCls} style={inputStyle} value={form.name} onChange={e => set('name', e.target.value)} placeholder="예: 여름 성수기 전략" /></div>
-          <div><label className="text-xs text-brand-muted mb-1 block">설명</label>
-            <textarea className={inputCls} style={inputStyle} rows={2} value={form.description} onChange={e => set('description', e.target.value)} /></div>
-          <div className="grid grid-cols-2 gap-2">
-            <div><label className="text-xs text-brand-muted mb-1 block">투숙 시작 *</label>
-              <input type="date" className={inputCls} style={inputStyle} value={form.stay_start} onChange={e => set('stay_start', e.target.value)} /></div>
-            <div><label className="text-xs text-brand-muted mb-1 block">투숙 종료 *</label>
-              <input type="date" className={inputCls} style={inputStyle} value={form.stay_end} onChange={e => set('stay_end', e.target.value)} /></div>
+          <div>
+            <label className="text-xs text-brand-muted mb-1 block">전략 이름 *</label>
+            <input className={inputCls} style={inputStyle} value={form.name}
+              onChange={e => set('name', e.target.value)} placeholder="예: 여름 성수기 전략" />
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div><label className="text-xs text-brand-muted mb-1 block">판매 시작</label>
-              <input type="date" className={inputCls} style={inputStyle} value={form.sale_start} onChange={e => set('sale_start', e.target.value)} /></div>
-            <div><label className="text-xs text-brand-muted mb-1 block">판매 종료</label>
-              <input type="date" className={inputCls} style={inputStyle} value={form.sale_end} onChange={e => set('sale_end', e.target.value)} /></div>
+          <div>
+            <label className="text-xs text-brand-muted mb-1 block">설명</label>
+            <textarea className={inputCls} style={inputStyle} rows={2}
+              value={form.description} onChange={e => set('description', e.target.value)} />
+          </div>
+          {/* 투숙 기간 */}
+          <div>
+            <div className="grid grid-cols-2 gap-2" style={{ opacity: stayUnlimited ? 0.4 : 1, pointerEvents: stayUnlimited ? 'none' : undefined }}>
+              <div>
+                <label className="text-xs text-brand-muted mb-1 block">투숙 시작{!stayUnlimited && ' *'}</label>
+                <FormDatePicker value={form.stay_start} onChange={v => set('stay_start', v)} placeholder="날짜 선택" />
+              </div>
+              <div>
+                <label className="text-xs text-brand-muted mb-1 block">투숙 종료{!stayUnlimited && ' *'}</label>
+                <FormDatePicker value={form.stay_end} onChange={v => set('stay_end', v)} placeholder="날짜 선택" />
+              </div>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginTop: 6, cursor: 'pointer', color: stayUnlimited ? '#00E5A0' : 'var(--color-text-secondary)' }}>
+              <input type="checkbox" checked={stayUnlimited} style={{ accentColor: '#00E5A0', cursor: 'pointer' }}
+                onChange={e => { setStayUnlimited(e.target.checked); if (e.target.checked) { set('stay_start', ''); set('stay_end', '') } }} />
+              기간제한 없음
+            </label>
+          </div>
+          {/* 판매 기간 */}
+          <div>
+            <div className="grid grid-cols-2 gap-2" style={{ opacity: saleUnlimited ? 0.4 : 1, pointerEvents: saleUnlimited ? 'none' : undefined }}>
+              <div>
+                <label className="text-xs text-brand-muted mb-1 block">판매 시작</label>
+                <FormDatePicker value={form.sale_start} onChange={v => set('sale_start', v)} placeholder="날짜 선택" />
+              </div>
+              <div>
+                <label className="text-xs text-brand-muted mb-1 block">판매 종료</label>
+                <FormDatePicker value={form.sale_end} onChange={v => set('sale_end', v)} placeholder="날짜 선택" />
+              </div>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginTop: 6, cursor: 'pointer', color: saleUnlimited ? '#00E5A0' : 'var(--color-text-secondary)' }}>
+              <input type="checkbox" checked={saleUnlimited} style={{ accentColor: '#00E5A0', cursor: 'pointer' }}
+                onChange={e => { setSaleUnlimited(e.target.checked); if (e.target.checked) { set('sale_start', ''); set('sale_end', '') } }} />
+              기간제한 없음
+            </label>
           </div>
         </div>
         <div className="flex justify-end gap-2 px-6 py-4" style={{ borderTop: '1px solid var(--color-border-default)' }}>
@@ -241,10 +342,18 @@ function PromotionModal({ hotelId, strategyId, profileId, roomTypes, onClose, on
   roomTypes: RoomType[]; onClose: () => void; onCreated: () => void
 }) {
   const [form, setForm] = useState({
-    name: '', room_type_code: '',
+    name: '', description: '',
     discount_type: 'pct' as DiscountType, discount_value: '',
-    stay_start: '', stay_end: '', status: 'active',
+    stay_start: '', stay_end: '',
+    sale_start: '', sale_end: '',
+    status: 'active',
   })
+  const [roomTypeCodes,  setRoomTypeCodes]  = useState<string[]>([])
+  const [rtOpen,         setRtOpen]         = useState(false)
+  const [minStay,        setMinStay]        = useState<number | null>(null)
+  const [maxStay,        setMaxStay]        = useState<number | null>(null)
+  const [stayUnlimited,  setStayUnlimited]  = useState(false)
+  const [saleUnlimited,  setSaleUnlimited]  = useState(false)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
@@ -252,20 +361,29 @@ function PromotionModal({ hotelId, strategyId, profileId, roomTypes, onClose, on
   const inputStyle = { background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }
 
   async function submit() {
-    if (!form.name || !form.discount_value) { setErr('이름과 할인값은 필수입니다.'); return }
+    if (!form.name.trim()) { setErr('프로모션 이름은 필수입니다.'); return }
+    if (!form.discount_value || Number(form.discount_value) < 0) { setErr('할인값은 0 이상 숫자여야 합니다.'); return }
+    if (minStay !== null && maxStay !== null && maxStay < minStay) { setErr('최대 연박은 최소 연박 이상이어야 합니다.'); return }
+    if (!stayUnlimited && form.stay_start && form.stay_end && form.stay_end < form.stay_start) { setErr('투숙 종료일은 시작일 이후여야 합니다.'); return }
     setSaving(true); setErr(null)
     try {
       const { error } = await (supabase as any)
         .from('s03_rate_promotion')
         .insert({
-          hotel_id: hotelId, strategy_id: strategyId,
-          name: form.name,
-          room_type_code: form.room_type_code || null,
-          discount_type: form.discount_type,
-          discount_value: Number(form.discount_value),
-          stay_start: form.stay_start || null,
-          stay_end: form.stay_end || null,
-          status: form.status,
+          hotel_id:        hotelId,
+          strategy_id:     strategyId,
+          name:            form.name.trim(),
+          description:     form.description || null,
+          room_type_codes: roomTypeCodes.length === 0 ? null : roomTypeCodes,
+          min_stay:        minStay,
+          max_stay:        maxStay,
+          discount_type:   form.discount_type,
+          discount_value:  Number(form.discount_value),
+          stay_start:      stayUnlimited ? null : (form.stay_start || null),
+          stay_end:        stayUnlimited ? null : (form.stay_end   || null),
+          sale_start:      saleUnlimited ? null : (form.sale_start || null),
+          sale_end:        saleUnlimited ? null : (form.sale_end   || null),
+          status:          form.status,
         })
       if (error) throw error
       onCreated()
@@ -281,32 +399,160 @@ function PromotionModal({ hotelId, strategyId, profileId, roomTypes, onClose, on
           <p className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>프로모션 추가</p>
           <button onClick={onClose} className="text-brand-muted hover:text-brand-text"><X size={18} /></button>
         </div>
-        <div className="px-6 py-4 space-y-3">
+        <div className="px-6 py-4 space-y-3 overflow-y-auto max-h-[75vh]">
           {err && <p className="text-xs text-status-negative px-3 py-2 rounded-lg" style={{ background: 'var(--negative-bg)' }}>{err}</p>}
-          <div><label className="text-xs text-brand-muted mb-1 block">프로모션 이름 *</label>
-            <input className={inputCls} style={inputStyle} value={form.name} onChange={e => set('name', e.target.value)} /></div>
+
+          {/* 이름 / 설명 */}
           <div>
-            <label className="text-xs text-brand-muted mb-1 block">객실 타입 (비어있으면 전체)</label>
-            <select className={inputCls} style={inputStyle} value={form.room_type_code} onChange={e => set('room_type_code', e.target.value)}>
-              <option value="">전체</option>
-              {roomTypes.map(rt => <option key={rt.room_type_code} value={rt.room_type_code}>{rt.room_type_code}</option>)}
-            </select>
+            <label className="text-xs text-brand-muted mb-1 block">프로모션 이름 *</label>
+            <input className={inputCls} style={inputStyle} value={form.name} onChange={e => set('name', e.target.value)} />
           </div>
+          <div>
+            <label className="text-xs text-brand-muted mb-1 block">설명</label>
+            <textarea className={inputCls} style={inputStyle} rows={2}
+              value={form.description} onChange={e => set('description', e.target.value)} />
+          </div>
+
+          {/* 객실 타입 다중 선택 */}
+          <div>
+            <label className="text-xs text-brand-muted mb-1 block">객실 타입</label>
+            {!rtOpen ? (
+              <div onClick={() => setRtOpen(true)} style={{
+                border: '0.5px solid var(--color-border-default)', borderRadius: 6, padding: '6px 10px',
+                minHeight: 32, cursor: 'pointer', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4,
+                background: 'var(--color-bg-tertiary)',
+              }}>
+                {roomTypeCodes.length === 0
+                  ? <span style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>전체 객실</span>
+                  : roomTypeCodes.map(code => (
+                      <span key={code} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: 'rgba(0,229,160,0.12)', color: '#00E5A0' }}>{code}</span>
+                    ))
+                }
+              </div>
+            ) : (
+              <div tabIndex={-1} onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setRtOpen(false) }}
+                style={{ border: '0.5px solid var(--color-border-default)', borderRadius: 6, background: 'var(--color-bg-elevated)', outline: 'none' }}>
+                <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+                  {(() => {
+                    const isAll = roomTypes.length > 0 && roomTypeCodes.length === roomTypes.length
+                    return (
+                      <label className="flex items-center gap-2 px-3 py-1.5 cursor-pointer"
+                        style={{ borderBottom: '0.5px solid var(--color-border-default)', background: 'transparent', fontSize: 12, color: isAll ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)' }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--overlay-hover)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                        <input type="checkbox" checked={isAll} style={{ accentColor: 'var(--color-accent-primary)', cursor: 'pointer' }}
+                          onChange={() => setRoomTypeCodes(isAll ? [] : roomTypes.map(rt => rt.room_type_code))} />
+                        전체
+                      </label>
+                    )
+                  })()}
+                  {roomTypes.map((rt, rtIdx) => {
+                    const checked = roomTypeCodes.includes(rt.room_type_code)
+                    return (
+                      <label key={rt.room_type_code} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer"
+                        style={{ borderBottom: rtIdx < roomTypes.length - 1 ? '0.5px solid var(--color-border-default)' : undefined, background: 'transparent', fontSize: 12, color: checked ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)' }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--overlay-hover)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                        <input type="checkbox" checked={checked} style={{ accentColor: 'var(--color-accent-primary)', cursor: 'pointer' }}
+                          onChange={() => setRoomTypeCodes(prev => checked ? prev.filter(c => c !== rt.room_type_code) : [...prev, rt.room_type_code])} />
+                        {rt.room_type_code}
+                      </label>
+                    )
+                  })}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '5px 8px', borderTop: '0.5px solid var(--color-border-default)' }}>
+                  <button onMouseDown={e => e.preventDefault()} onClick={() => setRtOpen(false)}
+                    style={{ fontSize: 11, padding: '3px 12px', borderRadius: 4, background: 'var(--gradient-cta)', color: '#0A0A0A', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                    완료
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 최소/최대 연박 */}
           <div className="grid grid-cols-2 gap-2">
-            <div><label className="text-xs text-brand-muted mb-1 block">할인 유형</label>
+            <div>
+              <label className="text-xs text-brand-muted mb-1 block">최소 연박</label>
+              <input type="number" min={1} className={inputCls} style={inputStyle}
+                value={minStay ?? ''} onChange={e => setMinStay(e.target.value ? Number(e.target.value) : null)} placeholder="예: 1" />
+            </div>
+            <div>
+              <label className="text-xs text-brand-muted mb-1 block">최대 연박</label>
+              <input type="number" min={1} className={inputCls} style={inputStyle}
+                value={maxStay ?? ''} onChange={e => setMaxStay(e.target.value ? Number(e.target.value) : null)} placeholder="예: 7" />
+            </div>
+          </div>
+
+          {/* 할인 방식 */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-brand-muted mb-1 block">할인 방식 *</label>
               <select className={inputCls} style={inputStyle} value={form.discount_type} onChange={e => set('discount_type', e.target.value)}>
-                <option value="pct">% 할인</option>
-                <option value="amount">금액 할인</option>
+                <option value="pct">% 할인 (정률)</option>
+                <option value="amount">금액 할인 (정액)</option>
                 <option value="fixed">고정 요금</option>
-              </select></div>
-            <div><label className="text-xs text-brand-muted mb-1 block">할인 값 *</label>
-              <input type="number" className={inputCls} style={inputStyle} value={form.discount_value} onChange={e => set('discount_value', e.target.value)} /></div>
+                <option value="addon">add-on (패키지)</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-brand-muted mb-1 block">
+                {form.discount_type === 'addon' ? '패키지 금액 (원)' : form.discount_type === 'pct' ? '할인율 (%) *' : '할인값 *'}
+              </label>
+              <input type="number" className={inputCls} style={inputStyle}
+                value={form.discount_value} onChange={e => set('discount_value', e.target.value)}
+                placeholder={form.discount_type === 'addon' ? '예: 30000' : form.discount_type === 'pct' ? '예: 10' : '예: 50000'} />
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div><label className="text-xs text-brand-muted mb-1 block">투숙 시작</label>
-              <input type="date" className={inputCls} style={inputStyle} value={form.stay_start} onChange={e => set('stay_start', e.target.value)} /></div>
-            <div><label className="text-xs text-brand-muted mb-1 block">투숙 종료</label>
-              <input type="date" className={inputCls} style={inputStyle} value={form.stay_end} onChange={e => set('stay_end', e.target.value)} /></div>
+          {form.discount_type === 'addon' && (
+            <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>BAR Rate에 해당 금액을 추가하여 패키지 요금으로 제공합니다.</p>
+          )}
+
+          {/* 투숙 기간 */}
+          <div>
+            <div className="grid grid-cols-2 gap-2" style={{ opacity: stayUnlimited ? 0.4 : 1, pointerEvents: stayUnlimited ? 'none' : undefined }}>
+              <div>
+                <label className="text-xs text-brand-muted mb-1 block">투숙 시작</label>
+                <FormDatePicker value={form.stay_start} onChange={v => set('stay_start', v)} placeholder="날짜 선택" />
+              </div>
+              <div>
+                <label className="text-xs text-brand-muted mb-1 block">투숙 종료</label>
+                <FormDatePicker value={form.stay_end} onChange={v => set('stay_end', v)} placeholder="날짜 선택" />
+              </div>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginTop: 6, cursor: 'pointer', color: stayUnlimited ? '#00E5A0' : 'var(--color-text-secondary)' }}>
+              <input type="checkbox" checked={stayUnlimited} style={{ accentColor: '#00E5A0', cursor: 'pointer' }}
+                onChange={e => { setStayUnlimited(e.target.checked); if (e.target.checked) { set('stay_start', ''); set('stay_end', '') } }} />
+              기간제한 없음
+            </label>
+          </div>
+
+          {/* 판매 기간 */}
+          <div>
+            <div className="grid grid-cols-2 gap-2" style={{ opacity: saleUnlimited ? 0.4 : 1, pointerEvents: saleUnlimited ? 'none' : undefined }}>
+              <div>
+                <label className="text-xs text-brand-muted mb-1 block">판매 시작</label>
+                <FormDatePicker value={form.sale_start} onChange={v => set('sale_start', v)} placeholder="날짜 선택" />
+              </div>
+              <div>
+                <label className="text-xs text-brand-muted mb-1 block">판매 종료</label>
+                <FormDatePicker value={form.sale_end} onChange={v => set('sale_end', v)} placeholder="날짜 선택" />
+              </div>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginTop: 6, cursor: 'pointer', color: saleUnlimited ? '#00E5A0' : 'var(--color-text-secondary)' }}>
+              <input type="checkbox" checked={saleUnlimited} style={{ accentColor: '#00E5A0', cursor: 'pointer' }}
+                onChange={e => { setSaleUnlimited(e.target.checked); if (e.target.checked) { set('sale_start', ''); set('sale_end', '') } }} />
+              기간제한 없음
+            </label>
+          </div>
+
+          {/* 상태 */}
+          <div>
+            <label className="text-xs text-brand-muted mb-1 block">상태</label>
+            <select className={inputCls} style={inputStyle} value={form.status} onChange={e => set('status', e.target.value)}>
+              <option value="active">활성</option>
+              <option value="inactive">비활성</option>
+            </select>
           </div>
         </div>
         <div className="flex justify-end gap-2 px-6 py-4" style={{ borderTop: '1px solid var(--color-border-default)' }}>
@@ -332,9 +578,12 @@ export default function RateStrategyPage() {
   const profileId        = profile?.id ?? ''
 
   // ── Filter State ───────────────────────────────────────────────────────────
+  const todayKST = getKSTDateString()
   const [otbDate,         setOtbDate]         = useState('')
   const [stayStart,       setStayStart]       = useState('')
   const [stayEnd,         setStayEnd]         = useState('')
+  const [viewYear,        setViewYear]        = useState(Number(todayKST.slice(0, 4)))
+  const [viewMonth,       setViewMonth]       = useState(Number(todayKST.slice(5, 7)))
   const [selRoomType,     setSelRoomType]     = useState('')
   const [strategyId,      setStrategyId]      = useState('')
   const [showAllTypes,    setShowAllTypes]    = useState(false)
@@ -344,8 +593,17 @@ export default function RateStrategyPage() {
   const [showPromoModal,  setShowPromoModal]  = useState(false)
   const [selectedDates,   setSelectedDates]   = useState<string[]>([])
   const [bulkValue,       setBulkValue]       = useState('')
+  const [bulkBaseValue,   setBulkBaseValue]   = useState('')
+  const [uploadStatus,    setUploadStatus]    = useState<'idle' | 'parsing' | 'uploading' | 'done' | 'error'>('idle')
+  const [uploadMsg,       setUploadMsg]       = useState<string | null>(null)
+  const [uploadErrors,    setUploadErrors]    = useState<string[]>([])
+  const [showErrorModal,  setShowErrorModal]  = useState(false)
+  const [pendingRows,     setPendingRows]     = useState<{date: string; barRate: number}[]>([])
   const [editCell,        setEditCell]        = useState<{ date: string; rateCode: string; rt: string } | null>(null)
   const [editVal,         setEditVal]         = useState('')
+  const [baseEditCell,    setBaseEditCell]    = useState<{ date: string; rt: string } | null>(null)
+  const [baseEditVal,     setBaseEditVal]     = useState('')
+  const [baseFlash,       setBaseFlash]       = useState<Record<string, 'saving' | 'success' | 'error'>>({})
   const [lastRpaTime,     setLastRpaTime]     = useState<string | null>(null)
   const [rpaSending,      setRpaSending]      = useState(false)
 
@@ -369,15 +627,27 @@ export default function RateStrategyPage() {
 
   useEffect(() => { if (otbDates.length > 0 && !otbDate) setOtbDate(otbDates[0]) }, [otbDates, otbDate])
 
+  // OTB 기준일 확정 시 투숙기간 + viewYear/viewMonth 자동 설정
+  useEffect(() => {
+    if (otbDate) {
+      setViewYear(Number(otbDate.slice(0, 4)))
+      setViewMonth(Number(otbDate.slice(5, 7)))
+      if (!stayStart) {
+        setStayStart(otbDate)
+        setStayEnd(endOfMonthStr(otbDate))
+      }
+    }
+  }, [otbDate])
+
   const { data: roomTypes = [] } = useQuery<RoomType[]>({
     queryKey: ['c01_room_types', hotelId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('c01_room_types')
-        .select('room_type_code, room_type_description, no_rooms')
+        .select('room_type_code, room_type_description, no_rooms, surcharge')
         .eq('hotel_id', hotelId)
         .eq('is_active', true)
-        .order('room_type_code')
+        .order('surcharge', { ascending: true })
       if (error) throw error
       return data
     },
@@ -438,9 +708,85 @@ export default function RateStrategyPage() {
     enabled: !!effectiveStratId, staleTime: 60 * 1000,
   })
 
+  const { data: ratePackages = [] } = useQuery<RatePackage[]>({
+    queryKey: ['s04_rate_package', effectiveStratId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('s04_rate_package').select('*')
+        .eq('strategy_id', effectiveStratId).eq('status', 'active')
+        .order('sort_order')
+      if (error) throw error
+      return data
+    },
+    enabled: !!effectiveStratId, staleTime: 60 * 1000,
+  })
+
+  // 테이블 표시 날짜 범위 (투숙기간 설정 시 우선, 없으면 viewYear/viewMonth 기준)
+  const padM = String(viewMonth).padStart(2, '0')
+  const tableStart = stayStart || `${viewYear}-${padM}-01`
+  const tableEnd   = stayEnd   || getKSTEndOfMonth(`${viewYear}-${padM}-01`)
+
+  // BAR Rate 업로드 이력 날짜 목록 (최근 4회)
+  const { data: uploadDates = [] } = useQuery<string[]>({
+    queryKey: ['bar-upload-dates', effectiveStratId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('s02_rate_detail_history')
+        .select('uploaded_at')
+        .eq('strategy_id', effectiveStratId)
+        .eq('date_type', 'base')
+        .order('uploaded_at', { ascending: false })
+      if (error) throw error
+      const distinct = [...new Set<string>((data ?? []).map((r: any) => r.uploaded_at as string))]
+      return distinct.slice(0, 4)
+    },
+    enabled: !!effectiveStratId,
+    staleTime: 60 * 1000,
+  })
+
+  // BAR Rate 이력 데이터 (stay_date × room_type_code × uploaded_at)
+  const { data: historyRows = [] } = useQuery<RateHistory[]>({
+    queryKey: ['bar-history', effectiveStratId, tableStart, tableEnd, uploadDates],
+    queryFn: async () => {
+      if (!uploadDates.length || !tableStart || !tableEnd) return []
+      const { data, error } = await (supabase as any)
+        .from('s02_rate_detail_history')
+        .select('stay_date, room_type_code, rack_rate, uploaded_at')
+        .eq('strategy_id', effectiveStratId)
+        .eq('date_type', 'base')
+        .gte('stay_date', tableStart)
+        .lte('stay_date', tableEnd)
+        .in('uploaded_at', uploadDates)
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: !!effectiveStratId && uploadDates.length > 0 && !!tableStart && !!tableEnd,
+    staleTime: 60 * 1000,
+  })
+
+  // 공휴일/이벤트
+  const stayStartEff0 = tableStart
+  const stayEndEff0   = tableEnd
+
+  const { data: calendarEvents = [] } = useQuery<CalendarEvent[]>({
+    queryKey: ['c07_public_calendar', stayStartEff0, stayEndEff0],
+    queryFn: async () => {
+      if (!stayStartEff0 || !stayEndEff0) return []
+      const { data, error } = await (supabase as any)
+        .from('c07_public_calendar')
+        .select('date, holiday_name, is_holiday')
+        .gte('date', stayStartEff0)
+        .lte('date', stayEndEff0)
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: !!stayStartEff0 && !!stayEndEff0,
+    staleTime: 60 * 60 * 1000,
+  })
+
   // OTB data for OCC
-  const stayStartEff = stayStart || currentStrategy?.stay_start || ''
-  const stayEndEff   = stayEnd   || currentStrategy?.stay_end   || ''
+  const stayStartEff = tableStart
+  const stayEndEff   = tableEnd
 
   const { data: otbRows = [] } = useQuery<OtbRow[]>({
     queryKey: ['r02_otb', hotelId, otbDate, stayStartEff, stayEndEff],
@@ -479,11 +825,35 @@ export default function RateStrategyPage() {
     return map
   }, [otbRows, roomCount])
 
+  // event map: date → CalendarEvent[]
+  const eventMap = useMemo(() => {
+    const map: Record<string, CalendarEvent[]> = {}
+    for (const ev of calendarEvents) {
+      if (!map[ev.date]) map[ev.date] = []
+      map[ev.date].push(ev)
+    }
+    return map
+  }, [calendarEvents])
+
+  // history map: `${stay_date}__${room_type_code}` → uploaded_at → rack_rate
+  const historyMap = useMemo(() => {
+    const map: Record<string, Record<string, number>> = {}
+    for (const r of historyRows) {
+      const k = `${r.stay_date}__${r.room_type_code}`
+      if (!map[k]) map[k] = {}
+      map[k][r.uploaded_at] = r.rack_rate
+    }
+    return map
+  }, [historyRows])
+
+  // D-3/D-2/D-1 날짜 목록 (uploadDates[1..3], 오래된 순)
+  const histDates = useMemo(() => uploadDates.slice(1).slice(-3).reverse(), [uploadDates])
+
   // rate lookup
   const rateMap = useMemo(() => {
     const map: Record<string, RateDetail> = {}
     for (const r of rateDetails) {
-      map[`${r.stay_date}__${r.room_type_code}__${r.rate_code}`] = r
+      map[`${r.stay_date}__${r.room_type_code}__${r.date_type}`] = r
     }
     return map
   }, [rateDetails])
@@ -495,7 +865,7 @@ export default function RateStrategyPage() {
   const { up, down, flat, avgPct } = useMemo(() => {
     let up = 0, down = 0, flat = 0, sumPct = 0, cnt = 0
     for (const r of rateDetails) {
-      if (r.rate_code !== 'change') continue
+      if (r.date_type !== 'change') continue
       const rack = r.rack_rate ?? 0
       const newR = r.new_rate ?? 0
       if (!rack) { flat++; continue }
@@ -525,23 +895,264 @@ export default function RateStrategyPage() {
   // ── Save Rate Cell ──────────────────────────────────────────────────────────
 
   const saveRateCell = useCallback(async (
-    date: string, rt: string, rateCode: string,
+    date: string, rt: string, dateType: string,
     mode: ChangeMode, val: string,
     rackRate: number | null
   ) => {
     const numVal = parseFloat(val.replace(/,/g, ''))
     if (isNaN(numVal) || !effectiveStratId) return
     const newRate = rackRate != null ? calcNewRate(rackRate, mode, numVal) : (mode === 'direct' ? numVal : null)
+    const diff    = newRate != null && rackRate != null ? newRate - rackRate : null
+    const diffPct = rackRate && diff != null ? (diff / rackRate) * 100 : null
     await (supabase as any)
       .from('s02_rate_detail')
       .upsert({
         hotel_id: hotelId, strategy_id: effectiveStratId,
-        room_type_code: rt, stay_date: date, rate_code: rateCode,
+        room_type_code: rt, stay_date: date, date_type: dateType,
+        stay_start: null, stay_end: null,
         rack_rate: rackRate, new_rate: newRate,
-        change_mode: mode, change_value: numVal,
-      }, { onConflict: 'strategy_id,room_type_code,stay_date,rate_code' })
+        diff, diff_pct: diffPct,
+      }, { onConflict: 'strategy_id,room_type_code,stay_date,date_type' })
     queryClient.invalidateQueries({ queryKey: ['s02_rate_detail', hotelId, effectiveStratId] })
   }, [hotelId, effectiveStratId, queryClient])
+
+  // ── Month Navigation ───────────────────────────────────────────────────────
+
+  const calcMonthRange = useCallback((year: number, month: number) => {
+    const kst = getKSTDateString()
+    const todayYear  = Number(kst.slice(0, 4))
+    const todayMonth = Number(kst.slice(5, 7))
+    const padM2 = String(month).padStart(2, '0')
+    const isCurrent = year === todayYear && month === todayMonth
+    const start = isCurrent ? otbDate : `${year}-${padM2}-01`
+    const end   = getKSTEndOfMonth(`${year}-${padM2}-01`)
+    return { start, end }
+  }, [otbDate])
+
+  const prevMonth = useCallback(() => {
+    let y = viewYear, m = viewMonth - 1
+    if (m === 0) { y -= 1; m = 12 }
+    const { start, end } = calcMonthRange(y, m)
+    setViewYear(y); setViewMonth(m)
+    setStayStart(start); setStayEnd(end)
+  }, [viewYear, viewMonth, calcMonthRange])
+
+  const nextMonth = useCallback(() => {
+    let y = viewYear, m = viewMonth + 1
+    if (m === 13) { y += 1; m = 1 }
+    const { start, end } = calcMonthRange(y, m)
+    setViewYear(y); setViewMonth(m)
+    setStayStart(start); setStayEnd(end)
+  }, [viewYear, viewMonth, calcMonthRange])
+
+  const handleStayStartChange = useCallback((v: string) => {
+    setStayStart(v)
+    if (v) {
+      setViewYear(Number(v.slice(0, 4)))
+      setViewMonth(Number(v.slice(5, 7)))
+    }
+  }, [])
+
+  // ── Save Base Rate (BAR Rate) ────────────────────────────────────────────────
+
+  const saveBaseRate = useCallback(async (
+    date: string, rt: string, val: string,
+    onSaving: () => void, onDone: (ok: boolean) => void
+  ) => {
+    const numVal = parseFloat(val.replace(/,/g, ''))
+    if (isNaN(numVal) || !effectiveStratId) { onDone(false); return }
+    const rackRate = Math.round(numVal) * 1000
+    onSaving()
+    try {
+      await (supabase as any)
+        .from('s02_rate_detail')
+        .upsert({
+          hotel_id: hotelId, strategy_id: effectiveStratId,
+          room_type_code: rt, stay_date: date, date_type: 'base',
+          stay_start: null, stay_end: null,
+          rack_rate: rackRate, new_rate: rackRate,
+          diff: 0, diff_pct: 0,
+        }, { onConflict: 'strategy_id,room_type_code,stay_date,date_type' })
+
+      // 동일 날짜 change 행 있으면 rack_rate 업데이트 후 재계산
+      const changeRow = getRate(date, rt, 'change')
+      if (changeRow) {
+        const existingDiffPct = changeRow.diff_pct ?? 0
+        const newChangeRate = Math.round(rackRate * (1 + existingDiffPct / 100))
+        const diff = newChangeRate - rackRate
+        await (supabase as any)
+          .from('s02_rate_detail')
+          .upsert({
+            hotel_id: hotelId, strategy_id: effectiveStratId,
+            room_type_code: rt, stay_date: date, date_type: 'change',
+            stay_start: null, stay_end: null,
+            rack_rate: rackRate, new_rate: newChangeRate,
+            diff, diff_pct: existingDiffPct,
+          }, { onConflict: 'strategy_id,room_type_code,stay_date,date_type' })
+      }
+      queryClient.invalidateQueries({ queryKey: ['s02_rate_detail', hotelId, effectiveStratId] })
+      onDone(true)
+    } catch { onDone(false) }
+  }, [hotelId, effectiveStratId, queryClient, getRate])
+
+  // ── Bulk Apply Base Rate ───────────────────────────────────────────────────
+
+  const applyBulkBase = useCallback(async () => {
+    if (!bulkBaseValue || !selectedDates.length) return
+    const numVal = parseFloat(bulkBaseValue.replace(/,/g, ''))
+    if (isNaN(numVal)) return
+    const rackRate = Math.round(numVal) * 1000
+    const rtList = showAllTypes ? roomTypes : roomTypes.filter(rt => rt.room_type_code === selRoomType)
+    const baseOps = selectedDates.flatMap(date =>
+      rtList.map(rt => ({
+        hotel_id: hotelId, strategy_id: effectiveStratId,
+        room_type_code: rt.room_type_code, stay_date: date, date_type: 'base',
+        stay_start: null, stay_end: null,
+        rack_rate: rackRate, new_rate: rackRate, diff: 0, diff_pct: 0,
+      }))
+    )
+    const changeOps = selectedDates.flatMap(date =>
+      rtList.flatMap(rt => {
+        const changeRow = getRate(date, rt.room_type_code, 'change')
+        if (!changeRow) return []
+        const existingDiffPct = changeRow.diff_pct ?? 0
+        const newChangeRate = Math.round(rackRate * (1 + existingDiffPct / 100))
+        const diff = newChangeRate - rackRate
+        return [{
+          hotel_id: hotelId, strategy_id: effectiveStratId,
+          room_type_code: rt.room_type_code, stay_date: date, date_type: 'change',
+          stay_start: null, stay_end: null,
+          rack_rate: rackRate, new_rate: newChangeRate, diff, diff_pct: existingDiffPct,
+        }]
+      })
+    )
+    if (baseOps.length > 0) {
+      await (supabase as any).from('s02_rate_detail').upsert(baseOps, { onConflict: 'strategy_id,room_type_code,stay_date,date_type' })
+    }
+    if (changeOps.length > 0) {
+      await (supabase as any).from('s02_rate_detail').upsert(changeOps, { onConflict: 'strategy_id,room_type_code,stay_date,date_type' })
+    }
+    queryClient.invalidateQueries({ queryKey: ['s02_rate_detail', hotelId, effectiveStratId] })
+    setSelectedDates([]); setBulkBaseValue('')
+  }, [bulkBaseValue, selectedDates, showAllTypes, roomTypes, selRoomType, hotelId, effectiveStratId, queryClient, getRate])
+
+  // ── Excel Upload ───────────────────────────────────────────────────────────
+
+  const parseExcel = (file: File): Promise<{ rows: {date: string; barRate: number}[]; errors: string[] }> =>
+    new Promise(resolve => {
+      const reader = new FileReader()
+      reader.onload = e => {
+        const wb = XLSX.read(e.target?.result, { type: 'binary', cellDates: true })
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        const raw = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[]
+        const rows: {date: string; barRate: number}[] = []
+        const errors: string[] = []
+        raw.slice(1).forEach((row, i) => {
+          const lineNum = i + 2
+          if (!row[0] && !row[1]) return
+          // 날짜 파싱
+          let dateStr = ''
+          if (row[0] instanceof Date) {
+            dateStr = row[0].toISOString().slice(0, 10)
+          } else {
+            const s = String(row[0] ?? '').replace(/\//g, '-').trim()
+            if (/^\d{4}-\d{2}-\d{2}$/.test(s)) dateStr = s
+            else { errors.push(`${lineNum}행: 날짜 형식 오류 (${s})`); return }
+          }
+          // BAR Rate 파싱
+          const raw1 = Number(row[1])
+          if (isNaN(raw1) || raw1 <= 0) { errors.push(`${lineNum}행: BAR Rate 값 오류 (${row[1]})`); return }
+          const barRate = raw1 < 1000 ? raw1 * 1000 : raw1
+          rows.push({ date: dateStr, barRate })
+        })
+        resolve({ rows, errors })
+      }
+      reader.readAsBinaryString(file)
+    })
+
+  const runUpload = useCallback(async (rows: {date: string; barRate: number}[]) => {
+    if (!effectiveStratId || !hotelId) return
+    setUploadStatus('uploading')
+    try {
+      const BATCH = 100
+      const payloads = rows.flatMap(({ date, barRate }) =>
+        roomTypes.map(rt => ({
+          hotel_id:       hotelId,
+          strategy_id:    effectiveStratId,
+          room_type_code: rt.room_type_code,
+          date_type:      'base',
+          stay_date:      date,
+          stay_start:     null,
+          stay_end:       null,
+          rack_rate:      Math.round(barRate + (rt.surcharge ?? 0)),
+          new_rate:       Math.round(barRate + (rt.surcharge ?? 0)),
+          diff:           0,
+          diff_pct:       0,
+        }))
+      )
+      for (let i = 0; i < payloads.length; i += BATCH) {
+        setUploadMsg(`업로드 중... (${Math.min(i + BATCH, payloads.length)}/${payloads.length}건)`)
+        await (supabase as any)
+          .from('s02_rate_detail')
+          .upsert(payloads.slice(i, i + BATCH), { onConflict: 'strategy_id,room_type_code,stay_date,date_type' })
+      }
+      queryClient.invalidateQueries({ queryKey: ['s02_rate_detail', hotelId, effectiveStratId] })
+
+      // 이력 저장 (uploaded_at = otbDate)
+      if (otbDate) {
+        const histPayloads = payloads.map(p => ({
+          hotel_id:       p.hotel_id,
+          strategy_id:    p.strategy_id,
+          room_type_code: p.room_type_code,
+          stay_date:      p.stay_date,
+          date_type:      p.date_type,
+          rack_rate:      p.rack_rate,
+          uploaded_at:    otbDate,
+        }))
+        for (let i = 0; i < histPayloads.length; i += BATCH) {
+          await (supabase as any)
+            .from('s02_rate_detail_history')
+            .insert(histPayloads.slice(i, i + BATCH))
+        }
+        queryClient.invalidateQueries({ queryKey: ['bar-upload-dates', effectiveStratId] })
+        queryClient.invalidateQueries({ queryKey: ['bar-history', effectiveStratId] })
+      }
+
+      setUploadStatus('done')
+      setUploadMsg(`${rows.length}일 × ${roomTypes.length}개 객실타입 요금이 입력되었습니다`)
+      setTimeout(() => { setUploadStatus('idle'); setUploadMsg(null) }, 3500)
+    } catch (e: any) {
+      setUploadStatus('error')
+      setUploadMsg(e.message ?? '업로드 실패')
+    }
+  }, [effectiveStratId, hotelId, roomTypes, queryClient, otbDate])
+
+  const handleFileChange = useCallback(async (file: File) => {
+    if (!file) return
+    setUploadStatus('parsing')
+    const { rows, errors } = await parseExcel(file)
+    if (errors.length > 0) {
+      setUploadErrors(errors)
+      setPendingRows(rows)
+      setShowErrorModal(true)
+      setUploadStatus('idle')
+    } else {
+      await runUpload(rows)
+    }
+  }, [runUpload])
+
+  const downloadTemplate = useCallback(() => {
+    const dateRange = stayStartEff && stayEndEff ? getDateRange(stayStartEff, stayEndEff) : []
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['날짜', 'BAR Rate'],
+      ...dateRange.map(d => [d, '']),
+    ])
+    ws['!cols'] = [{ wch: 14 }, { wch: 12 }]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'BAR Rate')
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    XLSX.writeFile(wb, `BAR_Rate_템플릿_${today}.xlsx`)
+  }, [stayStartEff, stayEndEff])
 
   // ── Bulk Apply ─────────────────────────────────────────────────────────────
 
@@ -556,11 +1167,13 @@ export default function RateStrategyPage() {
         const numVal = parseFloat(bulkValue)
         if (isNaN(numVal)) return null
         const newRate = rack != null ? calcNewRate(rack, mode, numVal) : (mode === 'direct' ? numVal : null)
-        return { hotel_id: hotelId, strategy_id: effectiveStratId, room_type_code: rt.room_type_code, stay_date: date, rate_code: 'change', rack_rate: rack, new_rate: newRate, change_mode: mode, change_value: numVal }
+        const diff    = newRate != null && rack != null ? newRate - rack : null
+        const diffPct = rack && diff != null ? (diff / rack) * 100 : null
+        return { hotel_id: hotelId, strategy_id: effectiveStratId, room_type_code: rt.room_type_code, stay_date: date, date_type: 'change', stay_start: null, stay_end: null, rack_rate: rack, new_rate: newRate, diff, diff_pct: diffPct }
       }).filter(Boolean)
     )
     if (ops.length > 0) {
-      await (supabase as any).from('s02_rate_detail').upsert(ops, { onConflict: 'strategy_id,room_type_code,stay_date,rate_code' })
+      await (supabase as any).from('s02_rate_detail').upsert(ops, { onConflict: 'strategy_id,room_type_code,stay_date,date_type' })
       queryClient.invalidateQueries({ queryKey: ['s02_rate_detail', hotelId, effectiveStratId] })
     }
     setSelectedDates([]); setBulkValue('')
@@ -602,12 +1215,38 @@ export default function RateStrategyPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
+  const filterDivider = (
+    <div style={{ width: 1, height: 32, background: 'var(--color-border-default)', flexShrink: 0, alignSelf: 'flex-end', marginBottom: 1 }} />
+  )
+
   return (
-    <PageShell
-      title="Rate Strategy"
-      subtitle={`${currentHotel?.hotel_name ?? ''} · OTB 기준: ${otbDate || '—'}`}
-      badge="수익 관리"
-      actions={
+    <div className="space-y-6 animate-fade-in">
+
+      {/* ── 헤더 ── */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
+        {/* 좌측: 타이틀 + 월 네비 */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <h1 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--color-text-primary)' }}>
+            Rate Strategy
+          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <button onClick={prevMonth}
+              className="flex items-center justify-center rounded transition-colors"
+              style={{ width: 24, height: 24, background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)', flexShrink: 0 }}>
+              <ChevronDown size={12} style={{ transform: 'rotate(90deg)' }} />
+            </button>
+            <span style={{ fontSize: 12, fontWeight: 500, minWidth: 72, textAlign: 'center', color: 'var(--color-text-secondary)' }}>
+              {viewYear}년 {viewMonth}월
+            </span>
+            <button onClick={nextMonth}
+              className="flex items-center justify-center rounded transition-colors"
+              style={{ width: 24, height: 24, background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)', flexShrink: 0 }}>
+              <ChevronDown size={12} style={{ transform: 'rotate(-90deg)' }} />
+            </button>
+          </div>
+        </div>
+
+        {/* 우측: 액션 버튼 */}
         <div className="flex items-center gap-2">
           <button onClick={() => setShowStratModal(true)}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold"
@@ -623,50 +1262,60 @@ export default function RateStrategyPage() {
             </button>
           )}
         </div>
-      }
-    >
-      {/* ── 필터 바 ── */}
-      <div className="flex flex-wrap items-end gap-3 p-4 rounded-xl"
+      </div>
+
+      {/* ── 필터 바 (1줄) ── */}
+      <div className="flex items-end flex-wrap gap-2 px-4 py-3 rounded-xl"
         style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)' }}>
+
         {/* OTB 기준일 */}
-        <div className="space-y-1 min-w-[140px]">
+        <div className="flex flex-col gap-1">
           <label className="text-[11px] font-medium text-brand-muted uppercase tracking-wide">OTB 기준일</label>
           <div className="relative">
-            <select className="w-full rounded-lg px-3 py-2 text-sm pr-7 outline-none appearance-none" style={filterStyle}
+            <select className="rounded-lg px-3 py-1.5 text-sm pr-7 outline-none appearance-none" style={{ ...filterStyle, minWidth: 130 }}
               value={otbDate} onChange={e => setOtbDate(e.target.value)}>
               {otbDates.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
             <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none" />
           </div>
         </div>
+
+        {filterDivider}
+
         {/* 투숙기간 */}
-        <div className="space-y-1">
+        <div className="flex flex-col gap-1">
           <label className="text-[11px] font-medium text-brand-muted uppercase tracking-wide">투숙기간</label>
           <div className="flex items-center gap-1.5">
-            <input type="date" className="rounded-lg px-3 py-2 text-sm outline-none" style={filterStyle}
-              value={stayStart} onChange={e => setStayStart(e.target.value)} />
+            <input type="date" className="rounded-lg px-3 py-1.5 text-sm outline-none" style={filterStyle}
+              value={stayStart} onChange={e => handleStayStartChange(e.target.value)} />
             <span className="text-brand-muted text-xs">~</span>
-            <input type="date" className="rounded-lg px-3 py-2 text-sm outline-none" style={filterStyle}
+            <input type="date" className="rounded-lg px-3 py-1.5 text-sm outline-none" style={filterStyle}
               value={stayEnd} onChange={e => setStayEnd(e.target.value)} />
           </div>
         </div>
+
+        {filterDivider}
+
         {/* 객실타입 */}
-        <div className="space-y-1 min-w-[160px]">
+        <div className="flex flex-col gap-1">
           <label className="text-[11px] font-medium text-brand-muted uppercase tracking-wide">객실타입</label>
           <div className="relative">
-            <select className="w-full rounded-lg px-3 py-2 text-sm pr-7 outline-none appearance-none" style={filterStyle}
+            <select className="rounded-lg px-3 py-1.5 text-sm pr-7 outline-none appearance-none" style={{ ...filterStyle, minWidth: 100 }}
               value={selRoomType} onChange={e => setSelRoomType(e.target.value)}>
               {roomTypes.map(rt => <option key={rt.room_type_code} value={rt.room_type_code}>{rt.room_type_code}</option>)}
             </select>
             <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none" />
           </div>
         </div>
+
+        {strategies.length > 0 && filterDivider}
+
         {/* 전략 선택 */}
         {strategies.length > 0 && (
-          <div className="space-y-1 min-w-[200px]">
+          <div className="flex flex-col gap-1">
             <label className="text-[11px] font-medium text-brand-muted uppercase tracking-wide">전략</label>
             <div className="relative">
-              <select className="w-full rounded-lg px-3 py-2 text-sm pr-7 outline-none appearance-none" style={filterStyle}
+              <select className="rounded-lg px-3 py-1.5 text-sm pr-7 outline-none appearance-none" style={{ ...filterStyle, minWidth: 180 }}
                 value={strategyId} onChange={e => setStrategyId(e.target.value)}>
                 {strategies.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
@@ -674,42 +1323,89 @@ export default function RateStrategyPage() {
             </div>
           </div>
         )}
-        {/* 전체 타입 토글 */}
-        <button onClick={() => setShowAllTypes(v => !v)}
-          className="px-3 py-2 rounded-lg text-xs font-medium transition-colors"
-          style={{
-            background: showAllTypes ? 'var(--accent-badge-bg)' : 'var(--color-bg-tertiary)',
-            border: showAllTypes ? '1px solid var(--color-accent-primary)' : '1px solid var(--color-border-default)',
-            color: showAllTypes ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)',
-          }}>
-          전체 타입
-        </button>
-        {/* 프로모션 추가 */}
-        {effectiveStratId && (
-          <button onClick={() => setShowPromoModal(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium"
-            style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)', background: 'var(--color-bg-secondary)' }}>
-            <Tag size={12} />프로모션
+
+        {/* 스페이서 */}
+        <div style={{ flex: 1 }} />
+
+        {/* 우측 액션 버튼 */}
+        <div className="flex items-center gap-1.5">
+          <button onClick={() => setShowAllTypes(v => !v)}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+            style={{
+              background: showAllTypes ? 'var(--accent-badge-bg)' : 'var(--color-bg-tertiary)',
+              border: showAllTypes ? '1px solid var(--color-accent-primary)' : '1px solid var(--color-border-default)',
+              color: showAllTypes ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)',
+            }}>
+            전체 타입
           </button>
-        )}
+          {effectiveStratId && (
+            <button onClick={() => setShowPromoModal(true)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium"
+              style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)', background: 'var(--color-bg-secondary)' }}>
+              <Tag size={11} />프로모션
+            </button>
+          )}
+          {effectiveStratId && (
+            <>
+              <label
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer"
+                style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)', background: 'var(--color-bg-secondary)' }}>
+                {uploadStatus === 'uploading' || uploadStatus === 'parsing'
+                  ? <Loader2 size={11} className="animate-spin" />
+                  : <Plus size={11} />}
+                엑셀 업로드
+                <input type="file" accept=".xlsx,.xls,.csv" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleFileChange(f); e.target.value = '' }} />
+              </label>
+              <button onClick={downloadTemplate}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium"
+                style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)', background: 'var(--color-bg-secondary)' }}>
+                템플릿
+              </button>
+            </>
+          )}
+        </div>
       </div>
+
+      {/* 업로드 상태 메시지 */}
+      {uploadMsg && (
+        <div className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs"
+          style={{
+            background: uploadStatus === 'error' ? 'rgba(226,75,74,0.08)' : 'rgba(0,229,160,0.06)',
+            border: `1px solid ${uploadStatus === 'error' ? 'rgba(226,75,74,0.3)' : 'rgba(0,229,160,0.2)'}`,
+            color: uploadStatus === 'error' ? '#E24B4A' : 'var(--color-accent-primary)',
+          }}>
+          {(uploadStatus === 'uploading' || uploadStatus === 'parsing') && <Loader2 size={12} className="animate-spin" />}
+          {uploadMsg}
+        </div>
+      )}
 
       {/* ── 일괄 입력 바 ── */}
       {selectedDates.length > 0 && (
-        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl"
+        <div className="flex flex-wrap items-center gap-3 px-4 py-2.5 rounded-xl"
           style={{ background: 'rgba(0,229,160,0.06)', border: '1px solid rgba(0,229,160,0.2)' }}>
           <CheckSquare size={14} style={{ color: 'var(--color-accent-primary)' }} />
           <span className="text-xs font-medium" style={{ color: 'var(--color-accent-primary)' }}>
             {selectedDates.length}일 선택됨
           </span>
-          <span className="text-xs text-brand-muted">일괄 입력</span>
+          {/* BAR Rate 일괄 */}
+          <span className="text-xs text-brand-muted">BAR Rate</span>
+          <input className="rounded-lg px-2 py-1 text-xs w-20 outline-none" style={filterStyle}
+            value={bulkBaseValue} onChange={e => setBulkBaseValue(e.target.value)}
+            placeholder="천원 단위" />
+          <button onClick={applyBulkBase}
+            className="px-3 py-1 rounded-lg text-xs font-semibold"
+            style={{ background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }}>적용</button>
+          <div className="w-px h-4" style={{ background: 'var(--color-border-default)' }} />
+          {/* 변경요금 일괄 */}
+          <span className="text-xs text-brand-muted">변경요금</span>
           <input className="rounded-lg px-2 py-1 text-xs w-24 outline-none" style={filterStyle}
             value={bulkValue} onChange={e => setBulkValue(e.target.value)}
             placeholder={`값 (${colMode['change']})`} />
           <button onClick={applyBulk}
             className="px-3 py-1 rounded-lg text-xs font-semibold"
             style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>적용</button>
-          <button onClick={() => setSelectedDates([])} className="text-brand-muted hover:text-brand-text">
+          <button onClick={() => setSelectedDates([])} className="text-brand-muted hover:text-brand-text ml-auto">
             <X size={14} />
           </button>
         </div>
@@ -762,12 +1458,29 @@ export default function RateStrategyPage() {
                       style={{ borderRight: DIVIDER }}>
                       OCC
                     </th>
-                    {/* 기존 요금 */}
+                    {/* D-N 이력 컬럼 헤더 */}
+                    {histDates.length > 0 && displayRTs.map(rt =>
+                      histDates.map((ud, i) => (
+                        <th key={`${rt.room_type_code}-hist-${ud}`}
+                          className="px-2 py-2.5 text-right font-semibold uppercase tracking-wide whitespace-nowrap"
+                          style={{ borderLeft: '0.5px solid var(--color-border-default)', color: 'var(--color-text-muted)', opacity: 0.6, fontSize: 10 }}>
+                          <div>{showAllTypes ? `${rt.room_type_code} ` : ''}D-{histDates.length - i}</div>
+                          <div style={{ fontSize: 9, fontWeight: 400 }}>{ud}</div>
+                        </th>
+                      ))
+                    )}
+                    {/* BAR Rate (현재, 편집 가능) */}
                     {displayRTs.map(rt => (
                       <th key={`${rt.room_type_code}-rack`}
-                        className="px-3 py-2.5 text-right font-semibold text-brand-muted uppercase tracking-wide whitespace-nowrap"
-                        style={{ borderRight: '1px solid var(--color-border-default)' }}>
-                        {showAllTypes ? `${rt.room_type_code} 기존` : '기존 요금'}
+                        className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide whitespace-nowrap"
+                        style={{
+                          borderLeft: histDates.length > 0 ? '1.5px solid #00E5A0' : '1px solid var(--color-border-default)',
+                          borderRight: '1px solid var(--color-border-default)',
+                          background: histDates.length > 0 ? 'rgba(0,229,160,0.06)' : undefined,
+                          color: '#00B883',
+                        }}>
+                        <div>{showAllTypes ? `${rt.room_type_code} BAR` : 'BAR Rate'}</div>
+                        {uploadDates[0] && <div style={{ fontSize: 9, fontWeight: 400, color: 'rgba(0,184,131,0.7)' }}>{uploadDates[0]} 현재</div>}
                       </th>
                     ))}
                     {/* 요금 컬럼 그룹 */}
@@ -785,6 +1498,17 @@ export default function RateStrategyPage() {
                         </th>
                       ))
                     ))}
+                    {/* 패키지 컬럼 그룹 */}
+                    {ratePackages.length > 0 && ratePackages.map(pkg => (
+                      displayRTs.map(rt => (
+                        <th key={`pkg_${pkg.id}_${rt.room_type_code}`}
+                          className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide whitespace-nowrap"
+                          style={{ borderLeft: '1.5px solid var(--color-border-secondary)', color: 'var(--color-text-muted)' }}>
+                          <div className="text-[10px] text-brand-muted mb-0.5">패키지</div>
+                          <div>{showAllTypes ? `${rt.room_type_code} ${pkg.name}` : pkg.name}</div>
+                        </th>
+                      ))
+                    ))}
                     {/* 메모 */}
                     <th className="px-3 py-2.5 text-left font-semibold text-brand-muted uppercase tracking-wide"
                       style={{ borderLeft: DIVIDER }}>메모</th>
@@ -792,49 +1516,154 @@ export default function RateStrategyPage() {
                 </thead>
                 <tbody>
                   {dates.map(date => {
-                    const weekend = isWeekend(date)
-                    const occ = occMap[date] ?? null
-                    const isSelected = selectedDates.includes(date)
+                    const weekend     = isWeekend(date)
+                    const occ         = occMap[date] ?? null
+                    const isSelected  = selectedDates.includes(date)
+                    const dow         = getDayNum(date)
+                    const isFri       = dow === 5
+                    const isSat       = dow === 6
+                    const namedEvents = (eventMap[date] ?? []).filter(ev => ev.holiday_name)
+                    const visibleEvts = namedEvents.slice(0, 2)
+                    const extraEvts   = namedEvents.length - visibleEvts.length
+                    const hasEvent    = namedEvents.length > 0
+                    const rowBg       = isSelected ? 'rgba(0,229,160,0.06)' : (weekend || hasEvent) ? 'rgba(0,229,160,0.04)' : 'var(--color-bg-surface)'
 
                     return (
                       <tr key={date}
                         style={{
                           background: isSelected
                             ? 'rgba(0,229,160,0.06)'
-                            : weekend ? 'rgba(0,229,160,0.03)' : 'transparent',
+                            : (weekend || hasEvent) ? 'rgba(0,229,160,0.04)' : 'transparent',
                           borderBottom: '1px solid var(--color-border-default)',
                         }}>
                         {/* 체크박스 */}
                         <td className="px-2 py-2 sticky left-0 z-10"
-                          style={{ background: isSelected ? 'rgba(0,229,160,0.06)' : weekend ? 'rgba(0,229,160,0.03)' : 'var(--color-bg-surface)', borderRight: DIVIDER }}>
+                          style={{ background: rowBg, borderRight: DIVIDER }}>
                           <input type="checkbox" checked={isSelected}
                             onChange={e => setSelectedDates(prev =>
                               e.target.checked ? [...prev, date] : prev.filter(d => d !== date)
                             )} className="cursor-pointer" />
                         </td>
                         {/* 날짜 */}
-                        <td className="px-3 py-2 whitespace-nowrap sticky left-8 z-10"
-                          style={{ background: isSelected ? 'rgba(0,229,160,0.06)' : weekend ? 'rgba(0,229,160,0.03)' : 'var(--color-bg-surface)', borderRight: DIVIDER }}>
-                          <span className="font-semibold font-mono" style={{ color: 'var(--color-text-primary)' }}>
-                            {date.slice(5)}
-                          </span>
-                          <span className="ml-1.5 text-[11px]"
-                            style={{ color: weekend ? 'var(--color-accent-primary)' : 'var(--color-text-muted)' }}>
-                            {getDow(date)}
-                          </span>
+                        <td className="px-3 py-1.5 whitespace-nowrap sticky left-8 z-10"
+                          style={{ background: rowBg, borderRight: DIVIDER, minWidth: 90 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span className="font-mono text-xs"
+                              style={{ color: 'var(--color-text-primary)', fontWeight: hasEvent ? 700 : 600 }}>
+                              {date.slice(5)}
+                            </span>
+                            <span className="text-[11px]"
+                              style={{ color: weekend ? 'var(--color-accent-primary)' : 'var(--color-text-muted)', fontWeight: hasEvent ? 700 : 400 }}>
+                              {getDow(date)}
+                            </span>
+                            {(isFri || isSat) && (
+                              <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#00E5A0', display: 'inline-block', flexShrink: 0 }} />
+                            )}
+                            {namedEvents.length > 0 && (
+                              <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#E24B4A', display: 'inline-block', flexShrink: 0 }} />
+                            )}
+                            {visibleEvts.map((ev, i) => (
+                              <span key={i} title={ev.holiday_name!}
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                  width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                                  fontSize: 9, fontWeight: 600,
+                                  background: ev.is_holiday ? 'rgba(226,75,74,0.15)' : 'rgba(0,184,255,0.15)',
+                                  color:      ev.is_holiday ? '#E24B4A' : '#185FA5',
+                                }}>
+                                {ev.holiday_name!.slice(0, 2)}
+                              </span>
+                            ))}
+                            {extraEvts > 0 && (
+                              <span title={`+${extraEvts}개`}
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                  width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                                  fontSize: 9, fontWeight: 600,
+                                  background: 'var(--color-bg-tertiary)', color: 'var(--color-text-muted)',
+                                }}>
+                                +
+                              </span>
+                            )}
+                          </div>
                         </td>
                         {/* OCC */}
                         <td className="px-3 py-2" style={{ borderRight: DIVIDER }}>
                           <OccBar pct={occ} />
                         </td>
-                        {/* 기존 요금 */}
+                        {/* D-N 이력 셀 (읽기 전용) */}
+                        {histDates.length > 0 && displayRTs.map(rt =>
+                          histDates.map((ud, i) => {
+                            const hk      = `${date}__${rt.room_type_code}`
+                            const prevRate = historyMap[hk]?.[ud]
+                            const curRate  = historyMap[hk]?.[uploadDates[0]]
+                            const diffPct  = prevRate && curRate
+                              ? ((curRate - prevRate) / prevRate * 100)
+                              : null
+                            return (
+                              <td key={`${rt.room_type_code}-hist-${ud}`}
+                                className="px-2 py-1.5 text-right font-mono"
+                                style={{ borderLeft: '0.5px solid var(--color-border-default)', fontSize: 11 }}>
+                                <div style={{ color: 'var(--color-text-secondary)', fontWeight: 400 }}>
+                                  {prevRate != null ? Math.round(prevRate / 1000) : <span style={{ opacity: 0.35 }}>—</span>}
+                                </div>
+                                {diffPct != null && (
+                                  <div style={{ fontSize: 9, color: diffPct > 0 ? '#00B883' : diffPct < 0 ? '#E24B4A' : 'var(--color-text-muted)' }}>
+                                    {diffPct > 0 ? '+' : ''}{diffPct.toFixed(1)}%
+                                  </div>
+                                )}
+                              </td>
+                            )
+                          })
+                        )}
+                        {/* BAR Rate (현재, 편집 가능) */}
                         {displayRTs.map(rt => {
                           const base = getRate(date, rt.room_type_code, 'base')
+                          const cellKey = `${date}__${rt.room_type_code}`
+                          const flash = baseFlash[cellKey]
+                          const isBaseEditing = baseEditCell?.date === date && baseEditCell?.rt === rt.room_type_code
                           return (
                             <td key={`${rt.room_type_code}-rack`}
                               className="px-3 py-2 text-right font-mono"
-                              style={{ color: 'var(--color-text-muted)', borderRight: '1px solid var(--color-border-default)' }}>
-                              {fmt(base?.rack_rate)}
+                              style={{
+                                borderLeft: histDates.length > 0 ? '1.5px solid #00E5A0' : undefined,
+                                borderRight: '1px solid var(--color-border-default)',
+                                background: histDates.length > 0 ? 'rgba(0,229,160,0.03)' : undefined,
+                                opacity: flash === 'saving' ? 0.5 : 1,
+                                outline: flash === 'success' ? '1.5px solid #00E5A0' : flash === 'error' ? '1.5px solid #E24B4A' : 'none',
+                                transition: 'outline 0.3s',
+                              }}>
+                              <input
+                                key={`${cellKey}-${base?.rack_rate ?? 'empty'}`}
+                                defaultValue={base?.rack_rate != null ? String(Math.round(base.rack_rate / 1000)) : ''}
+                                className="w-full text-right font-mono"
+                                style={{
+                                  border: 'none', background: 'transparent',
+                                  color: '#00E5A0', fontWeight: 600, fontSize: 12,
+                                  padding: 0, outline: 'none', boxShadow: 'none',
+                                }}
+                                placeholder="—"
+                                onBlur={e => {
+                                  const val = e.target.value.trim()
+                                  const cur = base?.rack_rate != null ? String(Math.round(base.rack_rate / 1000)) : ''
+                                  if (!val || val === cur) return
+                                  saveBaseRate(date, rt.room_type_code, val,
+                                    () => setBaseFlash(p => ({ ...p, [cellKey]: 'saving' })),
+                                    ok => {
+                                      setBaseFlash(p => ({ ...p, [cellKey]: ok ? 'success' : 'error' }))
+                                      setTimeout(() => setBaseFlash(p => { const n = { ...p }; delete n[cellKey]; return n }), 900)
+                                    }
+                                  )
+                                }}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                                  if (e.key === 'Escape') {
+                                    const t = e.target as HTMLInputElement
+                                    t.value = base?.rack_rate != null ? String(Math.round(base.rack_rate / 1000)) : ''
+                                    t.blur()
+                                  }
+                                }}
+                              />
                             </td>
                           )
                         })}
@@ -876,7 +1705,7 @@ export default function RateStrategyPage() {
                                   <div className="cursor-pointer hover:opacity-80"
                                     onClick={() => {
                                       setEditCell({ date, rateCode: col.key, rt: rt.room_type_code })
-                                      setEditVal(newR != null ? String(detail?.change_value ?? newR) : '')
+                                      setEditVal(newR != null ? String(newR) : '')
                                     }}>
                                     {newR != null ? (
                                       <>
@@ -891,6 +1720,32 @@ export default function RateStrategyPage() {
                                       <span className="text-brand-muted opacity-40">—</span>
                                     )}
                                   </div>
+                                )}
+                              </td>
+                            )
+                          })
+                        )}
+                        {/* 패키지 셀 (읽기 전용) */}
+                        {ratePackages.length > 0 && ratePackages.map(pkg =>
+                          displayRTs.map(rt => {
+                            const detail = getRate(date, rt.room_type_code, 'change')
+                            const newR = detail?.new_rate ?? null
+                            const total = newR != null ? newR + pkg.add_on_rate : null
+                            return (
+                              <td key={`pkg_${pkg.id}_${rt.room_type_code}`}
+                                className="px-3 py-2 text-right"
+                                style={{ borderLeft: '1.5px solid var(--color-border-secondary)' }}>
+                                {total != null ? (
+                                  <>
+                                    <div className="font-mono font-medium text-xs" style={{ color: 'var(--color-text-primary)' }}>
+                                      {Math.round(total / 1000)}
+                                    </div>
+                                    <div className="text-[10px]" style={{ color: 'var(--color-text-secondary)' }}>
+                                      +{Math.round(pkg.add_on_rate / 1000)}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <span className="text-brand-muted opacity-40">—</span>
                                 )}
                               </td>
                             )
@@ -963,6 +1818,22 @@ export default function RateStrategyPage() {
               </div>
             )}
 
+            {ratePackages.length > 0 && (
+              <div style={{ borderTop: '1px solid var(--color-border-default)', paddingTop: 12 }}>
+                <p className="text-[10px] font-semibold text-brand-muted uppercase tracking-widest mb-2.5">패키지</p>
+                <div className="space-y-1.5">
+                  {ratePackages.map(pkg => (
+                    <div key={pkg.id} className="flex items-center justify-between">
+                      <span className="text-xs text-brand-muted truncate max-w-[110px]">{pkg.name}</span>
+                      <span className="text-xs font-semibold font-mono" style={{ color: 'var(--color-accent-primary)' }}>
+                        +{pkg.add_on_rate.toLocaleString('ko-KR')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2" style={{ borderTop: '1px solid var(--color-border-default)', paddingTop: 12 }}>
               <button onClick={handleRpaSend} disabled={rpaSending}
                 className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold disabled:opacity-50"
@@ -989,6 +1860,41 @@ export default function RateStrategyPage() {
       </div>
 
       {/* ── 모달 ── */}
+      {/* 업로드 오류 모달 */}
+      {showErrorModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowErrorModal(false)} />
+          <div className="relative w-full max-w-sm rounded-2xl overflow-hidden"
+            style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-elevated)' }}>
+            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--color-border-default)' }}>
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>업로드 오류 확인</p>
+              <button onClick={() => setShowErrorModal(false)} className="text-brand-muted hover:text-brand-text"><X size={16} /></button>
+            </div>
+            <div className="px-5 py-4 space-y-2 max-h-60 overflow-y-auto">
+              {uploadErrors.map((e, i) => (
+                <p key={i} className="text-xs" style={{ color: '#F6AD55' }}>⚠ {e}</p>
+              ))}
+              {pendingRows.length > 0 && (
+                <p className="text-xs mt-2" style={{ color: 'var(--color-text-muted)' }}>
+                  유효한 {pendingRows.length}행은 업로드 가능합니다.
+                </p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-3" style={{ borderTop: '1px solid var(--color-border-default)' }}>
+              <button onClick={() => setShowErrorModal(false)} className="px-4 py-1.5 text-xs text-brand-muted">취소</button>
+              {pendingRows.length > 0 && (
+                <button
+                  onClick={() => { setShowErrorModal(false); runUpload(pendingRows) }}
+                  className="px-4 py-1.5 rounded-lg text-xs font-semibold"
+                  style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
+                  무시하고 업로드
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {showStratModal && (
         <StrategyModal hotelId={hotelId} profileId={profileId}
           onClose={() => setShowStratModal(false)}
@@ -1009,6 +1915,6 @@ export default function RateStrategyPage() {
             queryClient.invalidateQueries({ queryKey: ['s03_rate_promotion', hotelId, effectiveStratId] })
           }} />
       )}
-    </PageShell>
+    </div>
   )
 }
