@@ -21,6 +21,7 @@ import SegmentationModal from '@/components/dashboard/SegmentationModal'
 type StrategyStatus = 'draft' | 'active' | 'inactive'
 type DiscountType   = 'pct' | 'amount' | 'fixed' | 'addon'
 type ChangeMode     = '%' | '+-' | 'direct'
+type PickupView     = 'total' | 'fit' | 'fit_grp'
 
 interface Strategy {
   id:          string
@@ -691,6 +692,7 @@ export default function RateStrategyPage() {
   const [lastRpaTime,     setLastRpaTime]     = useState<string | null>(null)
   const [rpaSending,      setRpaSending]      = useState(false)
   const [segModalDate,    setSegModalDate]    = useState<string | null>(null)
+  const [pickupView,      setPickupView]      = useState<PickupView>('fit')
 
   // col mode: change / 2night / 3night / promoId
   const [colMode, setColMode] = useState<Record<string, ChangeMode>>({
@@ -866,6 +868,13 @@ export default function RateStrategyPage() {
     }
     return map
   }, [pickupRows])
+
+  const maxPickup = useMemo(() => {
+    return Math.max(
+      ...Object.values(segPickupMap).flatMap(v => [Math.abs(v.fit), Math.abs(v.grp)]),
+      1,
+    )
+  }, [segPickupMap])
 
   // BAR Rate 업로드 이력 날짜 목록 (최근 4회)
   const { data: uploadDates = [] } = useQuery<string[]>({
@@ -1334,6 +1343,10 @@ export default function RateStrategyPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <style>{`
+        .pu-dropdown-wrap:hover .pu-dropdown-menu { display: block !important; }
+        .pu-dropdown-menu div:hover { background: var(--overlay-hover); color: var(--color-text-primary) !important; }
+      `}</style>
 
       {/* ── 헤더 ── */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
@@ -1400,11 +1413,13 @@ export default function RateStrategyPage() {
         <div className="flex flex-col gap-1">
           <label className="text-[11px] font-medium text-brand-muted uppercase tracking-wide">투숙기간</label>
           <div className="flex items-center gap-1.5">
-            <input type="date" className="rounded-lg px-3 py-1.5 text-sm outline-none" style={filterStyle}
-              value={stayStart} onChange={e => handleStayStartChange(e.target.value)} />
+            <div onClick={e => e.stopPropagation()}>
+              <FormDatePicker value={stayStart} onChange={handleStayStartChange} placeholder="시작일" />
+            </div>
             <span className="text-brand-muted text-xs">~</span>
-            <input type="date" className="rounded-lg px-3 py-1.5 text-sm outline-none" style={filterStyle}
-              value={stayEnd} onChange={e => setStayEnd(e.target.value)} />
+            <div onClick={e => e.stopPropagation()}>
+              <FormDatePicker value={stayEnd} onChange={setStayEnd} placeholder="종료일" />
+            </div>
           </div>
         </div>
 
@@ -1570,8 +1585,60 @@ export default function RateStrategyPage() {
                     {/* OCC */}
                     <th className="px-3 py-2.5 text-left font-semibold text-brand-muted uppercase tracking-wide"
                       style={{ borderRight: DIVIDER }}>
-                      OCC
-                      {vsOtbDate && <span style={{ fontSize: 9, color: 'var(--color-text-muted)', marginLeft: 3, fontWeight: 400 }}>vs {vsOtbDate}</span>}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div>
+                          <span style={{ fontSize: 11, fontWeight: 500 }}>OCC</span>
+                          {vsOtbDate && (
+                            <span style={{ fontSize: 9, color: 'var(--color-text-secondary)', marginLeft: 4, fontWeight: 400 }}>vs {vsOtbDate}</span>
+                          )}
+                        </div>
+                        {vsOtbDate && (
+                          <div style={{ position: 'relative', display: 'inline-block' }} className="pu-dropdown-wrap">
+                            {/* 트리거 pill */}
+                            <button style={{
+                              fontSize: 11, fontWeight: 500,
+                              padding: '3px 10px', borderRadius: 20,
+                              border: '0.5px solid #00E5A0',
+                              cursor: 'pointer', background: 'transparent', color: '#00E5A0',
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                            }}>
+                              {pickupView === 'total' ? '합계' : pickupView === 'fit' ? 'FIT' : 'F+G'}
+                              <span style={{ fontSize: 9, opacity: 0.7 }}>▾</span>
+                            </button>
+                            {/* 드롭다운 메뉴 */}
+                            <div className="pu-dropdown-menu" style={{
+                              position: 'absolute', top: 'calc(100% + 5px)', left: '50%',
+                              transform: 'translateX(-50%)',
+                              background: 'var(--color-bg-secondary)',
+                              border: '0.5px solid var(--color-border-secondary)',
+                              borderRadius: 'var(--border-radius-md)',
+                              boxShadow: '0 6px 20px rgba(0,0,0,0.3)',
+                              minWidth: 110, overflow: 'hidden', zIndex: 100,
+                              display: 'none',
+                            }}>
+                              {([
+                                ['total', '합계', '#00E5A0'],
+                                ['fit',   'FIT',  '#00B883'],
+                                ['fit_grp', 'F+G', 'linear-gradient(135deg, #00B883 50%, #185FA5 50%)'],
+                              ] as [PickupView, string, string][]).map(([mode, label, dotBg], idx) => (
+                                <div key={mode}
+                                  onClick={e => { e.stopPropagation(); setPickupView(mode) }}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', gap: 7,
+                                    padding: '7px 12px', fontSize: 11, cursor: 'pointer',
+                                    borderBottom: idx < 2 ? '0.5px solid var(--color-border-default)' : 'none',
+                                    color: pickupView === mode ? '#00E5A0' : 'var(--color-text-secondary)',
+                                    fontWeight: pickupView === mode ? 500 : 400,
+                                  }}>
+                                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: dotBg, flexShrink: 0 }} />
+                                  {label}
+                                  {pickupView === mode && <span style={{ marginLeft: 'auto', color: '#00E5A0' }}>✓</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </th>
                     {/* D-N 이력 컬럼 헤더 */}
                     {histDates.length > 0 && displayRTs.map(rt =>
@@ -1696,42 +1763,82 @@ export default function RateStrategyPage() {
                         </td>
                         {/* OCC */}
                         {(() => {
-                          const barW     = occ != null ? Math.min(100, Math.max(0, occ)) : 0
-                          const barColor = occ != null
+                          const barW      = occ != null ? Math.min(100, Math.max(0, occ)) : 0
+                          const barColor  = occ != null
                             ? occ >= 80 ? '#00B883' : occ >= 60 ? '#F6AD55' : '#E24B4A'
                             : 'var(--color-bg-tertiary)'
-                          const seg      = vsOtbDate ? segPickupMap[date] : null
-                          const fitPu    = seg?.fit ?? 0
-                          const grpPu    = seg?.grp ?? 0
-                          const hasPu    = fitPu !== 0 || grpPu !== 0
+                          const seg       = vsOtbDate ? segPickupMap[date] : null
+                          const fitPu     = seg?.fit ?? 0
+                          const grpPu     = seg?.grp ?? 0
+                          const totalPu   = fitPu + grpPu
+                          const barW2     = (val: number) => `${Math.min((Math.abs(val) / maxPickup) * 40, 40)}px`
                           return (
                             <td className="px-3 py-2"
-                              onClick={seg ? () => setSegModalDate(date) : undefined}
-                              style={{ borderRight: DIVIDER, cursor: seg ? 'pointer' : 'default', minWidth: 130 }}>
+                              onClick={vsOtbDate ? () => setSegModalDate(date) : undefined}
+                              style={{ borderRight: DIVIDER, cursor: vsOtbDate ? 'pointer' : 'default', minWidth: 130 }}>
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                                {/* 왼쪽: 바 + % */}
+                                {/* 왼쪽: OCC 바 + % */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                                   <div style={{ width: `${barW * 0.48}px`, height: 4, borderRadius: 2, background: barColor, flexShrink: 0 }} />
                                   <span style={{ fontSize: 12, fontWeight: 500, color: occ != null ? barColor : 'var(--color-text-muted)' }}>
                                     {occ != null ? `${occ.toFixed(0)}%` : '—'}
                                   </span>
                                 </div>
-                                {/* 오른쪽: FIT | GRP 구분선 포함 */}
+                                {/* 오른쪽: 픽업 (vsOtbDate 있을 때만) */}
                                 {vsOtbDate && (
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0 }}>
-                                    <span style={{
-                                      fontSize: 10, fontWeight: 500, whiteSpace: 'nowrap', paddingRight: 5,
-                                      color: fitPu > 0 ? '#00B883' : fitPu < 0 ? '#E24B4A' : 'var(--color-text-secondary)',
-                                    }}>
-                                      FIT{fitPu > 0 ? '▲' : fitPu < 0 ? '▼' : '—'}{fitPu !== 0 ? Math.abs(fitPu) : ''}
-                                    </span>
-                                    <div style={{ width: 1, height: 12, background: 'var(--color-border-default)', flexShrink: 0 }} />
-                                    <span style={{
-                                      fontSize: 10, fontWeight: 500, whiteSpace: 'nowrap', paddingLeft: 5,
-                                      color: grpPu > 0 ? '#00B883' : grpPu < 0 ? '#E24B4A' : 'var(--color-text-secondary)',
-                                    }}>
-                                      GRP{grpPu > 0 ? '▲' : grpPu < 0 ? '▼' : '—'}{grpPu !== 0 ? Math.abs(grpPu) : ''}
-                                    </span>
+                                  <div style={{ flexShrink: 0 }}>
+                                    {/* 합계 */}
+                                    {pickupView === 'total' && (
+                                      <span style={{
+                                        fontSize: 11, fontWeight: 600, minWidth: 28, textAlign: 'right', display: 'block',
+                                        color: totalPu > 0 ? '#00B883' : totalPu < 0 ? '#E24B4A' : 'var(--color-text-secondary)',
+                                      }}>
+                                        {totalPu > 0 ? '+' : totalPu < 0 ? '▼' : '—'}
+                                        {totalPu !== 0 ? Math.abs(totalPu) : ''}
+                                      </span>
+                                    )}
+                                    {/* FIT만 */}
+                                    {pickupView === 'fit' && (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                                        {fitPu !== 0 ? (
+                                          <>
+                                            <div style={{ height: 3, borderRadius: 2, width: barW2(fitPu), background: fitPu > 0 ? '#00B883' : '#E24B4A' }} />
+                                            <span style={{ fontSize: 10, fontWeight: 500, minWidth: 20, textAlign: 'right', color: fitPu > 0 ? '#00B883' : '#E24B4A' }}>
+                                              {fitPu < 0 ? '▼' : ''}{Math.abs(fitPu)}
+                                            </span>
+                                          </>
+                                        ) : (
+                                          <span style={{ fontSize: 10, color: 'var(--color-text-secondary)' }}>—</span>
+                                        )}
+                                      </div>
+                                    )}
+                                    {/* FIT + GRP */}
+                                    {pickupView === 'fit_grp' && (
+                                      fitPu === 0 && grpPu === 0 ? (
+                                        <span style={{ fontSize: 10, color: 'var(--color-text-secondary)' }}>—</span>
+                                      ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                          {fitPu !== 0 && (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 3, justifyContent: 'flex-end' }}>
+                                              <span style={{ fontSize: 9, color: 'var(--color-text-secondary)', width: 10, textAlign: 'right' }}>F</span>
+                                              <div style={{ height: 3, borderRadius: 2, width: barW2(fitPu), background: fitPu > 0 ? '#00B883' : '#E24B4A' }} />
+                                              <span style={{ fontSize: 10, fontWeight: 500, minWidth: 20, textAlign: 'right', color: fitPu > 0 ? '#00B883' : '#E24B4A' }}>
+                                                {fitPu < 0 ? '▼' : ''}{Math.abs(fitPu)}
+                                              </span>
+                                            </div>
+                                          )}
+                                          {grpPu !== 0 && (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 3, justifyContent: 'flex-end' }}>
+                                              <span style={{ fontSize: 9, color: 'var(--color-text-secondary)', width: 10, textAlign: 'right' }}>G</span>
+                                              <div style={{ height: 3, borderRadius: 2, width: barW2(grpPu), background: grpPu > 0 ? '#00B883' : '#E24B4A' }} />
+                                              <span style={{ fontSize: 10, fontWeight: 500, minWidth: 20, textAlign: 'right', color: grpPu > 0 ? '#00B883' : '#E24B4A' }}>
+                                                {grpPu < 0 ? '▼' : ''}{Math.abs(grpPu)}
+                                              </span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )
+                                    )}
                                   </div>
                                 )}
                               </div>
