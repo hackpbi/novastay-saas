@@ -7,6 +7,7 @@ import {
   Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
 import type { ForecastDayData, ForecastSchema, CalendarMap } from '@/lib/forecast/types'
+import { useDateContext } from '@/contexts/DateContext'
 
 type Metric = 'occ' | 'adr' | 'rev'
 
@@ -28,44 +29,58 @@ function isHoliday(is_holiday: unknown): boolean {
 
 function isRedDay(fullDate: string, cal: { is_holiday: unknown; event: unknown } | undefined): boolean {
   const dow = new Date(fullDate + 'T12:00:00').getDay()
-  if (dow === 5 || dow === 6) return true          // 금/토
+  if (dow === 5 || dow === 6) return true
   if (!cal) return false
-  if (hasEvent(cal.event)) return true              // 이벤트일
-  if (isHoliday(cal.is_holiday)) return true        // 공휴일
+  if (hasEvent(cal.event)) return true
+  if (isHoliday(cal.is_holiday)) return true
   return false
 }
 
-function getDisplayChar(fullDate: string, cal: { event: unknown } | undefined): string {
-  if (cal && hasEvent(cal.event)) {
-    return String(cal.event).trim().charAt(0)       // 이벤트 첫 글자
+type TickDisplay = { char: string; color: string; bg: string; fontWeight: number }
+
+function getTickDisplay(
+  fullDate: string,
+  cal: { is_holiday: unknown; event: unknown } | undefined,
+  today: string,
+): TickDisplay {
+  if (fullDate === today) {
+    return { char: '오', color: '#1E90FF', bg: 'rgba(30,144,255,0.15)', fontWeight: 700 }
   }
-  return DOW_LABELS[new Date(fullDate + 'T12:00:00').getDay()]  // 요일
+  if (cal && hasEvent(cal.event)) {
+    return { char: String(cal.event).trim().charAt(0), color: '#E24B4A', bg: 'rgba(226,75,74,0.15)', fontWeight: 500 }
+  }
+  const dow = new Date(fullDate + 'T12:00:00').getDay()
+  const red = dow === 5 || dow === 6 || isHoliday(cal?.is_holiday)
+  return {
+    char: DOW_LABELS[dow],
+    color: red ? '#E24B4A' : '#888',
+    bg: red ? 'rgba(226,75,74,0.15)' : 'rgba(136,136,136,0.10)',
+    fontWeight: 400,
+  }
 }
 
-function CustomXTick({ x, y, payload, calendar, year, month }: {
+function CustomXTick({ x, y, payload, calendar, year, month, today }: {
   x?: number
   y?: number
   payload?: { value: string }
   calendar: CalendarMap
   year: number
   month: number
+  today: string
 }) {
   if (!payload || x === undefined || y === undefined) return null
   const [mStr, dStr] = payload.value.split('/')
   const fullDate = `${year}-${String(parseInt(mStr)).padStart(2, '0')}-${String(parseInt(dStr)).padStart(2, '0')}`
   const cal = calendar.get(fullDate)
-  const red = isRedDay(fullDate, cal)
-  const char = getDisplayChar(fullDate, cal)
-  const color = red ? '#E24B4A' : '#888'
-  const bgFill = red ? 'rgba(226,75,74,0.15)' : 'rgba(136,136,136,0.10)'
+  const { char, color, bg, fontWeight } = getTickDisplay(fullDate, cal, today)
 
   return (
     <g transform={`translate(${x},${y})`}>
-      <text x={0} y={12} textAnchor="middle" fontSize={10} fill={color}>
+      <text x={0} y={12} textAnchor="middle" fontSize={10} fill={color} fontWeight={fontWeight}>
         {payload.value}
       </text>
       <g transform="translate(0,26)">
-        <circle cx={0} cy={0} r={8} fill={bgFill} />
+        <circle cx={0} cy={0} r={8} fill={bg} />
         <text x={0} y={3.5} textAnchor="middle" fontSize={9} fill={color} fontWeight={500}>
           {char}
         </text>
@@ -99,6 +114,7 @@ export function ForecastGraphModal({
   onDateClick?: (date: string) => void
 }) {
   const [metric, setMetric] = useState<Metric>('occ')
+  const { otbDate: today } = useDateContext()
 
   useEffect(() => {
     if (!isOpen) return
@@ -216,7 +232,9 @@ export function ForecastGraphModal({
                 const label = chartData?.activeLabel
                 if (!label) return
                 const point = points.find(p => p.date === label)
-                if (point?.fullDate && onDateClick) onDateClick(point.fullDate)
+                if (!point?.fullDate) return
+                if (point.fullDate < today) return  // 과거 일자 차단
+                if (onDateClick) onDateClick(point.fullDate)
               }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-default, #2a2a2a)" />
@@ -243,6 +261,7 @@ export function ForecastGraphModal({
                     calendar={calendar ?? new Map()}
                     year={year}
                     month={month}
+                    today={today}
                   />
                 )}
                 axisLine={{ stroke: 'var(--color-border-default, #2a2a2a)' }}
@@ -273,7 +292,19 @@ export function ForecastGraphModal({
                 dataKey="FCST"
                 stroke="var(--color-accent-primary, #00E5A0)"
                 strokeWidth={2}
-                dot={{ r: 2.5, fill: 'var(--color-accent-primary, #00E5A0)', strokeWidth: 0 }}
+                dot={(dotProps: any) => {
+                  const isPast = (dotProps.payload?.fullDate ?? '') < today
+                  return (
+                    <circle
+                      key={dotProps.index}
+                      cx={dotProps.cx}
+                      cy={dotProps.cy}
+                      r={2.5}
+                      fill="#00E5A0"
+                      opacity={isPast ? 0.3 : 1}
+                    />
+                  )
+                }}
                 activeDot={{ r: 4 }}
               />
               <Line
