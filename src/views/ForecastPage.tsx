@@ -5,7 +5,7 @@ import ForecastTable from '@/components/forecast/ForecastTable'
 import ForecastHeader from '@/components/forecast/ForecastHeader'
 import SegmentFilter from '@/components/forecast/SegmentFilter'
 import KpiBar from '@/components/forecast/KpiBar'
-import { Download, Pencil, ClipboardList, Zap, TrendingUp } from 'lucide-react'
+import { Download, Pencil, ClipboardList, Zap, TrendingUp, BarChart2 } from 'lucide-react'
 import { fetchForecastSchema } from '@/lib/forecast/schema'
 import { fetchBaselineForecast, transformRpcToTableData } from '@/lib/forecast/baseline'
 import { fetchCalendarRange, calendarToMap } from '@/lib/forecast/calendar'
@@ -387,31 +387,19 @@ export default function ForecastPage() {
           top:           0,
           zIndex:        10,
           background:    'var(--color-bg-primary)',
-          paddingBottom: 12,
-          marginBottom:  12,
+          paddingBottom: 10,
+          marginBottom:  10,
           boxShadow:     '0 2px 4px rgba(0,0,0,0.05)',
         }}
       >
-        {/* ── 정보줄: 월 selector + FCST 요약 ── */}
+        {/* ── 헤더: 1행(월 네비 + 데이터 액션) / 2행(KPI + 편집 컨트롤) ── */}
         <ForecastHeader
           year={currentMonth.year}
           month={currentMonth.month}
           onPrev={goPrev}
           onNext={goNext}
-          leftExtra={schema && <KpiBar fcst={monthFcst} vsBudget={vsBudget} isLoaded={isLoaded} />}
-        />
-
-        {/* ── 구분선 ── */}
-        {schema && schema.nodes.length > 0 && (
-          <div style={{ height: 1, background: 'var(--color-border-default)', margin: '10px 0' }} />
-        )}
-
-        {/* ── 액션바: 데이터(좌) / 편집(우) ── */}
-        {schema && schema.nodes.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-
-            {/* 좌: 데이터 소스 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          rightActions={schema && schema.nodes.length > 0 ? (
+            <>
               {loadableDates.length > 0 ? (
                 <DatePicker
                   label="불러오기"
@@ -444,11 +432,6 @@ export default function ForecastPage() {
                   불러오기
                 </button>
               )}
-              {isLoaded && selectedLoadDate && (
-                <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap' }}>
-                  · {selectedLoadDate === loadableDates[0] && '최신 '}{fmtLoadDate(selectedLoadDate)} 데이터
-                </span>
-              )}
               <button
                 onClick={handleGenerate}
                 disabled={isGenerating || !hotelId}
@@ -472,17 +455,18 @@ export default function ForecastPage() {
                 <Zap size={13} />
                 {isGenerating ? '생성 중...' : '자동 생성'}
               </button>
-            </div>
-
-            {/* 우: 편집 제어 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            </>
+          ) : undefined}
+          kpiBar={schema && <KpiBar fcst={monthFcst} vsBudget={vsBudget} isLoaded={isLoaded} />}
+          rightControls={schema && schema.nodes.length > 0 ? (
+            <>
               {/* [보기] 칩: Seg / 그래프 / MTD */}
               <div style={{
-                display:    'inline-flex',
-                alignItems: 'center',
+                display:      'inline-flex',
+                alignItems:   'center',
                 borderRadius: 7,
-                border:     '0.5px solid var(--color-border-secondary)',
-                background: 'var(--color-bg-elevated)',
+                border:       '0.5px solid var(--color-border-secondary)',
+                background:   'var(--color-bg-elevated)',
               }}>
                 <span style={{
                   padding:     '5px 9px 5px 11px',
@@ -507,20 +491,28 @@ export default function ForecastPage() {
                   onClick={() => setGraphModalOpen(true)}
                   disabled={!isLoaded || data.length === 0}
                   title={!isLoaded ? 'forecast를 먼저 생성하세요' : 'OTB vs FCST 그래프'}
+                  onMouseEnter={e => {
+                    if (!(!isLoaded || data.length === 0))
+                      (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-accent-primary, #00E5A0)'
+                  }}
+                  onMouseLeave={e => {
+                    (e.currentTarget as HTMLButtonElement).style.color = !isLoaded ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)'
+                  }}
                   style={{
-                    display:    'flex',
-                    alignItems: 'center',
-                    gap:        4,
-                    padding:    '5px 9px',
-                    fontSize:   12,
-                    fontWeight: 500,
-                    background: 'transparent',
-                    border:     'none',
+                    display:     'flex',
+                    alignItems:  'center',
+                    gap:         4,
+                    padding:     '5px 9px',
+                    fontSize:    12,
+                    fontWeight:  500,
+                    background:  'transparent',
+                    border:      'none',
                     borderRight: '0.5px solid var(--color-border-secondary)',
-                    cursor:     !isLoaded || data.length === 0 ? 'not-allowed' : 'pointer',
-                    color:      !isLoaded ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)',
-                    opacity:    !isLoaded || data.length === 0 ? 0.45 : 1,
-                    whiteSpace: 'nowrap',
+                    cursor:      !isLoaded || data.length === 0 ? 'not-allowed' : 'pointer',
+                    color:       !isLoaded ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)',
+                    opacity:     !isLoaded || data.length === 0 ? 0.45 : 1,
+                    whiteSpace:  'nowrap',
+                    transition:  'color 0.15s',
                   }}
                 >
                   <TrendingUp size={12} />
@@ -529,6 +521,12 @@ export default function ForecastPage() {
                 <button
                   onClick={() => setMtdModalOpen(true)}
                   title="MTD 보기 (세그별 + 월 전체)"
+                  onMouseEnter={e => {
+                    (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-accent-primary, #00E5A0)'
+                  }}
+                  onMouseLeave={e => {
+                    (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-text-primary)'
+                  }}
                   style={{
                     display:    'flex',
                     alignItems: 'center',
@@ -541,11 +539,76 @@ export default function ForecastPage() {
                     cursor:     'pointer',
                     color:      'var(--color-text-primary)',
                     whiteSpace: 'nowrap',
+                    transition: 'color 0.15s',
                   }}
                 >
+                  <BarChart2 size={12} aria-hidden="true" />
                   MTD
                 </button>
               </div>
+              {/* 슬라이딩 pill 토글 */}
+              <div
+                onClick={() => setEditMode(prev => prev === 'bulk' ? 'inline' : 'bulk')}
+                style={{
+                  display:      'inline-flex',
+                  alignItems:   'center',
+                  background:   'rgba(255,255,255,0.06)',
+                  borderRadius: 999,
+                  padding:      3,
+                  border:       '1px solid rgba(255,255,255,0.1)',
+                  cursor:       'pointer',
+                  userSelect:   'none',
+                  position:     'relative',
+                  flexShrink:   0,
+                }}
+              >
+                <div style={{
+                  position:     'absolute',
+                  top:          3,
+                  left:         editMode === 'bulk' ? 3 : '50%',
+                  width:        'calc(50% - 3px)',
+                  height:       'calc(100% - 6px)',
+                  background:   '#00E5A0',
+                  borderRadius: 999,
+                  transition:   'left 0.22s cubic-bezier(0.4,0,0.2,1)',
+                  zIndex:       0,
+                }} />
+                <div style={{
+                  display:      'flex',
+                  alignItems:   'center',
+                  gap:          4,
+                  padding:      '5px 12px',
+                  borderRadius: 999,
+                  fontSize:     12,
+                  fontWeight:   600,
+                  position:     'relative',
+                  zIndex:       1,
+                  color:        editMode === 'bulk' ? '#0F2E20' : 'var(--color-text-tertiary)',
+                  transition:   'color 0.2s',
+                  whiteSpace:   'nowrap',
+                }}>
+                  <ClipboardList size={13} aria-hidden="true" />
+                  일괄수정
+                </div>
+                <div style={{
+                  display:      'flex',
+                  alignItems:   'center',
+                  gap:          4,
+                  padding:      '5px 12px',
+                  borderRadius: 999,
+                  fontSize:     12,
+                  fontWeight:   600,
+                  position:     'relative',
+                  zIndex:       1,
+                  color:        editMode === 'inline' ? '#0F2E20' : 'var(--color-text-tertiary)',
+                  transition:   'color 0.2s',
+                  whiteSpace:   'nowrap',
+                }}>
+                  <Pencil size={13} aria-hidden="true" />
+                  직접수정
+                </div>
+              </div>
+              {/* 변경/저장 */}
               {modifiedCount > 0 && (
                 <div style={{
                   display:      'flex',
@@ -559,7 +622,7 @@ export default function ForecastPage() {
                   borderRadius: 4,
                   whiteSpace:   'nowrap',
                 }}>
-                  ⚠ 변경 {modifiedCount}건 (저장 안 됨)
+                  ⚠ 변경 {modifiedCount}건
                   <button
                     onClick={handleSave}
                     disabled={saving}
@@ -579,94 +642,9 @@ export default function ForecastPage() {
                   </button>
                 </div>
               )}
-              {/* 수정 그룹 컨테이너 */}
-              <div style={{
-                display:    'inline-flex',
-                alignItems: 'center',
-                borderRadius: 7,
-                border:     '0.5px solid var(--color-border-secondary)',
-                background: 'var(--color-bg-elevated)',
-              }}>
-                <span style={{
-                  padding:     '5px 9px 5px 11px',
-                  fontSize:    11,
-                  color:       'var(--color-text-tertiary)',
-                  borderRight: '0.5px solid var(--color-border-secondary)',
-                  background:  'rgba(255,255,255,0.02)',
-                  whiteSpace:  'nowrap',
-                }}>
-                  수정
-                </span>
-                <div
-                  onClick={() => setEditMode(prev => prev === 'bulk' ? 'inline' : 'bulk')}
-                  style={{
-                    display:    'inline-flex',
-                    alignItems: 'center',
-                    background: 'rgba(255,255,255,0.06)',
-                    borderRadius: 999,
-                    padding:    3,
-                    margin:     '3px 6px',
-                    border:     '1px solid rgba(255,255,255,0.1)',
-                    cursor:     'pointer',
-                    userSelect: 'none',
-                    position:   'relative',
-                    flexShrink: 0,
-                  }}
-                >
-                  {/* 슬라이더 */}
-                  <div style={{
-                    position:   'absolute',
-                    top:        3,
-                    left:       editMode === 'bulk' ? 3 : '50%',
-                    width:      'calc(50% - 3px)',
-                    height:     'calc(100% - 6px)',
-                    background: '#00E5A0',
-                    borderRadius: 999,
-                    transition: 'left 0.22s cubic-bezier(0.4,0,0.2,1)',
-                    zIndex:     0,
-                  }} />
-                  {/* 일괄수정 */}
-                  <div style={{
-                    display:    'flex',
-                    alignItems: 'center',
-                    gap:        4,
-                    padding:    '5px 12px',
-                    borderRadius: 999,
-                    fontSize:   12,
-                    fontWeight: 600,
-                    position:   'relative',
-                    zIndex:     1,
-                    color:      editMode === 'bulk' ? '#0F2E20' : 'var(--color-text-tertiary)',
-                    transition: 'color 0.2s',
-                    whiteSpace: 'nowrap',
-                  }}>
-                    <ClipboardList size={13} aria-hidden="true" />
-                    일괄수정
-                  </div>
-                  {/* 직접수정 */}
-                  <div style={{
-                    display:    'flex',
-                    alignItems: 'center',
-                    gap:        4,
-                    padding:    '5px 12px',
-                    borderRadius: 999,
-                    fontSize:   12,
-                    fontWeight: 600,
-                    position:   'relative',
-                    zIndex:     1,
-                    color:      editMode === 'inline' ? '#0F2E20' : 'var(--color-text-tertiary)',
-                    transition: 'color 0.2s',
-                    whiteSpace: 'nowrap',
-                  }}>
-                    <Pencil size={13} aria-hidden="true" />
-                    직접수정
-                  </div>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        )}
+            </>
+          ) : undefined}
+        />
       </div>
 
       {/* 0개 선택 안내 */}

@@ -44,7 +44,7 @@ function DiffItem({ label, value, fmtValue }: { label: string; value: number; fm
     : 'var(--color-text-secondary)'
   return (
     <span>
-      <span style={{ color: 'var(--color-text-tertiary)', fontSize: 11 }}>{label} </span>
+      <span style={{ color: 'var(--color-text-tertiary)', fontSize: 14 }}>{label} </span>
       <span style={{ color, fontFamily: 'var(--font-mono, monospace)', fontWeight: 600 }}>{fmtValue}</span>
     </span>
   )
@@ -65,20 +65,20 @@ export default function KpiBar({ fcst, vsBudget, isLoaded }: KpiBarProps) {
       {/* FCST 박스 */}
       <div style={boxStyle}>
         <span style={{
-          fontSize:      10,
+          fontSize:      13,
           fontWeight:    600,
           letterSpacing: '0.05em',
           color:         'var(--color-text-secondary)',
         }}>
           FCST
         </span>
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+        <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-text-primary)' }}>
           {fmtPct(fcst.occ)}
         </span>
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+        <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-text-primary)' }}>
           {fmtAdrK(fcst.adr)}
         </span>
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+        <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-text-primary)' }}>
           {fmtRevM(fcst.rev)}
         </span>
       </div>
@@ -87,18 +87,18 @@ export default function KpiBar({ fcst, vsBudget, isLoaded }: KpiBarProps) {
       <span style={{ fontSize: 12, color: 'var(--color-border-default)' }}>│</span>
 
       {/* vs Budget */}
-      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.03em', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+      <span style={{ fontSize: 14, fontWeight: 600, letterSpacing: '0.03em', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
         vs Budget
       </span>
 
       {isLoaded && vsBudget ? (
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, fontSize: 12, whiteSpace: 'nowrap' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, fontSize: 15, whiteSpace: 'nowrap' }}>
           <DiffItem label="OCC" value={vsBudget.occDiff} fmtValue={fmtDiffOcc(vsBudget.occDiff)} />
           <DiffItem label="ADR" value={vsBudget.adrDiff} fmtValue={fmtDiffAdr(vsBudget.adrDiff)} />
           <DiffItem label="REV" value={vsBudget.revDiff} fmtValue={fmtDiffRev(vsBudget.revDiff)} />
         </div>
       ) : (
-        <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', opacity: 0.5, whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: 14, color: 'var(--color-text-tertiary)', opacity: 0.5, whiteSpace: 'nowrap' }}>
           {isLoaded ? '—' : '— (forecast를 생성하세요)'}
         </span>
       )}
