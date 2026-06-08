@@ -579,28 +579,90 @@ export default function ForecastPage() {
                   </button>
                 </div>
               )}
-              <button
-                onClick={() => setEditMode(prev => prev === 'inline' ? 'bulk' : 'inline')}
-                style={{
-                  display:      'flex',
-                  alignItems:   'center',
-                  gap:          4,
-                  padding:      '4px 10px',
-                  fontSize:     12,
-                  fontWeight:   600,
-                  cursor:       'pointer',
-                  border:       'none',
-                  borderRadius: 6,
-                  background:   editMode === 'inline'
-                    ? 'var(--color-accent-primary, #00E5A0)'
-                    : '#6366F1',
-                  color:        editMode === 'inline' ? '#000' : '#fff',
-                  transition:   'background 0.15s',
-                }}
-              >
-                {editMode === 'inline' ? <Pencil size={13} /> : <ClipboardList size={13} />}
-                {editMode === 'inline' ? '직접수정' : '일괄수정'}
-              </button>
+              {/* 수정 그룹 컨테이너 */}
+              <div style={{
+                display:    'inline-flex',
+                alignItems: 'center',
+                borderRadius: 7,
+                border:     '0.5px solid var(--color-border-secondary)',
+                background: 'var(--color-bg-elevated)',
+              }}>
+                <span style={{
+                  padding:     '5px 9px 5px 11px',
+                  fontSize:    11,
+                  color:       'var(--color-text-tertiary)',
+                  borderRight: '0.5px solid var(--color-border-secondary)',
+                  background:  'rgba(255,255,255,0.02)',
+                  whiteSpace:  'nowrap',
+                }}>
+                  수정
+                </span>
+                <div
+                  onClick={() => setEditMode(prev => prev === 'bulk' ? 'inline' : 'bulk')}
+                  style={{
+                    display:    'inline-flex',
+                    alignItems: 'center',
+                    background: 'rgba(255,255,255,0.06)',
+                    borderRadius: 999,
+                    padding:    3,
+                    margin:     '3px 6px',
+                    border:     '1px solid rgba(255,255,255,0.1)',
+                    cursor:     'pointer',
+                    userSelect: 'none',
+                    position:   'relative',
+                    flexShrink: 0,
+                  }}
+                >
+                  {/* 슬라이더 */}
+                  <div style={{
+                    position:   'absolute',
+                    top:        3,
+                    left:       editMode === 'bulk' ? 3 : '50%',
+                    width:      'calc(50% - 3px)',
+                    height:     'calc(100% - 6px)',
+                    background: '#00E5A0',
+                    borderRadius: 999,
+                    transition: 'left 0.22s cubic-bezier(0.4,0,0.2,1)',
+                    zIndex:     0,
+                  }} />
+                  {/* 일괄수정 */}
+                  <div style={{
+                    display:    'flex',
+                    alignItems: 'center',
+                    gap:        4,
+                    padding:    '5px 12px',
+                    borderRadius: 999,
+                    fontSize:   12,
+                    fontWeight: 600,
+                    position:   'relative',
+                    zIndex:     1,
+                    color:      editMode === 'bulk' ? '#0F2E20' : 'var(--color-text-tertiary)',
+                    transition: 'color 0.2s',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    <ClipboardList size={13} aria-hidden="true" />
+                    일괄수정
+                  </div>
+                  {/* 직접수정 */}
+                  <div style={{
+                    display:    'flex',
+                    alignItems: 'center',
+                    gap:        4,
+                    padding:    '5px 12px',
+                    borderRadius: 999,
+                    fontSize:   12,
+                    fontWeight: 600,
+                    position:   'relative',
+                    zIndex:     1,
+                    color:      editMode === 'inline' ? '#0F2E20' : 'var(--color-text-tertiary)',
+                    transition: 'color 0.2s',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    <Pencil size={13} aria-hidden="true" />
+                    직접수정
+                  </div>
+                </div>
+              </div>
             </div>
 
           </div>
