@@ -83,7 +83,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   // FCST: fcstDates 로드 후 가장 최근 날짜로 자동 설정 (정렬 순서 무관)
   useEffect(() => {
     if (fcstDates.length === 0) return
-    const latest = fcstDates.reduce((max, d) => (d > max ? d : max), fcstDates[0])
+    const latest = fcstDates.reduce((max: string, d: string) => (d > max ? d : max), fcstDates[0])
     if (!fcstDate || !fcstDates.includes(fcstDate)) {
       setFcstDate(latest)
     }

@@ -885,11 +885,9 @@ export default function DashboardPage() {
         year={segModal.year ?? 0}
         month={segModal.month ?? 0}
         roomCount={roomCount}
-        onPickupCellClick={(segCodes, label) => {
-          const y = segModal.year
-          const m = segModal.month
+        onPickupCellClick={(segCodes, label, clickedYear, clickedMonth) => {
           setSegModal({ open: false })
-          setAccountModal({ open: true, year: y, month: m, filterSegCodes: segCodes, filterLabel: label })
+          setAccountModal({ open: true, year: clickedYear, month: clickedMonth, filterSegCodes: segCodes, filterLabel: label })
         }}
       />
       <AccountModal

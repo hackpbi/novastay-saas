@@ -1,12 +1,26 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { X, Search, ChevronDown, ChevronRight, ArrowLeft } from 'lucide-react'
-import { useHotel } from '@/contexts/HotelContext'
+import { X, Search, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
 import { usePickupData } from '@/hooks/usePickupData'
 import { buildAccountTable, type AccountGroup, type AccountTableSummary } from '@/utils/accountTable'
+
+// ─── Nav button ───────────────────────────────────────────────────────────────
+
+function NavBtn({ onClick, disabled, children }: { onClick: () => void; disabled: boolean; children: React.ReactNode }) {
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      background: 'transparent', border: '1px solid var(--color-border-default)', borderRadius: 6,
+      padding: '2px 6px', cursor: disabled ? 'not-allowed' : 'pointer',
+      opacity: disabled ? 0.4 : 1, color: 'var(--color-text-secondary)',
+      display: 'flex', alignItems: 'center',
+    }}>
+      {children}
+    </button>
+  )
+}
 
 // ─── Formatters ─────────────────────────────────────────────────────────────────
 
@@ -323,21 +337,43 @@ export default function AccountModal({
   initialFilterLabel?:     string
   onBackToSeg?:            () => void
 }) {
-  const { currentHotel } = useHotel()
   const { data: schema, loading: schemaLoading, error: schemaError } = useMarketSchema()
   const { data: pickup, loading: pickupLoading } = usePickupData()
 
   const [searchQuery,   setSearchQuery]   = useState('')
   const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(new Set())
   const [filterCleared, setFilterCleared] = useState(false)
+  const [curYear,  setCurYear]  = useState(year)
+  const [curMonth, setCurMonth] = useState(month)
+
+  // 모달이 다른 month로 열릴 때 동기화
+  useEffect(() => {
+    if (open) { setCurYear(year); setCurMonth(month) }
+  }, [open, year, month])
+
+  // 6개월 범위 (year/month ~ +5개월)
+  const monthRange = useMemo(() => {
+    const months: { year: number; month: number }[] = []
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(year, (month - 1) + i, 1)
+      months.push({ year: d.getFullYear(), month: d.getMonth() + 1 })
+    }
+    return months
+  }, [year, month])
+
+  const currentIndex = monthRange.findIndex(m => m.year === curYear && m.month === curMonth)
+  const canGoPrev = currentIndex > 0
+  const canGoNext = currentIndex < monthRange.length - 1
+  const goPrev = () => { if (canGoPrev) { const t = monthRange[currentIndex - 1]; setCurYear(t.year); setCurMonth(t.month) } }
+  const goNext = () => { if (canGoNext) { const t = monthRange[currentIndex + 1]; setCurYear(t.year); setCurMonth(t.month) } }
 
   const loading = schemaLoading || pickupLoading
 
   const { groups, summary } = useMemo(
     () => !loading && schema.length > 0
-      ? buildAccountTable({ schema, pickup, year, month, roomCount })
+      ? buildAccountTable({ schema, pickup, year: curYear, month: curMonth, roomCount })
       : { groups: [], summary: EMPTY_SUMMARY },
-    [schema, pickup, year, month, roomCount, loading],
+    [schema, pickup, curYear, curMonth, roomCount, loading],
   )
 
   const filterActive = !filterCleared && !!initialFilterSegCodes?.length
@@ -472,9 +508,11 @@ export default function AccountModal({
               <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>Account 비교</h2>
             </div>
             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-              <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>
-                {year}년 {month}월 · {currentHotel?.hotel_name ?? ''}
+              <NavBtn onClick={goPrev} disabled={!canGoPrev}><ChevronLeft size={13} /></NavBtn>
+              <span style={{ fontSize: 12, color: 'var(--brand-dimmed)', minWidth: 72, textAlign: 'center' }}>
+                {curYear}년 {curMonth}월
               </span>
+              <NavBtn onClick={goNext} disabled={!canGoNext}><ChevronRight size={13} /></NavBtn>
               {filterActive && initialFilterLabel && (
                 <span
                   className="flex items-center gap-1"
@@ -549,8 +587,8 @@ export default function AccountModal({
               collapsedKeys={collapsedKeys}
               onToggle={toggleGroup}
               isSearching={isSearching}
-              year={year}
-              month={month}
+              year={curYear}
+              month={curMonth}
               roomCount={roomCount}
             />
           )}

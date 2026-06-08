@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { X } from 'lucide-react'
-import { useHotel } from '@/contexts/HotelContext'
+import { X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useDateContext } from '@/contexts/DateContext'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
@@ -10,6 +9,21 @@ import { usePickupData } from '@/hooks/usePickupData'
 import { buildSegTable, type SegTableRow, type SegTableSummary } from '@/utils/segmentationTable'
 import DatePicker from '@/components/DatePicker'
 import AccountModal from '@/components/dashboard/AccountModal'
+
+// ─── Nav button ───────────────────────────────────────────────────────────────
+
+function NavBtn({ onClick, disabled, children }: { onClick: () => void; disabled: boolean; children: React.ReactNode }) {
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      background: 'transparent', border: '1px solid var(--color-border-default)', borderRadius: 6,
+      padding: '2px 6px', cursor: disabled ? 'not-allowed' : 'pointer',
+      opacity: disabled ? 0.4 : 1, color: 'var(--color-text-secondary)',
+      display: 'flex', alignItems: 'center',
+    }}>
+      {children}
+    </button>
+  )
+}
 
 // ─── Number formatters ─────────────────────────────────────────────────────────
 
@@ -314,12 +328,35 @@ export default function SegmentationModal({
   month:              number
   day?:               number
   roomCount:          number
-  onPickupCellClick?: (segCodes: string[], label: string) => void
+  onPickupCellClick?: (segCodes: string[], label: string, year: number, month: number) => void
 }) {
-  const { currentHotel } = useHotel()
   const { otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate } = useDateContext()
 
   const [accountModalSeg, setAccountModalSeg] = useState<{ segCodes: string[]; label: string } | null>(null)
+  const [curYear,  setCurYear]  = useState(year)
+  const [curMonth, setCurMonth] = useState(month)
+
+  // 모달이 다른 month로 열릴 때 동기화
+  useEffect(() => {
+    if (open) { setCurYear(year); setCurMonth(month) }
+  }, [open, year, month])
+
+  // 6개월 범위 (year/month ~ +5개월)
+  const monthRange = useMemo(() => {
+    const months: { year: number; month: number }[] = []
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(year, (month - 1) + i, 1)
+      months.push({ year: d.getFullYear(), month: d.getMonth() + 1 })
+    }
+    return months
+  }, [year, month])
+
+  const currentIndex = monthRange.findIndex(m => m.year === curYear && m.month === curMonth)
+  const canGoPrev = currentIndex > 0
+  const canGoNext = currentIndex < monthRange.length - 1
+  const goPrev = () => { if (canGoPrev) { const t = monthRange[currentIndex - 1]; setCurYear(t.year); setCurMonth(t.month) } }
+  const goNext = () => { if (canGoNext) { const t = monthRange[currentIndex + 1]; setCurYear(t.year); setCurMonth(t.month) } }
+
   const days = otbDate && vsOtbDate
     ? Math.round((new Date(otbDate).getTime() - new Date(vsOtbDate).getTime()) / 86400000)
     : 0
@@ -330,9 +367,9 @@ export default function SegmentationModal({
 
   const { rows, summary } = useMemo(
     () => !loading && schema.length > 0
-      ? buildSegTable({ schema, pickup, year, month, roomCount, day })
+      ? buildSegTable({ schema, pickup, year: curYear, month: curMonth, roomCount, day })
       : { rows: [], summary: EMPTY_SUMMARY },
-    [schema, pickup, year, month, day, roomCount, loading],
+    [schema, pickup, curYear, curMonth, day, roomCount, loading],
   )
 
   const houRowIds = useMemo(() => {
@@ -378,9 +415,19 @@ export default function SegmentationModal({
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>
               Segmentation 비교
             </h2>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--brand-dimmed)' }}>
-              {year}년 {month}월{day !== undefined ? ` ${day}일` : ''} · {currentHotel?.hotel_name ?? ''}
-            </p>
+            {day !== undefined ? (
+              <p className="text-xs mt-0.5" style={{ color: 'var(--brand-dimmed)' }}>
+                {curYear}년 {curMonth}월 {day}일
+              </p>
+            ) : (
+              <div className="flex items-center gap-2 mt-0.5">
+                <NavBtn onClick={goPrev} disabled={!canGoPrev}><ChevronLeft size={13} /></NavBtn>
+                <span style={{ fontSize: 12, color: 'var(--brand-dimmed)', minWidth: 72, textAlign: 'center' }}>
+                  {curYear}년 {curMonth}월
+                </span>
+                <NavBtn onClick={goNext} disabled={!canGoNext}><ChevronRight size={13} /></NavBtn>
+              </div>
+            )}
             <div className="flex items-center gap-2 mt-2">
               <DatePicker
                 label="OTB"
@@ -420,10 +467,14 @@ export default function SegmentationModal({
               summary={summary}
               schema={schema}
               houRowIds={houRowIds}
-              onPickupCellClick={onPickupCellClick}
+              onPickupCellClick={
+                onPickupCellClick
+                  ? (segCodes, label) => onPickupCellClick(segCodes, label, curYear, curMonth)
+                  : undefined
+              }
               onRowClick={(segCodes, label) => setAccountModalSeg({ segCodes, label })}
-              year={year}
-              month={month}
+              year={curYear}
+              month={curMonth}
               day={day}
               roomCount={roomCount}
             />
@@ -442,8 +493,8 @@ export default function SegmentationModal({
         <AccountModal
           open
           onClose={() => setAccountModalSeg(null)}
-          year={year}
-          month={month}
+          year={curYear}
+          month={curMonth}
           roomCount={roomCount}
           initialFilterSegCodes={accountModalSeg.segCodes}
           initialFilterLabel={accountModalSeg.label}
