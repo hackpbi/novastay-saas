@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import { useHotel } from '@/contexts/HotelContext'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -9,6 +9,7 @@ import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
 import { usePickupData } from '@/hooks/usePickupData'
 import { buildSegTable, type SegTableRow, type SegTableSummary } from '@/utils/segmentationTable'
 import DatePicker from '@/components/DatePicker'
+import AccountModal from '@/components/dashboard/AccountModal'
 
 // ─── Number formatters ─────────────────────────────────────────────────────────
 
@@ -116,11 +117,12 @@ function getRowLabel(row: SegTableRow, schema: MarketSchemaRow[]): string {
 
 // ─── DataRow ──────────────────────────────────────────────────────────────────
 
-function DataRow({ row, schema, houRowIds, onPickupCellClick }: {
+function DataRow({ row, schema, houRowIds, onPickupCellClick, onRowClick }: {
   row:               SegTableRow
   schema:            MarketSchemaRow[]
   houRowIds:         Set<string>
   onPickupCellClick?: (segCodes: string[], label: string) => void
+  onRowClick?:        (segCodes: string[], label: string) => void
 }) {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
@@ -133,13 +135,17 @@ function DataRow({ row, schema, houRowIds, onPickupCellClick }: {
   const clickable  = !!onPickupCellClick && !isHou && segCodes.length > 0
   const handlePickup = clickable ? () => onPickupCellClick!(segCodes, label) : undefined
 
+  const rowClickable = !!onRowClick && !isHou && segCodes.length > 0
+  const handleRowClick = rowClickable ? () => onRowClick!(segCodes, label) : undefined
+
   const puTd = (extra: React.CSSProperties): React.CSSProperties => ({
     ...tdBase, textAlign: 'right', cursor: clickable ? 'pointer' : 'default', ...extra,
   })
 
   return (
     <tr
-      style={{ borderBottom: BORDER_GROUP, background: rowBg, color: rowColor, fontWeight: row.isBold ? 600 : 400 }}
+      style={{ borderBottom: BORDER_GROUP, background: rowBg, color: rowColor, fontWeight: row.isBold ? 600 : 400, cursor: rowClickable ? 'pointer' : 'default' }}
+      onClick={handleRowClick}
       onMouseEnter={e => {
         e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${rowBg}`
       }}
@@ -177,12 +183,13 @@ function DataRow({ row, schema, houRowIds, onPickupCellClick }: {
 
 // ─── DataTable ─────────────────────────────────────────────────────────────────
 
-function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, year, month, day, roomCount }: {
+function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, onRowClick, year, month, day, roomCount }: {
   rows:               SegTableRow[]
   summary:            SegTableSummary
   schema:             MarketSchemaRow[]
   houRowIds:          Set<string>
   onPickupCellClick?: (segCodes: string[], label: string) => void
+  onRowClick?:        (segCodes: string[], label: string) => void
   year:               number
   month:              number
   day?:               number
@@ -239,6 +246,7 @@ function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, year, 
               schema={schema}
               houRowIds={houRowIds}
               onPickupCellClick={onPickupCellClick}
+              onRowClick={onRowClick}
             />
           ))}
         </tbody>
@@ -310,6 +318,8 @@ export default function SegmentationModal({
 }) {
   const { currentHotel } = useHotel()
   const { otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate } = useDateContext()
+
+  const [accountModalSeg, setAccountModalSeg] = useState<{ segCodes: string[]; label: string } | null>(null)
   const days = otbDate && vsOtbDate
     ? Math.round((new Date(otbDate).getTime() - new Date(vsOtbDate).getTime()) / 86400000)
     : 0
@@ -411,6 +421,7 @@ export default function SegmentationModal({
               schema={schema}
               houRowIds={houRowIds}
               onPickupCellClick={onPickupCellClick}
+              onRowClick={(segCodes, label) => setAccountModalSeg({ segCodes, label })}
               year={year}
               month={month}
               day={day}
@@ -422,10 +433,23 @@ export default function SegmentationModal({
         {/* Footer */}
         <div className="flex justify-end px-6 py-3 shrink-0" style={{ borderTop: '1px solid var(--divider-color)' }}>
           <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>
-            {onPickupCellClick ? 'Pickup 셀 클릭 → Account 보기 · ' : ''}ESC로 닫기
+            대분류 행 클릭 → Account 보기{onPickupCellClick ? ' · Pickup 셀 클릭 → Account 보기' : ''} · ESC로 닫기
           </span>
         </div>
       </div>
+
+      {accountModalSeg && (
+        <AccountModal
+          open
+          onClose={() => setAccountModalSeg(null)}
+          year={year}
+          month={month}
+          roomCount={roomCount}
+          initialFilterSegCodes={accountModalSeg.segCodes}
+          initialFilterLabel={accountModalSeg.label}
+          onBackToSeg={() => setAccountModalSeg(null)}
+        />
+      )}
     </div>
   )
 }

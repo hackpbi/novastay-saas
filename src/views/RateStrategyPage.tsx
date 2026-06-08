@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, ChevronDown, X, Save, Tag, Loader2, Send,
   CheckSquare, Square, TrendingUp, TrendingDown,
-  Minus, Activity, Trash2,
+  Minus, Activity, Trash2, FileSpreadsheet,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { FormDatePicker } from '@/components/DatePicker'
@@ -693,6 +693,8 @@ export default function RateStrategyPage() {
   const [rpaSending,      setRpaSending]      = useState(false)
   const [segModalDate,    setSegModalDate]    = useState<string | null>(null)
   const [pickupView,      setPickupView]      = useState<PickupView>('fit')
+  const [previewBuffer,   setPreviewBuffer]   = useState<Record<string, Record<string, number>>>({})
+  const isPreviewMode = Object.keys(previewBuffer).length > 0
 
   // col mode: change / 2night / 3night / promoId
   const [colMode, setColMode] = useState<Record<string, ChangeMode>>({
@@ -770,6 +772,9 @@ export default function RateStrategyPage() {
   const currentStrategy = strategies.find(s => s.id === strategyId) ?? strategies[0] ?? null
   const effectiveStratId = currentStrategy?.id ?? ''
   useEffect(() => { if (strategies.length > 0 && !strategyId) setStrategyId(strategies[0].id) }, [strategies, strategyId])
+
+  // 전략/월 변경 시 미리보기 버퍼 초기화 (데이터 혼선 방지)
+  useEffect(() => { setPreviewBuffer({}) }, [effectiveStratId, viewYear, viewMonth])
 
   const { data: rateDetails = [], isLoading: ratesLoading } = useQuery<RateDetail[]>({
     queryKey: ['s02_rate_detail', hotelId, effectiveStratId],
@@ -1093,7 +1098,6 @@ export default function RateStrategyPage() {
           room_type_code: rt, stay_date: date, date_type: 'base',
           stay_start: null, stay_end: null,
           rack_rate: rackRate, new_rate: rackRate,
-          diff: 0, diff_pct: 0,
         }, { onConflict: 'strategy_id,room_type_code,stay_date,date_type' })
 
       // 동일 날짜 change 행 있으면 rack_rate 업데이트 후 재계산
@@ -1101,7 +1105,6 @@ export default function RateStrategyPage() {
       if (changeRow) {
         const existingDiffPct = changeRow.diff_pct ?? 0
         const newChangeRate = Math.round(rackRate * (1 + existingDiffPct / 100))
-        const diff = newChangeRate - rackRate
         await (supabase as any)
           .from('s02_rate_detail')
           .upsert({
@@ -1109,7 +1112,6 @@ export default function RateStrategyPage() {
             room_type_code: rt, stay_date: date, date_type: 'change',
             stay_start: null, stay_end: null,
             rack_rate: rackRate, new_rate: newChangeRate,
-            diff, diff_pct: existingDiffPct,
           }, { onConflict: 'strategy_id,room_type_code,stay_date,date_type' })
       }
       queryClient.invalidateQueries({ queryKey: ['s02_rate_detail', hotelId, effectiveStratId] })
@@ -1130,7 +1132,7 @@ export default function RateStrategyPage() {
         hotel_id: hotelId, strategy_id: effectiveStratId,
         room_type_code: rt.room_type_code, stay_date: date, date_type: 'base',
         stay_start: null, stay_end: null,
-        rack_rate: rackRate, new_rate: rackRate, diff: 0, diff_pct: 0,
+        rack_rate: rackRate, new_rate: rackRate,
       }))
     )
     const changeOps = selectedDates.flatMap(date =>
@@ -1139,12 +1141,11 @@ export default function RateStrategyPage() {
         if (!changeRow) return []
         const existingDiffPct = changeRow.diff_pct ?? 0
         const newChangeRate = Math.round(rackRate * (1 + existingDiffPct / 100))
-        const diff = newChangeRate - rackRate
         return [{
           hotel_id: hotelId, strategy_id: effectiveStratId,
           room_type_code: rt.room_type_code, stay_date: date, date_type: 'change',
           stay_start: null, stay_end: null,
-          rack_rate: rackRate, new_rate: newChangeRate, diff, diff_pct: existingDiffPct,
+          rack_rate: rackRate, new_rate: newChangeRate,
         }]
       })
     )
@@ -1169,58 +1170,100 @@ export default function RateStrategyPage() {
         const raw = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[]
         const rows: {date: string; barRate: number}[] = []
         const errors: string[] = []
+
+        const parseDate = (val: any): string => {
+          if (val instanceof Date) {
+            return val.toLocaleDateString('sv') // 'sv' 로케일 = YYYY-MM-DD, 로컬(KST) 기준
+          }
+          if (typeof val === 'number') {
+            const info = XLSX.SSF.parse_date_code(val)
+            return `${info.y}-${String(info.m).padStart(2, '0')}-${String(info.d).padStart(2, '0')}`
+          }
+          return String(val).replace(/\//g, '-').slice(0, 10)
+        }
+
+        console.log('[parseExcel] raw rows (첫 3행):', raw.slice(1, 4).map(r => ({ col0: r[0], col0Type: typeof r[0], col0IsDate: r[0] instanceof Date })))
+
         raw.slice(1).forEach((row, i) => {
           const lineNum = i + 2
           if (!row[0] && !row[1]) return
-          // 날짜 파싱
-          let dateStr = ''
-          if (row[0] instanceof Date) {
-            dateStr = row[0].toISOString().slice(0, 10)
-          } else {
-            const s = String(row[0] ?? '').replace(/\//g, '-').trim()
-            if (/^\d{4}-\d{2}-\d{2}$/.test(s)) dateStr = s
-            else { errors.push(`${lineNum}행: 날짜 형식 오류 (${s})`); return }
-          }
-          // BAR Rate 파싱
+          const dateStr = parseDate(row[0])
+          if (!dateStr) { errors.push(`${lineNum}행: 날짜 형식 오류 (${row[0]})`); return }
           const raw1 = Number(row[1])
           if (isNaN(raw1) || raw1 <= 0) { errors.push(`${lineNum}행: BAR Rate 값 오류 (${row[1]})`); return }
           const barRate = raw1 < 1000 ? raw1 * 1000 : raw1
           rows.push({ date: dateStr, barRate })
         })
+        console.log('[parseExcel] parsed dates (첫 5개):', rows.slice(0, 5).map(r => r.date))
         resolve({ rows, errors })
       }
       reader.readAsBinaryString(file)
     })
 
   const runUpload = useCallback(async (rows: {date: string; barRate: number}[]) => {
-    if (!effectiveStratId || !hotelId) return
+    console.log('[runUpload] start — strategy_id:', effectiveStratId, 'hotel_id:', hotelId, 'rows:', rows.length)
+    if (!effectiveStratId || !hotelId) {
+      console.warn('[runUpload] 중단: effectiveStratId 또는 hotelId 없음')
+      return
+    }
+    setUploadStatus('uploading')
+    try {
+      const buffer: Record<string, Record<string, number>> = {}
+      for (const { date, barRate } of rows) {
+        buffer[date] = {}
+        for (const rt of roomTypes) {
+          buffer[date][rt.room_type_code] = Math.round(barRate + (rt.surcharge ?? 0))
+        }
+      }
+      console.log('[runUpload] previewBuffer 생성 완료 —', Object.keys(buffer).length, '일치, 샘플:', Object.entries(buffer)[0])
+      setPreviewBuffer(buffer)
+      setUploadStatus('done')
+      setUploadMsg(`${rows.length}일치 미리보기 준비됨. 저장 버튼을 클릭하세요.`)
+      setTimeout(() => { setUploadStatus('idle'); setUploadMsg(null) }, 3500)
+    } catch (e: any) {
+      console.error('[runUpload] 오류:', e)
+      setUploadStatus('error')
+      setUploadMsg(e.message ?? '업로드 실패')
+    }
+  }, [effectiveStratId, hotelId, roomTypes])
+
+  const handleSavePreview = useCallback(async () => {
+    console.log('[handleSavePreview] start — strategy_id:', effectiveStratId, 'hotel_id:', hotelId, 'isPreviewMode:', isPreviewMode, 'previewBuffer 날짜 수:', Object.keys(previewBuffer).length)
+    if (!effectiveStratId || !hotelId || !isPreviewMode) {
+      console.warn('[handleSavePreview] 중단: 조건 미충족')
+      return
+    }
     setUploadStatus('uploading')
     try {
       const BATCH = 100
-      const payloads = rows.flatMap(({ date, barRate }) =>
-        roomTypes.map(rt => ({
+      const savedDateCount = Object.keys(previewBuffer).length
+      const payloads = Object.entries(previewBuffer).flatMap(([date, roomRates]) =>
+        Object.entries(roomRates).map(([room_type_code, rack_rate]) => ({
           hotel_id:       hotelId,
           strategy_id:    effectiveStratId,
-          room_type_code: rt.room_type_code,
+          room_type_code,
           date_type:      'base',
           stay_date:      date,
           stay_start:     null,
           stay_end:       null,
-          rack_rate:      Math.round(barRate + (rt.surcharge ?? 0)),
-          new_rate:       Math.round(barRate + (rt.surcharge ?? 0)),
-          diff:           0,
-          diff_pct:       0,
+          rack_rate,
+          new_rate:       rack_rate,
         }))
       )
+      console.log('[handleSavePreview] upsert payloads 총', payloads.length, '건, 샘플:', payloads[0])
       for (let i = 0; i < payloads.length; i += BATCH) {
-        setUploadMsg(`업로드 중... (${Math.min(i + BATCH, payloads.length)}/${payloads.length}건)`)
-        await (supabase as any)
+        setUploadMsg(`저장 중... (${Math.min(i + BATCH, payloads.length)}/${payloads.length}건)`)
+        const { error } = await (supabase as any)
           .from('s02_rate_detail')
           .upsert(payloads.slice(i, i + BATCH), { onConflict: 'strategy_id,room_type_code,stay_date,date_type' })
+        if (error) {
+          console.error('[handleSavePreview] upsert 에러:', error)
+          throw error
+        }
       }
+      console.log('[handleSavePreview] s02_rate_detail upsert 완료')
       queryClient.invalidateQueries({ queryKey: ['s02_rate_detail', hotelId, effectiveStratId] })
 
-      // 이력 저장 (uploaded_at = otbDate)
       if (otbDate) {
         const histPayloads = payloads.map(p => ({
           hotel_id:       p.hotel_id,
@@ -1232,22 +1275,25 @@ export default function RateStrategyPage() {
           uploaded_at:    otbDate,
         }))
         for (let i = 0; i < histPayloads.length; i += BATCH) {
-          await (supabase as any)
+          const { error: histErr } = await (supabase as any)
             .from('s02_rate_detail_history')
             .insert(histPayloads.slice(i, i + BATCH))
+          if (histErr) console.warn('[handleSavePreview] history insert 에러 (무시):', histErr)
         }
         queryClient.invalidateQueries({ queryKey: ['bar-upload-dates', effectiveStratId] })
         queryClient.invalidateQueries({ queryKey: ['bar-history', effectiveStratId] })
       }
 
+      setPreviewBuffer({})
       setUploadStatus('done')
-      setUploadMsg(`${rows.length}일 × ${roomTypes.length}개 객실타입 요금이 입력되었습니다`)
+      setUploadMsg(`${savedDateCount}일 × ${roomTypes.length}개 객실타입 요금이 저장되었습니다`)
       setTimeout(() => { setUploadStatus('idle'); setUploadMsg(null) }, 3500)
     } catch (e: any) {
+      console.error('[handleSavePreview] 오류:', e)
       setUploadStatus('error')
-      setUploadMsg(e.message ?? '업로드 실패')
+      setUploadMsg(e.message ?? '저장 실패')
     }
-  }, [effectiveStratId, hotelId, roomTypes, queryClient, otbDate])
+  }, [effectiveStratId, hotelId, previewBuffer, isPreviewMode, roomTypes, queryClient, otbDate])
 
   const handleFileChange = useCallback(async (file: File) => {
     if (!file) return
@@ -1343,11 +1389,6 @@ export default function RateStrategyPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <style>{`
-        .pu-dropdown-wrap:hover .pu-dropdown-menu { display: block !important; }
-        .pu-dropdown-menu div:hover { background: var(--overlay-hover); color: var(--color-text-primary) !important; }
-      `}</style>
-
       {/* ── 헤더 ── */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
         {/* 좌측: 타이틀 + 월 네비 */}
@@ -1373,7 +1414,45 @@ export default function RateStrategyPage() {
         </div>
 
         {/* 우측: 액션 버튼 */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-end gap-2">
+          {/* BAR 엑셀 그룹 */}
+          {effectiveStratId && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ fontSize: 9, color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                <FileSpreadsheet size={10} />
+                BAR 엑셀
+              </span>
+              <div style={{ display: 'inline-flex' }}>
+                <label style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  fontSize: 12, fontWeight: 600, padding: '8px 14px',
+                  cursor: 'pointer', whiteSpace: 'nowrap',
+                  borderRadius: '8px 0 0 8px',
+                  border: '1px solid var(--color-border-default)', borderRight: 'none',
+                  color: 'var(--color-text-primary)', background: 'var(--color-bg-secondary)',
+                }}>
+                  {uploadStatus === 'uploading' || uploadStatus === 'parsing'
+                    ? <Loader2 size={13} className="animate-spin" />
+                    : null}
+                  업로드
+                  <input type="file" accept=".xlsx,.xls,.csv" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleFileChange(f); e.target.value = '' }} />
+                </label>
+                <button onClick={downloadTemplate}
+                  style={{
+                    display: 'flex', alignItems: 'center',
+                    fontSize: 12, fontWeight: 600, padding: '8px 14px',
+                    cursor: 'pointer', whiteSpace: 'nowrap',
+                    borderRadius: '0 8px 8px 0',
+                    border: '1px solid var(--color-border-default)',
+                    borderLeft: '0.5px solid var(--color-border-secondary)',
+                    color: 'var(--color-text-primary)', background: 'var(--color-bg-secondary)',
+                  }}>
+                  양식
+                </button>
+              </div>
+            </div>
+          )}
           <button onClick={() => setShowStratModal(true)}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold"
             style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
@@ -1474,25 +1553,6 @@ export default function RateStrategyPage() {
               <Tag size={11} />프로모션
             </button>
           )}
-          {effectiveStratId && (
-            <>
-              <label
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer"
-                style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)', background: 'var(--color-bg-secondary)' }}>
-                {uploadStatus === 'uploading' || uploadStatus === 'parsing'
-                  ? <Loader2 size={11} className="animate-spin" />
-                  : <Plus size={11} />}
-                엑셀 업로드
-                <input type="file" accept=".xlsx,.xls,.csv" className="hidden"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) handleFileChange(f); e.target.value = '' }} />
-              </label>
-              <button onClick={downloadTemplate}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium"
-                style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)', background: 'var(--color-bg-secondary)' }}>
-                템플릿
-              </button>
-            </>
-          )}
         </div>
       </div>
 
@@ -1547,6 +1607,47 @@ export default function RateStrategyPage() {
         <div className="flex-1 min-w-0 rounded-xl overflow-hidden"
           style={{ border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}>
 
+          {isPreviewMode && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '8px 16px',
+              background: 'rgba(245,184,0,0.08)',
+              borderBottom: '0.5px solid rgba(245,184,0,0.2)',
+            }}>
+              <span style={{ fontSize: 12, color: '#F5B800' }}>
+                ⚠ <strong>{Object.keys(previewBuffer).length}일</strong>치 BAR Rate 미리보기 중 — 저장 버튼을 클릭해야 적용됩니다
+              </span>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => setPreviewBuffer({})}
+                  style={{
+                    fontSize: 12, padding: '5px 12px',
+                    borderRadius: 'var(--border-radius-md)',
+                    border: '0.5px solid var(--color-border-secondary)',
+                    background: 'transparent', color: 'var(--color-text-secondary)',
+                    cursor: 'pointer',
+                  }}>
+                  취소
+                </button>
+                <button
+                  onClick={handleSavePreview}
+                  disabled={uploadStatus === 'uploading'}
+                  style={{
+                    fontSize: 12, padding: '5px 12px',
+                    borderRadius: 'var(--border-radius-md)',
+                    border: 'none',
+                    background: '#F5B800', color: '#1a1a1a',
+                    fontWeight: 600, cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    opacity: uploadStatus === 'uploading' ? 0.6 : 1,
+                  }}>
+                  {uploadStatus === 'uploading' ? <Loader2 size={12} className="animate-spin" /> : null}
+                  저장
+                </button>
+              </div>
+            </div>
+          )}
+
           {!effectiveStratId ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
               <p className="text-sm text-brand-muted">전략을 먼저 생성하세요</p>
@@ -1592,52 +1693,42 @@ export default function RateStrategyPage() {
                             <span style={{ fontSize: 9, color: 'var(--color-text-secondary)', marginLeft: 4, fontWeight: 400 }}>vs {vsOtbDate}</span>
                           )}
                         </div>
-                        {vsOtbDate && (
-                          <div style={{ position: 'relative', display: 'inline-block' }} className="pu-dropdown-wrap">
-                            {/* 트리거 pill */}
-                            <button style={{
-                              fontSize: 11, fontWeight: 500,
-                              padding: '3px 10px', borderRadius: 20,
-                              border: '0.5px solid #00E5A0',
-                              cursor: 'pointer', background: 'transparent', color: '#00E5A0',
-                              display: 'inline-flex', alignItems: 'center', gap: 4,
-                            }}>
-                              {pickupView === 'total' ? '합계' : pickupView === 'fit' ? 'FIT' : 'F+G'}
-                              <span style={{ fontSize: 9, opacity: 0.7 }}>▾</span>
-                            </button>
-                            {/* 드롭다운 메뉴 */}
-                            <div className="pu-dropdown-menu" style={{
-                              position: 'absolute', top: 'calc(100% + 5px)', left: '50%',
-                              transform: 'translateX(-50%)',
-                              background: 'var(--color-bg-secondary)',
-                              border: '0.5px solid var(--color-border-secondary)',
-                              borderRadius: 'var(--border-radius-md)',
-                              boxShadow: '0 6px 20px rgba(0,0,0,0.3)',
-                              minWidth: 110, overflow: 'hidden', zIndex: 100,
-                              display: 'none',
-                            }}>
+                        {vsOtbDate && (() => {
+                          const btnBase: React.CSSProperties = {
+                            fontSize: 11, padding: '4px 10px 4px 0',
+                            borderRadius: 6, border: 'none',
+                            cursor: 'pointer', background: 'transparent',
+                            color: 'var(--color-text-secondary)',
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            whiteSpace: 'nowrap',
+                          }
+                          const btnActive: React.CSSProperties = {
+                            ...btnBase,
+                            background: 'rgba(255,255,255,0.06)',
+                            color: 'var(--color-text-primary)',
+                          }
+                          const FlagBar = ({ color }: { color: string }) => (
+                            <div style={{ width: 2, height: 13, borderRadius: 1, background: color, flexShrink: 0 }} />
+                          )
+                          return (
+                            <div style={{ display: 'flex', gap: 2 }}>
                               {([
-                                ['total', '합계', '#00E5A0'],
+                                ['total', '합계', pickupView === 'total' ? 'var(--color-text-secondary)' : 'var(--color-border-secondary)'],
                                 ['fit',   'FIT',  '#00B883'],
-                                ['fit_grp', 'F+G', 'linear-gradient(135deg, #00B883 50%, #185FA5 50%)'],
-                              ] as [PickupView, string, string][]).map(([mode, label, dotBg], idx) => (
-                                <div key={mode}
-                                  onClick={e => { e.stopPropagation(); setPickupView(mode) }}
-                                  style={{
-                                    display: 'flex', alignItems: 'center', gap: 7,
-                                    padding: '7px 12px', fontSize: 11, cursor: 'pointer',
-                                    borderBottom: idx < 2 ? '0.5px solid var(--color-border-default)' : 'none',
-                                    color: pickupView === mode ? '#00E5A0' : 'var(--color-text-secondary)',
-                                    fontWeight: pickupView === mode ? 500 : 400,
-                                  }}>
-                                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: dotBg, flexShrink: 0 }} />
+                                ['fit_grp', 'F+G', '#185FA5'],
+                              ] as [PickupView, string, string][]).map(([mode, label, flagColor]) => (
+                                <button key={mode}
+                                  onClick={() => setPickupView(mode)}
+                                  style={pickupView === mode ? btnActive : btnBase}
+                                  onMouseEnter={e => { if (pickupView !== mode) e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
+                                  onMouseLeave={e => { if (pickupView !== mode) e.currentTarget.style.background = 'transparent' }}>
+                                  <FlagBar color={flagColor} />
                                   {label}
-                                  {pickupView === mode && <span style={{ marginLeft: 'auto', color: '#00E5A0' }}>✓</span>}
-                                </div>
+                                </button>
                               ))}
                             </div>
-                          </div>
-                        )}
+                          )
+                        })()}
                       </div>
                     </th>
                     {/* D-N 이력 컬럼 헤더 */}
@@ -1872,28 +1963,35 @@ export default function RateStrategyPage() {
                         )}
                         {/* BAR Rate (현재, 편집 가능) */}
                         {displayRTs.map(rt => {
-                          const base = getRate(date, rt.room_type_code, 'base')
-                          const cellKey = `${date}__${rt.room_type_code}`
-                          const flash = baseFlash[cellKey]
-                          const isBaseEditing = baseEditCell?.date === date && baseEditCell?.rt === rt.room_type_code
+                          const base        = getRate(date, rt.room_type_code, 'base')
+                          const cellKey     = `${date}__${rt.room_type_code}`
+                          const flash       = baseFlash[cellKey]
+                          const previewRate = previewBuffer[date]?.[rt.room_type_code]
+                          const isPreview   = previewRate !== undefined
+                          const displayVal  = isPreview
+                            ? String(Math.round(previewRate / 1000))
+                            : base?.rack_rate != null ? String(Math.round(base.rack_rate / 1000)) : ''
                           return (
                             <td key={`${rt.room_type_code}-rack`}
                               className="px-3 py-2 text-right font-mono"
                               style={{
                                 borderLeft: histDates.length > 0 ? '1.5px solid #00E5A0' : undefined,
                                 borderRight: '1px solid var(--color-border-default)',
-                                background: histDates.length > 0 ? 'rgba(0,229,160,0.03)' : undefined,
+                                background: isPreview
+                                  ? 'rgba(255,200,0,0.08)'
+                                  : histDates.length > 0 ? 'rgba(0,229,160,0.03)' : undefined,
                                 opacity: flash === 'saving' ? 0.5 : 1,
                                 outline: flash === 'success' ? '1.5px solid #00E5A0' : flash === 'error' ? '1.5px solid #E24B4A' : 'none',
                                 transition: 'outline 0.3s',
                               }}>
                               <input
-                                key={`${cellKey}-${base?.rack_rate ?? 'empty'}`}
-                                defaultValue={base?.rack_rate != null ? String(Math.round(base.rack_rate / 1000)) : ''}
+                                key={`${cellKey}-${isPreview ? `prev-${previewRate}` : base?.rack_rate ?? 'empty'}`}
+                                defaultValue={displayVal}
                                 className="w-full text-right font-mono"
                                 style={{
                                   border: 'none', background: 'transparent',
-                                  color: '#00E5A0', fontWeight: 600, fontSize: 12,
+                                  color: isPreview ? '#F5B800' : '#00E5A0',
+                                  fontWeight: 600, fontSize: 12,
                                   padding: 0, outline: 'none', boxShadow: 'none',
                                 }}
                                 placeholder="—"
