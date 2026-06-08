@@ -147,7 +147,9 @@ function DataRow({ row, schema, houRowIds, onPickupCellClick, onRowClick }: {
   const segCodes   = getSegCodes(row, schema)
   const label      = getRowLabel(row, schema)
   const clickable  = !!onPickupCellClick && !isHou && segCodes.length > 0
-  const handlePickup = clickable ? () => onPickupCellClick!(segCodes, label) : undefined
+  const handlePickup = clickable
+    ? (e: React.MouseEvent) => { e.stopPropagation(); onPickupCellClick!(segCodes, label) }
+    : undefined
 
   const rowClickable = !!onRowClick && !isHou && segCodes.length > 0
   const handleRowClick = rowClickable ? () => onRowClick!(segCodes, label) : undefined
@@ -336,9 +338,13 @@ export default function SegmentationModal({
   const [curYear,  setCurYear]  = useState(year)
   const [curMonth, setCurMonth] = useState(month)
 
-  // 모달이 다른 month로 열릴 때 동기화
+  // 모달이 열릴 때 동기화 + 내부 AccountModal 초기화
   useEffect(() => {
-    if (open) { setCurYear(year); setCurMonth(month) }
+    if (open) {
+      setCurYear(year)
+      setCurMonth(month)
+      setAccountModalSeg(null)
+    }
   }, [open, year, month])
 
   // 6개월 범위 (year/month ~ +5개월)
