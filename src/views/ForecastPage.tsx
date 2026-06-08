@@ -302,19 +302,6 @@ export default function ForecastPage() {
     }
   }, [bulkEdit.fromGraph])
 
-  // ── 자동 펼침 임계값 ──────────────────────────────────────────────────────────
-  const [threshold, setThreshold] = useState(3)
-
-  const autoCount = useMemo(() =>
-    data.filter(d => {
-      for (const code in d.values) {
-        const v = d.values[code]
-        if (v.otb_rn >= v.rn + threshold) return true
-      }
-      return false
-    }).length,
-  [data, threshold])
-
   // ── Calendar fetch (월 변경 시마다) ─────────────────────────────────────────
   const [calendar, setCalendar] = useState<CalendarMap>(new Map())
 
@@ -517,41 +504,6 @@ export default function ForecastPage() {
                 onAll={selectAll}
                 onReset={selectNone}
               />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
-                  자동 펼침
-                </span>
-                <input
-                  type="number"
-                  min={0}
-                  max={20}
-                  value={threshold}
-                  onChange={e => {
-                    const v = parseInt(e.target.value)
-                    if (!isNaN(v) && v >= 0 && v <= 20) setThreshold(v)
-                  }}
-                  title="OTB가 FC + 이 값 이상이면 자동 펼침"
-                  style={{
-                    width:        40,
-                    padding:      '3px 6px',
-                    fontSize:     12,
-                    fontWeight:   600,
-                    textAlign:    'center',
-                    border:       '1px solid var(--color-border-default)',
-                    borderRadius: 4,
-                    background:   'var(--color-bg-secondary)',
-                    color:        'var(--color-text-primary)',
-                  }}
-                />
-                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
-                  실
-                  {autoCount > 0 && (
-                    <span style={{ marginLeft: 6, color: 'var(--color-warning, #F5A623)', fontWeight: 600 }}>
-                      ({autoCount}일)
-                    </span>
-                  )}
-                </span>
-              </div>
               {modifiedCount > 0 && (
                 <div style={{
                   display:      'flex',
@@ -693,7 +645,7 @@ export default function ForecastPage() {
               data={data}
               selectedNodeIds={selectedNodeIds}
               calendar={calendar}
-              threshold={threshold}
+              threshold={1}
               editedValues={editedValues}
               onEditChange={setEditedValues}
               editMode={editMode}
