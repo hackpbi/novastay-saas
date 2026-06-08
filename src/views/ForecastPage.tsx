@@ -310,7 +310,8 @@ export default function ForecastPage() {
   }, [])
   const closeBulkEditModal = useCallback(() => {
     setBulkEdit(prev => ({ ...prev, isOpen: false }))
-  }, [])
+    if (bulkEdit.fromGraph) setGraphModalOpen(true)
+  }, [bulkEdit.fromGraph])
   const selectBulkEditDate = useCallback((date: string) => {
     setBulkEdit(prev => ({ ...prev, selectedDate: date }))
   }, [])
@@ -767,6 +768,7 @@ export default function ForecastPage() {
           schema={schema}
           year={currentMonth.year}
           month={currentMonth.month}
+          calendar={calendar}
           onDateClick={(date) => {
             setGraphModalOpen(false)
             openBulkEditModal(date, true)

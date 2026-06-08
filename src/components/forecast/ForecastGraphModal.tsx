@@ -4,11 +4,50 @@ import { useState, useEffect, useMemo } from 'react'
 import { X } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer,
+  Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
-import type { ForecastDayData, ForecastSchema } from '@/lib/forecast/types'
+import type { ForecastDayData, ForecastSchema, CalendarMap } from '@/lib/forecast/types'
 
 type Metric = 'occ' | 'adr' | 'rev'
+
+// ── CustomXTick ───────────────────────────────────────────────────────────────
+
+function isRedDay(cal: { day: string; is_holiday: boolean; event: string | null } | undefined): boolean {
+  if (!cal) return false
+  return cal.day === '금' || cal.day === '토' || cal.is_holiday || !!(cal.event && cal.event.trim())
+}
+
+function CustomXTick({ x, y, payload, calendar, year, month }: {
+  x?: number
+  y?: number
+  payload?: { value: string }
+  calendar: CalendarMap
+  year: number
+  month: number
+}) {
+  if (!payload || x === undefined || y === undefined) return null
+  const [mStr, dStr] = payload.value.split('/')
+  const fullDate = `${year}-${String(parseInt(mStr)).padStart(2, '0')}-${String(parseInt(dStr)).padStart(2, '0')}`
+  const cal = calendar.get(fullDate)
+  const red = isRedDay(cal)
+  const eventChar = cal?.event?.trim()?.charAt(0) ?? ''
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text x={0} y={12} textAnchor="middle" fontSize={10} fill={red ? '#E24B4A' : '#888'}>
+        {payload.value}
+      </text>
+      {eventChar && (
+        <g transform="translate(0,26)">
+          <circle cx={0} cy={0} r={8} fill="rgba(226,75,74,0.15)" />
+          <text x={0} y={3.5} textAnchor="middle" fontSize={9} fill="#E24B4A" fontWeight={500}>
+            {eventChar}
+          </text>
+        </g>
+      )}
+    </g>
+  )
+}
 
 function fmtValue(v: number, metric: Metric): string {
   if (metric === 'occ') return `${v.toFixed(1)}%`
@@ -23,7 +62,7 @@ function fmtYAxis(v: number, metric: Metric): string {
 }
 
 export function ForecastGraphModal({
-  isOpen, onClose, data, schema, year, month, onDateClick,
+  isOpen, onClose, data, schema, year, month, calendar, onDateClick,
 }: {
   isOpen:       boolean
   onClose:      () => void
@@ -31,6 +70,7 @@ export function ForecastGraphModal({
   schema:       ForecastSchema
   year:         number
   month:        number
+  calendar?:    CalendarMap
   onDateClick?: (date: string) => void
 }) {
   const [metric, setMetric] = useState<Metric>('occ')
@@ -155,12 +195,35 @@ export function ForecastGraphModal({
               }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-default, #2a2a2a)" />
+
+              {/* 빨간 일자(금/토/이벤트/공휴일) 세로 점선 */}
+              {points
+                .filter(p => isRedDay((calendar ?? new Map()).get(p.fullDate)))
+                .map(p => (
+                  <ReferenceLine
+                    key={p.date}
+                    x={p.date}
+                    stroke="#E24B4A"
+                    strokeDasharray="3 3"
+                    strokeOpacity={0.35}
+                  />
+                ))
+              }
+
               <XAxis
                 dataKey="date"
-                tick={{ fontSize: 11, fill: 'var(--color-text-tertiary, #666)' }}
+                tick={(props: any) => (
+                  <CustomXTick
+                    {...props}
+                    calendar={calendar ?? new Map()}
+                    year={year}
+                    month={month}
+                  />
+                )}
                 axisLine={{ stroke: 'var(--color-border-default, #2a2a2a)' }}
                 tickLine={false}
-                interval="preserveStartEnd"
+                height={50}
+                interval={0}
               />
               <YAxis
                 tickFormatter={v => fmtYAxis(v as number, metric)}
