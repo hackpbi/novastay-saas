@@ -80,12 +80,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   // FCST dates
   const { data: fcstDates = [] } = useForecastDates(hotelId || undefined)
 
-  // FCST: fcstDates 로드 후 초기값 자동 설정
+  // FCST: fcstDates 로드 후 가장 최근 날짜로 자동 설정 (정렬 순서 무관)
   useEffect(() => {
-    if (fcstDates.length > 0 && !fcstDate) {
-      setFcstDate(fcstDates[0])
+    if (fcstDates.length === 0) return
+    const latest = fcstDates.reduce((max, d) => (d > max ? d : max), fcstDates[0])
+    if (!fcstDate || !fcstDates.includes(fcstDate)) {
+      setFcstDate(latest)
     }
-  }, [fcstDates, fcstDate])
+  }, [fcstDates])
 
   // OTB: otbDates 로드 후 또는 otbDate 초기화 후 자동 설정
   useEffect(() => {
