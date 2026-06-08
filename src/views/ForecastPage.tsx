@@ -277,6 +277,7 @@ export default function ForecastPage() {
   }>({ isOpen: false, selectedDate: null, fromGraph: false })
 
   const [graphModalOpen, setGraphModalOpen] = useState(false)
+  const [mtdModalOpen,   setMtdModalOpen]   = useState(false)
 
   const openBulkEditModal  = useCallback((date: string, fromGraph = false) => {
     setBulkEdit({ isOpen: true, selectedDate: date, fromGraph })
@@ -471,39 +472,80 @@ export default function ForecastPage() {
                 <Zap size={13} />
                 {isGenerating ? '생성 중...' : '자동 생성'}
               </button>
-              <button
-                onClick={() => setGraphModalOpen(true)}
-                disabled={!isLoaded || data.length === 0}
-                title={!isLoaded ? 'forecast를 먼저 생성하세요' : 'OTB vs FCST 그래프'}
-                style={{
-                  display:      'flex',
-                  alignItems:   'center',
-                  gap:          4,
-                  padding:      '4px 8px',
-                  fontSize:     12,
-                  fontWeight:   500,
-                  cursor:       !isLoaded ? 'not-allowed' : 'pointer',
-                  border:       '1px solid var(--color-border-default)',
-                  borderRadius: 6,
-                  background:   'var(--color-bg-surface)',
-                  color:        !isLoaded ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)',
-                  opacity:      !isLoaded || data.length === 0 ? 0.5 : 1,
-                }}
-              >
-                <TrendingUp size={13} />
-                그래프
-              </button>
             </div>
 
             {/* 우: 편집 제어 */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <SegmentFilter
-                nodes={schema.nodes}
-                selectedIds={selectedNodeIds}
-                onToggle={toggleNode}
-                onAll={selectAll}
-                onReset={selectNone}
-              />
+              {/* [보기] 칩: Seg / 그래프 / MTD */}
+              <div style={{
+                display:    'inline-flex',
+                alignItems: 'center',
+                borderRadius: 7,
+                border:     '0.5px solid var(--color-border-secondary)',
+                background: 'var(--color-bg-elevated)',
+              }}>
+                <span style={{
+                  padding:     '5px 9px 5px 11px',
+                  fontSize:    11,
+                  color:       'var(--color-text-tertiary)',
+                  borderRight: '0.5px solid var(--color-border-secondary)',
+                  background:  'rgba(255,255,255,0.02)',
+                  whiteSpace:  'nowrap',
+                }}>
+                  보기
+                </span>
+                <div style={{ borderRight: '0.5px solid var(--color-border-secondary)' }}>
+                  <SegmentFilter
+                    nodes={schema.nodes}
+                    selectedIds={selectedNodeIds}
+                    onToggle={toggleNode}
+                    onAll={selectAll}
+                    onReset={selectNone}
+                  />
+                </div>
+                <button
+                  onClick={() => setGraphModalOpen(true)}
+                  disabled={!isLoaded || data.length === 0}
+                  title={!isLoaded ? 'forecast를 먼저 생성하세요' : 'OTB vs FCST 그래프'}
+                  style={{
+                    display:    'flex',
+                    alignItems: 'center',
+                    gap:        4,
+                    padding:    '5px 9px',
+                    fontSize:   12,
+                    fontWeight: 500,
+                    background: 'transparent',
+                    border:     'none',
+                    borderRight: '0.5px solid var(--color-border-secondary)',
+                    cursor:     !isLoaded || data.length === 0 ? 'not-allowed' : 'pointer',
+                    color:      !isLoaded ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)',
+                    opacity:    !isLoaded || data.length === 0 ? 0.45 : 1,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <TrendingUp size={12} />
+                  그래프
+                </button>
+                <button
+                  onClick={() => setMtdModalOpen(true)}
+                  title="MTD 보기 (세그별 + 월 전체)"
+                  style={{
+                    display:    'flex',
+                    alignItems: 'center',
+                    gap:        4,
+                    padding:    '5px 11px 5px 9px',
+                    fontSize:   12,
+                    fontWeight: 500,
+                    background: 'transparent',
+                    border:     'none',
+                    cursor:     'pointer',
+                    color:      'var(--color-text-primary)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  MTD
+                </button>
+              </div>
               {modifiedCount > 0 && (
                 <div style={{
                   display:      'flex',
@@ -678,6 +720,55 @@ export default function ForecastPage() {
             openBulkEditModal(date, true)
           }}
         />
+      )}
+
+      {/* MTD 모달 */}
+      {mtdModalOpen && (
+        <div
+          onClick={() => setMtdModalOpen(false)}
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(0,0,0,0.55)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 60,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background:   'var(--color-bg-elevated)',
+              border:       '0.5px solid var(--color-border-secondary)',
+              borderRadius: 10,
+              padding:      24,
+              minWidth:     400,
+            }}
+          >
+            <h3 style={{ fontSize: 16, margin: 0, marginBottom: 12, color: 'var(--color-text-primary)' }}>
+              MTD
+            </h3>
+            <p style={{ color: 'var(--color-text-tertiary)', fontSize: 13, margin: 0 }}>
+              MTD 보기 (세그별 + 월 전체)
+            </p>
+            <p style={{ color: 'var(--color-text-tertiary)', fontSize: 12, marginTop: 16 }}>
+              준비 중입니다.
+            </p>
+            <button
+              onClick={() => setMtdModalOpen(false)}
+              style={{
+                marginTop:    16,
+                padding:      '6px 14px',
+                fontSize:     12,
+                borderRadius: 6,
+                border:       '1px solid var(--color-border-default)',
+                background:   'var(--color-bg-surface)',
+                color:        'var(--color-text-primary)',
+                cursor:       'pointer',
+              }}
+            >
+              닫기
+            </button>
+          </div>
+        </div>
       )}
 
       {/* 일괄수정 모달 */}
