@@ -20,6 +20,11 @@ import { supabase } from '@/lib/supabase'
 
 // ── Month helpers ──────────────────────────────────────────────────────────────
 
+function fmtLoadDate(dateStr: string): string {
+  const [, m, d] = dateStr.split('-')
+  return `${parseInt(m)}/${parseInt(d)}`
+}
+
 function monthRange(year: number, month: number) {
   const mm    = String(month).padStart(2, '0')
   const start = `${year}-${mm}-01`
@@ -83,12 +88,14 @@ export default function ForecastPage() {
   const [dataError,    setDataError]    = useState<string | null>(null)
   const [isLoaded,     setIsLoaded]     = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [hasAutoLoaded, setHasAutoLoaded] = useState(false)
 
   // 월/호텔 변경 시 빈 표로 리셋
   useEffect(() => {
     setIsLoaded(false)
     setData([])
     setDataError(null)
+    setHasAutoLoaded(false)
   }, [hotelId, currentMonth])
 
   async function doFetch() {
@@ -317,6 +324,8 @@ export default function ForecastPage() {
 
   useEffect(() => {
     if (!hotelId) return
+    setLoadableDates([])        // 스테일 날짜 초기화 (월 변경 시 이전 월 날짜 방지)
+    setSelectedLoadDate('')
     const { start, end } = monthRange(currentMonth.year, currentMonth.month)
     ;(async () => {
       const { data: rows } = await supabase
@@ -331,6 +340,15 @@ export default function ForecastPage() {
       setLoadableDates(unique)
     })().catch(() => {})
   }, [hotelId, currentMonth])
+
+  // ── 진입/월변경 시 최신 update_date 자동 로드 ──────────────────────────────
+  useEffect(() => {
+    if (!hotelId || loadableDates.length === 0 || hasAutoLoaded) return
+    setHasAutoLoaded(true)
+    handleLoadConfirm(loadableDates[0])
+    // handleLoadConfirm은 컴포넌트 내부 함수라 deps에서 제외 (loadableDates 변경 시만 실행)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadableDates])
 
   async function handleLoadConfirm(loadDate: string) {
     if (editedValues.size > 0) {
@@ -424,6 +442,11 @@ export default function ForecastPage() {
                   <Download size={13} />
                   불러오기
                 </button>
+              )}
+              {isLoaded && selectedLoadDate && (
+                <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap' }}>
+                  · {selectedLoadDate === loadableDates[0] && '최신 '}{fmtLoadDate(selectedLoadDate)} 데이터
+                </span>
               )}
               <button
                 onClick={handleUpload}
