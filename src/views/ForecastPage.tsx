@@ -5,7 +5,7 @@ import ForecastTable from '@/components/forecast/ForecastTable'
 import ForecastHeader from '@/components/forecast/ForecastHeader'
 import SegmentFilter from '@/components/forecast/SegmentFilter'
 import KpiBar from '@/components/forecast/KpiBar'
-import { Download, Upload, Pencil, ClipboardList, Zap, TrendingUp } from 'lucide-react'
+import { Download, Pencil, ClipboardList, Zap, TrendingUp } from 'lucide-react'
 import { fetchForecastSchema } from '@/lib/forecast/schema'
 import { fetchBaselineForecast, transformRpcToTableData } from '@/lib/forecast/baseline'
 import { fetchCalendarRange, calendarToMap } from '@/lib/forecast/calendar'
@@ -181,7 +181,6 @@ export default function ForecastPage() {
   // ── 인라인 편집 state ────────────────────────────────────────────────────────
   const [editedValues, setEditedValues] = useState<EditedValues>(new Map())
   const [saving,       setSaving]       = useState(false)
-  const [isUploading,  setIsUploading]  = useState(false)
 
   // 월/호텔 변경 시 편집 상태 초기화
   useEffect(() => { setEditedValues(new Map()) }, [data])
@@ -221,44 +220,18 @@ export default function ForecastPage() {
     return edits
   }
 
-  async function handleUpload() {
-    if (data.length === 0 || isUploading || saving) return
-    const confirmMsg = hasTodayData
-      ? `화면의 모든 Forecast를 저장합니다.\n계속하시겠습니까?`
-      : `오늘 첫 저장입니다.\n표 전체 데이터를 업로드합니다.\n\n계속하시겠습니까?`
-    if (!confirm(confirmMsg)) return
-    setIsUploading(true)
-    try {
-      const edits = buildAllSaveEdits()
-      if (edits.length === 0) { alert('업로드할 데이터가 없습니다.'); return }
-      const updateDate = otbDate || new Date().toISOString().slice(0, 10)
-      const result     = await saveForecastEdits(hotelId, updateDate, edits)
-      alert(`전체 저장 완료\n총 ${result.saved_count}건 (신규 ${result.inserted_count}, 수정 ${result.updated_count})`)
-      setEditedValues(new Map())
-      setSelectedLoadDate(updateDate)
-      if (!loadableDates.includes(updateDate)) {
-        setLoadableDates(prev => [updateDate, ...prev])
-      }
-      doFetch().catch(() => {})
-    } catch (err) {
-      alert(`업로드 실패: ${(err as Error).message}`)
-    } finally {
-      setIsUploading(false)
-    }
-  }
-
   async function handleSave() {
     if (editedValues.size === 0 || saving) return
 
     // 오늘 첫 저장 — 편집분이 아닌 표 전체 업로드
     if (!hasTodayData) {
       if (!confirm(
-        `오늘 첫 저장입니다.\n편집분이 아닌 표 전체 데이터를 업로드합니다.\n\n계속하시겠습니까?`
+        `오늘 첫 저장입니다.\n편집분이 아닌 표 전체 데이터를 저장합니다.\n\n계속하시겠습니까?`
       )) return
       setSaving(true)
       try {
         const edits = buildAllSaveEdits()
-        if (edits.length === 0) { alert('업로드할 데이터가 없습니다.'); return }
+        if (edits.length === 0) { alert('저장할 데이터가 없습니다.'); return }
         const updateDate = otbDate || new Date().toISOString().slice(0, 10)
         const result     = await saveForecastEdits(hotelId, updateDate, edits)
         alert(`전체 저장 완료\n총 ${result.saved_count}건 (신규 ${result.inserted_count}, 수정 ${result.updated_count})`)
@@ -488,28 +461,6 @@ export default function ForecastPage() {
                   · {selectedLoadDate === loadableDates[0] && '최신 '}{fmtLoadDate(selectedLoadDate)} 데이터
                 </span>
               )}
-              <button
-                onClick={handleUpload}
-                disabled={isUploading || saving || data.length === 0}
-                title={isUploading ? '업로드 중...' : '화면 전체를 a05에 저장'}
-                style={{
-                  display:      'flex',
-                  alignItems:   'center',
-                  gap:          4,
-                  padding:      '4px 8px',
-                  fontSize:     12,
-                  fontWeight:   500,
-                  cursor:       isUploading || saving ? 'not-allowed' : 'pointer',
-                  border:       '1px solid var(--color-border-default)',
-                  borderRadius: 6,
-                  background:   'var(--color-bg-surface)',
-                  color:        'var(--color-text-primary)',
-                  opacity:      isUploading || saving || data.length === 0 ? 0.5 : 1,
-                }}
-              >
-                <Upload size={13} />
-                {isUploading ? '업로드 중...' : '업로드'}
-              </button>
               <button
                 onClick={handleGenerate}
                 disabled={isGenerating || !hotelId}
