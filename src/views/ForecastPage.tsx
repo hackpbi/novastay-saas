@@ -225,7 +225,10 @@ export default function ForecastPage() {
 
   async function handleUpload() {
     if (data.length === 0 || isUploading || saving) return
-    if (!confirm(`화면의 모든 Forecast를 저장합니다.\n계속하시겠습니까?`)) return
+    const confirmMsg = hasTodayData
+      ? `화면의 모든 Forecast를 저장합니다.\n계속하시겠습니까?`
+      : `오늘 첫 저장입니다.\n표 전체 데이터를 업로드합니다.\n\n계속하시겠습니까?`
+    if (!confirm(confirmMsg)) return
     setIsUploading(true)
     try {
       const edits = buildAllSaveEdits()
@@ -234,6 +237,10 @@ export default function ForecastPage() {
       const result     = await saveForecastEdits(hotelId, updateDate, edits)
       alert(`전체 저장 완료\n총 ${result.saved_count}건 (신규 ${result.inserted_count}, 수정 ${result.updated_count})`)
       setEditedValues(new Map())
+      setSelectedLoadDate(updateDate)
+      if (!loadableDates.includes(updateDate)) {
+        setLoadableDates(prev => [updateDate, ...prev])
+      }
       doFetch().catch(() => {})
     } catch (err) {
       alert(`업로드 실패: ${(err as Error).message}`)
@@ -244,6 +251,34 @@ export default function ForecastPage() {
 
   async function handleSave() {
     if (editedValues.size === 0 || saving) return
+
+    // 오늘 첫 저장 — 편집분이 아닌 표 전체 업로드
+    if (!hasTodayData) {
+      if (!confirm(
+        `오늘 첫 저장입니다.\n편집분이 아닌 표 전체 데이터를 업로드합니다.\n\n계속하시겠습니까?`
+      )) return
+      setSaving(true)
+      try {
+        const edits = buildAllSaveEdits()
+        if (edits.length === 0) { alert('업로드할 데이터가 없습니다.'); return }
+        const updateDate = otbDate || new Date().toISOString().slice(0, 10)
+        const result     = await saveForecastEdits(hotelId, updateDate, edits)
+        alert(`전체 저장 완료\n총 ${result.saved_count}건 (신규 ${result.inserted_count}, 수정 ${result.updated_count})`)
+        setEditedValues(new Map())
+        setSelectedLoadDate(updateDate)
+        if (!loadableDates.includes(updateDate)) {
+          setLoadableDates(prev => [updateDate, ...prev])
+        }
+        doFetch().catch(() => {})
+      } catch (err) {
+        alert(`저장 실패: ${(err as Error).message}`)
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
+
+    // 재저장 — 편집분만
     setSaving(true)
     try {
       const updateDate = otbDate || new Date().toISOString().slice(0, 10)
@@ -321,6 +356,12 @@ export default function ForecastPage() {
   // ── 불러오기 — a05의 update_date 목록 (현재 월) ──────────────────────────────
   const [loadableDates,    setLoadableDates]    = useState<string[]>([])
   const [selectedLoadDate, setSelectedLoadDate] = useState<string>('')
+
+  // 오늘(otbDate) 데이터가 이미 저장되어 있는지 여부
+  const hasTodayData = useMemo(
+    () => !!otbDate && loadableDates.includes(otbDate),
+    [loadableDates, otbDate],
+  )
 
   useEffect(() => {
     if (!hotelId) return
