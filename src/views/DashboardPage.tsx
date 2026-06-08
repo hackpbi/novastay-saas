@@ -900,11 +900,9 @@ export default function DashboardPage() {
         initialFilterLabel={accountModal.filterLabel}
         onBackToSeg={
           accountModal.filterSegCodes
-            ? () => {
-                const y = accountModal.year
-                const m = accountModal.month
+            ? (backYear, backMonth) => {
                 setAccountModal({ open: false })
-                setSegModal({ open: true, year: y, month: m })
+                setSegModal({ open: true, year: backYear, month: backMonth })
               }
             : undefined
         }

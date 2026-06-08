@@ -335,7 +335,7 @@ export default function AccountModal({
   roomCount:               number
   initialFilterSegCodes?:  string[]
   initialFilterLabel?:     string
-  onBackToSeg?:            () => void
+  onBackToSeg?:            (year: number, month: number) => void
 }) {
   const { data: schema, loading: schemaLoading, error: schemaError } = useMarketSchema()
   const { data: pickup, loading: pickupLoading } = usePickupData()
@@ -481,9 +481,9 @@ export default function AccountModal({
           {/* 좌측: 돌아가기 버튼 + 제목 + 필터 칩 */}
           <div className="shrink-0">
             <div className="flex items-center gap-2 mb-0.5">
-              {onBackToSeg && filterActive && (
+              {onBackToSeg && !!initialFilterSegCodes?.length && (
                 <button
-                  onClick={onBackToSeg}
+                  onClick={() => { setFilterCleared(true); onBackToSeg(curYear, curMonth) }}
                   className="flex items-center gap-1 px-2 py-1 rounded-md text-xs transition-colors"
                   style={{
                     border:  '1px solid var(--color-border-default)',

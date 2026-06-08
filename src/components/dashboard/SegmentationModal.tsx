@@ -498,7 +498,11 @@ export default function SegmentationModal({
           roomCount={roomCount}
           initialFilterSegCodes={accountModalSeg.segCodes}
           initialFilterLabel={accountModalSeg.label}
-          onBackToSeg={() => setAccountModalSeg(null)}
+          onBackToSeg={(backYear, backMonth) => {
+            setCurYear(backYear)
+            setCurMonth(backMonth)
+            setAccountModalSeg(null)
+          }}
         />
       )}
     </div>
