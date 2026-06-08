@@ -12,9 +12,34 @@ type Metric = 'occ' | 'adr' | 'rev'
 
 // ── CustomXTick ───────────────────────────────────────────────────────────────
 
-function isRedDay(cal: { day: string; is_holiday: boolean; event: string | null } | undefined): boolean {
+const DOW_LABELS = ['일', '월', '화', '수', '목', '금', '토']
+
+function hasEvent(event: unknown): boolean {
+  if (event == null) return false
+  const s = String(event).trim()
+  return s !== '' && s !== 'null'
+}
+
+function isHoliday(is_holiday: unknown): boolean {
+  if (is_holiday === true) return true
+  if (typeof is_holiday === 'string') return is_holiday.trim() !== '' && is_holiday !== 'N'
+  return false
+}
+
+function isRedDay(fullDate: string, cal: { is_holiday: unknown; event: unknown } | undefined): boolean {
+  const dow = new Date(fullDate + 'T12:00:00').getDay()
+  if (dow === 5 || dow === 6) return true          // 금/토
   if (!cal) return false
-  return cal.day === '금' || cal.day === '토' || cal.is_holiday || !!(cal.event && cal.event.trim())
+  if (hasEvent(cal.event)) return true              // 이벤트일
+  if (isHoliday(cal.is_holiday)) return true        // 공휴일
+  return false
+}
+
+function getDisplayChar(fullDate: string, cal: { event: unknown } | undefined): string {
+  if (cal && hasEvent(cal.event)) {
+    return String(cal.event).trim().charAt(0)       // 이벤트 첫 글자
+  }
+  return DOW_LABELS[new Date(fullDate + 'T12:00:00').getDay()]  // 요일
 }
 
 function CustomXTick({ x, y, payload, calendar, year, month }: {
@@ -29,22 +54,22 @@ function CustomXTick({ x, y, payload, calendar, year, month }: {
   const [mStr, dStr] = payload.value.split('/')
   const fullDate = `${year}-${String(parseInt(mStr)).padStart(2, '0')}-${String(parseInt(dStr)).padStart(2, '0')}`
   const cal = calendar.get(fullDate)
-  const red = isRedDay(cal)
-  const eventChar = cal?.event?.trim()?.charAt(0) ?? ''
+  const red = isRedDay(fullDate, cal)
+  const char = getDisplayChar(fullDate, cal)
+  const color = red ? '#E24B4A' : '#888'
+  const bgFill = red ? 'rgba(226,75,74,0.15)' : 'rgba(136,136,136,0.10)'
 
   return (
     <g transform={`translate(${x},${y})`}>
-      <text x={0} y={12} textAnchor="middle" fontSize={10} fill={red ? '#E24B4A' : '#888'}>
+      <text x={0} y={12} textAnchor="middle" fontSize={10} fill={color}>
         {payload.value}
       </text>
-      {eventChar && (
-        <g transform="translate(0,26)">
-          <circle cx={0} cy={0} r={8} fill="rgba(226,75,74,0.15)" />
-          <text x={0} y={3.5} textAnchor="middle" fontSize={9} fill="#E24B4A" fontWeight={500}>
-            {eventChar}
-          </text>
-        </g>
-      )}
+      <g transform="translate(0,26)">
+        <circle cx={0} cy={0} r={8} fill={bgFill} />
+        <text x={0} y={3.5} textAnchor="middle" fontSize={9} fill={color} fontWeight={500}>
+          {char}
+        </text>
+      </g>
     </g>
   )
 }
@@ -198,7 +223,7 @@ export function ForecastGraphModal({
 
               {/* 빨간 일자(금/토/이벤트/공휴일) 세로 점선 */}
               {points
-                .filter(p => isRedDay((calendar ?? new Map()).get(p.fullDate)))
+                .filter(p => isRedDay(p.fullDate, (calendar ?? new Map()).get(p.fullDate)))
                 .map(p => (
                   <ReferenceLine
                     key={p.date}
