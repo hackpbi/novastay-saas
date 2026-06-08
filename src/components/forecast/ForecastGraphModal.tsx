@@ -7,6 +7,7 @@ import {
   Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
 import type { ForecastDayData, ForecastSchema, CalendarMap } from '@/lib/forecast/types'
+import { type EditedValues, makeEditKey } from '@/lib/forecast/save'
 import { useDateContext } from '@/contexts/DateContext'
 
 type Metric = 'occ' | 'adr' | 'rev'
@@ -102,16 +103,17 @@ function fmtYAxis(v: number, metric: Metric): string {
 }
 
 export function ForecastGraphModal({
-  isOpen, onClose, data, schema, year, month, calendar, onDateClick,
+  isOpen, onClose, data, editedValues, schema, year, month, calendar, onDateClick,
 }: {
-  isOpen:       boolean
-  onClose:      () => void
-  data:         ForecastDayData[]
-  schema:       ForecastSchema
-  year:         number
-  month:        number
-  calendar?:    CalendarMap
-  onDateClick?: (date: string) => void
+  isOpen:        boolean
+  onClose:       () => void
+  data:          ForecastDayData[]
+  editedValues:  EditedValues
+  schema:        ForecastSchema
+  year:          number
+  month:         number
+  calendar?:     CalendarMap
+  onDateClick?:  (date: string) => void
 }) {
   const [metric, setMetric] = useState<Metric>('occ')
   const { otbDate: today } = useDateContext()
@@ -131,8 +133,12 @@ export function ForecastGraphModal({
         if (!v) continue
         otbRn  += v.otb_rn
         otbRev += v.otb_rev
-        fcRn   += v.rn
-        fcRev  += v.rn * v.adr
+        // FCST: editedValues 우선, 없으면 raw data
+        const edited = editedValues.get(makeEditKey(day.business_date, code))
+        const rn  = edited?.rn  ?? v.rn
+        const adr = edited?.adr ?? v.adr
+        fcRn  += rn
+        fcRev += rn * adr
       }
       const rc = schema.roomCount
       const [, mm, dd] = day.business_date.split('-')
@@ -147,7 +153,7 @@ export function ForecastGraphModal({
         fcRev,
       }
     })
-  }, [data, schema])
+  }, [data, schema, editedValues])
 
   const points = useMemo(() =>
     chartData.map(d => ({

@@ -765,6 +765,7 @@ export default function ForecastPage() {
           isOpen={graphModalOpen}
           onClose={() => setGraphModalOpen(false)}
           data={data}
+          editedValues={editedValues}
           schema={schema}
           year={currentMonth.year}
           month={currentMonth.month}
