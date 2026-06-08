@@ -209,9 +209,7 @@ export default function ForecastPage() {
   function buildAllSaveEdits(): SaveEdit[] {
     const edits: SaveEdit[] = []
     for (const day of data) {
-      if (day.is_actual_day) continue  // 과거 실적 제외
       for (const [code, value] of Object.entries(day.values)) {
-        if (value.is_actual) continue  // 세그먼트 레벨 actual도 제외
         edits.push({
           business_date: day.business_date,
           segmentation:  code,
