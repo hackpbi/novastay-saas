@@ -361,7 +361,7 @@ export default function LyComparisonAccountModal({
                       fontSize: 10, color: 'rgba(255,255,255,0.4)', cursor: 'default', flexShrink: 0,
                     }}>?</div>
                     <div className="hidden group-hover:block absolute z-50" style={{
-                      bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)',
+                      top: 'calc(100% + 4px)', left: '50%', transform: 'translateX(-50%)',
                       width: 192, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)',
                       borderRadius: 6, padding: 8, fontSize: 11, color: 'rgba(255,255,255,0.7)',
                       whiteSpace: 'normal', lineHeight: 1.5, pointerEvents: 'none',
