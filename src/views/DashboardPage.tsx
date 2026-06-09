@@ -214,7 +214,7 @@ function MetricRow({ label, value, metric, subValue, tooltip, yoyOverride, yoyLo
           )}
         </div>
       </div>
-      <div className="text-right space-y-1 shrink-0 ml-2">
+      <div className="flex flex-col items-end gap-y-0.5 shrink-0 ml-2">
         {modeLabelNode}
         {yoyLoading ? (
           <span className="text-[11px] text-brand-dimmed">-</span>
