@@ -215,7 +215,6 @@ function MetricRow({ label, value, metric, subValue, tooltip, yoyOverride, yoyLo
         </div>
       </div>
       <div className="text-right space-y-1 shrink-0 ml-2">
-        <p className="text-[10px] text-brand-dimmed">동기간대비</p>
         {modeLabelNode}
         {yoyLoading ? (
           <span className="text-[11px] text-brand-dimmed">-</span>
