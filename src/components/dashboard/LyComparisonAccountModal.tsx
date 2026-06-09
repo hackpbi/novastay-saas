@@ -162,7 +162,7 @@ export default function LyComparisonAccountModal({
   const { otbDate }                                      = useDateContext()
   const { data: schema, loading: schemaLoading }         = useMarketSchema()
   const { data: lyPacing, loading: lyLoading }           = useLyPacing()
-  const lyMatchDate = lyPacing?.[0]?.ly_match_date ?? null
+  const lyMatchUpdateDate = lyPacing?.[0]?.ly_match_update_date ?? null
 
   const [currentMonthIndex, setCurrentMonthIndex] = useState(0)
   const [searchQuery,   setSearchQuery]   = useState('')
@@ -288,7 +288,7 @@ export default function LyComparisonAccountModal({
             <div className="min-w-0">
               <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>전년 동기간 비교 — Account</h2>
               <p className="text-xs mt-0.5" style={{ color: 'var(--brand-dimmed)' }}>
-                현재 OTB {otbDate ?? '-'}{' · '}전년 동기간 OTB {lyMatchDate ?? '-'}
+                현재 OTB {otbDate ?? '-'}{' · '}전년 동기간 OTB {lyMatchUpdateDate ?? '-'}
               </p>
               {isFilterMode && initialFilterLabel && !filterCleared && (
                 <div className="flex items-center gap-1 mt-1.5">

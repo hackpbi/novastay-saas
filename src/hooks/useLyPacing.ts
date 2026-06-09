@@ -16,7 +16,7 @@ export type LyPacingRow = {
   ly_revenue:      number
   ly_diff_nights:  number
   ly_diff_revenue: number
-  ly_match_date:   string | null
+  ly_match_update_date:   string | null
 }
 
 export function useLyPacing() {
@@ -48,7 +48,7 @@ export function useLyPacing() {
         ly_revenue:      Number(r.ly_revenue),
         ly_diff_nights:  Number(r.ly_diff_nights),
         ly_diff_revenue: Number(r.ly_diff_revenue),
-        ly_match_date:   r.ly_match_date,
+        ly_match_update_date:   r.ly_match_update_date,
       }))
     },
     enabled: !!hotelId && !!otbDate,

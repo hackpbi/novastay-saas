@@ -156,7 +156,7 @@ export default function LyComparisonSegModal({
   const isDark                                           = theme === 'dark'
   const { data: schema, loading: schemaLoading }         = useMarketSchema()
   const { data: lyPacing, loading: lyLoading }           = useLyPacing()
-  const lyMatchDate = lyPacing?.[0]?.ly_match_date ?? null
+  const lyMatchUpdateDate = lyPacing?.[0]?.ly_match_update_date ?? null
   const [currentMonthIndex, setCurrentMonthIndex]        = useState(0)
 
   const loading = schemaLoading || lyLoading
@@ -234,7 +234,7 @@ export default function LyComparisonSegModal({
               전년 동기간 비교
             </h2>
             <p className="text-xs mt-0.5" style={{ color: 'var(--brand-dimmed)' }}>
-              현재 OTB {otbDate ?? '-'}{' · '}전년 동기간 OTB {lyMatchDate ?? '-'}
+              현재 OTB {otbDate ?? '-'}{' · '}전년 동기간 OTB {lyMatchUpdateDate ?? '-'}
             </p>
           </div>
 
