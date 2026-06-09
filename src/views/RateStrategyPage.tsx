@@ -15,6 +15,8 @@ import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import PageShell from '@/components/PageShell'
 import SegmentationModal from '@/components/dashboard/SegmentationModal'
+import { PromoCalendarView } from '@/components/rate-strategy/PromoCalendarView'
+import { RateCalendarView }  from '@/components/rate-strategy/RateCalendarView'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -22,6 +24,7 @@ type StrategyStatus = 'draft' | 'active' | 'inactive'
 type DiscountType   = 'pct' | 'amount' | 'fixed' | 'addon'
 type ChangeMode     = '%' | '+-' | 'direct'
 type PickupView     = 'total' | 'fit' | 'fit_grp'
+type RateTab        = 'list' | 'promo-cal' | 'rate-cal'
 
 interface Strategy {
   id:          string
@@ -693,6 +696,7 @@ export default function RateStrategyPage() {
   const [rpaSending,      setRpaSending]      = useState(false)
   const [segModalDate,    setSegModalDate]    = useState<string | null>(null)
   const [pickupView,      setPickupView]      = useState<PickupView>('fit')
+  const [activeTab,       setActiveTab]       = useState<RateTab>('list')
   const [previewBuffer,   setPreviewBuffer]   = useState<Record<string, Record<string, number>>>({})
   const isPreviewMode = Object.keys(previewBuffer).length > 0
 
@@ -1469,6 +1473,42 @@ export default function RateStrategyPage() {
         </div>
       </div>
 
+      {/* ── 탭 바 ── */}
+      <div style={{ display: 'flex', gap: 4 }}>
+        {([
+          { id: 'list',      label: '일자별'       },
+          { id: 'promo-cal', label: '프로모션 달력' },
+          { id: 'rate-cal',  label: '요금 달력'    },
+        ] as { id: RateTab; label: string }[]).map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            style={{
+              fontSize:     12,
+              fontWeight:   activeTab === tab.id ? 600 : 400,
+              padding:      '5px 14px',
+              borderRadius: 8,
+              border:       activeTab === tab.id
+                ? '1.5px solid #00E5A0'
+                : '1px solid var(--color-border-default)',
+              background:   activeTab === tab.id
+                ? 'rgba(0,229,160,0.08)'
+                : 'var(--color-bg-secondary)',
+              color:        activeTab === tab.id
+                ? '#00E5A0'
+                : 'var(--color-text-secondary)',
+              cursor:       'pointer',
+              transition:   'all 0.15s',
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── 일자별 탭 (list) ── */}
+      <div style={{ display: activeTab === 'list' ? undefined : 'none' }} className="space-y-6">
+
       {/* ── 필터 바 (1줄) ── */}
       <div className="flex items-end flex-wrap gap-2 px-4 py-3 rounded-xl"
         style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)' }}>
@@ -2210,6 +2250,14 @@ export default function RateStrategyPage() {
         </div>
         <span style={{ color: 'var(--color-text-muted)' }}>전송 시 PMS 자동 반영</span>
       </div>
+
+      </div>{/* /list tab */}
+
+      {/* ── 프로모션 달력 탭 ── */}
+      {activeTab === 'promo-cal' && <PromoCalendarView />}
+
+      {/* ── 요금 달력 탭 ── */}
+      {activeTab === 'rate-cal' && <RateCalendarView />}
 
       {/* ── 모달 ── */}
       {/* 업로드 오류 모달 */}

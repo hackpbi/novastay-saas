@@ -12,6 +12,7 @@ import { fetchCalendarRange, calendarToMap } from '@/lib/forecast/calendar'
 import { type EditedValues, saveForecastEdits, type SaveEdit } from '@/lib/forecast/save'
 import { BulkEditModal } from '@/components/forecast/BulkEditModal'
 import { ForecastGraphModal } from '@/components/forecast/ForecastGraphModal'
+import { MtdModal } from '@/components/forecast/MtdModal'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import type { ForecastSchema, ForecastDayData, CalendarMap } from '@/lib/forecast/types'
@@ -844,52 +845,18 @@ export default function ForecastPage() {
       )}
 
       {/* MTD 모달 */}
-      {mtdModalOpen && (
-        <div
-          onClick={() => setMtdModalOpen(false)}
-          style={{
-            position: 'fixed', inset: 0,
-            background: 'rgba(0,0,0,0.55)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            zIndex: 60,
-          }}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              background:   'var(--color-bg-elevated)',
-              border:       '0.5px solid var(--color-border-secondary)',
-              borderRadius: 10,
-              padding:      24,
-              minWidth:     400,
-            }}
-          >
-            <h3 style={{ fontSize: 16, margin: 0, marginBottom: 12, color: 'var(--color-text-primary)' }}>
-              MTD
-            </h3>
-            <p style={{ color: 'var(--color-text-tertiary)', fontSize: 13, margin: 0 }}>
-              MTD 보기 (세그별 + 월 전체)
-            </p>
-            <p style={{ color: 'var(--color-text-tertiary)', fontSize: 12, marginTop: 16 }}>
-              준비 중입니다.
-            </p>
-            <button
-              onClick={() => setMtdModalOpen(false)}
-              style={{
-                marginTop:    16,
-                padding:      '6px 14px',
-                fontSize:     12,
-                borderRadius: 6,
-                border:       '1px solid var(--color-border-default)',
-                background:   'var(--color-bg-surface)',
-                color:        'var(--color-text-primary)',
-                cursor:       'pointer',
-              }}
-            >
-              닫기
-            </button>
-          </div>
-        </div>
+      {mtdModalOpen && schema && (
+        <MtdModal
+          isOpen={mtdModalOpen}
+          onClose={() => setMtdModalOpen(false)}
+          schema={schema}
+          data={data}
+          editedValues={editedValues}
+          year={currentMonth.year}
+          month={currentMonth.month}
+          otbDate={otbDate || new Date().toISOString().slice(0, 10)}
+          hotelId={hotelId}
+        />
       )}
 
       {/* 일괄수정 모달 */}

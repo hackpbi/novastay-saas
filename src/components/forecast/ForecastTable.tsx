@@ -172,6 +172,22 @@ function EditableCell({ value, fmt, onSave, editable, isModified, editMode = 'in
             e.stopPropagation()
             if (e.key === 'Enter') { e.preventDefault(); commit() }
             if (e.key === 'Escape') cancel()
+            if (e.key === 'Tab') {
+              e.preventDefault()
+              commit()
+              const currentTd = (e.target as HTMLElement).closest('td')
+              if (currentTd) {
+                const allTds = Array.from(currentTd.closest('tr')?.querySelectorAll('td') ?? [])
+                const idx = allTds.indexOf(currentTd as HTMLTableCellElement)
+                const nextTd = allTds[idx + 1] as HTMLTableCellElement | undefined
+                if (nextTd) {
+                  setTimeout(() => {
+                    const span = nextTd.querySelector('span')
+                    if (span) (span as HTMLElement).click()
+                  }, 0)
+                }
+              }
+            }
           }}
           onClick={e => e.stopPropagation()}
           onFocus={e => e.target.select()}
@@ -309,6 +325,10 @@ export default function ForecastTable({
 
   return (
     <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 190px)', minHeight: 200 }}>
+      <style>{`
+        .fc-row:hover td { background: rgba(0,229,160,0.05) !important; }
+        .otb-row:hover td { background: rgba(0,229,160,0.05) !important; }
+      `}</style>
       <table
         style={{
           borderCollapse: 'separate',
@@ -493,7 +513,7 @@ export default function ForecastTable({
             const cal        = calendar?.get(row.business_date)
             const _evt       = cal?.event?.trim()
             const hasEvent   = !!_evt && _evt.toLowerCase() !== 'null'
-            const isWeekend  = !hasEvent && (cal?.day === '금' || cal?.day === '토')
+            const isWeekend  = cal?.day === '금' || cal?.day === '토'
             const isFriSat   = cal?.day === '금' || cal?.day === '토'
             const expandable = canExpand(row)
             const isExpanded = expandable && (manualExpandedDates.has(row.business_date) || shouldAutoExpand(row, threshold))
@@ -503,6 +523,7 @@ export default function ForecastTable({
               <Fragment key={row.business_date}>
                 {/* ── FC 행 ── */}
                 <tr
+                  className="fc-row"
                   style={{
                     opacity:    row.is_actual_day ? 0.55 : 1,
                     transition: 'opacity 0.15s',
@@ -541,6 +562,17 @@ export default function ForecastTable({
                       <span style={isFriSat ? { color: '#3B82F6', fontWeight: 600 } : undefined}>
                         {row.day_label}
                       </span>
+                      {isWeekend && (
+                        <span style={{
+                          display:      'inline-block',
+                          width:        5,
+                          height:       5,
+                          borderRadius: '50%',
+                          background:   '#F59E0B',
+                          flexShrink:   0,
+                          marginLeft:   1,
+                        }} />
+                      )}
                       {hasEvent && (
                         <span
                           title={_evt}
@@ -562,17 +594,6 @@ export default function ForecastTable({
                         >
                           {_evt!.slice(0, 2)}
                         </span>
-                      )}
-                      {!hasEvent && isWeekend && (
-                        <span style={{
-                          marginLeft:   'auto',
-                          display:      'inline-block',
-                          width:        6,
-                          height:       6,
-                          borderRadius: '50%',
-                          background:   '#F59E0B',
-                          flexShrink:   0,
-                        }} />
                       )}
                     </div>
                   </td>
@@ -648,15 +669,22 @@ export default function ForecastTable({
 
                       return (
                         <Fragment key={col.id}>
-                          <td style={{
-                            ...tdBase,
-                            borderBottom: fcBtm,
-                            background:   isRnEdited ? 'rgba(0,184,131,0.12)' : isOtbOver ? 'rgba(239,68,68,0.10)' : cellBg,
-                            textAlign:    'right',
-                            color:        sv.rn === 0 ? TERTIARY : isOtbOver ? 'var(--color-warning, #F5A623)' : textCol,
-                            fontWeight:   isRnEdited ? 600 : fw,
-                            borderRight:  BORDER,
-                          }}>
+                          <td
+                            style={{
+                              ...tdBase,
+                              borderBottom: fcBtm,
+                              background:   isRnEdited ? 'rgba(0,184,131,0.12)' : isOtbOver ? 'rgba(239,68,68,0.10)' : cellBg,
+                              textAlign:    'right',
+                              color:        sv.rn === 0 ? TERTIARY : isOtbOver ? 'var(--color-warning, #F5A623)' : textCol,
+                              fontWeight:   isRnEdited ? 600 : fw,
+                              borderRight:  BORDER,
+                              cursor:       editable ? 'pointer' : 'default',
+                            }}
+                            onClick={editable ? (e) => {
+                              const span = e.currentTarget.querySelector('span')
+                              if (span) (span as HTMLElement).click()
+                            } : undefined}
+                          >
                             {editable ? (
                               <EditableCell
                                 value={sv.rn}
@@ -669,15 +697,22 @@ export default function ForecastTable({
                               />
                             ) : fmtRn(sv.rn)}
                           </td>
-                          <td style={{
-                            ...tdBase,
-                            borderBottom: fcBtm,
-                            background:   isAdrEdited ? 'rgba(0,184,131,0.12)' : cellBg,
-                            textAlign:    'right',
-                            color:        sv.adr === 0 ? TERTIARY : textCol,
-                            fontWeight:   isAdrEdited ? 600 : fw,
-                            borderRight:  BORDER,
-                          }}>
+                          <td
+                            style={{
+                              ...tdBase,
+                              borderBottom: fcBtm,
+                              background:   isAdrEdited ? 'rgba(0,184,131,0.12)' : cellBg,
+                              textAlign:    'right',
+                              color:        sv.adr === 0 ? TERTIARY : textCol,
+                              fontWeight:   isAdrEdited ? 600 : fw,
+                              borderRight:  BORDER,
+                              cursor:       editable ? 'pointer' : 'default',
+                            }}
+                            onClick={editable ? (e) => {
+                              const span = e.currentTarget.querySelector('span')
+                              if (span) (span as HTMLElement).click()
+                            } : undefined}
+                          >
                             {editable ? (
                               <EditableCell
                                 value={sv.adr}
@@ -709,7 +744,7 @@ export default function ForecastTable({
 
                 {/* ── OTB 행 (펼침 시) ── */}
                 {isExpanded && (
-                  <tr>
+                  <tr className="otb-row">
                     <td
                       style={{
                         ...tdBase,

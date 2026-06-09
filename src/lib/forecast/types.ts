@@ -7,6 +7,8 @@ export type C05Row = {
   segmentation: string[]
   order_index: number
   is_bold: boolean
+  bg_dark_color:  string | null
+  bg_light_color: string | null
 }
 
 // ─── Tree node (built from C05) ────────────────────────────────────────────────
@@ -18,6 +20,8 @@ export type SchemaNode = {
   orderIndex: number
   segmentationCodes: string[]  // leaf codes (own or aggregated from children)
   children: SchemaNode[]
+  bgDarkColor?:  string   // c05.bg_dark_color
+  bgLightColor?: string   // c05.bg_light_color
 }
 
 // ─── Column rendering units ────────────────────────────────────────────────────
