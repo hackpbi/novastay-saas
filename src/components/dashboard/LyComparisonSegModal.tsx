@@ -6,7 +6,7 @@ import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useMarketSchema } from '@/hooks/useMarketSchema'
-import { useLyPacing } from '@/hooks/useLyPacing'
+import { useLyPacing, type LyPacingMode } from '@/hooks/useLyPacing'
 import {
   buildLyComparisonSegTable,
 } from '@/utils/lyComparisonSegTable'
@@ -155,7 +155,8 @@ export default function LyComparisonSegModal({
   const { theme }                                        = useTheme()
   const isDark                                           = theme === 'dark'
   const { data: schema, loading: schemaLoading }         = useMarketSchema()
-  const { data: lyPacing, loading: lyLoading }           = useLyPacing()
+  const [mode, setMode]                                  = useState<LyPacingMode>('v1')
+  const { data: lyPacing, loading: lyLoading }           = useLyPacing(mode)
   const lyMatchUpdateDate = lyPacing?.[0]?.ly_match_update_date ?? null
   const [currentMonthIndex, setCurrentMonthIndex]        = useState(0)
 
@@ -253,10 +254,35 @@ export default function LyComparisonSegModal({
             </div>
           )}
 
-          {/* Right: close */}
-          <button onClick={onClose} className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1" aria-label="닫기">
-            <X size={22} />
-          </button>
+          {/* Right: mode toggle + close */}
+          <div className="flex items-center gap-3">
+            <div style={{ display: 'inline-flex', borderRadius: 999, border: '1px solid rgba(255,255,255,0.12)', overflow: 'hidden' }}>
+              {(['v1', 'v2'] as LyPacingMode[]).map(m => (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  style={{
+                    padding:     '4px 10px',
+                    fontSize:    11,
+                    fontWeight:  600,
+                    cursor:      'pointer',
+                    border:      'none',
+                    whiteSpace:  'nowrap',
+                    background:  mode === m ? 'rgba(0,229,160,0.15)' : 'transparent',
+                    color:       mode === m ? '#00E5A0' : 'rgba(255,255,255,0.35)',
+                    transition:  'background 0.15s, color 0.15s',
+                  }}
+                  onMouseEnter={e => { if (mode !== m) (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.6)' }}
+                  onMouseLeave={e => { if (mode !== m) (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.35)' }}
+                >
+                  {m === 'v1' ? 'update_date 매칭' : '양쪽 매칭'}
+                </button>
+              ))}
+            </div>
+            <button onClick={onClose} className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1" aria-label="닫기">
+              <X size={22} />
+            </button>
+          </div>
         </div>
 
         {/* Body */}

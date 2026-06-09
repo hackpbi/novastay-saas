@@ -5,7 +5,7 @@ import { X, ChevronDown, ChevronRight, ChevronLeft, Search, ArrowLeft } from 'lu
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
-import { useLyPacing } from '@/hooks/useLyPacing'
+import { useLyPacing, type LyPacingMode } from '@/hooks/useLyPacing'
 import {
   buildLyComparisonAccountTable,
   type LyComparisonAccountGroup,
@@ -161,7 +161,8 @@ export default function LyComparisonAccountModal({
   const { currentHotel }                                 = useHotel()
   const { otbDate }                                      = useDateContext()
   const { data: schema, loading: schemaLoading }         = useMarketSchema()
-  const { data: lyPacing, loading: lyLoading }           = useLyPacing()
+  const [mode, setMode]                                  = useState<LyPacingMode>('v1')
+  const { data: lyPacing, loading: lyLoading }           = useLyPacing(mode)
   const lyMatchUpdateDate = lyPacing?.[0]?.ly_match_update_date ?? null
 
   const [currentMonthIndex, setCurrentMonthIndex] = useState(0)
@@ -319,6 +320,30 @@ export default function LyComparisonAccountModal({
 
           {/* Right */}
           <div className="flex items-center gap-2 shrink-0">
+            {/* mode 토글 */}
+            <div style={{ display: 'inline-flex', borderRadius: 999, border: '1px solid rgba(255,255,255,0.12)', overflow: 'hidden' }}>
+              {(['v1', 'v2'] as LyPacingMode[]).map(m => (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  style={{
+                    padding:    '4px 10px',
+                    fontSize:   11,
+                    fontWeight: 600,
+                    cursor:     'pointer',
+                    border:     'none',
+                    whiteSpace: 'nowrap',
+                    background: mode === m ? 'rgba(0,229,160,0.15)' : 'transparent',
+                    color:      mode === m ? '#00E5A0' : 'rgba(255,255,255,0.35)',
+                    transition: 'background 0.15s, color 0.15s',
+                  }}
+                  onMouseEnter={e => { if (mode !== m) (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.6)' }}
+                  onMouseLeave={e => { if (mode !== m) (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.35)' }}
+                >
+                  {m === 'v1' ? 'update_date 매칭' : '양쪽 매칭'}
+                </button>
+              ))}
+            </div>
             <div className="relative">
               <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--color-text-muted)' }} />
               <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
