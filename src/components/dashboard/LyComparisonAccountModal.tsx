@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { X, ChevronDown, ChevronRight, ChevronLeft, Search, ArrowLeft } from 'lucide-react'
 import { useHotel } from '@/contexts/HotelContext'
+import { useDateContext } from '@/contexts/DateContext'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
 import { useLyPacing } from '@/hooks/useLyPacing'
 import {
@@ -158,8 +159,10 @@ export default function LyComparisonAccountModal({
   onBackToSeg?:           (monthKey: string) => void
 }) {
   const { currentHotel }                                 = useHotel()
+  const { otbDate }                                      = useDateContext()
   const { data: schema, loading: schemaLoading }         = useMarketSchema()
   const { data: lyPacing, loading: lyLoading }           = useLyPacing()
+  const lyMatchDate = lyPacing?.[0]?.ly_match_date ?? null
 
   const [currentMonthIndex, setCurrentMonthIndex] = useState(0)
   const [searchQuery,   setSearchQuery]   = useState('')
@@ -284,7 +287,9 @@ export default function LyComparisonAccountModal({
             )}
             <div className="min-w-0">
               <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>전년 동기간 비교 — Account</h2>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--brand-dimmed)' }}>{currentHotel?.hotel_name ?? ''}</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--brand-dimmed)' }}>
+                현재 OTB {otbDate ?? '-'}{' · '}전년 동기간 OTB {lyMatchDate ?? '-'}
+              </p>
               {isFilterMode && initialFilterLabel && !filterCleared && (
                 <div className="flex items-center gap-1 mt-1.5">
                   <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px]"

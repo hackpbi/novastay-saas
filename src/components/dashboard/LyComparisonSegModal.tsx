@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useHotel } from '@/contexts/HotelContext'
+import { useDateContext } from '@/contexts/DateContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useMarketSchema } from '@/hooks/useMarketSchema'
 import { useLyPacing } from '@/hooks/useLyPacing'
@@ -150,10 +151,12 @@ export default function LyComparisonSegModal({
   onAccountDrillDown?: (segCodes: string[], monthKey: string, label: string) => void
 }) {
   const { currentHotel }                                 = useHotel()
+  const { otbDate }                                      = useDateContext()
   const { theme }                                        = useTheme()
   const isDark                                           = theme === 'dark'
   const { data: schema, loading: schemaLoading }         = useMarketSchema()
   const { data: lyPacing, loading: lyLoading }           = useLyPacing()
+  const lyMatchDate = lyPacing?.[0]?.ly_match_date ?? null
   const [currentMonthIndex, setCurrentMonthIndex]        = useState(0)
 
   const loading = schemaLoading || lyLoading
@@ -231,7 +234,7 @@ export default function LyComparisonSegModal({
               전년 동기간 비교
             </h2>
             <p className="text-xs mt-0.5" style={{ color: 'var(--brand-dimmed)' }}>
-              {currentHotel?.hotel_name ?? ''}
+              현재 OTB {otbDate ?? '-'}{' · '}전년 동기간 OTB {lyMatchDate ?? '-'}
             </p>
           </div>
 
