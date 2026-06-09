@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
@@ -156,6 +157,7 @@ export default function LyComparisonSegModal({
   const isDark                                           = theme === 'dark'
   const { data: schema, loading: schemaLoading }         = useMarketSchema()
   const [mode, setMode]                                  = useState<LyPacingMode>('v1')
+  const [tooltip, setTooltip]                            = useState<{ visible: boolean; x: number; y: number; text: string }>({ visible: false, x: 0, y: 0, text: '' })
   const { data: lyPacing, loading: lyLoading }           = useLyPacing(mode)
   const lyMatchUpdateDate = lyPacing?.[0]?.ly_match_update_date ?? null
   const [currentMonthIndex, setCurrentMonthIndex]        = useState(0)
@@ -288,24 +290,27 @@ export default function LyComparisonSegModal({
                   >
                     {m === 'v1' ? '전년 동일자' : '전년 동기간'}
                   </button>
-                  <div className="group relative" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                  <div
+                    style={{ display: 'inline-flex', alignItems: 'center', cursor: 'default' }}
+                    onMouseEnter={e => {
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      setTooltip({
+                        visible: true,
+                        x: rect.left + rect.width / 2,
+                        y: rect.bottom + 8,
+                        text: m === 'v1'
+                          ? '작년 동일 update_date 기준으로 비교\n예) 오늘 2026-06-09 → 작년 2025-06-09 스냅샷'
+                          : '작년 동기간 날짜로 매핑하여 비교\n예) 2026-06-09 → yoy_match 기준 2025-06-10',
+                      })
+                    }}
+                    onMouseLeave={() => setTooltip(prev => ({ ...prev, visible: false }))}
+                  >
                     <div style={{
                       width: 14, height: 14, borderRadius: '50%',
                       border: '1px solid rgba(255,255,255,0.3)',
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 10, color: 'rgba(255,255,255,0.4)', cursor: 'default', flexShrink: 0,
+                      fontSize: 10, color: 'rgba(255,255,255,0.4)', flexShrink: 0,
                     }}>?</div>
-                    <div className="hidden group-hover:block absolute z-50" style={{
-                      top: 'calc(100% + 4px)', left: '50%', transform: 'translateX(-50%)',
-                      width: 192, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: 6, padding: 8, fontSize: 11, color: 'rgba(255,255,255,0.7)',
-                      whiteSpace: 'normal', lineHeight: 1.5, pointerEvents: 'none',
-                    }}>
-                      {m === 'v1'
-                        ? <>작년 동일 update_date 기준으로 비교<br />예) 오늘 2026-06-09 → 작년 2025-06-09 스냅샷</>
-                        : <>작년 동기간 날짜로 매핑하여 비교<br />예) 2026-06-09 → yoy_match 기준 2025-06-10</>
-                      }
-                    </div>
                   </div>
                 </div>
               ))}
@@ -434,6 +439,28 @@ export default function LyComparisonSegModal({
           <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>ESC로 닫기</span>
         </div>
       </div>
+      {tooltip.visible && createPortal(
+        <div style={{
+          position:     'fixed',
+          left:         tooltip.x,
+          top:          tooltip.y,
+          transform:    'translateX(-50%)',
+          zIndex:       9999,
+          width:        192,
+          background:   '#1a1a1a',
+          border:       '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 6,
+          padding:      8,
+          fontSize:     11,
+          color:        'rgba(255,255,255,0.7)',
+          whiteSpace:   'pre-line',
+          lineHeight:   1.5,
+          pointerEvents: 'none',
+        }}>
+          {tooltip.text}
+        </div>,
+        document.body
+      )}
     </div>
   )
 }
