@@ -5,7 +5,7 @@ import { ArrowUp, ArrowDown, AlignJustify, User, ChevronLeft, ChevronRight } fro
 import { useQuery } from '@tanstack/react-query'
 import { usePickupData } from '@/hooks/usePickupData'
 import { useOtbData } from '@/hooks/useOtbData'
-import { useLyPacing } from '@/hooks/useLyPacing'
+import { useLyPacing, type LyPacingMode } from '@/hooks/useLyPacing'
 import SegmentationModal          from '@/components/dashboard/SegmentationModal'
 import AccountModal               from '@/components/dashboard/AccountModal'
 import MonthlyPickupSegModal      from '@/components/dashboard/MonthlyPickupSegModal'
@@ -182,15 +182,16 @@ function SubMetric({ label, value }: { label: string; value: number }) {
   )
 }
 
-function MetricRow({ label, value, metric, subValue, tooltip, yoyOverride, yoyLoading, onLyClick }: {
-  label:       string
-  value:       string
-  metric:      MetricData
-  subValue?:   string
-  tooltip?:    string
-  yoyOverride?: { value: number | null; unit: string; fitPct?: number | null; grpPct?: number | null; showFitGrp?: boolean }
-  yoyLoading?: boolean
-  onLyClick?:  () => void
+function MetricRow({ label, value, metric, subValue, tooltip, yoyOverride, yoyLoading, onLyClick, modeLabelNode }: {
+  label:          string
+  value:          string
+  metric:         MetricData
+  subValue?:      string
+  tooltip?:       string
+  yoyOverride?:   { value: number | null; unit: string; fitPct?: number | null; grpPct?: number | null; showFitGrp?: boolean }
+  yoyLoading?:    boolean
+  onLyClick?:     () => void
+  modeLabelNode?: React.ReactNode
 }) {
   return (
     <div
@@ -215,6 +216,7 @@ function MetricRow({ label, value, metric, subValue, tooltip, yoyOverride, yoyLo
       </div>
       <div className="text-right space-y-1 shrink-0 ml-2">
         <p className="text-[10px] text-brand-dimmed">동기간대비</p>
+        {modeLabelNode}
         {yoyLoading ? (
           <span className="text-[11px] text-brand-dimmed">-</span>
         ) : yoyOverride ? (
@@ -273,7 +275,7 @@ function getAchievementColor(pct: number | null): string {
 
 // ─── Month Card ─────────────────────────────────────────────────────────────────
 
-function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSegClick, onAccountClick, pickupNights, onLyClick, onAchievementClick }: {
+function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSegClick, onAccountClick, pickupNights, onLyClick, onAchievementClick, lyMode, onLyModeToggle }: {
   data:             MonthData
   stats:            MonthStats
   loading:          boolean
@@ -285,6 +287,8 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
   pickupNights:     number
   onLyClick?:              (year: number, month: number) => void
   onAchievementClick?:     (year: number, month: number) => void
+  lyMode:           'v1' | 'v2'
+  onLyModeToggle:   () => void
 }) {
   const { year, month, occ, adr, rev, forecast, budget, pu, rmAction } = data
 
@@ -340,6 +344,17 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
           }}
           yoyLoading={yoyLoading}
           onLyClick={onLyClick ? () => onLyClick(year, month) : undefined}
+          modeLabelNode={
+            <span
+              onClick={onLyModeToggle}
+              className="text-[9px] cursor-pointer transition-colors"
+              style={{ color: 'rgba(255,255,255,0.4)', borderBottom: '1px dashed rgba(255,255,255,0.3)' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLSpanElement).style.color = 'rgba(255,255,255,0.7)'; (e.currentTarget as HTMLSpanElement).style.borderBottomColor = 'rgba(255,255,255,0.5)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLSpanElement).style.color = 'rgba(255,255,255,0.4)'; (e.currentTarget as HTMLSpanElement).style.borderBottomColor = 'rgba(255,255,255,0.3)' }}
+            >
+              {lyMode === 'v1' ? '전년 동일자 ⇅' : '전년 동기간 ⇅'}
+            </span>
+          }
         />
         <MetricRow
           label="ADR"
@@ -353,6 +368,11 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
           }}
           yoyLoading={yoyLoading}
           onLyClick={onLyClick ? () => onLyClick(year, month) : undefined}
+          modeLabelNode={
+            <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
+              {lyMode === 'v1' ? '전년 동일자' : '전년 동기간'}
+            </span>
+          }
         />
         <MetricRow
           label="REV"
@@ -368,6 +388,11 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
           }}
           yoyLoading={yoyLoading}
           onLyClick={onLyClick ? () => onLyClick(year, month) : undefined}
+          modeLabelNode={
+            <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
+              {lyMode === 'v1' ? '전년 동일자' : '전년 동기간'}
+            </span>
+          }
         />
       </div>
 
@@ -500,7 +525,8 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
 const PAGE_SIZE = 3
 
 export default function DashboardPage() {
-  const [page, setPage] = useState(0)
+  const [page, setPage]     = useState(0)
+  const [lyMode, setLyMode] = useState<LyPacingMode>('v1')
   const [segModal,     setSegModal]     = useState<{ open: boolean; year?: number; month?: number }>({ open: false })
   const [monthlyPickupSegOpen,       setMonthlyPickupSegOpen]       = useState(false)
   const [forecastBudgetModal,        setForecastBudgetModal]        = useState<{
@@ -531,7 +557,7 @@ export default function DashboardPage() {
     ? Math.round((new Date(otbDate).getTime() - new Date(vsOtbDate).getTime()) / 86400000)
     : 0
   const { data: otbData } = useOtbData()
-  const { data: lyData, loading: lyLoading } = useLyPacing()
+  const { data: lyData, loading: lyLoading } = useLyPacing(lyMode)
 
   function getMonthPickup(year: number, month: number): number {
     return pickupData
@@ -811,6 +837,8 @@ export default function DashboardPage() {
               setForecastBudgetModal({ open: true, monthKey })
             }}
             pickupNights={getMonthPickup(m.year, m.month)}
+            lyMode={lyMode}
+            onLyModeToggle={() => setLyMode(prev => prev === 'v1' ? 'v2' : 'v1')}
           />
         ))}
       </div>
