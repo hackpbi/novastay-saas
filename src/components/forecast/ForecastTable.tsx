@@ -493,7 +493,7 @@ export default function ForecastTable({
             const cal        = calendar?.get(row.business_date)
             const _evt       = cal?.event?.trim()
             const hasEvent   = !!_evt && _evt.toLowerCase() !== 'null'
-            const isWeekend  = !hasEvent && cal?.rev_dow === '토'
+            const isWeekend  = !hasEvent && (cal?.day === '금' || cal?.day === '토')
             const isFriSat   = cal?.day === '금' || cal?.day === '토'
             const expandable = canExpand(row)
             const isExpanded = expandable && (manualExpandedDates.has(row.business_date) || shouldAutoExpand(row, threshold))
@@ -545,25 +545,27 @@ export default function ForecastTable({
                         <span
                           title={_evt}
                           style={{
+                            marginLeft:     'auto',
                             display:        'inline-flex',
                             alignItems:     'center',
                             justifyContent: 'center',
-                            width:          18,
+                            width:          22,
                             height:         18,
                             borderRadius:   '50%',
                             background:     'var(--color-text-danger, #ef4444)',
                             color:          '#fff',
-                            fontSize:       10,
+                            fontSize:       9,
                             fontWeight:     600,
                             flexShrink:     0,
                             cursor:         'help',
                           }}
                         >
-                          {_evt!.charAt(0)}
+                          {_evt!.slice(0, 2)}
                         </span>
                       )}
                       {!hasEvent && isWeekend && (
                         <span style={{
+                          marginLeft:   'auto',
                           display:      'inline-block',
                           width:        6,
                           height:       6,
@@ -627,6 +629,12 @@ export default function ForecastTable({
                       const editedEntry  = isLeaf ? editedValues.get(makeEditKey(row.business_date, segCode)) : undefined
                       const isRnEdited   = editedEntry?.rn  !== undefined
                       const isAdrEdited  = editedEntry?.adr !== undefined
+                      const isOtbOver    = (() => {
+                        if (!isLeaf || !isExpanded || row.is_actual_day || !sv) return false
+                        const otbV = row.values[segCode]
+                        if (!otbV) return false
+                        return otbV.otb_rn >= sv.rn + threshold
+                      })()
 
                       if (sv === null) {
                         return (
@@ -643,9 +651,9 @@ export default function ForecastTable({
                           <td style={{
                             ...tdBase,
                             borderBottom: fcBtm,
-                            background:   isRnEdited ? 'rgba(0,184,131,0.12)' : cellBg,
+                            background:   isRnEdited ? 'rgba(0,184,131,0.12)' : isOtbOver ? 'rgba(239,68,68,0.10)' : cellBg,
                             textAlign:    'right',
-                            color:        sv.rn === 0 ? TERTIARY : textCol,
+                            color:        sv.rn === 0 ? TERTIARY : isOtbOver ? 'var(--color-warning, #F5A623)' : textCol,
                             fontWeight:   isRnEdited ? 600 : fw,
                             borderRight:  BORDER,
                           }}>

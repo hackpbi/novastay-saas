@@ -86,8 +86,10 @@ export default function ForecastPage() {
   // ── Baseline data state ───────────────────────────────────────────────────────
   const [data,         setData]         = useState<ForecastDayData[]>([])
   const [dataError,    setDataError]    = useState<string | null>(null)
-  const [isLoaded,     setIsLoaded]     = useState(false)
-  const [isGenerating, setIsGenerating] = useState(false)
+  const [isLoaded,      setIsLoaded]      = useState(false)
+  const [isGenerating,  setIsGenerating]  = useState(false)
+  const [isLoading,     setIsLoading]     = useState(false)
+  const [loadProgress,  setLoadProgress]  = useState<number>(0)
   const [hasAutoLoaded, setHasAutoLoaded] = useState(false)
 
   // 월/호텔 변경 시 빈 표로 리셋
@@ -100,9 +102,14 @@ export default function ForecastPage() {
 
   async function doFetch() {
     const { start, end } = monthRange(currentMonth.year, currentMonth.month)
+    setIsLoading(true)
+    setLoadProgress(0)
     const rows = await fetchBaselineForecast(hotelId, start, end, otbDate || undefined)
-    setData(transformRpcToTableData(rows))
+    setData(transformRpcToTableData(rows, (pct) => {
+      setLoadProgress(pct)
+    }))
     setIsLoaded(true)
+    setIsLoading(false)
   }
 
   async function handleGenerate() {
@@ -356,11 +363,15 @@ export default function ForecastPage() {
       if (!confirm('편집한 내용이 있습니다. 불러오면 사라집니다. 계속하시겠습니까?')) return
     }
     setIsGenerating(true)
+    setIsLoading(true)
+    setLoadProgress(0)
     setDataError(null)
     try {
       const { start, end } = monthRange(currentMonth.year, currentMonth.month)
       const rows = await fetchBaselineForecast(hotelId, start, end, otbDate || undefined, loadDate)
-      setData(transformRpcToTableData(rows))
+      setData(transformRpcToTableData(rows, (pct) => {
+        setLoadProgress(pct)
+      }))
       setEditedValues(new Map())
       setIsLoaded(true)
       setSelectedLoadDate(loadDate)
@@ -371,6 +382,7 @@ export default function ForecastPage() {
       alert(`불러오기 실패: ${msg}`)
     } finally {
       setIsGenerating(false)
+      setIsLoading(false)
     }
   }
 
@@ -686,39 +698,104 @@ export default function ForecastPage() {
           )}
 
           {schema && schema.nodes.length > 0 && !isLoaded && (
-            <div style={{
-              display:        'flex',
-              flexDirection:  'column',
-              alignItems:     'center',
-              justifyContent: 'center',
-              minHeight:      300,
-              gap:            16,
-            }}>
-              <p style={{ fontSize: 14, color: 'var(--color-text-muted)' }}>
-                forecast를 생성하거나 불러오세요
-              </p>
-              <button
-                onClick={handleGenerate}
-                disabled={isGenerating}
-                style={{
-                  display:      'flex',
-                  alignItems:   'center',
-                  gap:          6,
-                  padding:      '10px 20px',
-                  fontSize:     13,
-                  fontWeight:   600,
-                  cursor:       isGenerating ? 'wait' : 'pointer',
-                  border:       'none',
-                  borderRadius: 8,
-                  background:   'var(--color-accent-primary, #00E5A0)',
-                  color:        '#000',
-                  opacity:      isGenerating ? 0.6 : 1,
-                }}
-              >
-                <Zap size={15} />
-                {isGenerating ? '생성 중...' : '자동 생성'}
-              </button>
-            </div>
+            isLoading ? (
+              <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ display: 'inline-flex', gap: 3 }}>
+                        {[0, 1, 2].map(i => (
+                          <span key={i} style={{
+                            width: 4, height: 4, borderRadius: '50%',
+                            background: 'var(--color-accent-primary, #00E5A0)',
+                            opacity: 0.4,
+                            animation: `dotPulse 1.2s ${i * 0.2}s infinite`,
+                          }} />
+                        ))}
+                      </span>
+                      데이터 불러오는 중...
+                    </span>
+                    {loadProgress > 0 && loadProgress < 100 && (
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-accent-primary, #00E5A0)' }}>
+                        {loadProgress}%
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ height: 3, background: 'rgba(255,255,255,0.07)', borderRadius: 999, overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${loadProgress}%`,
+                      background: 'var(--color-accent-primary, #00E5A0)',
+                      borderRadius: 999,
+                      transition: 'width 0.2s ease',
+                    }} />
+                  </div>
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <tbody>
+                    {Array.from({ length: 30 }).map((_, i) => (
+                      <tr key={i} style={{ borderBottom: '0.5px solid var(--color-border-default)' }}>
+                        {[130, 60, 60, 60, 72, 60, 60, 60].map((w, ci) => (
+                          <td key={ci} style={{ padding: '7px 8px' }}>
+                            <div style={{
+                              height: 12,
+                              width: ci === 0 ? w : w,
+                              margin: ci === 0 ? 0 : '0 auto',
+                              borderRadius: 4,
+                              background: 'rgba(255,255,255,0.06)',
+                              backgroundImage: 'linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.04) 75%)',
+                              backgroundSize: '600px 100%',
+                              animation: 'skShimmer 1.6s infinite linear',
+                            }} />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <style>{`
+                  @keyframes skShimmer {
+                    0% { background-position: -600px 0 }
+                    100% { background-position: 600px 0 }
+                  }
+                  @keyframes dotPulse {
+                    0%, 80%, 100% { opacity: 0.2 }
+                    40% { opacity: 1 }
+                  }
+                `}</style>
+              </div>
+            ) : (
+              <div style={{
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center',
+                minHeight: 300, gap: 16,
+              }}>
+                <p style={{ fontSize: 14, color: 'var(--color-text-muted)' }}>
+                  forecast를 생성하거나 불러오세요
+                </p>
+                <button
+                  onClick={handleGenerate}
+                  disabled={isGenerating}
+                  style={{
+                    display:      'flex',
+                    alignItems:   'center',
+                    gap:          6,
+                    padding:      '10px 20px',
+                    fontSize:     13,
+                    fontWeight:   600,
+                    cursor:       isGenerating ? 'wait' : 'pointer',
+                    border:       'none',
+                    borderRadius: 8,
+                    background:   'var(--color-accent-primary, #00E5A0)',
+                    color:        '#000',
+                    opacity:      isGenerating ? 0.6 : 1,
+                  }}
+                >
+                  <Zap size={15} />
+                  {isGenerating ? '생성 중...' : '자동 생성'}
+                </button>
+              </div>
+            )
           )}
 
           {schema && schema.nodes.length > 0 && isLoaded && (
@@ -755,6 +832,10 @@ export default function ForecastPage() {
           year={currentMonth.year}
           month={currentMonth.month}
           calendar={calendar}
+          threshold={1}
+          onSave={handleSave}
+          saving={saving}
+          modifiedCount={modifiedCount}
           onDateClick={(date) => {
             setGraphModalOpen(false)
             openBulkEditModal(date, true)

@@ -103,17 +103,22 @@ function fmtYAxis(v: number, metric: Metric): string {
 }
 
 export function ForecastGraphModal({
-  isOpen, onClose, data, editedValues, schema, year, month, calendar, onDateClick,
+  isOpen, onClose, data, editedValues, schema, year, month, calendar, onDateClick, threshold = 1,
+  onSave, saving = false, modifiedCount = 0,
 }: {
-  isOpen:        boolean
-  onClose:       () => void
-  data:          ForecastDayData[]
-  editedValues:  EditedValues
-  schema:        ForecastSchema
-  year:          number
-  month:         number
-  calendar?:     CalendarMap
-  onDateClick?:  (date: string) => void
+  isOpen:         boolean
+  onClose:        () => void
+  data:           ForecastDayData[]
+  editedValues:   EditedValues
+  schema:         ForecastSchema
+  year:           number
+  month:          number
+  calendar?:      CalendarMap
+  onDateClick?:   (date: string) => void
+  threshold?:     number
+  onSave?:        () => void
+  saving?:        boolean
+  modifiedCount?: number
 }) {
   const [metric, setMetric] = useState<Metric>('occ')
   const { otbDate: today } = useDateContext()
@@ -151,14 +156,25 @@ export function ForecastGraphModal({
         fcOcc:  rc > 0 ? (fcRn / rc) * 100 : 0,
         fcAdr:  fcRn > 0 ? fcRev / fcRn : 0,
         fcRev,
+        isOtbOver: (() => {
+          for (const code of schema.allSegmentationCodes) {
+            const v = day.values[code]
+            if (!v) continue
+            const edited = editedValues.get(makeEditKey(day.business_date, code))
+            const fcRnSeg = edited?.rn ?? v.rn
+            if (v.otb_rn >= fcRnSeg + threshold) return true
+          }
+          return false
+        })(),
       }
     })
   }, [data, schema, editedValues])
 
   const points = useMemo(() =>
     chartData.map(d => ({
-      date:     d.date,
-      fullDate: d.fullDate,
+      date:      d.date,
+      fullDate:  d.fullDate,
+      isOtbOver: d.isOtbOver,
       FCST: metric === 'occ' ? d.fcOcc  : metric === 'adr' ? d.fcAdr  : d.fcRev,
       OTB:  metric === 'occ' ? d.otbOcc : metric === 'adr' ? d.otbAdr : d.otbRev,
     })),
@@ -299,12 +315,25 @@ export function ForecastGraphModal({
                 stroke="var(--color-accent-primary, #00E5A0)"
                 strokeWidth={2}
                 dot={(dotProps: any) => {
-                  const isPast = (dotProps.payload?.fullDate ?? '') < today
+                  const isPast    = (dotProps.payload?.fullDate ?? '') < today
+                  const isOtbOver = dotProps.payload?.isOtbOver === true
+                  const cx = dotProps.cx
+                  const cy = dotProps.cy
+
+                  if (isOtbOver && !isPast) {
+                    return (
+                      <g key={dotProps.index}>
+                        <circle cx={cx} cy={cy} r={6} fill="rgba(239,68,68,0.15)" stroke="#ef4444" strokeWidth={1.5} />
+                        <circle cx={cx} cy={cy} r={2} fill="#ef4444" />
+                      </g>
+                    )
+                  }
+
                   return (
                     <circle
                       key={dotProps.index}
-                      cx={dotProps.cx}
-                      cy={dotProps.cy}
+                      cx={cx}
+                      cy={cy}
                       r={2.5}
                       fill="#00E5A0"
                       opacity={isPast ? 0.3 : 1}
@@ -326,8 +355,41 @@ export function ForecastGraphModal({
           </ResponsiveContainer>
         </div>
 
-        <div className="flex justify-end px-6 pb-4 shrink-0">
-          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>ESC로 닫기</span>
+        <div
+          className="flex items-center justify-between px-6 pb-4 shrink-0"
+          style={{ borderTop: '0.5px solid var(--color-border-default)', paddingTop: 12 }}
+        >
+          <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>
+            {modifiedCount > 0
+              ? <span style={{ color: 'var(--color-warning, #F5A623)' }}>⚠ 변경 {modifiedCount}건 미저장</span>
+              : 'ESC · 닫기'
+            }
+          </span>
+          <button
+            onClick={onSave}
+            disabled={modifiedCount === 0 || saving || !onSave}
+            style={{
+              display:    'flex',
+              alignItems: 'center',
+              gap:        5,
+              padding:    '6px 18px',
+              fontSize:   12,
+              fontWeight: 600,
+              borderRadius: 7,
+              border:     'none',
+              cursor:     modifiedCount > 0 && !saving ? 'pointer' : 'not-allowed',
+              background: modifiedCount > 0 && !saving
+                ? 'var(--color-accent-primary, #00E5A0)'
+                : 'rgba(255,255,255,0.07)',
+              color: modifiedCount > 0 && !saving
+                ? '#0a2018'
+                : 'var(--color-text-tertiary)',
+              transition: 'background 0.15s, color 0.15s',
+              opacity:    saving ? 0.6 : 1,
+            }}
+          >
+            {saving ? '저장 중...' : '저장'}
+          </button>
         </div>
       </div>
     </div>

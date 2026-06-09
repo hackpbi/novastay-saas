@@ -29,7 +29,10 @@ export async function fetchBaselineForecast(
   return (data ?? []) as ForecastRpcRow[]
 }
 
-export function transformRpcToTableData(rows: ForecastRpcRow[]): ForecastDayData[] {
+export function transformRpcToTableData(
+  rows:        ForecastRpcRow[],
+  onProgress?: (pct: number) => void,
+): ForecastDayData[] {
   const dateMap = new Map<string, ForecastDayData>()
 
   for (const row of rows) {
@@ -57,7 +60,16 @@ export function transformRpcToTableData(rows: ForecastRpcRow[]): ForecastDayData
     }
   }
 
-  return Array.from(dateMap.values()).sort((a, b) =>
+  const sorted = Array.from(dateMap.values()).sort((a, b) =>
     a.business_date.localeCompare(b.business_date),
   )
+
+  if (onProgress) {
+    const total = sorted.length
+    sorted.forEach((_, i) => {
+      onProgress(Math.round(((i + 1) / total) * 100))
+    })
+  }
+
+  return sorted
 }
