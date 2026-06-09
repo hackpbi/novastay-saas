@@ -363,8 +363,8 @@ export default function LyComparisonAccountModal({
                         x: rect.left + rect.width / 2,
                         y: rect.bottom + 8,
                         text: m === 'v1'
-                          ? '작년 동일 update_date 기준으로 비교\n예) 오늘 2026-06-09 → 작년 2025-06-09 스냅샷'
-                          : '작년 동기간 날짜로 매핑하여 비교\n예) 2026-06-09 → yoy_match 기준 2025-06-10',
+                          ? `오늘 일자 기준 작년 OTB 현황\n예) 오늘 ${otbDate ?? '-'} OTB → 작년 ${lyMatchUpdateDate ?? '-'} OTB`
+                          : `오늘 일자 기준 작년 OTB 및 일자별 요일·공휴일 매칭\n예) 오늘 ${otbDate ?? '-'} OTB → 작년 ${lyMatchUpdateDate ?? '-'} OTB`,
                       })
                     }}
                     onMouseLeave={() => setTooltip(prev => ({ ...prev, visible: false }))}
