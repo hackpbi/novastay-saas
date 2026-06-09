@@ -321,27 +321,58 @@ export default function LyComparisonAccountModal({
           {/* Right */}
           <div className="flex items-center gap-2 shrink-0">
             {/* mode 토글 */}
-            <div style={{ display: 'inline-flex', borderRadius: 999, border: '1px solid rgba(255,255,255,0.12)', overflow: 'hidden' }}>
-              {(['v1', 'v2'] as LyPacingMode[]).map(m => (
-                <button
+            <div style={{ display: 'inline-flex', borderRadius: 999, border: '1px solid rgba(255,255,255,0.12)' }}>
+              {(['v1', 'v2'] as LyPacingMode[]).map((m, i) => (
+                <div
                   key={m}
-                  onClick={() => setMode(m)}
                   style={{
-                    padding:    '4px 10px',
-                    fontSize:   11,
-                    fontWeight: 600,
-                    cursor:     'pointer',
-                    border:     'none',
-                    whiteSpace: 'nowrap',
-                    background: mode === m ? 'rgba(0,229,160,0.15)' : 'transparent',
-                    color:      mode === m ? '#00E5A0' : 'rgba(255,255,255,0.35)',
-                    transition: 'background 0.15s, color 0.15s',
+                    display:      'inline-flex',
+                    alignItems:   'center',
+                    gap:          4,
+                    padding:      '4px 8px 4px 10px',
+                    borderRight:  i === 0 ? '1px solid rgba(255,255,255,0.12)' : 'none',
+                    background:   mode === m ? 'rgba(0,229,160,0.15)' : 'transparent',
+                    borderRadius: i === 0 ? '999px 0 0 999px' : '0 999px 999px 0',
                   }}
-                  onMouseEnter={e => { if (mode !== m) (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.6)' }}
-                  onMouseLeave={e => { if (mode !== m) (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.35)' }}
                 >
-                  {m === 'v1' ? 'update_date 매칭' : '양쪽 매칭'}
-                </button>
+                  <button
+                    onClick={() => setMode(m)}
+                    style={{
+                      padding:    0,
+                      fontSize:   11,
+                      fontWeight: 600,
+                      cursor:     'pointer',
+                      border:     'none',
+                      background: 'transparent',
+                      whiteSpace: 'nowrap',
+                      color:      mode === m ? '#00E5A0' : 'rgba(255,255,255,0.35)',
+                      transition: 'color 0.15s',
+                    }}
+                    onMouseEnter={e => { if (mode !== m) (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.6)' }}
+                    onMouseLeave={e => { if (mode !== m) (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.35)' }}
+                  >
+                    {m === 'v1' ? '전년 동일자' : '전년 동기간'}
+                  </button>
+                  <div className="group relative" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                    <div style={{
+                      width: 14, height: 14, borderRadius: '50%',
+                      border: '1px solid rgba(255,255,255,0.3)',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 10, color: 'rgba(255,255,255,0.4)', cursor: 'default', flexShrink: 0,
+                    }}>?</div>
+                    <div className="hidden group-hover:block absolute z-50" style={{
+                      bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)',
+                      width: 192, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: 6, padding: 8, fontSize: 11, color: 'rgba(255,255,255,0.7)',
+                      whiteSpace: 'normal', lineHeight: 1.5, pointerEvents: 'none',
+                    }}>
+                      {m === 'v1'
+                        ? <>작년 동일 update_date 기준으로 비교<br />예) 오늘 2026-06-09 → 작년 2025-06-09 스냅샷</>
+                        : <>작년 동기간 날짜로 매핑하여 비교<br />예) 2026-06-09 → yoy_match 기준 2025-06-10</>
+                      }
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
             <div className="relative">
