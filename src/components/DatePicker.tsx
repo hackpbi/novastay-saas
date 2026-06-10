@@ -15,9 +15,10 @@ export interface DatePickerProps {
 }
 
 export interface FormDatePickerProps {
-  value:       string
-  onChange:    (v: string) => void
+  value:        string
+  onChange:     (v: string) => void
   placeholder?: string
+  style?:       React.CSSProperties
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -334,7 +335,7 @@ export default function DatePicker({ label, value, onChange, accent = false, ava
 // ─── FormDatePicker ────────────────────────────────────────────────────────────
 // 인풋 박스 스타일 트리거 + 기존 달력 팝업
 
-export function FormDatePicker({ value, onChange, placeholder = '날짜 선택' }: FormDatePickerProps) {
+export function FormDatePicker({ value, onChange, placeholder = '날짜 선택', style }: FormDatePickerProps) {
   const [todayStr,  setTodayStr]  = useState('')
   const [open,      setOpen]      = useState(false)
   const [viewYear,  setViewYear]  = useState(() => new Date().getFullYear())
@@ -417,6 +418,7 @@ export function FormDatePicker({ value, onChange, placeholder = '날짜 선택' 
             : '1px solid var(--color-border-default)',
           boxShadow:  open ? '0 0 0 3px var(--color-accent-dim)' : 'none',
           caretColor: 'var(--color-accent-primary)',
+          ...style,
         }}
       >
         <span>{display || placeholder}</span>

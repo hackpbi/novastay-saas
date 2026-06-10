@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ChevronDown } from 'lucide-react'
 import {
   generateCalendarDays, isFriOrSat, getDow, toDateStr, dayCellStyle, DOW_LABELS,
 } from './BaseCalendar'
@@ -37,19 +36,12 @@ const MOCK_PROMO_DETAIL = [
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function PromoCalendarView() {
-  const [year,        setYear]        = useState(() => new Date().getFullYear())
-  const [month,       setMonth]       = useState(() => new Date().getMonth() + 1)
+export function PromoCalendarView({ year, month }: { year: number; month: number }) {
   const [selectedDay, setSelectedDay] = useState<number | null>(null)
 
-  const prevMonth = () => {
-    if (month === 1) { setYear(y => y - 1); setMonth(12) }
-    else setMonth(m => m - 1)
-  }
-  const nextMonth = () => {
-    if (month === 12) { setYear(y => y + 1); setMonth(1) }
-    else setMonth(m => m + 1)
-  }
+  useEffect(() => {
+    setSelectedDay(null)
+  }, [year, month])
 
   useEffect(() => {
     if (!selectedDay) return
@@ -64,57 +56,25 @@ export function PromoCalendarView() {
 
   return (
     <div style={{
+      height:       '100%',
       border:       '1px solid var(--color-border-default)',
       borderRadius: 12,
       overflow:     'hidden',
       background:   'var(--color-bg-secondary)',
       boxShadow:    'var(--shadow-card)',
+      display:      'flex',
+      flexDirection:'column',
     }}>
-      {/* 월 헤더 */}
-      <div style={{
-        display:        'flex',
-        alignItems:     'center',
-        justifyContent: 'space-between',
-        padding:        '12px 16px',
-        borderBottom:   '0.5px solid var(--color-border-tertiary)',
-      }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)' }}>
-          {year}년 {month}월 · 프로모션 달력
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <button onClick={prevMonth} style={{
-            width: 24, height: 24, borderRadius: 6,
-            border: '1px solid var(--color-border-default)',
-            background: 'var(--color-bg-tertiary)',
-            color: 'var(--color-text-secondary)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer',
-          }}>
-            <ChevronDown size={12} style={{ transform: 'rotate(90deg)' }} />
-          </button>
-          <button onClick={nextMonth} style={{
-            width: 24, height: 24, borderRadius: 6,
-            border: '1px solid var(--color-border-default)',
-            background: 'var(--color-bg-tertiary)',
-            color: 'var(--color-text-secondary)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer',
-          }}>
-            <ChevronDown size={12} style={{ transform: 'rotate(-90deg)' }} />
-          </button>
-        </div>
-      </div>
-
       {/* 달력 */}
-      <div style={{ padding: '10px 14px' }}>
+      <div style={{ padding: '8px 12px', flex: 1, display: 'flex', flexDirection: 'column' }}>
         {/* 요일 헤더 */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3, marginBottom: 3 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3, marginBottom: 2 }}>
           {DOW_LABELS.map((d, i) => (
             <div key={d} style={{
               fontSize:  10,
               color:     i >= 5 ? '#00B883' : 'var(--color-text-secondary)',
               textAlign: 'center',
-              padding:   '3px 0',
+              padding:   '2px 0',
             }}>
               {d}
             </div>
@@ -122,9 +82,9 @@ export function PromoCalendarView() {
         </div>
 
         {/* 날짜 그리드 */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gridAutoRows: '1fr', gap: 3, flex: 1 }}>
           {days.map((day, i) => {
-            if (!day) return <div key={`empty-${i}`} style={{ minHeight: 70 }} />
+            if (!day) return <div key={`empty-${i}`} />
             const dateStr    = toDateStr(year, month, day)
             const promos     = MOCK_PROMOS[dateStr] ?? []
             const isWeekend  = isFriOrSat(year, month, day)
@@ -133,7 +93,7 @@ export function PromoCalendarView() {
               <div
                 key={day}
                 onClick={() => setSelectedDay(day)}
-                style={dayCellStyle(year, month, day, { minHeight: 70 })}
+                style={dayCellStyle(year, month, day, { padding: '6px 8px', overflow: 'hidden' })}
               >
                 <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 4, color: isWeekend ? '#00B883' : undefined }}>
                   {day}
@@ -182,7 +142,7 @@ export function PromoCalendarView() {
             style={{
               background:   'var(--color-bg-elevated)',
               border:       '0.5px solid var(--color-border-secondary)',
-              borderRadius: 'var(--border-radius-lg)',
+              borderRadius: '12px',
               width:        440,
               maxHeight:    '80vh',
               overflowY:    'auto',
@@ -194,7 +154,7 @@ export function PromoCalendarView() {
               alignItems:     'center',
               justifyContent: 'space-between',
               padding:        '14px 16px',
-              borderBottom:   '0.5px solid var(--color-border-tertiary)',
+              borderBottom:   '0.5px solid var(--color-border-default)',
             }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)' }}>
@@ -208,8 +168,8 @@ export function PromoCalendarView() {
                 onClick={() => setSelectedDay(null)}
                 style={{
                   width: 26, height: 26,
-                  borderRadius: 'var(--border-radius-md)',
-                  border:       '0.5px solid var(--color-border-tertiary)',
+                  borderRadius: '6px',
+                  border:       '0.5px solid var(--color-border-default)',
                   background:   'transparent',
                   cursor:       'pointer',
                   color:        'var(--color-text-secondary)',
@@ -227,8 +187,8 @@ export function PromoCalendarView() {
             {MOCK_PROMO_DETAIL.map(promo => (
               <div key={promo.id} style={{
                 margin:       '10px 14px',
-                border:       '0.5px solid var(--color-border-tertiary)',
-                borderRadius: 'var(--border-radius-md)',
+                border:       '0.5px solid var(--color-border-default)',
+                borderRadius: '6px',
                 overflow:     'hidden',
               }}>
                 {/* 카드 헤더 */}
@@ -263,7 +223,7 @@ export function PromoCalendarView() {
                 {/* 객실타입별 금액 테이블 */}
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
-                    <tr style={{ borderBottom: '0.5px solid var(--color-border-tertiary)' }}>
+                    <tr style={{ borderBottom: '0.5px solid var(--color-border-default)' }}>
                       {['객실타입', 'BAR Rate', '할인', '적용 요금'].map((h, i) => (
                         <th key={h} style={{
                           fontSize:   10,
@@ -280,7 +240,7 @@ export function PromoCalendarView() {
                   <tbody>
                     {promo.rooms_detail.map((r, i) => (
                       <tr key={r.type} style={{
-                        borderBottom: i < promo.rooms_detail.length - 1 ? '0.5px solid var(--color-border-tertiary)' : 'none',
+                        borderBottom: i < promo.rooms_detail.length - 1 ? '0.5px solid var(--color-border-default)' : 'none',
                       }}>
                         <td style={{ fontSize: 11, padding: '6px 12px', color: 'var(--color-text-primary)' }}>{r.type}</td>
                         <td style={{ fontSize: 11, padding: '6px 12px', textAlign: 'right', color: 'var(--color-text-secondary)' }}>{r.bar}K</td>
@@ -299,13 +259,13 @@ export function PromoCalendarView() {
               justifyContent: 'space-between',
               alignItems:     'center',
               padding:        '10px 14px',
-              borderTop:      '0.5px solid var(--color-border-tertiary)',
+              borderTop:      '0.5px solid var(--color-border-default)',
             }}>
               <button style={{
                 fontSize:     11,
                 padding:      '5px 11px',
-                borderRadius: 'var(--border-radius-md)',
-                border:       '0.5px solid var(--color-border-tertiary)',
+                borderRadius: '6px',
+                border:       '0.5px solid var(--color-border-default)',
                 background:   'transparent',
                 color:        'var(--color-text-primary)',
                 cursor:       'pointer',
@@ -320,7 +280,7 @@ export function PromoCalendarView() {
                 style={{
                   fontSize:     11,
                   padding:      '5px 14px',
-                  borderRadius: 'var(--border-radius-md)',
+                  borderRadius: '6px',
                   border:       'none',
                   background:   '#00E5A0',
                   color:        '#04342C',

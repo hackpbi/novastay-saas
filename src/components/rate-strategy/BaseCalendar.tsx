@@ -1,5 +1,12 @@
 import type { CSSProperties } from 'react'
 
+export function getKSTDateString(): string {
+  const now   = new Date()
+  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000
+  const kst   = new Date(utcMs + 9 * 60 * 60000)
+  return `${kst.getFullYear()}-${String(kst.getMonth() + 1).padStart(2, '0')}-${String(kst.getDate()).padStart(2, '0')}`
+}
+
 export function generateCalendarDays(year: number, month: number): (number | null)[] {
   const firstDay    = new Date(year, month - 1, 1).getDay()
   const daysInMonth = new Date(year, month, 0).getDate()
@@ -29,10 +36,9 @@ export function dayCellStyle(
   extra?: CSSProperties,
 ): CSSProperties {
   return {
-    border:       '0.5px solid var(--color-border-tertiary)',
-    borderRadius: 'var(--border-radius-md)',
+    border:       '0.5px solid var(--color-border-default)',
+    borderRadius: 8,
     padding:      '5px',
-    minHeight:    70,
     cursor:       'pointer',
     position:     'relative',
     background:   isFriOrSat(year, month, day) ? 'rgba(0,229,160,0.04)' : undefined,

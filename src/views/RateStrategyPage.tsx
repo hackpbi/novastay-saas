@@ -227,129 +227,6 @@ interface PackageItem {
   rate: number | null
 }
 
-// ── StrategyModal ──────────────────────────────────────────────────────────────
-
-function StrategyModal({ hotelId, profileId, onClose, onCreated }: {
-  hotelId: string; profileId: string
-  onClose: () => void; onCreated: (s: Strategy) => void
-}) {
-  const [form, setForm] = useState({
-    name: '', description: '',
-    sale_start: '', sale_end: '',
-    stay_start: '', stay_end: '',
-  })
-  const [stayUnlimited, setStayUnlimited] = useState(false)
-  const [saleUnlimited, setSaleUnlimited] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
-  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
-
-  const inputCls = 'w-full rounded-lg px-3 py-2 text-sm outline-none'
-  const inputStyle = { background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }
-
-  async function submit() {
-    if (!form.name.trim()) { setErr('전략 이름은 필수입니다.'); return }
-    if (!stayUnlimited) {
-      if (!form.stay_start) { setErr('투숙 시작일은 필수입니다.'); return }
-      if (!form.stay_end)   { setErr('투숙 종료일은 필수입니다.'); return }
-      if (form.stay_end < form.stay_start) { setErr('투숙 종료일은 시작일 이후여야 합니다.'); return }
-    }
-    if (!saleUnlimited && form.sale_start && form.sale_end && form.sale_end < form.sale_start) {
-      setErr('판매 종료일은 판매 시작일 이후여야 합니다.'); return
-    }
-    setSaving(true); setErr(null)
-    try {
-      const { data: strategy, error } = await (supabase as any)
-        .from('s01_rate_strategy')
-        .insert({
-          hotel_id:    hotelId,
-          name:        form.name.trim(),
-          description: form.description || null,
-          stay_start:  stayUnlimited ? null : form.stay_start,
-          stay_end:    stayUnlimited ? null : form.stay_end,
-          sale_start:  saleUnlimited ? null : (form.sale_start || null),
-          sale_end:    saleUnlimited ? null : (form.sale_end   || null),
-          status:      'draft',
-          created_by:  profileId,
-          updated_by:  profileId,
-        })
-        .select().single()
-      if (error) throw error
-      onCreated(strategy)
-    } catch (e: any) { setErr(e.message) } finally { setSaving(false) }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md rounded-2xl overflow-hidden"
-        style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-elevated)' }}>
-        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--color-border-default)' }}>
-          <p className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>전략 생성</p>
-          <button onClick={onClose} className="text-brand-muted hover:text-brand-text"><X size={18} /></button>
-        </div>
-        <div className="px-6 py-4 space-y-3 overflow-y-auto max-h-[75vh]">
-          {err && <p className="text-xs text-status-negative px-3 py-2 rounded-lg" style={{ background: 'var(--negative-bg)' }}>{err}</p>}
-          <div>
-            <label className="text-xs text-brand-muted mb-1 block">전략 이름 *</label>
-            <input className={inputCls} style={inputStyle} value={form.name}
-              onChange={e => set('name', e.target.value)} placeholder="예: 여름 성수기 전략" />
-          </div>
-          <div>
-            <label className="text-xs text-brand-muted mb-1 block">설명</label>
-            <textarea className={inputCls} style={inputStyle} rows={2}
-              value={form.description} onChange={e => set('description', e.target.value)} />
-          </div>
-          {/* 투숙 기간 */}
-          <div>
-            <div className="grid grid-cols-2 gap-2" style={{ opacity: stayUnlimited ? 0.4 : 1, pointerEvents: stayUnlimited ? 'none' : undefined }}>
-              <div>
-                <label className="text-xs text-brand-muted mb-1 block">투숙 시작{!stayUnlimited && ' *'}</label>
-                <FormDatePicker value={form.stay_start} onChange={v => set('stay_start', v)} placeholder="날짜 선택" />
-              </div>
-              <div>
-                <label className="text-xs text-brand-muted mb-1 block">투숙 종료{!stayUnlimited && ' *'}</label>
-                <FormDatePicker value={form.stay_end} onChange={v => set('stay_end', v)} placeholder="날짜 선택" />
-              </div>
-            </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginTop: 6, cursor: 'pointer', color: stayUnlimited ? '#00E5A0' : 'var(--color-text-secondary)' }}>
-              <input type="checkbox" checked={stayUnlimited} style={{ accentColor: '#00E5A0', cursor: 'pointer' }}
-                onChange={e => { setStayUnlimited(e.target.checked); if (e.target.checked) { set('stay_start', ''); set('stay_end', '') } }} />
-              기간제한 없음
-            </label>
-          </div>
-          {/* 판매 기간 */}
-          <div>
-            <div className="grid grid-cols-2 gap-2" style={{ opacity: saleUnlimited ? 0.4 : 1, pointerEvents: saleUnlimited ? 'none' : undefined }}>
-              <div>
-                <label className="text-xs text-brand-muted mb-1 block">판매 시작</label>
-                <FormDatePicker value={form.sale_start} onChange={v => set('sale_start', v)} placeholder="날짜 선택" />
-              </div>
-              <div>
-                <label className="text-xs text-brand-muted mb-1 block">판매 종료</label>
-                <FormDatePicker value={form.sale_end} onChange={v => set('sale_end', v)} placeholder="날짜 선택" />
-              </div>
-            </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginTop: 6, cursor: 'pointer', color: saleUnlimited ? '#00E5A0' : 'var(--color-text-secondary)' }}>
-              <input type="checkbox" checked={saleUnlimited} style={{ accentColor: '#00E5A0', cursor: 'pointer' }}
-                onChange={e => { setSaleUnlimited(e.target.checked); if (e.target.checked) { set('sale_start', ''); set('sale_end', '') } }} />
-              기간제한 없음
-            </label>
-          </div>
-        </div>
-        <div className="flex justify-end gap-2 px-6 py-4" style={{ borderTop: '1px solid var(--color-border-default)' }}>
-          <button onClick={onClose} className="px-4 py-2 text-xs text-brand-muted">취소</button>
-          <button onClick={submit} disabled={saving}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold disabled:opacity-50"
-            style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
-            {saving ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}생성
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ── PromotionModal ─────────────────────────────────────────────────────────────
 
 function PromotionModal({ hotelId, strategyId, profileId, roomTypes, onClose, onCreated }: {
@@ -677,7 +554,6 @@ export default function RateStrategyPage() {
   const [showAllTypes,    setShowAllTypes]    = useState(false)
 
   // ── UI State ───────────────────────────────────────────────────────────────
-  const [showStratModal,  setShowStratModal]  = useState(false)
   const [showPromoModal,  setShowPromoModal]  = useState(false)
   const [selectedDates,   setSelectedDates]   = useState<string[]>([])
   const [bulkValue,       setBulkValue]       = useState('')
@@ -1457,11 +1333,33 @@ export default function RateStrategyPage() {
               </div>
             </div>
           )}
-          <button onClick={() => setShowStratModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold"
-            style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
-            <Plus size={13} />전략 생성
-          </button>
+          {/* 탭 버튼 */}
+          <div style={{ display: 'flex', gap: 4 }}>
+            {([
+              { id: 'list',      label: '일자별'       },
+              { id: 'promo-cal', label: '프로모션 달력' },
+              { id: 'rate-cal',  label: '요금 달력'    },
+            ] as { id: RateTab; label: string }[]).map(t => (
+              <button
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
+                style={{
+                  fontSize:     12,
+                  fontWeight:   activeTab === t.id ? 600 : 400,
+                  padding:      '5px 14px',
+                  borderRadius: 8,
+                  border:       activeTab === t.id ? '1.5px solid #00E5A0' : '1px solid var(--color-border-default)',
+                  background:   activeTab === t.id ? 'rgba(0,229,160,0.08)' : 'var(--color-bg-secondary)',
+                  color:        activeTab === t.id ? '#00E5A0' : 'var(--color-text-secondary)',
+                  cursor:       'pointer',
+                  transition:   'all 0.15s',
+                }}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
           {effectiveStratId && (
             <button onClick={handleRpaSend} disabled={rpaSending}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold disabled:opacity-50"
@@ -1471,39 +1369,6 @@ export default function RateStrategyPage() {
             </button>
           )}
         </div>
-      </div>
-
-      {/* ── 탭 바 ── */}
-      <div style={{ display: 'flex', gap: 4 }}>
-        {([
-          { id: 'list',      label: '일자별'       },
-          { id: 'promo-cal', label: '프로모션 달력' },
-          { id: 'rate-cal',  label: '요금 달력'    },
-        ] as { id: RateTab; label: string }[]).map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              fontSize:     12,
-              fontWeight:   activeTab === tab.id ? 600 : 400,
-              padding:      '5px 14px',
-              borderRadius: 8,
-              border:       activeTab === tab.id
-                ? '1.5px solid #00E5A0'
-                : '1px solid var(--color-border-default)',
-              background:   activeTab === tab.id
-                ? 'rgba(0,229,160,0.08)'
-                : 'var(--color-bg-secondary)',
-              color:        activeTab === tab.id
-                ? '#00E5A0'
-                : 'var(--color-text-secondary)',
-              cursor:       'pointer',
-              transition:   'all 0.15s',
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
       </div>
 
       {/* ── 일자별 탭 (list) ── */}
@@ -1557,20 +1422,6 @@ export default function RateStrategyPage() {
         </div>
 
         {strategies.length > 0 && filterDivider}
-
-        {/* 전략 선택 */}
-        {strategies.length > 0 && (
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-medium text-brand-muted uppercase tracking-wide">전략</label>
-            <div className="relative">
-              <select className="rounded-lg px-3 py-1.5 text-sm pr-7 outline-none appearance-none" style={{ ...filterStyle, minWidth: 180 }}
-                value={strategyId} onChange={e => setStrategyId(e.target.value)}>
-                {strategies.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-              <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none" />
-            </div>
-          </div>
-        )}
 
         {/* 스페이서 */}
         <div style={{ flex: 1 }} />
@@ -1688,16 +1539,7 @@ export default function RateStrategyPage() {
             </div>
           )}
 
-          {!effectiveStratId ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <p className="text-sm text-brand-muted">전략을 먼저 생성하세요</p>
-              <button onClick={() => setShowStratModal(true)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold"
-                style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
-                <Plus size={13} />전략 생성
-              </button>
-            </div>
-          ) : dates.length === 0 ? (
+          {dates.length === 0 ? (
             <div className="flex items-center justify-center py-16">
               <p className="text-sm text-brand-muted">투숙기간을 설정하면 요금 테이블이 표시됩니다</p>
             </div>
@@ -2254,10 +2096,22 @@ export default function RateStrategyPage() {
       </div>{/* /list tab */}
 
       {/* ── 프로모션 달력 탭 ── */}
-      {activeTab === 'promo-cal' && <PromoCalendarView />}
+      {activeTab === 'promo-cal' && (
+        <div style={{ height: 'calc(100vh - 210px)', minHeight: 400 }}>
+          <PromoCalendarView year={viewYear} month={viewMonth} />
+        </div>
+      )}
 
       {/* ── 요금 달력 탭 ── */}
-      {activeTab === 'rate-cal' && <RateCalendarView />}
+      {activeTab === 'rate-cal' && (
+        <div style={{ height: 'calc(100vh - 210px)', minHeight: 400 }}>
+          <RateCalendarView
+            year={viewYear}
+            month={viewMonth}
+            occMap={occMap}
+          />
+        </div>
+      )}
 
       {/* ── 모달 ── */}
       {/* 업로드 오류 모달 */}
@@ -2312,17 +2166,6 @@ export default function RateStrategyPage() {
         )
       })()}
 
-      {showStratModal && (
-        <StrategyModal hotelId={hotelId} profileId={profileId}
-          onClose={() => setShowStratModal(false)}
-          onCreated={s => {
-            setShowStratModal(false)
-            setStrategyId(s.id)
-            setStayStart(s.stay_start)
-            setStayEnd(s.stay_end)
-            queryClient.invalidateQueries({ queryKey: ['s01_rate_strategy', hotelId] })
-          }} />
-      )}
       {showPromoModal && (
         <PromotionModal hotelId={hotelId} strategyId={effectiveStratId}
           profileId={profileId} roomTypes={roomTypes}
