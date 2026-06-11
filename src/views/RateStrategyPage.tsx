@@ -20,27 +20,10 @@ import { RateCalendarView }  from '@/components/rate-strategy/RateCalendarView'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type StrategyStatus = 'draft' | 'active' | 'inactive'
 type DiscountType   = 'pct' | 'amount' | 'fixed' | 'addon'
 type ChangeMode     = '%' | '+-' | 'direct'
 type PickupView     = 'total' | 'fit' | 'fit_grp'
 type RateTab        = 'list' | 'promo-cal' | 'rate-cal'
-
-interface Strategy {
-  id:          string
-  hotel_id:    string
-  name:        string
-  description: string | null
-  sale_start:  string | null
-  sale_end:    string | null
-  stay_start:  string
-  stay_end:    string
-  status:      StrategyStatus
-  created_by:  string | null
-  updated_by:  string | null
-  created_at:  string
-  updated_at:  string
-}
 
 interface RateDetail {
   id:             string
@@ -89,13 +72,6 @@ interface CalendarEvent {
   date:       string
   event:      string | null
   is_holiday: boolean
-}
-
-interface RateHistory {
-  stay_date:      string
-  room_type_code: string
-  rack_rate:      number
-  uploaded_at:    string
 }
 
 interface RatePackage {
@@ -171,18 +147,6 @@ function pctColor(pct: number | null) {
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-function StatusBadge({ status }: { status: StrategyStatus }) {
-  const m = {
-    active:   { label: '활성',  color: '#00A86B', bg: 'rgba(0,168,107,0.12)' },
-    draft:    { label: '초안',  color: '#F6AD55', bg: 'rgba(246,173,85,0.12)' },
-    inactive: { label: '비활성', color: '#888',    bg: 'var(--color-bg-tertiary)' },
-  }[status]
-  return (
-    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
-      style={{ color: m.color, background: m.bg }}>{m.label}</span>
-  )
-}
-
 function ModeToggle({ modes, value, onChange }: {
   modes: ChangeMode[]
   value: ChangeMode
@@ -229,8 +193,8 @@ interface PackageItem {
 
 // ── PromotionModal ─────────────────────────────────────────────────────────────
 
-function PromotionModal({ hotelId, strategyId, profileId, roomTypes, onClose, onCreated }: {
-  hotelId: string; strategyId: string; profileId: string
+function PromotionModal({ hotelId, profileId, roomTypes, onClose, onCreated }: {
+  hotelId: string; profileId: string
   roomTypes: RoomType[]; onClose: () => void; onCreated: () => void
 }) {
   const [form, setForm] = useState({
@@ -269,7 +233,6 @@ function PromotionModal({ hotelId, strategyId, profileId, roomTypes, onClose, on
         .from('s03_rate_promotion')
         .insert({
           hotel_id:        hotelId,
-          strategy_id:     strategyId,
           name:            form.name.trim(),
           description:     form.description || null,
           room_type_codes: roomTypeCodes.length === 0 ? null : roomTypeCodes,
@@ -293,7 +256,6 @@ function PromotionModal({ hotelId, strategyId, profileId, roomTypes, onClose, on
           .from('s04_rate_package')
           .insert(validPkgs.map((p, i) => ({
             hotel_id:    hotelId,
-            strategy_id: strategyId,
             name:        p.name.trim(),
             add_on_rate: p.rate ?? 0,
             sort_order:  i,
@@ -549,8 +511,8 @@ export default function RateStrategyPage() {
   const [stayEnd,         setStayEnd]         = useState('')
   const [viewYear,        setViewYear]        = useState(Number(todayKST.slice(0, 4)))
   const [viewMonth,       setViewMonth]       = useState(Number(todayKST.slice(5, 7)))
+  const [saleDate,        setSaleDate]        = useState<string>(getKSTDateString())
   const [selRoomType,     setSelRoomType]     = useState('')
-  const [strategyId,      setStrategyId]      = useState('')
   const [showAllTypes,    setShowAllTypes]    = useState(false)
 
   // ── UI State ───────────────────────────────────────────────────────────────
@@ -637,60 +599,44 @@ export default function RateStrategyPage() {
   })
   const roomCount = hotelDetail?.room_count ?? 0
 
-  const { data: strategies = [] } = useQuery<Strategy[]>({
-    queryKey: ['s01_rate_strategy', hotelId],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from('s01_rate_strategy').select('*').eq('hotel_id', hotelId)
-        .order('created_at', { ascending: false })
-      if (error) throw error
-      return data
-    },
-    enabled: !!hotelId, staleTime: 2 * 60 * 1000,
-  })
-
-  const currentStrategy = strategies.find(s => s.id === strategyId) ?? strategies[0] ?? null
-  const effectiveStratId = currentStrategy?.id ?? ''
-  useEffect(() => { if (strategies.length > 0 && !strategyId) setStrategyId(strategies[0].id) }, [strategies, strategyId])
-
-  // 전략/월 변경 시 미리보기 버퍼 초기화 (데이터 혼선 방지)
-  useEffect(() => { setPreviewBuffer({}) }, [effectiveStratId, viewYear, viewMonth])
+  // 월 변경 시 미리보기 버퍼 초기화
+  useEffect(() => { setPreviewBuffer({}) }, [viewYear, viewMonth])
 
   const { data: rateDetails = [], isLoading: ratesLoading } = useQuery<RateDetail[]>({
-    queryKey: ['s02_rate_detail', hotelId, effectiveStratId],
+    queryKey: ['s02_rate_detail', hotelId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('s02_rate_detail').select('*')
-        .eq('hotel_id', hotelId).eq('strategy_id', effectiveStratId)
+        .eq('hotel_id', hotelId)
       if (error) throw error
       return data
     },
-    enabled: !!effectiveStratId, staleTime: 60 * 1000,
+    enabled: !!hotelId, staleTime: 60 * 1000,
   })
 
   const { data: promotions = [] } = useQuery<Promotion[]>({
-    queryKey: ['s03_rate_promotion', hotelId, effectiveStratId],
+    queryKey: ['s03_rate_promotion', hotelId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('s03_rate_promotion').select('*')
-        .eq('hotel_id', hotelId).eq('strategy_id', effectiveStratId).eq('status', 'active')
+        .eq('hotel_id', hotelId).eq('status', 'active')
       if (error) throw error
       return data
     },
-    enabled: !!effectiveStratId, staleTime: 60 * 1000,
+    enabled: !!hotelId, staleTime: 60 * 1000,
   })
 
   const { data: ratePackages = [] } = useQuery<RatePackage[]>({
-    queryKey: ['s04_rate_package', effectiveStratId],
+    queryKey: ['s04_rate_package', hotelId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('s04_rate_package').select('*')
-        .eq('strategy_id', effectiveStratId).eq('status', 'active')
+        .eq('hotel_id', hotelId).eq('status', 'active')
         .order('sort_order')
       if (error) throw error
       return data
     },
-    enabled: !!effectiveStratId, staleTime: 60 * 1000,
+    enabled: !!hotelId, staleTime: 60 * 1000,
   })
 
   // 테이블 표시 날짜 범위 (투숙기간 설정 시 우선, 없으면 viewYear/viewMonth 기준)
@@ -713,8 +659,10 @@ export default function RateStrategyPage() {
           p_min_date:    minOtbDate,
         })
       if (error) throw error
+      const monthStart = `${viewYear}-${String(viewMonth).padStart(2, '0')}-01`
+      const monthEnd   = new Date(viewYear, viewMonth, 0).toISOString().slice(0, 10)
       return (data ?? []).filter((r: any) =>
-        !tableStart || !tableEnd || (r.business_date >= tableStart && r.business_date <= tableEnd)
+        r.business_date >= monthStart && r.business_date <= monthEnd
       )
     },
     enabled: !!hotelId && !!otbDate && !!minOtbDate,
@@ -760,44 +708,6 @@ export default function RateStrategyPage() {
       1,
     )
   }, [segPickupMap])
-
-  // BAR Rate 업로드 이력 날짜 목록 (최근 4회)
-  const { data: uploadDates = [] } = useQuery<string[]>({
-    queryKey: ['bar-upload-dates', effectiveStratId],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from('s02_rate_detail_history')
-        .select('uploaded_at')
-        .eq('strategy_id', effectiveStratId)
-        .eq('date_type', 'base')
-        .order('uploaded_at', { ascending: false })
-      if (error) throw error
-      const distinct = [...new Set<string>((data ?? []).map((r: any) => r.uploaded_at as string))]
-      return distinct.slice(0, 4)
-    },
-    enabled: !!effectiveStratId,
-    staleTime: 60 * 1000,
-  })
-
-  // BAR Rate 이력 데이터 (stay_date × room_type_code × uploaded_at)
-  const { data: historyRows = [] } = useQuery<RateHistory[]>({
-    queryKey: ['bar-history', effectiveStratId, tableStart, tableEnd, uploadDates],
-    queryFn: async () => {
-      if (!uploadDates.length || !tableStart || !tableEnd) return []
-      const { data, error } = await (supabase as any)
-        .from('s02_rate_detail_history')
-        .select('stay_date, room_type_code, rack_rate, uploaded_at')
-        .eq('strategy_id', effectiveStratId)
-        .eq('date_type', 'base')
-        .gte('stay_date', tableStart)
-        .lte('stay_date', tableEnd)
-        .in('uploaded_at', uploadDates)
-      if (error) throw error
-      return data ?? []
-    },
-    enabled: !!effectiveStratId && uploadDates.length > 0 && !!tableStart && !!tableEnd,
-    staleTime: 60 * 1000,
-  })
 
   // 공휴일/이벤트
   const stayStartEff0 = tableStart
@@ -850,19 +760,6 @@ export default function RateStrategyPage() {
   }, [calendarEvents])
 
   // history map: `${stay_date}__${room_type_code}` → uploaded_at → rack_rate
-  const historyMap = useMemo(() => {
-    const map: Record<string, Record<string, number>> = {}
-    for (const r of historyRows) {
-      const k = `${r.stay_date}__${r.room_type_code}`
-      if (!map[k]) map[k] = {}
-      map[k][r.uploaded_at] = r.rack_rate
-    }
-    return map
-  }, [historyRows])
-
-  // D-3/D-2/D-1 날짜 목록 (uploadDates[1..3], 오래된 순)
-  const histDates = useMemo(() => uploadDates.slice(1).slice(-3).reverse(), [uploadDates])
-
   // rate lookup
   const rateMap = useMemo(() => {
     const map: Record<string, RateDetail> = {}
@@ -907,21 +804,21 @@ export default function RateStrategyPage() {
     rackRate: number | null
   ) => {
     const numVal = parseFloat(val.replace(/,/g, ''))
-    if (isNaN(numVal) || !effectiveStratId) return
+    if (isNaN(numVal)) return
     const newRate = rackRate != null ? calcNewRate(rackRate, mode, numVal) : (mode === 'direct' ? numVal : null)
     const diff    = newRate != null && rackRate != null ? newRate - rackRate : null
     const diffPct = rackRate && diff != null ? (diff / rackRate) * 100 : null
     await (supabase as any)
       .from('s02_rate_detail')
       .upsert({
-        hotel_id: hotelId, strategy_id: effectiveStratId,
+        hotel_id: hotelId,
         room_type_code: rt, stay_date: date, date_type: dateType,
         stay_start: null, stay_end: null,
         rack_rate: rackRate, new_rate: newRate,
         diff, diff_pct: diffPct,
-      }, { onConflict: 'strategy_id,room_type_code,stay_date,date_type' })
-    queryClient.invalidateQueries({ queryKey: ['s02_rate_detail', hotelId, effectiveStratId] })
-  }, [hotelId, effectiveStratId, queryClient])
+      }, { onConflict: 'hotel_id,room_type_code,stay_date,date_type' })
+    queryClient.invalidateQueries({ queryKey: ['s02_rate_detail', hotelId] })
+  }, [hotelId, queryClient])
 
   // ── Month Navigation ───────────────────────────────────────────────────────
 
@@ -967,18 +864,18 @@ export default function RateStrategyPage() {
     onSaving: () => void, onDone: (ok: boolean) => void
   ) => {
     const numVal = parseFloat(val.replace(/,/g, ''))
-    if (isNaN(numVal) || !effectiveStratId) { onDone(false); return }
+    if (isNaN(numVal)) { onDone(false); return }
     const rackRate = Math.round(numVal) * 1000
     onSaving()
     try {
       await (supabase as any)
         .from('s02_rate_detail')
         .upsert({
-          hotel_id: hotelId, strategy_id: effectiveStratId,
+          hotel_id: hotelId,
           room_type_code: rt, stay_date: date, date_type: 'base',
           stay_start: null, stay_end: null,
           rack_rate: rackRate, new_rate: rackRate,
-        }, { onConflict: 'strategy_id,room_type_code,stay_date,date_type' })
+        }, { onConflict: 'hotel_id,room_type_code,stay_date,date_type' })
 
       // 동일 날짜 change 행 있으면 rack_rate 업데이트 후 재계산
       const changeRow = getRate(date, rt, 'change')
@@ -988,16 +885,16 @@ export default function RateStrategyPage() {
         await (supabase as any)
           .from('s02_rate_detail')
           .upsert({
-            hotel_id: hotelId, strategy_id: effectiveStratId,
+            hotel_id: hotelId,
             room_type_code: rt, stay_date: date, date_type: 'change',
             stay_start: null, stay_end: null,
             rack_rate: rackRate, new_rate: newChangeRate,
-          }, { onConflict: 'strategy_id,room_type_code,stay_date,date_type' })
+          }, { onConflict: 'hotel_id,room_type_code,stay_date,date_type' })
       }
-      queryClient.invalidateQueries({ queryKey: ['s02_rate_detail', hotelId, effectiveStratId] })
+      queryClient.invalidateQueries({ queryKey: ['s02_rate_detail', hotelId] })
       onDone(true)
     } catch { onDone(false) }
-  }, [hotelId, effectiveStratId, queryClient, getRate])
+  }, [hotelId, queryClient, getRate])
 
   // ── Bulk Apply Base Rate ───────────────────────────────────────────────────
 
@@ -1009,7 +906,7 @@ export default function RateStrategyPage() {
     const rtList = showAllTypes ? roomTypes : roomTypes.filter(rt => rt.room_type_code === selRoomType)
     const baseOps = selectedDates.flatMap(date =>
       rtList.map(rt => ({
-        hotel_id: hotelId, strategy_id: effectiveStratId,
+        hotel_id: hotelId,
         room_type_code: rt.room_type_code, stay_date: date, date_type: 'base',
         stay_start: null, stay_end: null,
         rack_rate: rackRate, new_rate: rackRate,
@@ -1022,7 +919,7 @@ export default function RateStrategyPage() {
         const existingDiffPct = changeRow.diff_pct ?? 0
         const newChangeRate = Math.round(rackRate * (1 + existingDiffPct / 100))
         return [{
-          hotel_id: hotelId, strategy_id: effectiveStratId,
+          hotel_id: hotelId,
           room_type_code: rt.room_type_code, stay_date: date, date_type: 'change',
           stay_start: null, stay_end: null,
           rack_rate: rackRate, new_rate: newChangeRate,
@@ -1030,14 +927,14 @@ export default function RateStrategyPage() {
       })
     )
     if (baseOps.length > 0) {
-      await (supabase as any).from('s02_rate_detail').upsert(baseOps, { onConflict: 'strategy_id,room_type_code,stay_date,date_type' })
+      await (supabase as any).from('s02_rate_detail').upsert(baseOps, { onConflict: 'hotel_id,room_type_code,stay_date,date_type' })
     }
     if (changeOps.length > 0) {
-      await (supabase as any).from('s02_rate_detail').upsert(changeOps, { onConflict: 'strategy_id,room_type_code,stay_date,date_type' })
+      await (supabase as any).from('s02_rate_detail').upsert(changeOps, { onConflict: 'hotel_id,room_type_code,stay_date,date_type' })
     }
-    queryClient.invalidateQueries({ queryKey: ['s02_rate_detail', hotelId, effectiveStratId] })
+    queryClient.invalidateQueries({ queryKey: ['s02_rate_detail', hotelId] })
     setSelectedDates([]); setBulkBaseValue('')
-  }, [bulkBaseValue, selectedDates, showAllTypes, roomTypes, selRoomType, hotelId, effectiveStratId, queryClient, getRate])
+  }, [bulkBaseValue, selectedDates, showAllTypes, roomTypes, selRoomType, hotelId, queryClient, getRate])
 
   // ── Excel Upload ───────────────────────────────────────────────────────────
 
@@ -1081,11 +978,8 @@ export default function RateStrategyPage() {
     })
 
   const runUpload = useCallback(async (rows: {date: string; barRate: number}[]) => {
-    console.log('[runUpload] start — strategy_id:', effectiveStratId, 'hotel_id:', hotelId, 'rows:', rows.length)
-    if (!effectiveStratId || !hotelId) {
-      console.warn('[runUpload] 중단: effectiveStratId 또는 hotelId 없음')
-      return
-    }
+    console.log('[runUpload] start — hotel_id:', hotelId, 'rows:', rows.length)
+    if (!hotelId) return
     setUploadStatus('uploading')
     try {
       const buffer: Record<string, Record<string, number>> = {}
@@ -1105,14 +999,11 @@ export default function RateStrategyPage() {
       setUploadStatus('error')
       setUploadMsg(e.message ?? '업로드 실패')
     }
-  }, [effectiveStratId, hotelId, roomTypes])
+  }, [hotelId, roomTypes])
 
   const handleSavePreview = useCallback(async () => {
-    console.log('[handleSavePreview] start — strategy_id:', effectiveStratId, 'hotel_id:', hotelId, 'isPreviewMode:', isPreviewMode, 'previewBuffer 날짜 수:', Object.keys(previewBuffer).length)
-    if (!effectiveStratId || !hotelId || !isPreviewMode) {
-      console.warn('[handleSavePreview] 중단: 조건 미충족')
-      return
-    }
+    console.log('[handleSavePreview] start — hotel_id:', hotelId, 'isPreviewMode:', isPreviewMode, 'previewBuffer 날짜 수:', Object.keys(previewBuffer).length)
+    if (!hotelId || !isPreviewMode) return
     setUploadStatus('uploading')
     try {
       const BATCH = 100
@@ -1120,7 +1011,6 @@ export default function RateStrategyPage() {
       const payloads = Object.entries(previewBuffer).flatMap(([date, roomRates]) =>
         Object.entries(roomRates).map(([room_type_code, rack_rate]) => ({
           hotel_id:       hotelId,
-          strategy_id:    effectiveStratId,
           room_type_code,
           date_type:      'base',
           stay_date:      date,
@@ -1135,34 +1025,14 @@ export default function RateStrategyPage() {
         setUploadMsg(`저장 중... (${Math.min(i + BATCH, payloads.length)}/${payloads.length}건)`)
         const { error } = await (supabase as any)
           .from('s02_rate_detail')
-          .upsert(payloads.slice(i, i + BATCH), { onConflict: 'strategy_id,room_type_code,stay_date,date_type' })
+          .upsert(payloads.slice(i, i + BATCH), { onConflict: 'hotel_id,room_type_code,stay_date,date_type' })
         if (error) {
           console.error('[handleSavePreview] upsert 에러:', error)
           throw error
         }
       }
       console.log('[handleSavePreview] s02_rate_detail upsert 완료')
-      queryClient.invalidateQueries({ queryKey: ['s02_rate_detail', hotelId, effectiveStratId] })
-
-      if (otbDate) {
-        const histPayloads = payloads.map(p => ({
-          hotel_id:       p.hotel_id,
-          strategy_id:    p.strategy_id,
-          room_type_code: p.room_type_code,
-          stay_date:      p.stay_date,
-          date_type:      p.date_type,
-          rack_rate:      p.rack_rate,
-          uploaded_at:    otbDate,
-        }))
-        for (let i = 0; i < histPayloads.length; i += BATCH) {
-          const { error: histErr } = await (supabase as any)
-            .from('s02_rate_detail_history')
-            .insert(histPayloads.slice(i, i + BATCH))
-          if (histErr) console.warn('[handleSavePreview] history insert 에러 (무시):', histErr)
-        }
-        queryClient.invalidateQueries({ queryKey: ['bar-upload-dates', effectiveStratId] })
-        queryClient.invalidateQueries({ queryKey: ['bar-history', effectiveStratId] })
-      }
+      queryClient.invalidateQueries({ queryKey: ['s02_rate_detail', hotelId] })
 
       setPreviewBuffer({})
       setUploadStatus('done')
@@ -1173,7 +1043,7 @@ export default function RateStrategyPage() {
       setUploadStatus('error')
       setUploadMsg(e.message ?? '저장 실패')
     }
-  }, [effectiveStratId, hotelId, previewBuffer, isPreviewMode, roomTypes, queryClient, otbDate])
+  }, [hotelId, previewBuffer, isPreviewMode, roomTypes, queryClient])
 
   const handleFileChange = useCallback(async (file: File) => {
     if (!file) return
@@ -1217,15 +1087,15 @@ export default function RateStrategyPage() {
         const newRate = rack != null ? calcNewRate(rack, mode, numVal) : (mode === 'direct' ? numVal : null)
         const diff    = newRate != null && rack != null ? newRate - rack : null
         const diffPct = rack && diff != null ? (diff / rack) * 100 : null
-        return { hotel_id: hotelId, strategy_id: effectiveStratId, room_type_code: rt.room_type_code, stay_date: date, date_type: 'change', stay_start: null, stay_end: null, rack_rate: rack, new_rate: newRate, diff, diff_pct: diffPct }
+        return { hotel_id: hotelId, room_type_code: rt.room_type_code, stay_date: date, date_type: 'change', stay_start: null, stay_end: null, rack_rate: rack, new_rate: newRate, diff, diff_pct: diffPct }
       }).filter(Boolean)
     )
     if (ops.length > 0) {
-      await (supabase as any).from('s02_rate_detail').upsert(ops, { onConflict: 'strategy_id,room_type_code,stay_date,date_type' })
-      queryClient.invalidateQueries({ queryKey: ['s02_rate_detail', hotelId, effectiveStratId] })
+      await (supabase as any).from('s02_rate_detail').upsert(ops, { onConflict: 'hotel_id,room_type_code,stay_date,date_type' })
+      queryClient.invalidateQueries({ queryKey: ['s02_rate_detail', hotelId] })
     }
     setSelectedDates([]); setBulkValue('')
-  }, [bulkValue, selectedDates, colMode, showAllTypes, roomTypes, selRoomType, hotelId, effectiveStratId, queryClient, getRate])
+  }, [bulkValue, selectedDates, colMode, showAllTypes, roomTypes, selRoomType, hotelId, queryClient, getRate])
 
   // ── RPA Send ───────────────────────────────────────────────────────────────
 
@@ -1237,7 +1107,7 @@ export default function RateStrategyPage() {
         await fetch(webhookUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ hotel_id: hotelId, strategy_id: effectiveStratId, rates: rateDetails }),
+          body: JSON.stringify({ hotel_id: hotelId, rates: rateDetails }),
         })
       }
       setLastRpaTime(new Date().toLocaleString('ko-KR'))
@@ -1290,49 +1160,36 @@ export default function RateStrategyPage() {
               style={{ width: 24, height: 24, background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)', flexShrink: 0 }}>
               <ChevronDown size={12} style={{ transform: 'rotate(-90deg)' }} />
             </button>
+
+            {/* 판매기준일 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 12 }}>
+              <span style={{ fontSize: 11, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+                판매기준일
+              </span>
+              <FormDatePicker value={saleDate} onChange={setSaleDate} placeholder="날짜 선택" />
+              {saleDate !== getKSTDateString() && (
+                <button
+                  onClick={() => setSaleDate(getKSTDateString())}
+                  style={{
+                    fontSize:     10,
+                    padding:      '2px 7px',
+                    borderRadius: 4,
+                    border:       '0.5px solid var(--color-border-default)',
+                    background:   'transparent',
+                    color:        'var(--color-text-secondary)',
+                    cursor:       'pointer',
+                    whiteSpace:   'nowrap',
+                  }}
+                >
+                  오늘
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
         {/* 우측: 액션 버튼 */}
         <div className="flex items-end gap-2">
-          {/* BAR 엑셀 그룹 */}
-          {effectiveStratId && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ fontSize: 9, color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                <FileSpreadsheet size={10} />
-                BAR 엑셀
-              </span>
-              <div style={{ display: 'inline-flex' }}>
-                <label style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  fontSize: 12, fontWeight: 600, padding: '8px 14px',
-                  cursor: 'pointer', whiteSpace: 'nowrap',
-                  borderRadius: '8px 0 0 8px',
-                  border: '1px solid var(--color-border-default)', borderRight: 'none',
-                  color: 'var(--color-text-primary)', background: 'var(--color-bg-secondary)',
-                }}>
-                  {uploadStatus === 'uploading' || uploadStatus === 'parsing'
-                    ? <Loader2 size={13} className="animate-spin" />
-                    : null}
-                  업로드
-                  <input type="file" accept=".xlsx,.xls,.csv" className="hidden"
-                    onChange={e => { const f = e.target.files?.[0]; if (f) handleFileChange(f); e.target.value = '' }} />
-                </label>
-                <button onClick={downloadTemplate}
-                  style={{
-                    display: 'flex', alignItems: 'center',
-                    fontSize: 12, fontWeight: 600, padding: '8px 14px',
-                    cursor: 'pointer', whiteSpace: 'nowrap',
-                    borderRadius: '0 8px 8px 0',
-                    border: '1px solid var(--color-border-default)',
-                    borderLeft: '0.5px solid var(--color-border-secondary)',
-                    color: 'var(--color-text-primary)', background: 'var(--color-bg-secondary)',
-                  }}>
-                  양식
-                </button>
-              </div>
-            </div>
-          )}
           {/* 탭 버튼 */}
           <div style={{ display: 'flex', gap: 4 }}>
             {([
@@ -1360,7 +1217,7 @@ export default function RateStrategyPage() {
             ))}
           </div>
 
-          {effectiveStratId && (
+          {hotelId && (
             <button onClick={handleRpaSend} disabled={rpaSending}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold disabled:opacity-50"
               style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)', background: 'var(--color-bg-secondary)' }}>
@@ -1421,8 +1278,6 @@ export default function RateStrategyPage() {
           </div>
         </div>
 
-        {strategies.length > 0 && filterDivider}
-
         {/* 스페이서 */}
         <div style={{ flex: 1 }} />
 
@@ -1437,7 +1292,7 @@ export default function RateStrategyPage() {
             }}>
             전체 타입
           </button>
-          {effectiveStratId && (
+          {hotelId && (
             <button onClick={() => setShowPromoModal(true)}
               className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium"
               style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)', background: 'var(--color-bg-secondary)' }}>
@@ -1613,29 +1468,16 @@ export default function RateStrategyPage() {
                         })()}
                       </div>
                     </th>
-                    {/* D-N 이력 컬럼 헤더 */}
-                    {histDates.length > 0 && displayRTs.map(rt =>
-                      histDates.map((ud, i) => (
-                        <th key={`${rt.room_type_code}-hist-${ud}`}
-                          className="px-2 py-2.5 text-right font-semibold uppercase tracking-wide whitespace-nowrap"
-                          style={{ borderLeft: '0.5px solid var(--color-border-default)', color: 'var(--color-text-muted)', opacity: 0.6, fontSize: 10 }}>
-                          <div>{showAllTypes ? `${rt.room_type_code} ` : ''}D-{histDates.length - i}</div>
-                          <div style={{ fontSize: 9, fontWeight: 400 }}>{ud}</div>
-                        </th>
-                      ))
-                    )}
                     {/* BAR Rate (현재, 편집 가능) */}
                     {displayRTs.map(rt => (
                       <th key={`${rt.room_type_code}-rack`}
                         className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide whitespace-nowrap"
                         style={{
-                          borderLeft: histDates.length > 0 ? '1.5px solid #00E5A0' : '1px solid var(--color-border-default)',
+                          borderLeft: '1px solid var(--color-border-default)',
                           borderRight: '1px solid var(--color-border-default)',
-                          background: histDates.length > 0 ? 'rgba(0,229,160,0.06)' : undefined,
                           color: '#00B883',
                         }}>
                         <div>{showAllTypes ? `${rt.room_type_code} BAR` : 'BAR Rate'}</div>
-                        {uploadDates[0] && <div style={{ fontSize: 9, fontWeight: 400, color: 'rgba(0,184,131,0.7)' }}>{uploadDates[0]} 현재</div>}
                       </th>
                     ))}
                     {/* 요금 컬럼 그룹 */}
@@ -1818,31 +1660,6 @@ export default function RateStrategyPage() {
                             </td>
                           )
                         })()}
-                        {/* D-N 이력 셀 (읽기 전용) */}
-                        {histDates.length > 0 && displayRTs.map(rt =>
-                          histDates.map((ud, i) => {
-                            const hk      = `${date}__${rt.room_type_code}`
-                            const prevRate = historyMap[hk]?.[ud]
-                            const curRate  = historyMap[hk]?.[uploadDates[0]]
-                            const diffPct  = prevRate && curRate
-                              ? ((curRate - prevRate) / prevRate * 100)
-                              : null
-                            return (
-                              <td key={`${rt.room_type_code}-hist-${ud}`}
-                                className="px-2 py-1.5 text-right font-mono"
-                                style={{ borderLeft: '0.5px solid var(--color-border-default)', fontSize: 11 }}>
-                                <div style={{ color: 'var(--color-text-secondary)', fontWeight: 400 }}>
-                                  {prevRate != null ? Math.round(prevRate / 1000) : <span style={{ opacity: 0.35 }}>—</span>}
-                                </div>
-                                {diffPct != null && (
-                                  <div style={{ fontSize: 9, color: diffPct > 0 ? '#00B883' : diffPct < 0 ? '#E24B4A' : 'var(--color-text-muted)' }}>
-                                    {diffPct > 0 ? '+' : ''}{diffPct.toFixed(1)}%
-                                  </div>
-                                )}
-                              </td>
-                            )
-                          })
-                        )}
                         {/* BAR Rate (현재, 편집 가능) */}
                         {displayRTs.map(rt => {
                           const base        = getRate(date, rt.room_type_code, 'base')
@@ -1857,11 +1674,8 @@ export default function RateStrategyPage() {
                             <td key={`${rt.room_type_code}-rack`}
                               className="px-3 py-2 text-right font-mono"
                               style={{
-                                borderLeft: histDates.length > 0 ? '1.5px solid #00E5A0' : undefined,
                                 borderRight: '1px solid var(--color-border-default)',
-                                background: isPreview
-                                  ? 'rgba(255,200,0,0.08)'
-                                  : histDates.length > 0 ? 'rgba(0,229,160,0.03)' : undefined,
+                                background: isPreview ? 'rgba(255,200,0,0.08)' : undefined,
                                 opacity: flash === 'saving' ? 0.5 : 1,
                                 outline: flash === 'success' ? '1.5px solid #00E5A0' : flash === 'error' ? '1.5px solid #E24B4A' : 'none',
                                 transition: 'outline 0.3s',
@@ -1999,7 +1813,7 @@ export default function RateStrategyPage() {
         </div>
 
         {/* ── OTB 사이드 패널 ── */}
-        {effectiveStratId && (
+        {hotelId && (
           <div className="w-52 shrink-0 rounded-xl p-4 space-y-4"
             style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}>
 
@@ -2042,15 +1856,6 @@ export default function RateStrategyPage() {
                 ))}
               </div>
             </div>
-
-            {currentStrategy && (
-              <div style={{ borderTop: '1px solid var(--color-border-default)', paddingTop: 12 }}>
-                <StatusBadge status={currentStrategy.status} />
-                <p className="text-[10px] text-brand-muted mt-1.5">
-                  {currentStrategy.name}
-                </p>
-              </div>
-            )}
 
             {ratePackages.length > 0 && (
               <div style={{ borderTop: '1px solid var(--color-border-default)', paddingTop: 12 }}>
@@ -2104,11 +1909,13 @@ export default function RateStrategyPage() {
 
       {/* ── 요금 달력 탭 ── */}
       {activeTab === 'rate-cal' && (
-        <div style={{ height: 'calc(100vh - 210px)', minHeight: 400 }}>
+        <div style={{ minHeight: 400 }}>
           <RateCalendarView
             year={viewYear}
             month={viewMonth}
             occMap={occMap}
+            saleDate={saleDate}
+            pickupRows={pickupRows}
           />
         </div>
       )}
@@ -2167,12 +1974,12 @@ export default function RateStrategyPage() {
       })()}
 
       {showPromoModal && (
-        <PromotionModal hotelId={hotelId} strategyId={effectiveStratId}
+        <PromotionModal hotelId={hotelId}
           profileId={profileId} roomTypes={roomTypes}
           onClose={() => setShowPromoModal(false)}
           onCreated={() => {
             setShowPromoModal(false)
-            queryClient.invalidateQueries({ queryKey: ['s03_rate_promotion', hotelId, effectiveStratId] })
+            queryClient.invalidateQueries({ queryKey: ['s03_rate_promotion', hotelId] })
           }} />
       )}
     </div>

@@ -1,10 +1,9 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Loader2, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import type { PromoFormData } from './DayPanel'
 
 const DOW_KR = ['일', '월', '화', '수', '목', '금', '토'] as const
 
@@ -42,19 +41,20 @@ interface DayRate {
 }
 
 interface Props {
-  promoForm:         PromoFormData
   hotelId:           string
+  promotionId:       string
+  promotionName:     string
+  stayStart:         string
+  stayEnd:           string
   year:              number
   month:             number
   selectedRoomTypes: string[]
+  barRateMap?:       Record<number, { base_rate: number }>
   onClose:           () => void
   onSaved:           () => void
 }
 
-export function CustomRateModal({ promoForm, hotelId, selectedRoomTypes, onClose, onSaved }: Props) {
-  const queryClient = useQueryClient()
-  const stayStart   = promoForm.stay_start
-  const stayEnd     = promoForm.stay_end
+export function CustomRateModal({ hotelId, promotionId, promotionName, stayStart, stayEnd, selectedRoomTypes, onClose, onSaved }: Props) {
 
   const dates = useMemo(() => getDateRange(stayStart, stayEnd), [stayStart, stayEnd])
 
@@ -184,30 +184,41 @@ export function CustomRateModal({ promoForm, hotelId, selectedRoomTypes, onClose
   }
 
   const handleSave = async () => {
-    if (!promoForm.name.trim()) { setErr('프로모션 이름이 없습니다.'); return }
     setSaving(true); setErr(null)
     try {
+      const rows: {
+        hotel_id:       string
+        promotion_id:   string
+        stay_date:      string
+        room_type_code: string
+        rate:           number
+      }[] = []
+      for (const dr of dayRates) {
+        for (const rr of dr.roomRates) {
+          if (rr.rate == null) continue
+          rows.push({
+            hotel_id:       hotelId,
+            promotion_id:   promotionId,
+            stay_date:      dr.date,
+            room_type_code: rr.room_type_code,
+            rate:           rr.rate * 1000,
+          })
+        }
+      }
+      if (rows.length === 0) {
+        onSaved()
+        onClose()
+        return
+      }
       const { error } = await (supabase as any)
-        .from('s03_rate_promotion')
-        .insert({
-          hotel_id:        hotelId,
-          name:            promoForm.name.trim(),
-          description:     promoForm.description || null,
-          discount_type:   'fixed',
-          discount_value:  0,
-          stay_start:      stayStart || null,
-          stay_end:        stayEnd   || null,
-          sale_start:      promoForm.sale_start || null,
-          sale_end:        promoForm.sale_end   || null,
-          min_stay:        promoForm.min_stay   ? Number(promoForm.min_stay)  : null,
-          max_stay:        promoForm.max_stay   ? Number(promoForm.max_stay)  : null,
-          status:          promoForm.status,
-          strategy_id:     null,
-          room_type_codes: selectedRoomTypes.length > 0 ? selectedRoomTypes : null,
+        .from('s06_rate_custom')
+        .upsert(rows, {
+          onConflict: 'promotion_id,stay_date,room_type_code',
+          ignoreDuplicates: false,
         })
       if (error) throw error
-      queryClient.invalidateQueries({ queryKey: ['s03_rate_promotion', hotelId] })
       onSaved()
+      onClose()
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : '저장 실패')
     } finally {
@@ -254,7 +265,7 @@ export function CustomRateModal({ promoForm, hotelId, selectedRoomTypes, onClose
           padding: '14px 18px', borderBottom: '0.5px solid var(--color-border-default)', flexShrink: 0,
         }}>
           <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)' }}>
-            요금 설정 — {promoForm.name || '(이름 없음)'}
+            요금 설정 — {promotionName || '(이름 없음)'}
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button
