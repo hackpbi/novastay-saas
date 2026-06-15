@@ -292,29 +292,11 @@ export default function MonthlyPickupAccountTotalModal({
             </p>
           ) : (
             <div className="px-6 py-4">
-              <div className="flex items-center justify-end mb-2">
-                {visibleGroups.length > 0 && (
-                  <button
-                    onClick={toggleAll}
-                    className="text-xs px-2.5 py-1 rounded-lg transition-colors"
-                    style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}
-                    onMouseEnter={e => e.currentTarget.style.color = 'var(--color-accent-primary)'}
-                    onMouseLeave={e => e.currentTarget.style.color = 'var(--color-text-secondary)'}
-                  >
-                    {allCollapsed ? '모두 펼치기' : '모두 접기'}
-                  </button>
-                )}
-              </div>
               <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
                 {/* 헤더 2단 */}
                 <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                   <tr>
-                    <th style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE }} rowSpan={2}>Account</th>
-                    <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: BORDER }}>
-                      전체 ({startLabel} ~ {endLabel})
-                    </th>
-                  </tr>
-                  <tr>
+                    <th style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE, borderBottom: BORDER }}>Account</th>
                     <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>ΔR-N</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>
                     <th style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>ΔREV</th>
