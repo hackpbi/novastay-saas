@@ -164,7 +164,7 @@ export default function MonthlyPickupSegTotalModal({
   const endLabel   = monthKeys.length > 0 ? formatYYYYMM(monthKeys[monthKeys.length - 1]) : ''
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pt-20" style={{ paddingTop: 'calc(5rem + 5vh)' }}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4" style={{ paddingTop: 80 }}>
       <div
         className="absolute inset-0 backdrop-blur-sm"
         style={{ background: 'rgba(0,0,0,0.6)' }}
