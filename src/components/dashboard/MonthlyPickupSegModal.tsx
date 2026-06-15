@@ -27,6 +27,7 @@ const tdBase: React.CSSProperties = {
   padding: '6px 10px', verticalAlign: 'middle',
 }
 const BORDER = '1px solid var(--divider-color)'
+const MONTH_SEP = '1.5px solid rgba(0,229,160,0.3)'   // 월 경계 (각 월 첫 컬럼 좌측)
 
 // ─── Format helpers (fontColor: 양수 schema 폰트색 / 음수 red / Dash 폰트색) ──────────
 
@@ -92,7 +93,7 @@ function MonthCells({ cell, clickable, onClick, fontColor }: {
   const td: React.CSSProperties = { ...tdBase, textAlign: 'right', cursor }
   return (
     <>
-      <td className="font-mono" style={{ ...td, borderLeft: BORDER, borderRight: BORDER }} onClick={onClick}>
+      <td className="font-mono" style={{ ...td, borderLeft: MONTH_SEP, borderRight: BORDER }} onClick={onClick}>
         <FmtPickupNights n={cell.pickupNights} fontColor={fontColor} />
       </td>
       <td className="font-mono" style={{ ...td, borderRight: BORDER }} onClick={onClick}>
@@ -269,17 +270,17 @@ export default function MonthlyPickupSegModal({
                 <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                   <tr>
                     <th style={{ ...thBase, textAlign: 'left', borderRight: BORDER }} rowSpan={2}>Segmentation</th>
-                    {visibleMonths.map((mk, idx) => (
-                      <th key={mk} colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: idx < visibleMonths.length - 1 ? BORDER : BORDER }}>
+                    {visibleMonths.map(mk => (
+                      <th key={mk} colSpan={3} style={{ ...thBase, textAlign: 'center', background: 'rgba(0,229,160,0.06)', color: 'rgba(0,229,160,0.7)', borderLeft: MONTH_SEP, borderRight: BORDER }}>
                         {formatYYYYMM(mk)}
                       </th>
                     ))}
                   </tr>
                   <tr>
-                    {visibleMonths.map((mk, idx) => ([
-                      <th key={`${mk}-rn`}  style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>ΔR-N</th>,
+                    {visibleMonths.map(mk => ([
+                      <th key={`${mk}-rn`}  style={{ ...thBase, textAlign: 'right', borderLeft: MONTH_SEP, borderBottom: BORDER }}>ΔR-N</th>,
                       <th key={`${mk}-adr`} style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>,
-                      <th key={`${mk}-rev`} style={{ ...thBase, textAlign: 'right', borderRight: idx < visibleMonths.length - 1 ? BORDER : BORDER, borderBottom: BORDER }}>ΔREV</th>,
+                      <th key={`${mk}-rev`} style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>ΔREV</th>,
                     ]))}
                   </tr>
                 </thead>
@@ -330,7 +331,7 @@ export default function MonthlyPickupSegModal({
                   <tr style={{ borderTop: BORDER, background: '#111111' }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER }}>OCC</td>
                     {visibleMonths.map((mk, idx) => (
-                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER, borderRight: BORDER }}>
+                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: MONTH_SEP, borderRight: BORDER }}>
                         <FmtOcc n={summary.monthlyTotals[mk]?.occ ?? 0} />
                       </td>
                     ))}
@@ -339,7 +340,7 @@ export default function MonthlyPickupSegModal({
                   <tr style={{ borderTop: BORDER, background: '#111111' }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER }}>RevPAR</td>
                     {visibleMonths.map((mk, idx) => (
-                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER, borderRight: BORDER }}>
+                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: MONTH_SEP, borderRight: BORDER }}>
                         <FmtRevpar n={summary.monthlyTotals[mk]?.revpar ?? 0} />
                       </td>
                     ))}
