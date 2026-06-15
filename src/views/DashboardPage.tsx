@@ -9,6 +9,7 @@ import { useLyPacing, type LyPacingMode } from '@/hooks/useLyPacing'
 import SegmentationModal          from '@/components/dashboard/SegmentationModal'
 import AccountModal               from '@/components/dashboard/AccountModal'
 import MonthlyPickupSegModal      from '@/components/dashboard/MonthlyPickupSegModal'
+import MonthlyPickupSegTotalModal from '@/components/dashboard/MonthlyPickupSegTotalModal'
 import MonthlyPickupAccountModal  from '@/components/dashboard/MonthlyPickupAccountModal'
 import LyComparisonSegModal       from '@/components/dashboard/LyComparisonSegModal'
 import LyComparisonAccountModal   from '@/components/dashboard/LyComparisonAccountModal'
@@ -528,6 +529,7 @@ export default function DashboardPage() {
   const [lyMode, setLyMode] = useState<LyPacingMode>('v1')
   const [segModal,     setSegModal]     = useState<{ open: boolean; year?: number; month?: number }>({ open: false })
   const [monthlyPickupSegOpen,       setMonthlyPickupSegOpen]       = useState(false)
+  const [pickupViewMode,             setPickupViewMode]             = useState<'monthly' | 'total'>('total')
   const [forecastBudgetModal,        setForecastBudgetModal]        = useState<{
     open: boolean; monthKey?: string
   }>({ open: false })
@@ -762,6 +764,21 @@ export default function DashboardPage() {
             {' '}픽업 되었습니다.
           </p>
         )}
+        {/* 픽업 추이 모달 뷰 토글 (월별 / 합계) */}
+        {!pickupLoading && (
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>픽업 추이</span>
+            <div className="flex rounded-md overflow-hidden" style={{ border: '1px solid var(--color-border-default)', background: 'var(--color-bg-elevated)' }}>
+              {(['monthly', 'total'] as const).map(mode => (
+                <button key={mode} onClick={() => setPickupViewMode(mode)}
+                  className="px-2.5 py-1 text-xs transition-colors"
+                  style={{ background: pickupViewMode === mode ? 'var(--color-accent-primary)' : 'transparent', color: pickupViewMode === mode ? '#0A0A0A' : 'var(--color-text-secondary)' }}>
+                  {mode === 'monthly' ? '월별' : '합계'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
 
@@ -877,8 +894,24 @@ export default function DashboardPage() {
         }
       />
 
+      {/* 픽업 추이 모달 — 토글(pickupViewMode)에 따라 월별/합계 전환 */}
       <MonthlyPickupSegModal
-        open={monthlyPickupSegOpen}
+        open={monthlyPickupSegOpen && pickupViewMode === 'monthly'}
+        onClose={() => setMonthlyPickupSegOpen(false)}
+        roomCount={roomCount}
+        onPickupCellClick={(segCodes, monthKey, label) => {
+          setMonthlyPickupSegOpen(false)
+          setMonthlyPickupAccountModal({
+            open: true,
+            filterSegCodes:  segCodes,
+            filterMonthKey:  monthKey ?? undefined,
+            filterLabel:     label,
+            initialViewMode: monthKey === null ? 'total' : 'monthly',
+          })
+        }}
+      />
+      <MonthlyPickupSegTotalModal
+        open={monthlyPickupSegOpen && pickupViewMode === 'total'}
         onClose={() => setMonthlyPickupSegOpen(false)}
         roomCount={roomCount}
         onPickupCellClick={(segCodes, monthKey, label) => {
