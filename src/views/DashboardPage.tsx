@@ -11,6 +11,7 @@ import AccountModal               from '@/components/dashboard/AccountModal'
 import MonthlyPickupSegModal      from '@/components/dashboard/MonthlyPickupSegModal'
 import MonthlyPickupSegTotalModal from '@/components/dashboard/MonthlyPickupSegTotalModal'
 import MonthlyPickupAccountModal  from '@/components/dashboard/MonthlyPickupAccountModal'
+import MonthlyPickupAccountTotalModal from '@/components/dashboard/MonthlyPickupAccountTotalModal'
 import LyComparisonSegModal       from '@/components/dashboard/LyComparisonSegModal'
 import LyComparisonAccountModal   from '@/components/dashboard/LyComparisonAccountModal'
 import { useHotel } from '@/contexts/HotelContext'
@@ -926,13 +927,24 @@ export default function DashboardPage() {
         }}
       />
       <MonthlyPickupAccountModal
-        open={monthlyPickupAccountModal.open}
+        open={monthlyPickupAccountModal.open && pickupViewMode === 'monthly'}
         onClose={() => setMonthlyPickupAccountModal({ open: false })}
         roomCount={roomCount}
         initialFilterSegCodes={monthlyPickupAccountModal.filterSegCodes}
         initialFilterMonthKey={monthlyPickupAccountModal.filterMonthKey}
         initialFilterLabel={monthlyPickupAccountModal.filterLabel}
         initialViewMode={monthlyPickupAccountModal.initialViewMode}
+        onBackToSeg={() => {
+          setMonthlyPickupAccountModal({ open: false })
+          setMonthlyPickupSegOpen(true)
+        }}
+      />
+      <MonthlyPickupAccountTotalModal
+        open={monthlyPickupAccountModal.open && pickupViewMode === 'total'}
+        onClose={() => setMonthlyPickupAccountModal({ open: false })}
+        roomCount={roomCount}
+        initialFilterSegCodes={monthlyPickupAccountModal.filterSegCodes}
+        initialFilterLabel={monthlyPickupAccountModal.filterLabel}
         onBackToSeg={() => {
           setMonthlyPickupAccountModal({ open: false })
           setMonthlyPickupSegOpen(true)
