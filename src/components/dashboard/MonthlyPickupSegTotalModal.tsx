@@ -236,13 +236,19 @@ export default function MonthlyPickupSegTotalModal({
                     return (
                       <tr
                         key={row.id}
-                        style={{ borderBottom: BORDER, background: rowBg, color: rowColor, fontWeight: row.isBold ? 600 : 400 }}
+                        style={{
+                          borderBottom: BORDER,
+                          background: rowBg,
+                          // 소분류(indent) 글자는 흐리게 — 데이터 셀은 Fmt* 내부 color 사용이라 영향 없음
+                          color: row.indent ? (isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.45)') : rowColor,
+                          fontWeight: row.isBold ? 600 : 400,
+                        }}
                         onMouseEnter={e => {
                           e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${rowBg}`
                         }}
                         onMouseLeave={e => { e.currentTarget.style.background = rowBg }}
                       >
-                        <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: DOUBLE, color: row.indent ? 'var(--color-text-secondary)' : rowColor }}>
+                        <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: DOUBLE }}>
                           {row.indent ? (
                             <><span style={{ color: 'var(--brand-dimmed)' }}>└ </span>{row.name}</>
                           ) : row.name}
