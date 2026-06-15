@@ -149,6 +149,8 @@ export default function DatePicker({ label, value, onChange, accent = false, ava
                 : '1px solid var(--color-border-default)',
           boxShadow: bare ? 'none' : open ? '0 0 0 2px var(--color-accent-glow)' : 'none',
           paddingLeft: bare ? 0 : undefined,   // bare 모드: 좌측 정렬용 패딩 제거
+          paddingTop: bare ? 2 : undefined,
+          paddingBottom: bare ? 2 : undefined,
         }}
       >
         <span
