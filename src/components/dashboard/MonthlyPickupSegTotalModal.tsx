@@ -97,13 +97,13 @@ function TotalCells({ cell, clickable, onClick }: {
   const td: React.CSSProperties = { ...tdBase, textAlign: 'right', cursor }
   return (
     <>
-      <td className="font-mono" style={{ ...td, borderLeft: BORDER }} onClick={onClick}>
+      <td className="font-mono" style={{ ...td, borderLeft: BORDER, borderRight: BORDER }} onClick={onClick}>
         <FmtPickupNights n={cell.pickupNights} />
       </td>
-      <td className="font-mono" style={td} onClick={onClick}>
+      <td className="font-mono" style={{ ...td, borderRight: BORDER }} onClick={onClick}>
         <FmtPickupAdr n={cell.pickupAdr} />
       </td>
-      <td className="font-mono" style={td} onClick={onClick}>
+      <td className="font-mono" style={{ ...td, borderRight: BORDER }} onClick={onClick}>
         <FmtPickupRevenue n={cell.pickupRevenue} />
       </td>
     </>
@@ -217,14 +217,9 @@ export default function MonthlyPickupSegTotalModal({
                 {/* 헤더 2단 */}
                 <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                   <tr>
-                    <th style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE }} rowSpan={2}>Segmentation</th>
-                    <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: BORDER }}>
-                      전체 ({startLabel} ~ {endLabel})
-                    </th>
-                  </tr>
-                  <tr>
-                    <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>ΔR-N</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>
+                    <th style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE, borderBottom: BORDER }}>Segmentation</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderRight: BORDER, borderBottom: BORDER }}>ΔR-N</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>ΔADR</th>
                     <th style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>ΔREV</th>
                   </tr>
                 </thead>
@@ -269,14 +264,14 @@ export default function MonthlyPickupSegTotalModal({
                   {/* OCC */}
                   <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: DOUBLE }}>OCC</td>
-                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER }}>
+                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER, borderRight: BORDER }}>
                       <FmtOcc n={summary.grandTotal.occ} />
                     </td>
                   </tr>
                   {/* RevPAR */}
                   <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: DOUBLE }}>RevPAR</td>
-                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER }}>
+                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER, borderRight: BORDER }}>
                       <FmtRevpar n={summary.grandTotal.revpar} />
                     </td>
                   </tr>
