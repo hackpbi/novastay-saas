@@ -173,36 +173,35 @@ export default function MonthlyPickupSegTotalModal({
         style={{ width: 598, maxWidth: '92vw', maxHeight: '79vh', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-3 shrink-0" style={{ borderBottom: `1px solid ${BORDER.split(' ').pop()}` }}>
-          <div className="flex items-center gap-4">
-            {/* 제목 + 기간 */}
-            <div>
+        <div className="px-6 py-3 shrink-0" style={{ borderBottom: `1px solid ${BORDER.split(' ').pop()}` }}>
+          {/* 1줄: 제목 + 닫기 */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-baseline gap-2">
               <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-text-primary)' }}>
                 6개월 픽업
               </span>
               {startLabel && endLabel && (
-                <span style={{ fontSize: 12, color: 'var(--brand-dimmed)', marginLeft: 8 }}>
+                <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>
                   ({startLabel} ~ {endLabel})
                 </span>
               )}
             </div>
-            {/* DatePicker — 제목 바로 오른쪽 */}
-            <div className="flex items-center gap-2">
-              <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} accent bare availableDates={otbDates} />
-              <DatePicker label="vs OTB" value={vsOtbDate} onChange={setVsOtbDate} bare availableDates={otbDates.filter(d => d < otbDate)} />
-              <span style={{ fontSize: 12, color: 'var(--brand-dimmed)' }}>
-                {days > 0 ? `${days}일간` : '당일'} 픽업 현황
-              </span>
-            </div>
+            <button
+              onClick={onClose}
+              className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1"
+              aria-label="닫기"
+            >
+              <X size={22} />
+            </button>
           </div>
-
-          <button
-            onClick={onClose}
-            className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1"
-            aria-label="닫기"
-          >
-            <X size={22} />
-          </button>
+          {/* 2줄: DatePicker */}
+          <div className="flex items-center gap-2 mt-1.5">
+            <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} accent bare availableDates={otbDates} />
+            <DatePicker label="vs OTB" value={vsOtbDate} onChange={setVsOtbDate} bare availableDates={otbDates.filter(d => d < otbDate)} />
+            <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>
+              {days > 0 ? `${days}일간` : '당일'} 픽업 현황
+            </span>
+          </div>
         </div>
 
         {/* Body */}
