@@ -179,14 +179,13 @@ export default function MonthlyPickupSegTotalModal({
               6개월 픽업
               {startLabel && endLabel && (
                 <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--brand-dimmed)', marginLeft: 8 }}>
-                  {startLabel} ~ {endLabel}
+                  ({startLabel} ~ {endLabel})
                 </span>
               )}
             </h2>
             {/* OTB / vsOTB picker */}
-            <div className="flex items-center gap-2 mt-1.5">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
               <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} accent bare availableDates={otbDates} />
-              <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>vs</span>
               <DatePicker label="vs OTB" value={vsOtbDate} onChange={setVsOtbDate} bare availableDates={otbDates.filter(d => d < otbDate)} />
               <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>
                 {days > 0 ? `${days}일간` : '당일'} 픽업 현황
