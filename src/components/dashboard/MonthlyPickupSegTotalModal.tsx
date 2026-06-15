@@ -173,7 +173,7 @@ export default function MonthlyPickupSegTotalModal({
         style={{ width: 598, maxWidth: '92vw', maxHeight: '79vh', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
-        <div className="px-6 py-3 shrink-0" style={{ borderBottom: `1px solid ${BORDER.split(' ').pop()}` }}>
+        <div className="px-6 pt-3 pb-2 shrink-0" style={{ borderBottom: `1px solid ${BORDER.split(' ').pop()}` }}>
           {/* 1줄: 제목 + 닫기 */}
           <div className="flex items-center justify-between">
             <div className="flex items-baseline gap-2">
@@ -195,7 +195,7 @@ export default function MonthlyPickupSegTotalModal({
             </button>
           </div>
           {/* 2줄: DatePicker */}
-          <div className="flex items-center gap-2 mt-1.5">
+          <div className="flex items-center gap-2 mt-1">
             <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} accent bare availableDates={otbDates} />
             <DatePicker label="vs OTB" value={vsOtbDate} onChange={setVsOtbDate} bare availableDates={otbDates.filter(d => d < otbDate)} />
             <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>
