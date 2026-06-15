@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { X, ChevronDown, ChevronRight } from 'lucide-react'
+import { useTheme } from '@/contexts/ThemeContext'
 import { useDateContext } from '@/contexts/DateContext'
 import DatePicker from '@/components/DatePicker'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
@@ -30,30 +31,31 @@ function formatYYYYMM(key: string): string {
   return key.replace('-', '.')
 }
 
-function Dash() {
-  return <span style={{ color: 'var(--brand-dimmed)' }}>—</span>
+function Dash({ fontColor }: { fontColor?: string }) {
+  return <span style={{ color: fontColor ?? 'var(--brand-dimmed)' }}>—</span>
 }
 
-function FmtPickupNights({ n }: { n: number }) {
-  if (n === 0) return <Dash />
+// 양수 → schema 폰트색(fontColor, 없으면 text-primary), 음수 → red, 0/Dash → schema 폰트색
+function FmtPickupNights({ n, fontColor }: { n: number; fontColor?: string }) {
+  if (n === 0) return <Dash fontColor={fontColor} />
   const sign  = n > 0 ? '+' : ''
-  const color = n > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
+  const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{n.toLocaleString('ko-KR')}</span>
 }
 
-function FmtPickupAdr({ n }: { n: number }) {
-  if (Math.abs(n) < 500) return <Dash />
+function FmtPickupAdr({ n, fontColor }: { n: number; fontColor?: string }) {
+  if (Math.abs(n) < 500) return <Dash fontColor={fontColor} />
   const k     = Math.round(n / 1000)
   const sign  = k > 0 ? '+' : ''
-  const color = k > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
+  const color = k > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{k}k</span>
 }
 
-function FmtPickupRevenue({ n }: { n: number }) {
-  if (Math.abs(n) < 50_000) return <Dash />
+function FmtPickupRevenue({ n, fontColor }: { n: number; fontColor?: string }) {
+  if (Math.abs(n) < 50_000) return <Dash fontColor={fontColor} />
   const m     = (n / 1_000_000).toFixed(1)
   const sign  = n > 0 ? '+' : ''
-  const color = n > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
+  const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{m}M</span>
 }
 
@@ -74,17 +76,17 @@ function FmtRevpar({ n }: { n: number }) {
 
 // ─── Total cells ───────────────────────────────────────────────────────────────
 
-function TotalCells({ cell }: { cell: MonthlyPickupCell }) {
+function TotalCells({ cell, fontColor }: { cell: MonthlyPickupCell; fontColor?: string }) {
   return (
     <>
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: BORDER }}>
-        <FmtPickupNights n={cell.pickupNights} />
+        <FmtPickupNights n={cell.pickupNights} fontColor={fontColor} />
       </td>
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}>
-        <FmtPickupAdr n={cell.pickupAdr} />
+        <FmtPickupAdr n={cell.pickupAdr} fontColor={fontColor} />
       </td>
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}>
-        <FmtPickupRevenue n={cell.pickupRevenue} />
+        <FmtPickupRevenue n={cell.pickupRevenue} fontColor={fontColor} />
       </td>
     </>
   )
@@ -109,6 +111,25 @@ function groupHasFilterCode(
     if (s.segmentation.some(c => codes.includes(c))) return true
   }
   return false
+}
+
+// 그룹에 해당하는 schema 행(색상 소스) 찾기 — groupHasFilterCode 와 동일 매칭
+function groupSchemaRow(
+  group: MonthlyPickupAccountGroup,
+  schema: MarketSchemaRow[],
+): MarketSchemaRow | undefined {
+  for (const s of schema) {
+    if (s.name !== group.segmentationName) continue
+    if (group.parentName !== null) {
+      if (s.level !== 'sub') continue
+      const parent = schema.find(p => p.id === s.parent_id)
+      if (parent?.name !== group.parentName) continue
+    } else {
+      if (s.level === 'main') continue
+    }
+    return s
+  }
+  return undefined
 }
 
 // ─── Skeleton ──────────────────────────────────────────────────────────────────
@@ -137,6 +158,8 @@ export default function MonthlyPickupAccountTotalModal({
   initialFilterLabel?:     string
   onBackToSeg?:            () => void
 }) {
+  const { theme }                                = useTheme()
+  const isDark                                   = theme === 'dark'
   const { otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate } = useDateContext()
   const days = otbDate && vsOtbDate
     ? Math.round((new Date(otbDate).getTime() - new Date(vsOtbDate).getTime()) / 86400000)
@@ -301,6 +324,11 @@ export default function MonthlyPickupAccountTotalModal({
                   {visibleGroups.map(group => {
                     const collapsed = effectiveCollapsedKeys.has(group.key)
                     const label     = group.segmentationName
+                    // 그룹: schema 색상 / account 하위 행: 어둡게 + 흐린 폰트
+                    const sRow      = groupSchemaRow(group, schema)
+                    const groupBg   = (isDark ? sRow?.bg_dark_color  : sRow?.bg_light_color)  ?? '#111111'
+                    const groupFont = (isDark ? sRow?.font_dark_color : sRow?.font_light_color) ?? 'var(--color-text-primary)'
+                    const ACCOUNT_FONT = 'rgba(255,255,255,0.45)'
 
                     return (
                       <>
@@ -309,38 +337,38 @@ export default function MonthlyPickupAccountTotalModal({
                           key={`hdr-${group.key}`}
                           onClick={() => toggleCollapse(group.key)}
                           className="cursor-pointer"
-                          style={{ borderTop: BORDER, background: '#111111' }}
-                          onMouseEnter={e => e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), #111111`}
-                          onMouseLeave={e => e.currentTarget.style.background = '#111111'}
+                          style={{ borderTop: BORDER, background: groupBg, color: groupFont }}
+                          onMouseEnter={e => e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${groupBg}`}
+                          onMouseLeave={e => e.currentTarget.style.background = groupBg}
                         >
                           <td style={{ ...tdBase, paddingLeft: 12 }}>
                             <div className="flex items-center gap-2">
                               {collapsed
-                                ? <ChevronRight size={13} style={{ color: 'var(--color-text-secondary)', flexShrink: 0 }} />
-                                : <ChevronDown  size={13} style={{ color: 'var(--color-text-secondary)', flexShrink: 0 }} />
+                                ? <ChevronRight size={13} style={{ color: groupFont, flexShrink: 0 }} />
+                                : <ChevronDown  size={13} style={{ color: groupFont, flexShrink: 0 }} />
                               }
-                              <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{label}</span>
-                              <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>({group.rows.length}개)</span>
+                              <span style={{ fontWeight: 600, color: groupFont }}>{label}</span>
+                              <span style={{ fontSize: 11, color: groupFont, opacity: 0.6 }}>({group.rows.length}개)</span>
                             </div>
                           </td>
-                          <TotalCells cell={group.totalPickup} />
+                          <TotalCells cell={group.totalPickup} fontColor={groupFont} />
                         </tr>
 
                         {/* Account 행들 */}
                         {!collapsed && group.rows.map(row => (
                           <tr
                             key={`${group.key}-${row.account_name}`}
-                            style={{ borderBottom: `1px solid var(--color-border-subtle)`, background: 'var(--color-bg-primary)' }}
-                            onMouseEnter={e => e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), var(--color-bg-primary)`}
-                            onMouseLeave={e => e.currentTarget.style.background = 'var(--color-bg-primary)'}
+                            style={{ borderBottom: `1px solid var(--color-border-subtle)`, background: '#111111', color: ACCOUNT_FONT }}
+                            onMouseEnter={e => e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), #111111`}
+                            onMouseLeave={e => e.currentTarget.style.background = '#111111'}
                           >
-                            <td style={{ ...tdBase, paddingLeft: 28, color: 'var(--color-text-secondary)' }}>
-                              <span style={{ color: 'var(--brand-dimmed)' }}>└ </span>
+                            <td style={{ ...tdBase, paddingLeft: 28, color: ACCOUNT_FONT }}>
+                              <span style={{ color: ACCOUNT_FONT }}>└ </span>
                               {!row.account_name || row.account_name === '(미지정)'
-                                ? <span style={{ color: 'var(--brand-dimmed)' }}>(미지정)</span>
+                                ? <span style={{ color: ACCOUNT_FONT }}>(미지정)</span>
                                 : row.account_name}
                             </td>
-                            <TotalCells cell={row.totalPickup} />
+                            <TotalCells cell={row.totalPickup} fontColor={ACCOUNT_FONT} />
                           </tr>
                         ))}
                       </>
