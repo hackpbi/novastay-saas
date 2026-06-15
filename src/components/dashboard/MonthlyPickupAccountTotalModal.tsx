@@ -1,9 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { X, ChevronDown, ChevronRight, Search, ArrowLeft } from 'lucide-react'
-import { useHotel } from '@/contexts/HotelContext'
-import { useTheme } from '@/contexts/ThemeContext'
+import { X, ChevronDown, ChevronRight, Search } from 'lucide-react'
 import { useDateContext } from '@/contexts/DateContext'
 import DatePicker from '@/components/DatePicker'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
@@ -26,7 +24,6 @@ const tdBase: React.CSSProperties = {
 }
 const BORDER = '1px solid var(--divider-color)'
 const DOUBLE = '3px double rgba(255, 255, 255, 0.25)'
-const ZERO_CELL: MonthlyPickupCell = { pickupNights: 0, pickupAdr: 0, pickupRevenue: 0 }
 
 // ─── Format helpers ────────────────────────────────────────────────────────────
 
@@ -141,9 +138,6 @@ export default function MonthlyPickupAccountTotalModal({
   initialFilterLabel?:     string
   onBackToSeg?:            () => void
 }) {
-  const { currentHotel }                         = useHotel()
-  const { theme }                                = useTheme()
-  const isDark                                   = theme === 'dark'
   const { otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate } = useDateContext()
   const days = otbDate && vsOtbDate
     ? Math.round((new Date(otbDate).getTime() - new Date(vsOtbDate).getTime()) / 86400000)
@@ -254,49 +248,10 @@ export default function MonthlyPickupAccountTotalModal({
         <div className="flex items-start justify-between gap-3 px-6 py-4 shrink-0" style={{ borderBottom: BORDER }}>
           {/* Left */}
           <div className="flex items-start gap-3 min-w-0">
-            {/* Back button */}
-            {onBackToSeg && isFilterMode && (
-              <button
-                onClick={onBackToSeg}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs transition-colors shrink-0 mt-0.5"
-                style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}
-                onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-accent-primary)'; e.currentTarget.style.borderColor = 'var(--color-accent-primary)' }}
-                onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-secondary)'; e.currentTarget.style.borderColor = 'var(--color-border-default)' }}
-              >
-                <ArrowLeft size={12} />
-                Seg로
-              </button>
-            )}
-
             <div className="min-w-0">
               <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>
                 월별 픽업 추이 — Account · 합계
               </h2>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--brand-dimmed)' }}>
-                {isFilterMode && initialFilterLabel
-                  ? `필터: ${initialFilterLabel}`
-                  : startLabel && endLabel
-                    ? `${startLabel} ~ ${endLabel} · ${currentHotel?.hotel_name ?? ''}`
-                    : currentHotel?.hotel_name ?? ''
-                }
-              </p>
-
-              {/* Filter chip */}
-              {isFilterMode && initialFilterLabel && (
-                <div className="flex items-center gap-1 mt-1.5">
-                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px]"
-                    style={{ background: 'var(--accent-badge-bg)', color: 'var(--color-accent-primary)', border: '1px solid var(--color-accent-primary)' }}>
-                    {initialFilterLabel}
-                    <button
-                      onClick={() => setFilterCleared(true)}
-                      className="hover:opacity-60 transition-opacity leading-none ml-0.5"
-                      aria-label="필터 해제"
-                    >
-                      ×
-                    </button>
-                  </span>
-                </div>
-              )}
 
               {/* OTB / vsOTB picker */}
               <div className="flex items-center gap-2 mt-1.5">
@@ -332,9 +287,9 @@ export default function MonthlyPickupAccountTotalModal({
             </div>
 
             <button
-              onClick={onClose}
+              onClick={() => (onBackToSeg ? onBackToSeg() : onClose())}
               className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1"
-              aria-label="닫기"
+              aria-label="Seg 합계로"
             >
               <X size={22} />
             </button>
