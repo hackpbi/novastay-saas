@@ -180,7 +180,6 @@ export default function MonthlyPickupAccountTotalModal({
     [schema, pickup, roomCount, loading],
   )
 
-  const isFilterMode = !filterCleared && !!initialFilterSegCodes?.length
 
   // 그룹은 전체 표시(필터 없음) + account 검색만 적용
   const visibleGroups = useMemo(() => {
@@ -381,9 +380,6 @@ export default function MonthlyPickupAccountTotalModal({
                   <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: '#111111' }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: BORDER }}>
                       합계 (HOU 제외)
-                      {isFilterMode && !filterCleared && (
-                        <span style={{ fontSize: 10, color: 'var(--brand-dimmed)', marginLeft: 4 }}>※ 전체 기준</span>
-                      )}
                     </td>
                     <TotalCells cell={summary.grandTotal} />
                   </tr>
