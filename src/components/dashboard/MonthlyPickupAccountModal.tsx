@@ -187,15 +187,8 @@ export default function MonthlyPickupAccountModal({
     [schema, pickup, roomCount, loading],
   )
 
-  // Effective filter
-  const effectiveMonthKey = !filterCleared ? initialFilterMonthKey : undefined
-  const isFilterMode      = !filterCleared && (!!initialFilterSegCodes?.length || !!initialFilterMonthKey)
-
-  // visible months
-  const visibleMonthKeys: string[] = useMemo(
-    () => effectiveMonthKey ? [effectiveMonthKey] : monthKeys,
-    [monthKeys, effectiveMonthKey],
-  )
+  // visible months — 전체 표시(페이지네이션). 클릭 월(initialFilterMonthKey)은 초기 페이지 선택에만 사용
+  const visibleMonthKeys = monthKeys
   const isSingleMonth = visibleMonthKeys.length === 1
 
   // pagination
@@ -247,8 +240,12 @@ export default function MonthlyPickupAccountModal({
   // reset on open / filter cleared
   useEffect(() => {
     if (open) {
-      setPageIndex(0); setSearchQuery(''); setFilterCleared(false)
+      // 클릭한 월이 속한 페이지로 자동 이동
+      const idx = initialFilterMonthKey ? monthKeys.indexOf(initialFilterMonthKey) : -1
+      setPageIndex(idx >= 0 ? Math.floor(idx / PAGE_SIZE) : 0)
+      setSearchQuery(''); setFilterCleared(false)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   useEffect(() => {
@@ -418,14 +415,14 @@ export default function MonthlyPickupAccountModal({
                           onMouseEnter={e => e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${groupBg}`}
                           onMouseLeave={e => e.currentTarget.style.background = groupBg}
                         >
-                          <td style={{ ...tdBase, paddingLeft: 12 }}>
+                          <td style={{ ...tdBase, paddingLeft: 12, color: '#ffffff', fontWeight: 600 }}>
                             <div className="flex items-center gap-2">
                               {collapsed
-                                ? <ChevronRight size={13} style={{ color: groupFont, flexShrink: 0 }} />
-                                : <ChevronDown  size={13} style={{ color: groupFont, flexShrink: 0 }} />
+                                ? <ChevronRight size={13} style={{ color: '#ffffff', flexShrink: 0 }} />
+                                : <ChevronDown  size={13} style={{ color: '#ffffff', flexShrink: 0 }} />
                               }
-                              <span style={{ fontWeight: 600, color: groupFont }}>{label}</span>
-                              <span style={{ fontSize: 11, color: groupFont, opacity: 0.6 }}>({group.rows.length}개)</span>
+                              <span style={{ fontWeight: 600, color: '#ffffff' }}>{label}</span>
+                              <span style={{ fontSize: 11, color: '#ffffff', opacity: 0.6 }}>({group.rows.length}개)</span>
                             </div>
                           </td>
                           {visiblePageMonths.map(mk => (
@@ -462,9 +459,6 @@ export default function MonthlyPickupAccountModal({
                   <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: '#111111' }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: BORDER }}>
                       합계 (HOU 제외)
-                      {isFilterMode && !filterCleared && (
-                        <span style={{ fontSize: 10, color: 'var(--brand-dimmed)', marginLeft: 4 }}>※ 전체 기준</span>
-                      )}
                     </td>
                     {visiblePageMonths.map(mk => (
                       <MonthCells key={mk} cell={summary.monthlyTotals[mk] ?? ZERO_CELL} isLast={visiblePageMonths.indexOf(mk) === visiblePageMonths.length - 1} />
