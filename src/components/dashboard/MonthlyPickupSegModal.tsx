@@ -264,9 +264,9 @@ export default function MonthlyPickupSegModal({
             </p>
           ) : (
             <div className="px-6 py-4">
-              <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+              <table className="w-full text-xs" style={{ borderCollapse: 'collapse', position: 'relative', zIndex: 1 }}>
                 {/* 헤더 2단 */}
-                <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                   <tr>
                     <th style={{ ...thBase, textAlign: 'left', borderRight: BORDER }} rowSpan={2}>Segmentation</th>
                     {visibleMonths.map((mk, idx) => (

@@ -188,7 +188,6 @@ export default function MonthlyPickupAccountModal({
   )
 
   // Effective filter
-  const effectiveSegCodes = !filterCleared ? initialFilterSegCodes : undefined
   const effectiveMonthKey = !filterCleared ? initialFilterMonthKey : undefined
   const isFilterMode      = !filterCleared && (!!initialFilterSegCodes?.length || !!initialFilterMonthKey)
 
@@ -205,34 +204,31 @@ export default function MonthlyPickupAccountModal({
     ? visibleMonthKeys
     : visibleMonthKeys.slice(pageIndex * PAGE_SIZE, pageIndex * PAGE_SIZE + PAGE_SIZE)
 
-  // group filter + search
+  // 그룹은 전체 표시(필터 없음) + account 검색만 적용
   const visibleGroups = useMemo(() => {
     let g = groups
-
-    if (effectiveSegCodes && effectiveSegCodes.length > 0) {
-      g = g.filter(group => groupHasFilterCode(group, effectiveSegCodes, schema))
-    }
-
     const q = searchQuery.trim().toLowerCase()
     if (q) {
       g = g
         .map(group => ({ ...group, rows: group.rows.filter(r => r.account_name.toLowerCase().includes(q)) }))
         .filter(group => group.rows.length > 0)
     }
-
     return g
-  }, [groups, effectiveSegCodes, searchQuery, schema])
+  }, [groups, searchQuery])
 
-  // auto-collapse on open / groups change
+  // 진입 시: 클릭한 세그(initialFilterSegCodes)에 해당하는 그룹만 펼침, 나머지는 접힘
   useEffect(() => {
     if (!open) return
-    if (isFilterMode && !filterCleared) {
-      setCollapsedKeys(new Set())  // 필터 진입 시 모두 펼침
+    const codes = !filterCleared ? initialFilterSegCodes : undefined
+    if (codes && codes.length > 0) {
+      setCollapsedKeys(new Set(
+        groups.filter(g => !groupHasFilterCode(g, codes, schema)).map(g => g.key)
+      ))
     } else {
-      setCollapsedKeys(new Set(visibleGroups.map(g => g.key)))  // 전체 모드: 모두 접힘
+      setCollapsedKeys(new Set(groups.map(g => g.key)))  // 세그 미지정: 모두 접힘
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, isFilterMode, filterCleared, visibleGroups.length])
+  }, [open, filterCleared, groups, initialFilterSegCodes])
 
   // search → auto-expand
   const effectiveCollapsedKeys = searchQuery.trim() ? new Set<string>() : collapsedKeys
@@ -382,9 +378,9 @@ export default function MonthlyPickupAccountModal({
             </p>
           ) : (
             <div className="px-6 py-4">
-              <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+              <table className="w-full text-xs" style={{ borderCollapse: 'collapse', position: 'relative', zIndex: 1 }}>
                 {/* 헤더 2단 */}
-                <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                   <tr>
                     <th style={{ ...thBase, textAlign: 'left', borderRight: BORDER }} rowSpan={2}>Account</th>
                     {visiblePageMonths.map((mk, idx) => (
