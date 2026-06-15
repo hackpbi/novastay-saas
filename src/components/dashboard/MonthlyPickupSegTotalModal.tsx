@@ -31,27 +31,27 @@ function formatYYYYMM(key: string): string {
   return key.replace('-', '.')
 }
 
-function Dash() {
-  return <span style={{ color: 'var(--brand-dimmed)' }}>—</span>
+function Dash({ color }: { color?: string }) {
+  return <span style={{ color: color ?? 'var(--brand-dimmed)' }}>—</span>
 }
 
-function FmtPickupNights({ n }: { n: number }) {
-  if (n === 0) return <Dash />
+function FmtPickupNights({ n, fontColor }: { n: number; fontColor?: string }) {
+  if (n === 0) return <Dash color={fontColor} />
   const sign  = n > 0 ? '+' : ''
   const color = n > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{n.toLocaleString('ko-KR')}</span>
 }
 
-function FmtPickupAdr({ n }: { n: number }) {
-  if (Math.abs(n) < 500) return <Dash />
+function FmtPickupAdr({ n, fontColor }: { n: number; fontColor?: string }) {
+  if (Math.abs(n) < 500) return <Dash color={fontColor} />
   const k     = Math.round(n / 1000)
   const sign  = k > 0 ? '+' : ''
   const color = k > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{k}k</span>
 }
 
-function FmtPickupRevenue({ n }: { n: number }) {
-  if (Math.abs(n) < 50_000) return <Dash />
+function FmtPickupRevenue({ n, fontColor }: { n: number; fontColor?: string }) {
+  if (Math.abs(n) < 50_000) return <Dash color={fontColor} />
   const m     = (n / 1_000_000).toFixed(1)
   const sign  = n > 0 ? '+' : ''
   const color = n > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
@@ -87,24 +87,24 @@ function Skeleton() {
 
 // ─── Month cell group (전체 합계용) ───────────────────────────────────────────────
 
-function TotalCells({ cell, clickable, onClick, dimmed }: {
+function TotalCells({ cell, clickable, onClick, fontColor }: {
   cell:      MonthlyPickupCell
   clickable: boolean
   onClick?:  () => void
-  dimmed?:   boolean
+  fontColor?: string
 }) {
   const cursor = clickable ? 'pointer' : 'default'
-  const td: React.CSSProperties = { ...tdBase, textAlign: 'right', cursor, opacity: dimmed ? 0.5 : 1 }
+  const td: React.CSSProperties = { ...tdBase, textAlign: 'right', cursor }
   return (
     <>
       <td className="font-mono" style={{ ...td, borderLeft: BORDER, borderRight: BORDER }} onClick={onClick}>
-        <FmtPickupNights n={cell.pickupNights} />
+        <FmtPickupNights n={cell.pickupNights} fontColor={fontColor} />
       </td>
       <td className="font-mono" style={{ ...td, borderRight: BORDER }} onClick={onClick}>
-        <FmtPickupAdr n={cell.pickupAdr} />
+        <FmtPickupAdr n={cell.pickupAdr} fontColor={fontColor} />
       </td>
       <td className="font-mono" style={{ ...td, borderRight: BORDER }} onClick={onClick}>
-        <FmtPickupRevenue n={cell.pickupRevenue} />
+        <FmtPickupRevenue n={cell.pickupRevenue} fontColor={fontColor} />
       </td>
     </>
   )
@@ -239,8 +239,7 @@ export default function MonthlyPickupSegTotalModal({
                         style={{
                           borderBottom: BORDER,
                           background: rowBg,
-                          // 소분류(indent) 글자는 흐리게 — 데이터 셀은 Fmt* 내부 color 사용이라 영향 없음
-                          color: row.indent ? (isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.45)') : rowColor,
+                          color: rowColor,   // schema 폰트 색상(레벨별 밝기 반영) — 이름·Dash 모두 적용
                           fontWeight: row.isBold ? 600 : 400,
                         }}
                         onMouseEnter={e => {
@@ -256,7 +255,7 @@ export default function MonthlyPickupSegTotalModal({
                         <TotalCells
                           cell={row.totalPickup}
                           clickable={clickable}
-                          dimmed={!!row.indent}
+                          fontColor={isDark ? row.fontDarkColor ?? undefined : row.fontLightColor ?? undefined}
                           onClick={clickable ? () => onPickupCellClick!(row.segmentationCodes, null, `${row.name} · 전체`) : undefined}
                         />
                       </tr>
