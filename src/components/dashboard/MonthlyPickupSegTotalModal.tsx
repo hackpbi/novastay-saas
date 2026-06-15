@@ -20,7 +20,7 @@ const thBase: React.CSSProperties = {
   padding: '6px 10px', background: 'var(--color-bg-elevated)', whiteSpace: 'nowrap',
 }
 const tdBase: React.CSSProperties = {
-  padding: '6px 10px', verticalAlign: 'middle',
+  padding: '0px 10px', height: 36, verticalAlign: 'middle',
 }
 const BORDER = '1px solid var(--divider-color)'
 const DOUBLE = '3px double rgba(255, 255, 255, 0.25)'
@@ -265,14 +265,14 @@ export default function MonthlyPickupSegTotalModal({
                   {/* OCC */}
                   <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: DOUBLE }}>OCC</td>
-                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER, borderRight: BORDER }}>
+                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '0px 10px', height: 36, verticalAlign: 'middle', fontWeight: 600, borderLeft: BORDER, borderRight: BORDER }}>
                       <FmtOcc n={summary.grandTotal.occ} />
                     </td>
                   </tr>
                   {/* RevPAR */}
                   <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: DOUBLE }}>RevPAR</td>
-                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER, borderRight: BORDER }}>
+                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '0px 10px', height: 36, verticalAlign: 'middle', fontWeight: 600, borderLeft: BORDER, borderRight: BORDER }}>
                       <FmtRevpar n={summary.grandTotal.revpar} />
                     </td>
                   </tr>
