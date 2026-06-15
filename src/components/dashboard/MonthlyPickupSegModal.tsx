@@ -13,6 +13,9 @@ import {
   type MonthlyPickupSegRow,
   type MonthlyPickupCell,
 } from '@/utils/monthlyPickupSegTable'
+import {
+  FmtPickupNights, FmtPickupAdr, FmtPickupRevenue, FmtOcc, FmtRevpar, formatYYYYMM,
+} from '@/utils/pickupFormatters'
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -28,54 +31,6 @@ const tdBase: React.CSSProperties = {
 }
 const BORDER = '1px solid var(--divider-color)'
 const DOUBLE = '3px double rgba(255, 255, 255, 0.25)'
-
-// ─── Format helpers ────────────────────────────────────────────────────────────
-
-function formatYYYYMM(key: string): string {
-  return key.replace('-', '.')
-}
-
-function Dash() {
-  return <span style={{ color: 'var(--brand-dimmed)' }}>—</span>
-}
-
-function FmtPickupNights({ n }: { n: number }) {
-  if (n === 0) return <Dash />
-  const sign  = n > 0 ? '+' : ''
-  const color = n > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
-  return <span style={{ color }}>{sign}{n.toLocaleString('ko-KR')}</span>
-}
-
-function FmtPickupAdr({ n }: { n: number }) {
-  if (Math.abs(n) < 500) return <Dash />
-  const k     = Math.round(n / 1000)
-  const sign  = k > 0 ? '+' : ''
-  const color = k > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
-  return <span style={{ color }}>{sign}{k}k</span>
-}
-
-function FmtPickupRevenue({ n }: { n: number }) {
-  if (Math.abs(n) < 50_000) return <Dash />
-  const m     = (n / 1_000_000).toFixed(1)
-  const sign  = n > 0 ? '+' : ''
-  const color = n > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
-  return <span style={{ color }}>{sign}{m}M</span>
-}
-
-function FmtOcc({ n }: { n: number }) {
-  if (Math.abs(n) < 0.1) return <Dash />
-  const sign  = n > 0 ? '+' : ''
-  const color = n > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
-  return <span style={{ color }}>{sign}{n.toFixed(1)}%</span>
-}
-
-function FmtRevpar({ n }: { n: number }) {
-  if (Math.abs(n) < 500) return <Dash />
-  const k     = Math.round(n / 1000)
-  const sign  = k > 0 ? '+' : ''
-  const color = k > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
-  return <span style={{ color }}>{sign}{k}k</span>
-}
 
 // ─── Skeleton ──────────────────────────────────────────────────────────────────
 
