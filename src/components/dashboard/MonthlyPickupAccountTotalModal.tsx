@@ -17,13 +17,12 @@ import type { MonthlyPickupCell } from '@/utils/monthlyPickupSegTable'
 const thBase: React.CSSProperties = {
   fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
   letterSpacing: '0.07em', color: 'var(--color-text-secondary)',
-  padding: '6px 10px', background: 'var(--color-bg-elevated)', whiteSpace: 'nowrap',
+  padding: '6px 10px', background: '#0a0a0a', whiteSpace: 'nowrap',
 }
 const tdBase: React.CSSProperties = {
   padding: '6px 10px', verticalAlign: 'middle',
 }
 const BORDER = '1px solid var(--divider-color)'
-const DOUBLE = '3px double rgba(255, 255, 255, 0.25)'
 
 // ─── Format helpers ────────────────────────────────────────────────────────────
 
@@ -242,7 +241,7 @@ export default function MonthlyPickupAccountTotalModal({
 
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col"
-        style={{ width: 520, maxWidth: '92vw', maxHeight: '88vh', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
+        style={{ width: 520, maxWidth: '92vw', maxHeight: '88vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
         <div className="px-6 pt-1 pb-1 shrink-0" style={{ borderBottom: BORDER }}>
@@ -296,7 +295,7 @@ export default function MonthlyPickupAccountTotalModal({
                 {/* 헤더 2단 */}
                 <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                   <tr>
-                    <th style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE, borderBottom: BORDER }}>Account</th>
+                    <th style={{ ...thBase, textAlign: 'left', borderRight: BORDER, borderBottom: BORDER }}>Account</th>
                     <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>ΔR-N</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>
                     <th style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>ΔREV</th>
@@ -315,9 +314,9 @@ export default function MonthlyPickupAccountTotalModal({
                           key={`hdr-${group.key}`}
                           onClick={() => toggleCollapse(group.key)}
                           className="cursor-pointer"
-                          style={{ borderTop: BORDER, background: 'var(--color-bg-elevated)' }}
-                          onMouseEnter={e => e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), var(--color-bg-elevated)`}
-                          onMouseLeave={e => e.currentTarget.style.background = 'var(--color-bg-elevated)'}
+                          style={{ borderTop: BORDER, background: '#111111' }}
+                          onMouseEnter={e => e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), #111111`}
+                          onMouseLeave={e => e.currentTarget.style.background = '#111111'}
                         >
                           <td style={{ ...tdBase, paddingLeft: 12 }}>
                             <div className="flex items-center gap-2">
@@ -356,8 +355,8 @@ export default function MonthlyPickupAccountTotalModal({
 
                 <tfoot>
                   {/* 합계 */}
-                  <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: 'var(--color-bg-secondary)' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: DOUBLE }}>
+                  <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: '#111111' }}>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: BORDER }}>
                       합계 (HOU 제외)
                       {isFilterMode && !filterCleared && (
                         <span style={{ fontSize: 10, color: 'var(--brand-dimmed)', marginLeft: 4 }}>※ 전체 기준</span>
@@ -366,15 +365,15 @@ export default function MonthlyPickupAccountTotalModal({
                     <TotalCells cell={summary.grandTotal} />
                   </tr>
                   {/* OCC */}
-                  <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: DOUBLE }}>OCC</td>
+                  <tr style={{ borderTop: BORDER, background: '#111111' }}>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER }}>OCC</td>
                     <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER }}>
                       <FmtOcc n={summary.grandTotal.occ} />
                     </td>
                   </tr>
                   {/* RevPAR */}
-                  <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: DOUBLE }}>RevPAR</td>
+                  <tr style={{ borderTop: BORDER, background: '#111111' }}>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER }}>RevPAR</td>
                     <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER }}>
                       <FmtRevpar n={summary.grandTotal.revpar} />
                     </td>
