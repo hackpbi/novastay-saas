@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { X, ChevronDown, ChevronRight, Search } from 'lucide-react'
+import { X, ChevronDown, ChevronRight } from 'lucide-react'
 import { useDateContext } from '@/contexts/DateContext'
 import DatePicker from '@/components/DatePicker'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
@@ -245,47 +245,19 @@ export default function MonthlyPickupAccountTotalModal({
         style={{ width: 520, maxWidth: '92vw', maxHeight: '88vh', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
-        <div className="flex items-start justify-between gap-3 px-6 py-4 shrink-0" style={{ borderBottom: BORDER }}>
-          {/* Left */}
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="min-w-0">
-              <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-                월별 픽업 추이 — Account · 합계
-              </h2>
-
-              {/* OTB / vsOTB picker */}
-              <div className="flex items-center gap-2 mt-1.5">
-                <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} accent availableDates={otbDates} />
-                <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>vs</span>
-                <DatePicker label="vs OTB" value={vsOtbDate} onChange={setVsOtbDate} availableDates={otbDates.filter(d => d < otbDate)} />
-                <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>
-                  {days > 0 ? `${days}일간` : '당일'} 픽업 현황
+        <div className="px-6 pt-1 pb-1 shrink-0" style={{ borderBottom: BORDER }}>
+          {/* 1줄: 제목 + 닫기(Seg 복귀) */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-baseline gap-2">
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                6개월 픽업
+              </span>
+              {startLabel && endLabel && (
+                <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>
+                  ({startLabel} ~ {endLabel})
                 </span>
-              </div>
+              )}
             </div>
-          </div>
-
-          {/* Right controls */}
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Search */}
-            <div className="relative">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--color-text-muted)' }} />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="account 검색..."
-                autoFocus
-                className="text-xs pl-7 pr-3 py-1.5 rounded-lg focus:outline-none"
-                style={{
-                  width: 140,
-                  background: 'var(--color-bg-tertiary)',
-                  border: '1px solid var(--color-border-default)',
-                  color: 'var(--color-text-primary)',
-                }}
-              />
-            </div>
-
             <button
               onClick={() => (onBackToSeg ? onBackToSeg() : onClose())}
               className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1"
@@ -293,6 +265,14 @@ export default function MonthlyPickupAccountTotalModal({
             >
               <X size={22} />
             </button>
+          </div>
+          {/* 2줄: DatePicker */}
+          <div className="flex items-center gap-2" style={{ marginTop: 0 }}>
+            <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} accent bare availableDates={otbDates} />
+            <DatePicker label="vs OTB" value={vsOtbDate} onChange={setVsOtbDate} bare availableDates={otbDates.filter(d => d < otbDate)} />
+            <span style={{ fontSize: 11, color: 'var(--brand-dimmed)', whiteSpace: 'nowrap' }}>
+              {days > 0 ? `${days}일간` : '당일'} 픽업 현황
+            </span>
           </div>
         </div>
 
