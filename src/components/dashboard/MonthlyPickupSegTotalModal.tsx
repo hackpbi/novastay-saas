@@ -171,8 +171,8 @@ export default function MonthlyPickupSegTotalModal({
       />
 
       <div
-        className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-lg"
-        style={{ maxHeight: '88vh', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
+        className="relative rounded-2xl overflow-hidden flex flex-col"
+        style={{ width: 598, maxWidth: '92vw', maxHeight: '79vh', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-4 shrink-0" style={{ borderBottom: `1px solid ${BORDER.split(' ').pop()}` }}>
