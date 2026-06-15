@@ -189,35 +189,35 @@ export default function MonthlyPickupSegTotalModal({
                 </span>
               )}
             </div>
-            <div className="flex flex-col items-end gap-2">
-              <button
-                onClick={onClose}
-                className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1"
-                aria-label="닫기"
-              >
-                <X size={22} />
-              </button>
-              {/* 월별/합계 토글 (현재 합계) */}
-              <div className="flex rounded-md overflow-hidden" style={{ border: '1px solid var(--color-border-default)', background: 'var(--color-bg-elevated)' }}>
-                <button
-                  onClick={() => onSwitchToMonthly?.()}
-                  className="px-2.5 py-1 text-xs transition-colors"
-                  style={{ background: 'transparent', color: 'var(--color-text-secondary)' }}
-                >월별</button>
-                <button
-                  className="px-2.5 py-1 text-xs transition-colors"
-                  style={{ background: 'var(--color-accent-primary)', color: '#0A0A0A' }}
-                >합계</button>
-              </div>
-            </div>
+            <button
+              onClick={onClose}
+              className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1"
+              aria-label="닫기"
+            >
+              <X size={22} />
+            </button>
           </div>
-          {/* 2줄: DatePicker */}
-          <div className="flex items-center gap-2" style={{ marginTop: 0 }}>
-            <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} accent bare availableDates={otbDates} />
-            <DatePicker label="vs OTB" value={vsOtbDate} onChange={setVsOtbDate} bare availableDates={otbDates.filter(d => d < otbDate)} />
-            <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>
-              {days > 0 ? `${days}일간` : '당일'} 픽업 현황
-            </span>
+          {/* 2줄: DatePicker(좌) + 월별/합계 토글(우) */}
+          <div className="flex items-center justify-between mt-1">
+            <div className="flex items-center gap-2">
+              <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} accent bare availableDates={otbDates} />
+              <DatePicker label="vs OTB" value={vsOtbDate} onChange={setVsOtbDate} bare availableDates={otbDates.filter(d => d < otbDate)} />
+              <span style={{ fontSize: 11, color: 'var(--brand-dimmed)', whiteSpace: 'nowrap' }}>
+                {days > 0 ? `${days}일간` : '당일'} 픽업 현황
+              </span>
+            </div>
+            {/* 월별/합계 토글 (현재 합계) */}
+            <div className="flex rounded-md overflow-hidden self-stretch" style={{ border: '1px solid var(--color-border-default)', background: 'var(--color-bg-elevated)' }}>
+              <button
+                onClick={() => onSwitchToMonthly?.()}
+                className="px-2.5 text-xs transition-colors"
+                style={{ background: 'transparent', color: 'var(--color-text-secondary)' }}
+              >월별</button>
+              <button
+                className="px-2.5 text-xs transition-colors"
+                style={{ background: 'var(--color-accent-primary)', color: '#0A0A0A' }}
+              >합계</button>
+            </div>
           </div>
         </div>
 
