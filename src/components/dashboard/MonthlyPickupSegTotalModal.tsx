@@ -31,45 +31,46 @@ function formatYYYYMM(key: string): string {
   return key.replace('-', '.')
 }
 
-function Dash({ color }: { color?: string }) {
-  return <span style={{ color: color ?? 'var(--brand-dimmed)' }}>—</span>
+function Dash({ fontColor }: { fontColor?: string }) {
+  return <span style={{ color: fontColor ?? 'var(--brand-dimmed)' }}>—</span>
 }
 
+// 양수 → schema 폰트색(fontColor, 없으면 text-primary), 음수 → red, 0/Dash → schema 폰트색
 function FmtPickupNights({ n, fontColor }: { n: number; fontColor?: string }) {
-  if (n === 0) return <Dash color={fontColor} />
+  if (n === 0) return <Dash fontColor={fontColor} />
   const sign  = n > 0 ? '+' : ''
-  const color = n > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
+  const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{n.toLocaleString('ko-KR')}</span>
 }
 
 function FmtPickupAdr({ n, fontColor }: { n: number; fontColor?: string }) {
-  if (Math.abs(n) < 500) return <Dash color={fontColor} />
+  if (Math.abs(n) < 500) return <Dash fontColor={fontColor} />
   const k     = Math.round(n / 1000)
   const sign  = k > 0 ? '+' : ''
-  const color = k > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
+  const color = k > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{k}k</span>
 }
 
 function FmtPickupRevenue({ n, fontColor }: { n: number; fontColor?: string }) {
-  if (Math.abs(n) < 50_000) return <Dash color={fontColor} />
+  if (Math.abs(n) < 50_000) return <Dash fontColor={fontColor} />
   const m     = (n / 1_000_000).toFixed(1)
   const sign  = n > 0 ? '+' : ''
-  const color = n > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
+  const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{m}M</span>
 }
 
-function FmtOcc({ n }: { n: number }) {
-  if (Math.abs(n) < 0.1) return <Dash />
+function FmtOcc({ n, fontColor }: { n: number; fontColor?: string }) {
+  if (Math.abs(n) < 0.1) return <Dash fontColor={fontColor} />
   const sign  = n > 0 ? '+' : ''
-  const color = n > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
+  const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{n.toFixed(1)}%</span>
 }
 
-function FmtRevpar({ n }: { n: number }) {
-  if (Math.abs(n) < 500) return <Dash />
+function FmtRevpar({ n, fontColor }: { n: number; fontColor?: string }) {
+  if (Math.abs(n) < 500) return <Dash fontColor={fontColor} />
   const k     = Math.round(n / 1000)
   const sign  = k > 0 ? '+' : ''
-  const color = k > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
+  const color = k > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{k}k</span>
 }
 
