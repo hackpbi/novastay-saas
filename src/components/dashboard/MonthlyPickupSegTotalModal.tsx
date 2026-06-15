@@ -24,7 +24,6 @@ const tdBase: React.CSSProperties = {
   padding: '0px 10px', height: 30, verticalAlign: 'middle',
 }
 const BORDER = '1px solid var(--divider-color)'
-const DOUBLE = '3px double rgba(255, 255, 255, 0.25)'
 
 // ─── Format helpers ────────────────────────────────────────────────────────────
 
@@ -88,13 +87,14 @@ function Skeleton() {
 
 // ─── Month cell group (전체 합계용) ───────────────────────────────────────────────
 
-function TotalCells({ cell, clickable, onClick }: {
+function TotalCells({ cell, clickable, onClick, dimmed }: {
   cell:      MonthlyPickupCell
   clickable: boolean
   onClick?:  () => void
+  dimmed?:   boolean
 }) {
   const cursor = clickable ? 'pointer' : 'default'
-  const td: React.CSSProperties = { ...tdBase, textAlign: 'right', cursor }
+  const td: React.CSSProperties = { ...tdBase, textAlign: 'right', cursor, opacity: dimmed ? 0.5 : 1 }
   return (
     <>
       <td className="font-mono" style={{ ...td, borderLeft: BORDER, borderRight: BORDER }} onClick={onClick}>
@@ -219,7 +219,7 @@ export default function MonthlyPickupSegTotalModal({
                 {/* 헤더 2단 */}
                 <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                   <tr>
-                    <th style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE, borderBottom: BORDER }}>Segmentation</th>
+                    <th style={{ ...thBase, textAlign: 'left', borderRight: BORDER, borderBottom: BORDER }}>Segmentation</th>
                     <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderRight: BORDER, borderBottom: BORDER }}>ΔR-N</th>
                     <th style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>ΔADR</th>
                     <th style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>ΔREV</th>
@@ -248,7 +248,7 @@ export default function MonthlyPickupSegTotalModal({
                         }}
                         onMouseLeave={e => { e.currentTarget.style.background = rowBg }}
                       >
-                        <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: DOUBLE }}>
+                        <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: BORDER }}>
                           {row.indent ? (
                             <><span style={{ color: 'var(--brand-dimmed)' }}>└ </span>{row.name}</>
                           ) : row.name}
@@ -256,6 +256,7 @@ export default function MonthlyPickupSegTotalModal({
                         <TotalCells
                           cell={row.totalPickup}
                           clickable={clickable}
+                          dimmed={!!row.indent}
                           onClick={clickable ? () => onPickupCellClick!(row.segmentationCodes, null, `${row.name} · 전체`) : undefined}
                         />
                       </tr>
@@ -266,19 +267,19 @@ export default function MonthlyPickupSegTotalModal({
                 <tfoot>
                   {/* 합계 */}
                   <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: 'var(--color-bg-secondary)' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: DOUBLE }}>합계 (HOU 제외)</td>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: BORDER }}>합계 (HOU 제외)</td>
                     <TotalCells cell={summary.grandTotal} clickable={false} />
                   </tr>
                   {/* OCC */}
                   <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: DOUBLE }}>OCC</td>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER }}>OCC</td>
                     <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '0px 10px', height: 30, verticalAlign: 'middle', fontWeight: 600, borderLeft: BORDER, borderRight: BORDER }}>
                       <FmtOcc n={summary.grandTotal.occ} />
                     </td>
                   </tr>
                   {/* RevPAR */}
                   <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: DOUBLE }}>RevPAR</td>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER }}>RevPAR</td>
                     <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '0px 10px', height: 30, verticalAlign: 'middle', fontWeight: 600, borderLeft: BORDER, borderRight: BORDER }}>
                       <FmtRevpar n={summary.grandTotal.revpar} />
                     </td>
