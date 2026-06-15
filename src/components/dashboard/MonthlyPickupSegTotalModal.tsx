@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react'
 import { X } from 'lucide-react'
-import { useHotel } from '@/contexts/HotelContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useDateContext } from '@/contexts/DateContext'
 import DatePicker from '@/components/DatePicker'
@@ -120,7 +119,6 @@ export default function MonthlyPickupSegTotalModal({
   roomCount:          number
   onPickupCellClick?: (segCodes: string[], monthKey: string | null, label: string) => void
 }) {
-  const { currentHotel }                                  = useHotel()
   const { theme }                                         = useTheme()
   const isDark                                            = theme === 'dark'
   const { otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate } = useDateContext()
@@ -178,16 +176,18 @@ export default function MonthlyPickupSegTotalModal({
         <div className="flex items-start justify-between px-6 py-4 shrink-0" style={{ borderBottom: `1px solid ${BORDER.split(' ').pop()}` }}>
           <div>
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-              월별 픽업 추이 · 합계
+              6개월 픽업
+              {startLabel && endLabel && (
+                <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--brand-dimmed)', marginLeft: 8 }}>
+                  {startLabel} ~ {endLabel}
+                </span>
+              )}
             </h2>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--brand-dimmed)' }}>
-              {startLabel && endLabel ? `${startLabel} ~ ${endLabel} · ` : ''}{currentHotel?.hotel_name ?? ''}
-            </p>
             {/* OTB / vsOTB picker */}
             <div className="flex items-center gap-2 mt-1.5">
-              <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} accent availableDates={otbDates} />
+              <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} accent bare availableDates={otbDates} />
               <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>vs</span>
-              <DatePicker label="vs OTB" value={vsOtbDate} onChange={setVsOtbDate} availableDates={otbDates.filter(d => d < otbDate)} />
+              <DatePicker label="vs OTB" value={vsOtbDate} onChange={setVsOtbDate} bare availableDates={otbDates.filter(d => d < otbDate)} />
               <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>
                 {days > 0 ? `${days}일간` : '당일'} 픽업 현황
               </span>

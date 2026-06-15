@@ -12,6 +12,7 @@ export interface DatePickerProps {
   confirmMode?:    boolean
   onConfirm?:      (v: string) => void
   confirmLabel?:   string
+  bare?:           boolean   // 테두리/배경 제거 (텍스트만)
 }
 
 export interface FormDatePickerProps {
@@ -41,7 +42,7 @@ function buildGrid(year: number, month: number): (number | null)[] {
 
 // ─── DatePicker ────────────────────────────────────────────────────────────────
 
-export default function DatePicker({ label, value, onChange, accent = false, availableDates, confirmMode = false, onConfirm, confirmLabel = '불러오기' }: DatePickerProps) {
+export default function DatePicker({ label, value, onChange, accent = false, availableDates, confirmMode = false, onConfirm, confirmLabel = '불러오기', bare = false }: DatePickerProps) {
   const [todayStr,     setTodayStr]     = useState('')
   const [open,         setOpen]         = useState(false)
   const [pendingDate,  setPendingDate]  = useState<string | null>(null)
@@ -132,17 +133,21 @@ export default function DatePicker({ label, value, onChange, accent = false, ava
         onClick={openCalendar}
         className="flex items-center gap-1.5 pl-2.5 pr-2 py-1.5 rounded-lg cursor-pointer transition-all duration-150 whitespace-nowrap"
         style={{
-          background: open
-            ? 'var(--accent-badge-bg)'
-            : accent
+          background: bare
+            ? 'transparent'
+            : open
               ? 'var(--accent-badge-bg)'
-              : 'var(--color-bg-tertiary)',
-          border: open
-            ? '1px solid var(--color-accent-primary)'
-            : accent
-              ? '1px solid var(--accent-badge-border)'
-              : '1px solid var(--color-border-default)',
-          boxShadow: open ? '0 0 0 2px var(--color-accent-glow)' : 'none',
+              : accent
+                ? 'var(--accent-badge-bg)'
+                : 'var(--color-bg-tertiary)',
+          border: bare
+            ? 'none'
+            : open
+              ? '1px solid var(--color-accent-primary)'
+              : accent
+                ? '1px solid var(--accent-badge-border)'
+                : '1px solid var(--color-border-default)',
+          boxShadow: bare ? 'none' : open ? '0 0 0 2px var(--color-accent-glow)' : 'none',
         }}
       >
         <span
