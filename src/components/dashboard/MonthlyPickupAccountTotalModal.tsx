@@ -149,7 +149,7 @@ function Skeleton() {
 export default function MonthlyPickupAccountTotalModal({
   open, onClose, roomCount,
   initialFilterSegCodes, initialFilterLabel,
-  onBackToSeg,
+  onBackToSeg, onSwitchToMonthly,
 }: {
   open:                    boolean
   onClose:                 () => void
@@ -157,6 +157,7 @@ export default function MonthlyPickupAccountTotalModal({
   initialFilterSegCodes?:  string[]
   initialFilterLabel?:     string
   onBackToSeg?:            () => void
+  onSwitchToMonthly?:      () => void
 }) {
   const { theme }                                = useTheme()
   const isDark                                   = theme === 'dark'
@@ -274,13 +275,27 @@ export default function MonthlyPickupAccountTotalModal({
                 </span>
               )}
             </div>
-            <button
-              onClick={() => (onBackToSeg ? onBackToSeg() : onClose())}
-              className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1"
-              aria-label="Seg 합계로"
-            >
-              <X size={22} />
-            </button>
+            <div className="flex flex-col items-end gap-2">
+              <button
+                onClick={() => (onBackToSeg ? onBackToSeg() : onClose())}
+                className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1"
+                aria-label="Seg 합계로"
+              >
+                <X size={22} />
+              </button>
+              {/* 월별/합계 토글 (현재 합계) */}
+              <div className="flex rounded-md overflow-hidden" style={{ border: '1px solid var(--color-border-default)', background: 'var(--color-bg-elevated)' }}>
+                <button
+                  onClick={() => onSwitchToMonthly?.()}
+                  className="px-2.5 py-1 text-xs transition-colors"
+                  style={{ background: 'transparent', color: 'var(--color-text-secondary)' }}
+                >월별</button>
+                <button
+                  className="px-2.5 py-1 text-xs transition-colors"
+                  style={{ background: 'var(--color-accent-primary)', color: '#0A0A0A' }}
+                >합계</button>
+              </div>
+            </div>
           </div>
           {/* 2줄: DatePicker */}
           <div className="flex items-center gap-2" style={{ marginTop: 0 }}>

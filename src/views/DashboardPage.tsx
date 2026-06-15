@@ -915,6 +915,7 @@ export default function DashboardPage() {
         open={monthlyPickupSegOpen && pickupViewMode === 'total'}
         onClose={() => setMonthlyPickupSegOpen(false)}
         roomCount={roomCount}
+        onSwitchToMonthly={() => setPickupViewMode('monthly')}
         onPickupCellClick={(segCodes, monthKey, label) => {
           setMonthlyPickupSegOpen(false)
           setMonthlyPickupAccountModal({
@@ -945,6 +946,7 @@ export default function DashboardPage() {
         roomCount={roomCount}
         initialFilterSegCodes={monthlyPickupAccountModal.filterSegCodes}
         initialFilterLabel={monthlyPickupAccountModal.filterLabel}
+        onSwitchToMonthly={() => setPickupViewMode('monthly')}
         onBackToSeg={() => {
           setMonthlyPickupAccountModal({ open: false })
           setMonthlyPickupSegOpen(true)
