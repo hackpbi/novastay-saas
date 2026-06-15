@@ -241,7 +241,7 @@ export default function MonthlyPickupSegTotalModal({
                         }}
                         onMouseLeave={e => { e.currentTarget.style.background = rowBg }}
                       >
-                        <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: DOUBLE }}>
+                        <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: DOUBLE, color: row.indent ? 'var(--color-text-secondary)' : rowColor }}>
                           {row.indent ? (
                             <><span style={{ color: 'var(--brand-dimmed)' }}>└ </span>{row.name}</>
                           ) : row.name}
