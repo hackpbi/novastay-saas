@@ -355,17 +355,17 @@ export default function MonthlyPickupAccountTotalModal({
                           onMouseEnter={e => e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${groupBg}`}
                           onMouseLeave={e => e.currentTarget.style.background = groupBg}
                         >
-                          <td style={{ ...tdBase, paddingLeft: 12 }}>
+                          <td style={{ ...tdBase, paddingLeft: 12, color: '#ffffff', fontWeight: 600 }}>
                             <div className="flex items-center gap-2">
                               {collapsed
-                                ? <ChevronRight size={13} style={{ color: groupFont, flexShrink: 0 }} />
-                                : <ChevronDown  size={13} style={{ color: groupFont, flexShrink: 0 }} />
+                                ? <ChevronRight size={13} style={{ color: '#ffffff', flexShrink: 0 }} />
+                                : <ChevronDown  size={13} style={{ color: '#ffffff', flexShrink: 0 }} />
                               }
-                              <span style={{ fontWeight: 600, color: groupFont }}>{label}</span>
-                              <span style={{ fontSize: 11, color: groupFont, opacity: 0.6 }}>({group.rows.length}개)</span>
+                              <span style={{ fontWeight: 600, color: '#ffffff' }}>{label}</span>
+                              <span style={{ fontSize: 11, color: '#ffffff', opacity: 0.6 }}>({group.rows.length}개)</span>
                             </div>
                           </td>
-                          <TotalCells cell={group.totalPickup} fontColor={groupFont} />
+                          <TotalCells cell={group.totalPickup} fontColor="#ffffff" />
                         </tr>
 
                         {/* Account 행들 */}

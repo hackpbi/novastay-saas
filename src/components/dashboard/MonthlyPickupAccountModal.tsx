@@ -426,7 +426,7 @@ export default function MonthlyPickupAccountModal({
                             </div>
                           </td>
                           {visiblePageMonths.map(mk => (
-                            <MonthCells key={mk} cell={group.monthlyTotals[mk] ?? ZERO_CELL} isLast={visiblePageMonths.indexOf(mk) === visiblePageMonths.length - 1} fontColor={groupFont} />
+                            <MonthCells key={mk} cell={group.monthlyTotals[mk] ?? ZERO_CELL} isLast={visiblePageMonths.indexOf(mk) === visiblePageMonths.length - 1} fontColor="#ffffff" />
                           ))}
                         </tr>
 
