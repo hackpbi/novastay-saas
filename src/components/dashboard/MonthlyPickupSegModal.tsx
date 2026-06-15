@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { X, ChevronLeft, ChevronRight } from 'lucide-react'
-import { useHotel } from '@/contexts/HotelContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useDateContext } from '@/contexts/DateContext'
 import DatePicker from '@/components/DatePicker'
@@ -13,9 +12,7 @@ import {
   type MonthlyPickupSegRow,
   type MonthlyPickupCell,
 } from '@/utils/monthlyPickupSegTable'
-import {
-  FmtPickupNights, FmtPickupAdr, FmtPickupRevenue, FmtOcc, FmtRevpar, formatYYYYMM,
-} from '@/utils/pickupFormatters'
+import { formatYYYYMM } from '@/utils/pickupFormatters'
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -24,13 +21,51 @@ const PAGE_SIZE = 3
 const thBase: React.CSSProperties = {
   fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
   letterSpacing: '0.07em', color: 'var(--color-text-secondary)',
-  padding: '6px 10px', background: 'var(--color-bg-elevated)', whiteSpace: 'nowrap',
+  padding: '6px 10px', background: '#0a0a0a', whiteSpace: 'nowrap',
 }
 const tdBase: React.CSSProperties = {
   padding: '6px 10px', verticalAlign: 'middle',
 }
 const BORDER = '1px solid var(--divider-color)'
-const DOUBLE = '3px double rgba(255, 255, 255, 0.25)'
+
+// ─── Format helpers (fontColor: 양수 schema 폰트색 / 음수 red / Dash 폰트색) ──────────
+
+function Dash({ fontColor }: { fontColor?: string }) {
+  return <span style={{ color: fontColor ?? 'var(--brand-dimmed)' }}>—</span>
+}
+function FmtPickupNights({ n, fontColor }: { n: number; fontColor?: string }) {
+  if (n === 0) return <Dash fontColor={fontColor} />
+  const sign  = n > 0 ? '+' : ''
+  const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
+  return <span style={{ color }}>{sign}{n.toLocaleString('ko-KR')}</span>
+}
+function FmtPickupAdr({ n, fontColor }: { n: number; fontColor?: string }) {
+  if (Math.abs(n) < 500) return <Dash fontColor={fontColor} />
+  const k     = Math.round(n / 1000)
+  const sign  = k > 0 ? '+' : ''
+  const color = k > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
+  return <span style={{ color }}>{sign}{k}k</span>
+}
+function FmtPickupRevenue({ n, fontColor }: { n: number; fontColor?: string }) {
+  if (Math.abs(n) < 50_000) return <Dash fontColor={fontColor} />
+  const m     = (n / 1_000_000).toFixed(1)
+  const sign  = n > 0 ? '+' : ''
+  const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
+  return <span style={{ color }}>{sign}{m}M</span>
+}
+function FmtOcc({ n }: { n: number }) {
+  if (Math.abs(n) < 0.1) return <Dash />
+  const sign  = n > 0 ? '+' : ''
+  const color = n > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
+  return <span style={{ color }}>{sign}{n.toFixed(1)}%</span>
+}
+function FmtRevpar({ n }: { n: number }) {
+  if (Math.abs(n) < 500) return <Dash />
+  const k     = Math.round(n / 1000)
+  const sign  = k > 0 ? '+' : ''
+  const color = k > 0 ? 'var(--color-positive)' : 'var(--color-negative)'
+  return <span style={{ color }}>{sign}{k}k</span>
+}
 
 // ─── Skeleton ──────────────────────────────────────────────────────────────────
 
@@ -46,24 +81,25 @@ function Skeleton({ cols }: { cols: number }) {
 
 // ─── Month cell group ──────────────────────────────────────────────────────────
 
-function MonthCells({ cell, clickable, onClick, isLast }: {
+function MonthCells({ cell, clickable, onClick, fontColor }: {
   cell:      MonthlyPickupCell
   clickable: boolean
   onClick?:  () => void
   isLast?:   boolean
+  fontColor?: string
 }) {
   const cursor = clickable ? 'pointer' : 'default'
   const td: React.CSSProperties = { ...tdBase, textAlign: 'right', cursor }
   return (
     <>
-      <td className="font-mono" style={{ ...td, borderLeft: BORDER }} onClick={onClick}>
-        <FmtPickupNights n={cell.pickupNights} />
+      <td className="font-mono" style={{ ...td, borderLeft: BORDER, borderRight: BORDER }} onClick={onClick}>
+        <FmtPickupNights n={cell.pickupNights} fontColor={fontColor} />
       </td>
-      <td className="font-mono" style={td} onClick={onClick}>
-        <FmtPickupAdr n={cell.pickupAdr} />
+      <td className="font-mono" style={{ ...td, borderRight: BORDER }} onClick={onClick}>
+        <FmtPickupAdr n={cell.pickupAdr} fontColor={fontColor} />
       </td>
-      <td className="font-mono" style={{ ...td, borderRight: isLast ? undefined : DOUBLE }} onClick={onClick}>
-        <FmtPickupRevenue n={cell.pickupRevenue} />
+      <td className="font-mono" style={{ ...td, borderRight: BORDER }} onClick={onClick}>
+        <FmtPickupRevenue n={cell.pickupRevenue} fontColor={fontColor} />
       </td>
     </>
   )
@@ -72,14 +108,14 @@ function MonthCells({ cell, clickable, onClick, isLast }: {
 // ─── Modal ─────────────────────────────────────────────────────────────────────
 
 export default function MonthlyPickupSegModal({
-  open, onClose, roomCount, onPickupCellClick,
+  open, onClose, roomCount, onPickupCellClick, onSwitchToTotal,
 }: {
   open:               boolean
   onClose:            () => void
   roomCount:          number
   onPickupCellClick?: (segCodes: string[], monthKey: string | null, label: string) => void
+  onSwitchToTotal?:   () => void
 }) {
-  const { currentHotel }                                  = useHotel()
   const { theme }                                         = useTheme()
   const isDark                                            = theme === 'dark'
   const { otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate } = useDateContext()
@@ -141,65 +177,80 @@ export default function MonthlyPickupSegModal({
 
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-5xl"
-        style={{ maxHeight: '88vh', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
+        style={{ maxHeight: '88vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
-        <div className="flex items-start justify-between px-6 py-4 shrink-0" style={{ borderBottom: `1px solid ${BORDER.split(' ').pop()}` }}>
-          <div>
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-              월별 픽업 추이
-            </h2>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--brand-dimmed)' }}>
-              {startLabel && endLabel ? `${startLabel} ~ ${endLabel} · ` : ''}{currentHotel?.hotel_name ?? ''}
-            </p>
-            {/* OTB / vsOTB picker */}
-            <div className="flex items-center gap-2 mt-1.5">
-              <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} accent availableDates={otbDates} />
-              <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>vs</span>
-              <DatePicker label="vs OTB" value={vsOtbDate} onChange={setVsOtbDate} availableDates={otbDates.filter(d => d < otbDate)} />
-              <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>
+        <div className="px-6 pt-1 pb-1 shrink-0" style={{ borderBottom: `1px solid ${BORDER.split(' ').pop()}` }}>
+          {/* 1줄: 제목 + 페이지네이션 + X */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-baseline gap-2">
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                6개월 픽업
+              </span>
+              {startLabel && endLabel && (
+                <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>
+                  ({startLabel} ~ {endLabel})
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {totalPages > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <button
+                    onClick={() => setPageIndex(i => Math.max(0, i - 1))}
+                    disabled={pageIndex === 0}
+                    className="px-1.5 py-1 rounded transition-colors disabled:opacity-30"
+                    style={{ color: 'var(--color-text-secondary)' }}
+                    onMouseEnter={e => { if (pageIndex > 0) (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-accent-primary)' }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-text-secondary)' }}
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  <span className="text-xs" style={{ color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+                    {pageIndex + 1}/{totalPages}
+                  </span>
+                  <button
+                    onClick={() => setPageIndex(i => Math.min(totalPages - 1, i + 1))}
+                    disabled={pageIndex === totalPages - 1}
+                    className="px-1.5 py-1 rounded transition-colors disabled:opacity-30"
+                    style={{ color: 'var(--color-text-secondary)' }}
+                    onMouseEnter={e => { if (pageIndex < totalPages - 1) (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-accent-primary)' }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-text-secondary)' }}
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              )}
+              <button
+                onClick={onClose}
+                className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1"
+                aria-label="닫기"
+              >
+                <X size={22} />
+              </button>
+            </div>
+          </div>
+          {/* 2줄: DatePicker(좌) + 월별/합계 토글(우) */}
+          <div className="flex items-center justify-between mt-1">
+            <div className="flex items-center gap-2">
+              <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} accent bare availableDates={otbDates} />
+              <DatePicker label="vs OTB" value={vsOtbDate} onChange={setVsOtbDate} bare availableDates={otbDates.filter(d => d < otbDate)} />
+              <span style={{ fontSize: 11, color: 'var(--brand-dimmed)', whiteSpace: 'nowrap' }}>
                 {days > 0 ? `${days}일간` : '당일'} 픽업 현황
               </span>
             </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <button
-                  onClick={() => setPageIndex(i => Math.max(0, i - 1))}
-                  disabled={pageIndex === 0}
-                  className="px-1.5 py-1 rounded transition-colors disabled:opacity-30"
-                  style={{ color: 'var(--color-text-secondary)' }}
-                  onMouseEnter={e => { if (pageIndex > 0) (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-accent-primary)' }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-text-secondary)' }}
-                >
-                  <ChevronLeft size={14} />
-                </button>
-                <span className="text-xs" style={{ color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
-                  {pageIndex + 1}/{totalPages}
-                </span>
-                <button
-                  onClick={() => setPageIndex(i => Math.min(totalPages - 1, i + 1))}
-                  disabled={pageIndex === totalPages - 1}
-                  className="px-1.5 py-1 rounded transition-colors disabled:opacity-30"
-                  style={{ color: 'var(--color-text-secondary)' }}
-                  onMouseEnter={e => { if (pageIndex < totalPages - 1) (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-accent-primary)' }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-text-secondary)' }}
-                >
-                  <ChevronRight size={14} />
-                </button>
-              </div>
-            )}
-
-            <button
-              onClick={onClose}
-              className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1"
-              aria-label="닫기"
-            >
-              <X size={22} />
-            </button>
+            {/* 월별/합계 토글 (현재 월별) */}
+            <div className="flex rounded-md overflow-hidden self-stretch" style={{ border: '1px solid var(--color-border-default)', background: 'var(--color-bg-elevated)' }}>
+              <button
+                className="px-2.5 text-xs transition-colors"
+                style={{ background: 'var(--color-accent-primary)', color: '#0A0A0A' }}
+              >월별</button>
+              <button
+                onClick={() => onSwitchToTotal?.()}
+                className="px-2.5 text-xs transition-colors"
+                style={{ background: 'transparent', color: 'var(--color-text-secondary)' }}
+              >합계</button>
+            </div>
           </div>
         </div>
 
@@ -217,9 +268,9 @@ export default function MonthlyPickupSegModal({
                 {/* 헤더 2단 */}
                 <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                   <tr>
-                    <th style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE }} rowSpan={2}>Segmentation</th>
+                    <th style={{ ...thBase, textAlign: 'left', borderRight: BORDER }} rowSpan={2}>Segmentation</th>
                     {visibleMonths.map((mk, idx) => (
-                      <th key={mk} colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: idx < visibleMonths.length - 1 ? DOUBLE : BORDER }}>
+                      <th key={mk} colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: idx < visibleMonths.length - 1 ? BORDER : BORDER }}>
                         {formatYYYYMM(mk)}
                       </th>
                     ))}
@@ -228,17 +279,18 @@ export default function MonthlyPickupSegModal({
                     {visibleMonths.map((mk, idx) => ([
                       <th key={`${mk}-rn`}  style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>ΔR-N</th>,
                       <th key={`${mk}-adr`} style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>,
-                      <th key={`${mk}-rev`} style={{ ...thBase, textAlign: 'right', borderRight: idx < visibleMonths.length - 1 ? DOUBLE : BORDER, borderBottom: BORDER }}>ΔREV</th>,
+                      <th key={`${mk}-rev`} style={{ ...thBase, textAlign: 'right', borderRight: idx < visibleMonths.length - 1 ? BORDER : BORDER, borderBottom: BORDER }}>ΔREV</th>,
                     ]))}
                   </tr>
                 </thead>
 
                 <tbody>
                   {rows.map(row => {
-                    const rowBg    = (isDark ? row.bgDarkColor  : row.bgLightColor)  ?? 'var(--color-bg-secondary)'
+                    const rowBg    = (isDark ? row.bgDarkColor  : row.bgLightColor)  ?? '#111111'
                     const rowColor = (isDark ? row.fontDarkColor : row.fontLightColor) ?? 'var(--color-text-primary)'
                     const isHou    = houRowIds.has(row.id)
                     const clickable = !!onPickupCellClick && !isHou && row.segmentationCodes.length > 0
+                    const nameColor = row.indent ? 'rgba(255,255,255,0.45)' : rowColor
 
                     return (
                       <tr
@@ -249,9 +301,9 @@ export default function MonthlyPickupSegModal({
                         }}
                         onMouseLeave={e => { e.currentTarget.style.background = rowBg }}
                       >
-                        <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: DOUBLE }}>
+                        <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: BORDER, color: nameColor }}>
                           {row.indent ? (
-                            <><span style={{ color: 'var(--brand-dimmed)' }}>└ </span>{row.name}</>
+                            <><span style={{ color: nameColor }}>└ </span>{row.name}</>
                           ) : row.name}
                         </td>
                         {visibleMonths.map((mk, idx) => {
@@ -259,7 +311,7 @@ export default function MonthlyPickupSegModal({
                           const handleClick = clickable
                             ? () => onPickupCellClick!(row.segmentationCodes, mk, `${row.name} · ${formatYYYYMM(mk)}`)
                             : undefined
-                          return <MonthCells key={mk} cell={cell} clickable={clickable} onClick={handleClick} isLast={idx === visibleMonths.length - 1} />
+                          return <MonthCells key={mk} cell={cell} clickable={clickable} onClick={handleClick} isLast={idx === visibleMonths.length - 1} fontColor={rowColor} />
                         })}
                       </tr>
                     )
@@ -268,26 +320,26 @@ export default function MonthlyPickupSegModal({
 
                 <tfoot>
                   {/* 합계 */}
-                  <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: 'var(--color-bg-secondary)' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: DOUBLE }}>합계 (HOU 제외)</td>
+                  <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: '#111111' }}>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: BORDER }}>합계 (HOU 제외)</td>
                     {visibleMonths.map((mk, idx) => (
                       <MonthCells key={mk} cell={summary.monthlyTotals[mk] ?? { pickupNights: 0, pickupAdr: 0, pickupRevenue: 0 }} clickable={false} isLast={idx === visibleMonths.length - 1} />
                     ))}
                   </tr>
                   {/* OCC */}
-                  <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: DOUBLE }}>OCC</td>
+                  <tr style={{ borderTop: BORDER, background: '#111111' }}>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER }}>OCC</td>
                     {visibleMonths.map((mk, idx) => (
-                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER, borderRight: idx < visibleMonths.length - 1 ? DOUBLE : undefined }}>
+                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER, borderRight: BORDER }}>
                         <FmtOcc n={summary.monthlyTotals[mk]?.occ ?? 0} />
                       </td>
                     ))}
                   </tr>
                   {/* RevPAR */}
-                  <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: DOUBLE }}>RevPAR</td>
+                  <tr style={{ borderTop: BORDER, background: '#111111' }}>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER }}>RevPAR</td>
                     {visibleMonths.map((mk, idx) => (
-                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER, borderRight: idx < visibleMonths.length - 1 ? DOUBLE : undefined }}>
+                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER, borderRight: BORDER }}>
                         <FmtRevpar n={summary.monthlyTotals[mk]?.revpar ?? 0} />
                       </td>
                     ))}
