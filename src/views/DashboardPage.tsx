@@ -936,6 +936,7 @@ export default function DashboardPage() {
         initialFilterMonthKey={monthlyPickupAccountModal.filterMonthKey}
         initialFilterLabel={monthlyPickupAccountModal.filterLabel}
         initialViewMode={monthlyPickupAccountModal.initialViewMode}
+        onSwitchToTotal={() => setPickupViewMode('total')}
         onBackToSeg={() => {
           setMonthlyPickupAccountModal({ open: false })
           setMonthlyPickupSegOpen(true)
