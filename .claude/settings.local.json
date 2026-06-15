@@ -33,7 +33,23 @@
       "Bash(npm i *)",
       "Bash(grep -v \"//\\\\|font\\\\|color\\\\|text\\\\|background\\\\|border-\\\\|margin\\\\|padding:\")",
       "Bash(grep -v \"//\\\\|font\\\\|color\\\\|background\\\\|borderTop\\\\|uppercase\\\\|letter\")",
-      "Bash(grep -v \"//\\\\|font\\\\|color\\\\|background\")"
+      "Bash(grep -v \"//\\\\|font\\\\|color\\\\|background\")",
+      "Bash(grep -v \"//\\\\|selectedDates\\\\|setSelected\")",
+      "Bash(grep -n \"<th\\\\|<\\\\/th\\\\|<td\\\\|<\\\\/td\" src/views/RateStrategyPage.tsx)",
+      "Bash(grep -n \"\\\\/\\\\* 날짜\\\\|\\\\/\\\\* OCC\\\\|\\\\/\\\\* BAR\\\\|\\\\/\\\\* 체크\\\\|\\\\/\\\\* 요금\\\\|\\\\/\\\\* 메모\\\\|\\\\/\\\\* 패키지\" src/views/RateStrategyPage.tsx)",
+      "Bash(git -C \"c:/dev/18_NovaStay_Saas_ver1\" status)",
+      "Bash(git -C \"c:/dev/18_NovaStay_Saas_ver1\" diff --stat)",
+      "Bash(git -C \"c:/dev/18_NovaStay_Saas_ver1\" add src/views/RateStrategyPage.tsx)",
+      "Bash(git -C c:/dev/18_NovaStay_Saas_ver1 commit -m ' *)",
+      "Bash(git -C \"c:/dev/18_NovaStay_Saas_ver1\" push origin main)",
+      "Bash(grep -v \"console\\\\|\\\\/\\\\/\\\\|diffPct\\\\|pct =\\\\|pct :\\\\|pct,\\\\|Math\\\\|newR\\\\|rack\\\\|val\\\\|str\\\\|fmt\\\\|color\\\\|style\\\\|text\")",
+      "Bash(Select-String -Pattern \"rate-strategy\")",
+      "Bash(Select-String -Pattern \"BarRateAddModal|DayPanel\")",
+      "Bash(node -e \"console.log\\(require\\('chart.js/package.json'\\).version\\)\")",
+      "Bash(grep -nA2 \"<RateChartView\" src/views/RateStrategyPage.tsx)",
+      "Bash(grep -nE \"const barDay    = effectiveBarRateMap|const baseRateK|const fmtRate|Pencil size=|/* 기존 요금 표시|변경$|기존 요금 표시\" src/components/rate-strategy/RateCalendarView.tsx)",
+      "Bash(grep -nE \"^  return \\\\\\(|^    <>|return \\\\\\(\\\\s*$\" src/components/rate-strategy/RateCalendarView.tsx)",
+      "PowerShell(git add -A)"
     ]
   }
 }

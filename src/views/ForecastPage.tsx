@@ -19,6 +19,13 @@ import type { ForecastSchema, ForecastDayData, CalendarMap } from '@/lib/forecas
 import DatePicker from '@/components/DatePicker'
 import { supabase } from '@/lib/supabase'
 
+// 저장 시 비정상 숫자(NaN/Infinity) 방어용 안전 변환
+function safeNum(v: unknown, fallback = 0): number {
+  const n = Number(v)
+  if (!isFinite(n) || isNaN(n)) return fallback
+  return n
+}
+
 // ── Month helpers ──────────────────────────────────────────────────────────────
 
 function fmtLoadDate(dateStr: string): string {
@@ -206,8 +213,8 @@ export default function ForecastPage() {
       edits.push({
         business_date: businessDate,
         segmentation,
-        rn:  edited.rn  ?? original.rn,
-        adr: edited.adr ?? original.adr,
+        rn:  safeNum(edited.rn  ?? original.rn,  0),
+        adr: safeNum(edited.adr ?? original.adr, 0),
       })
     }
     return edits
@@ -220,8 +227,8 @@ export default function ForecastPage() {
         edits.push({
           business_date: day.business_date,
           segmentation:  code,
-          rn:            value.rn  ?? 0,
-          adr:           value.adr ?? 0,
+          rn:  safeNum(value.rn,  0),
+          adr: safeNum(value.adr, 0),
         })
       }
     }

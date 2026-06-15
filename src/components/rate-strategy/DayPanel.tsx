@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus } from 'lucide-react'
+import { Plus, Pencil, RotateCcw, Save, Copy } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { FormDatePicker } from '@/components/DatePicker'
 import { BarRateAddModal } from './BarRateAddModal'
@@ -29,6 +29,41 @@ function ExcelIcon({ size = 12 }: { size?: number }) {
       <line x1="17" y1="4"    x2="17" y2="20"    stroke="white" strokeWidth="0.5" strokeOpacity="0.7" />
     </svg>
   )
+}
+
+// 프로모션 색상 (ID 기반 고정) — RateCalendarView 와 동일
+const PROMO_COLORS = [
+  '#00B883', '#534AB7', '#BA7517', '#E24B4A',
+  '#185FA5', '#0F6E56', '#993556', '#638522',
+]
+function promoColorById(id: string): string {
+  let hash = 0
+  for (let i = 0; i < id.length; i++) hash = id.charCodeAt(i) + ((hash << 5) - hash)
+  return PROMO_COLORS[Math.abs(hash) % PROMO_COLORS.length]
+}
+// 할인 표기 (discount_type/value 기반)
+function fmtDisc(dt: string, dv: number): string {
+  return dt === 'pct'    ? `-${dv}%`
+       : dt === 'amount' ? `-${Math.round(dv / 1000)}K`
+       : dt === 'addon'  ? `+${Math.round(dv / 1000)}K`
+       : `${Math.round(dv / 1000)}K`
+}
+
+// 프로모션 라이프사이클 상태 (KST today 기준) — 투숙·판매 기간 모두 유효해야 '적용중'
+type PromoStatus = 'active' | 'ended' | 'upcoming'
+function promoStatus(raw: any, today: string): PromoStatus {
+  const saleStart = raw?.sale_start ?? null
+  const saleEnd   = raw?.sale_end ?? null
+  const stayEnd   = (!raw?.stay_end || raw.stay_end === '2000-01-01') ? null : raw.stay_end
+  if (saleStart && saleStart > today) return 'upcoming'          // 판매 시작 전
+  const stayValid = stayEnd === null || stayEnd >= today
+  const saleValid = saleEnd === null || saleEnd >= today
+  return (stayValid && saleValid) ? 'active' : 'ended'
+}
+const PROMO_BADGE: Record<PromoStatus, { label: string; color: string }> = {
+  active:   { label: '적용중', color: '#00E5A0' },
+  ended:    { label: '종료',   color: '#888' },
+  upcoming: { label: '예정',   color: '#F59E0B' },
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -81,6 +116,11 @@ interface DayPanelProps {
   onResetDates:      () => void
   isSaving:          boolean
   saveToast?:        string | null
+  onPrevMonth:          () => void
+  onNextMonth:          () => void
+  onOpenSaleDatePicker: () => void
+  saleDate:             string
+  onSaleDateChange?:    (v: string) => void
 }
 
 interface ExcelPreviewRow {
@@ -107,7 +147,10 @@ export function DayPanel({
   onToggleAddPromo, onPromoFormChange, onDeletePromo, onPromoSaved, onExcelSaved,
   hotelId, year, month, roomTypes, barRateMap,
   selectedDates, onSave, onResetDates, isSaving, saveToast,
+  onPrevMonth, onNextMonth, onOpenSaleDatePicker, saleDate, onSaleDateChange,
 }: DayPanelProps) {
+  void onOpenSaleDatePicker  // (구) 원격 트리거 — 현재는 헤더 내 로컬 FormDatePicker 사용
+  const saleDateLocalRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
 
   const { data: barRateRows = [] } = useQuery({
@@ -146,6 +189,53 @@ export function DayPanel({
     })
   }
   const [selectedRoomTypes,   setSelectedRoomTypes]   = useState<string[]>([])
+  // ── 프로모션 진행중·예정 / 지난 필터 ──
+  const promoToday = new Date().toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })  // 'YYYY-MM-DD' KST
+  const [promoFilter,    setPromoFilter]    = useState<'active' | 'past'>('active')
+  const [expandedPastId, setExpandedPastId] = useState<string | null>(null)
+  const PROMO_SELECT = 'id, name, discount_type, discount_value, room_type_codes, stay_start, stay_end, sale_start, sale_end, status'
+
+  // 진행중·예정 (status='active') — 페이지 진입 시 auto_deactivate_promotions 가 만료분을 inactive 처리.
+  // onPromoSaved 의 ['s03_rate_promotion', hotelId] 무효화가 prefix 매칭으로 함께 갱신
+  const { data: activeRows = [] } = useQuery({
+    queryKey: ['s03_rate_promotion', hotelId, 'active', promoToday],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('s03_rate_promotion')
+        .select(PROMO_SELECT)
+        .eq('hotel_id', hotelId)
+        .eq('status', 'active')
+        .order('stay_start', { ascending: true })
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: !!hotelId,
+  })
+
+  // 지난 프로모션 (status='inactive') 최근 20개 — 자동 비활성화 + 수동 비활성화 모두 포함
+  const { data: pastRows = [] } = useQuery({
+    queryKey: ['s03_rate_promotion', hotelId, 'past', promoToday],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('s03_rate_promotion')
+        .select(PROMO_SELECT)
+        .eq('hotel_id', hotelId)
+        .eq('status', 'inactive')
+        .order('stay_end', { ascending: false })
+        .limit(20)
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: !!hotelId,
+  })
+
+  const activeItems = (activeRows as any[]).map(p => ({
+    id: p.id, name: p.name, color: promoColorById(p.id), disc: fmtDisc(p.discount_type, p.discount_value), _raw: p,
+  }))
+  const pastItems = (pastRows as any[]).map(p => ({
+    id: p.id, name: p.name, color: promoColorById(p.id), disc: fmtDisc(p.discount_type, p.discount_value), _raw: p,
+  }))
+
   const [rtDropOpen,          setRtDropOpen]          = useState(false)
   const [pendingDeleteIds,    setPendingDeleteIds]    = useState<string[]>([])
   const [isChipExpanded,      setIsChipExpanded]      = useState(false)
@@ -154,6 +244,7 @@ export function DayPanel({
   const [dragOverAll,            setDragOverAll]            = useState(false)
   const [pendingFavoriteChanges, setPendingFavoriteChanges] = useState<{ id: string; is_favorite: boolean }[]>([])
   const [editingPromo,  setEditingPromo]  = useState<any | null>(null)
+  const [packages,      setPackages]      = useState<{ id: string; name: string; rate: number | null }[]>([])
   const [isSavingPromo,   setIsSavingPromo]   = useState(false)
   const [promoErr,        setPromoErr]        = useState<string | null>(null)
   const [excelPreview,    setExcelPreview]    = useState<ExcelPreviewRow[] | null>(null)
@@ -178,9 +269,6 @@ export function DayPanel({
       return stillPending.length !== prev.length ? stillPending : prev
     })
   }, [barRateRows])
-
-  const [y, , d] = day.split('-').map(Number)
-  const dow = ['일', '월', '화', '수', '목', '금', '토'][new Date(y, month - 1, d).getDay()]
 
   const handleAddRates = async (newRates: number[]) => {
     const existing = new Set(barList)
@@ -364,6 +452,28 @@ export function DayPanel({
     window.addEventListener('pointercancel', onCancel)
   }
 
+  // 입력된 패키지를 s04_rate_package 에 INSERT (프로모션 저장 성공 후 호출).
+  // 패키지 저장 실패가 프로모션 저장 성공을 막지 않도록 자체 try/catch.
+  const insertPendingPackages = async () => {
+    const validPkgs = packages.filter(p => p.name.trim())
+    if (validPkgs.length === 0) return
+    try {
+      const { error } = await (supabase as any)
+        .from('s04_rate_package')
+        .insert(validPkgs.map((p, i) => ({
+          hotel_id:    hotelId,
+          name:        p.name.trim(),
+          add_on_rate: p.rate ?? 0,
+          sort_order:  i,
+          status:      'active',
+        })))
+      if (error) throw error
+      setPackages([])
+    } catch (e) {
+      console.error('[insertPendingPackages] 패키지 저장 실패', e)
+    }
+  }
+
   const handleEditPromo = (p: MonthPromo) => {
     console.log('[editPromo] _raw:', p._raw)
     console.log('[editPromo] min_stay:', p._raw?.min_stay, typeof p._raw?.min_stay)
@@ -389,6 +499,10 @@ export function DayPanel({
       ['status',         p._raw?.status ?? 'active'],
     ] as [string, string][]).forEach(([field, val]) => onPromoFormChange(field, val))
 
+    // s04_rate_package 에 promotion_id 연결 컬럼이 없어 해당 프로모션의 패키지를
+    // 특정할 수 없으므로 pre-fill 생략(수정 모드에서도 패키지는 추가만 가능).
+    setPackages([])
+
     setEditingPromo(p)
     setPromoErr(null)
     if (!showAddPromo) onToggleAddPromo()
@@ -398,6 +512,7 @@ export function DayPanel({
     setEditingPromo(null)
     setSelectedRoomTypes([])
     setRtDropOpen(false)
+    setPackages([])
     ;([
       ['name', ''], ['description', ''], ['min_stay', ''], ['max_stay', ''],
       ['discount_type', 'pct'], ['discount_value', ''],
@@ -406,6 +521,31 @@ export function DayPanel({
       ['status', 'active'],
     ] as [string, string][]).forEach(([field, val]) => onPromoFormChange(field, val))
     if (showAddPromo) onToggleAddPromo()
+  }
+
+  // 지난 프로모션 → 새 프로모션으로 복사 (날짜는 비움, 신규 INSERT)
+  const handleCopyPromo = (raw: any) => {
+    setPromoFilter('active')
+    setEditingPromo(null)            // INSERT 경로 보장
+    setPromoErr(null)
+    setStayUnlimited(false)
+    setSaleUnlimited(false)
+    setPackages([])
+    setSelectedRoomTypes(raw.room_type_codes ?? [])
+    ;([
+      ['name',           `${raw.name ?? ''} (복사)`],
+      ['description',    ''],
+      ['min_stay',       ''],
+      ['max_stay',       ''],
+      ['discount_type',  raw.discount_type ?? 'pct'],
+      ['discount_value', raw.discount_value != null ? String(raw.discount_value) : ''],
+      ['stay_start',     ''],   // 날짜는 새로 입력
+      ['stay_end',       ''],
+      ['sale_start',     ''],
+      ['sale_end',       ''],
+      ['status',         'active'],
+    ] as [string, string][]).forEach(([field, val]) => onPromoFormChange(field, val))
+    if (!showAddPromo) onToggleAddPromo()
   }
 
   const handleSaveEditPromo = async () => {
@@ -430,6 +570,7 @@ export function DayPanel({
         })
         .eq('id', editingPromo._raw?.id)
       if (error) throw error
+      await insertPendingPackages()
       onPromoSaved()
       handleCancelPromo()
     } catch (e: any) {
@@ -463,6 +604,7 @@ export function DayPanel({
           })
           .select('id').single()
         if (error) throw error
+        await insertPendingPackages()
         setCustomRatePromoId(promo.id)
         setShowCustomRateModal(true)
         setIsSavingPromo(false)
@@ -487,6 +629,7 @@ export function DayPanel({
           room_type_codes: selectedRoomTypes.length > 0 ? selectedRoomTypes : null,
         })
       if (error) throw error
+      await insertPendingPackages()
       onPromoSaved()
       handleCancelPromo()
     } catch (e: any) {
@@ -711,18 +854,43 @@ export function DayPanel({
     <>
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
 
-      {/* 헤더 */}
+      {/* 헤더 — 월 네비 + 판매기준일 (가운데 정렬) */}
       <div style={{
-        padding:      '12px 14px',
-        borderBottom: '0.5px solid var(--color-border-default)',
-        background:   'var(--color-bg-secondary)',
-        flexShrink:   0,
+        padding:        '12px 14px',
+        borderBottom:   '0.5px solid var(--color-border-default)',
+        background:     'var(--color-bg-secondary)',
+        flexShrink:     0,
+        display:        'flex',
+        flexDirection:  'column',
+        alignItems:     'center',
+        gap:            6,
       }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)' }}>
-          {month}월 {d}일 {dow}요일
+        {/* 판매기준일 인라인 (클릭 시 바로 아래 숨긴 FormDatePicker 오픈 → 팝업이 버튼 아래에 표시) */}
+        <div
+          onClick={() => saleDateLocalRef.current?.querySelector('button')?.click()}
+          style={{
+            display:      'inline-flex',
+            alignItems:   'center',
+            gap:          5,
+            cursor:       'pointer',
+            padding:      '2px 6px',
+            borderRadius: 6,
+            border:       '0.5px solid transparent',
+            transition:   'all 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-border-default)'; e.currentTarget.style.background = 'var(--color-bg-tertiary)' }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.background = 'transparent' }}
+        >
+          <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>판매기준일</span>
+          <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-primary)' }}>
+            {saleDate?.replace(/-/g, '. ') ?? '날짜 선택'}
+          </span>
+          <Pencil size={11} style={{ color: 'var(--color-text-secondary)', opacity: 0.6 }} aria-hidden="true" />
         </div>
-        <div style={{ fontSize: 10, color: 'var(--color-text-secondary)', marginTop: 2 }}>
-          OCC 58% · ADR 148K
+
+        {/* 숨긴 FormDatePicker — 판매기준일 바로 아래에 위치해 팝업이 편집 버튼 아래로 열림 */}
+        <div ref={saleDateLocalRef} style={{ width: 0, height: 0, overflow: 'hidden' }}>
+          <FormDatePicker value={saleDate} onChange={onSaleDateChange ?? (() => {})} placeholder="날짜 선택" />
         </div>
       </div>
 
@@ -952,7 +1120,16 @@ export function DayPanel({
               프로모션
             </span>
             <div style={{ display: 'flex', gap: 4 }}>
-              {!promoDeleteMode ? (
+              {promoFilter === 'past' ? (
+                <>
+                  <button disabled
+                    style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, border: '0.5px solid var(--color-border-default)', background: 'transparent', color: 'var(--color-text-secondary)', opacity: 0.4, cursor: 'not-allowed' }}
+                  >추가</button>
+                  <button disabled
+                    style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, border: '0.5px solid var(--color-border-default)', background: 'transparent', color: 'var(--color-text-secondary)', opacity: 0.4, cursor: 'not-allowed' }}
+                  >삭제</button>
+                </>
+              ) : !promoDeleteMode ? (
                 <>
                   <button
                     onClick={onToggleAddPromo}
@@ -984,6 +1161,28 @@ export function DayPanel({
             </div>
           </div>
 
+          {/* 필터 칩 */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+            <button
+              onClick={() => { setPromoFilter('active'); setPromoDeleteMode(false); setSelectedPromoIds(new Set()); setExpandedPastId(null) }}
+              style={{
+                fontSize: 11, padding: '2px 12px', borderRadius: 999, cursor: 'pointer',
+                border: promoFilter === 'active' ? '1px solid rgba(0,229,160,0.4)' : '1px solid #3a3a3a',
+                background: promoFilter === 'active' ? 'rgba(0,229,160,0.1)' : '#2a2a2a',
+                color: promoFilter === 'active' ? '#00E5A0' : '#888',
+              }}
+            >진행중·예정</button>
+            <button
+              onClick={() => { setPromoFilter('past'); setPromoDeleteMode(false); setSelectedPromoIds(new Set()) }}
+              style={{
+                fontSize: 11, padding: '2px 12px', borderRadius: 999, cursor: 'pointer',
+                border: promoFilter === 'past' ? '1px solid rgba(245,158,11,0.4)' : '1px solid #3a3a3a',
+                background: promoFilter === 'past' ? 'rgba(245,158,11,0.1)' : '#2a2a2a',
+                color: promoFilter === 'past' ? '#F59E0B' : '#888',
+              }}
+            >지난 프로모션</button>
+          </div>
+
           {promoDeleteMode && (
             <div style={{
               fontSize:     10,
@@ -999,14 +1198,18 @@ export function DayPanel({
             </div>
           )}
 
-          {monthPromos.length === 0 && (
+          {promoFilter === 'active' ? (
+          <>
+          {activeItems.length === 0 && (
             <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', padding: '4px 0' }}>
-              등록된 프로모션이 없습니다
+              진행중·예정 프로모션이 없습니다
             </div>
           )}
 
-          {monthPromos.map(p => {
-            const isApplied = p.dates.includes(day)
+          {activeItems.map(p => {
+            const isApplied = (!p._raw.stay_start || p._raw.stay_start === '2000-01-01')
+              ? true
+              : (day >= p._raw.stay_start && day <= p._raw.stay_end)
             const isSelected = selectedPromoIds.has(p.id)
             return (
               <div key={p.id}
@@ -1019,7 +1222,7 @@ export function DayPanel({
                     })
                     return
                   }
-                  handleEditPromo(p)
+                  handleEditPromo(p as any)
                 }}
                 style={{
                   display:        'flex',
@@ -1041,12 +1244,15 @@ export function DayPanel({
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)' }}>{p.name}</span>
-                      {isApplied && (
-                        <span style={{
-                          fontSize: 9, padding: '1px 5px', borderRadius: 20,
-                          background: `${p.color}22`, color: p.color,
-                        }}>적용중</span>
-                      )}
+                      {(() => {
+                        const badge = PROMO_BADGE[promoStatus(p._raw, promoToday)]
+                        return (
+                          <span style={{
+                            fontSize: 9, padding: '1px 5px', borderRadius: 20,
+                            background: `${badge.color}22`, color: badge.color,
+                          }}>{badge.label}</span>
+                        )
+                      })()}
                     </div>
                     <div style={{ fontSize: 9, color: 'var(--color-text-secondary)', marginTop: 1 }}>
                       {(() => {
@@ -1100,7 +1306,7 @@ export function DayPanel({
                 </div>
                 {!promoDeleteMode && (
                   <button
-                    onClick={e => { e.stopPropagation(); handleEditPromo(p) }}
+                    onClick={e => { e.stopPropagation(); handleEditPromo(p as any) }}
                     style={{ fontSize: 13, color: '#555', background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', flexShrink: 0, marginLeft: 4 }}
                     onMouseEnter={e => (e.currentTarget.style.color = '#00E5A0')}
                     onMouseLeave={e => (e.currentTarget.style.color = '#555')}
@@ -1109,6 +1315,72 @@ export function DayPanel({
               </div>
             )
           })}
+          </>
+          ) : (
+          <>
+          {pastItems.length === 0 && (
+            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', padding: '4px 0' }}>
+              지난 프로모션이 없습니다
+            </div>
+          )}
+
+          {pastItems.map(p => {
+            const raw = p._raw
+            const isExp = expandedPastId === p.id
+            const rc: string[] = raw.room_type_codes ?? []
+            const fmtRange = (s?: string | null, e?: string | null) =>
+              !s ? '상시' : `${s.replace(/-/g, '.')} – ${(e ?? '').slice(5).replace('-', '.')}`
+            const rows: [string, string][] = [
+              ['할인율', p.disc],
+              ['적용 객실', rc.length === 0 ? '전 객실' : rc.length <= 3 ? rc.join(', ') : `${rc.slice(0, 3).join(', ')} 외 ${rc.length - 3}개`],
+              ['투숙 기간', (!raw.stay_start || raw.stay_start === '2000-01-01') ? '상시' : fmtRange(raw.stay_start, raw.stay_end)],
+              ['판매 기간', !raw.sale_start ? '상시' : fmtRange(raw.sale_start, raw.sale_end)],
+            ]
+            return (
+              <div key={p.id} style={{
+                border: '0.5px solid var(--color-border-default)', borderRadius: 6,
+                marginBottom: 4, overflow: 'hidden', opacity: 0.85,
+              }}>
+                <div
+                  onClick={() => setExpandedPastId(isExp ? null : p.id)}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 8px', cursor: 'pointer', background: 'var(--color-bg-tertiary)' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: p.color, flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)' }}>{p.name}</span>
+                    <span style={{ fontSize: 9, color: 'var(--color-text-secondary)' }}>{p.disc}</span>
+                  </div>
+                  <span style={{ fontSize: 10, color: '#555', flexShrink: 0 }}>{isExp ? '▲' : '▼'}</span>
+                </div>
+                {isExp && (
+                  <div style={{ padding: '8px 10px', borderTop: '0.5px solid var(--color-border-default)', fontSize: 10 }}>
+                    {rows.map(([k, v]) => (
+                      <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                        <span style={{ color: '#555' }}>{k}</span>
+                        <span style={{ color: 'var(--color-text-primary)' }}>{v}</span>
+                      </div>
+                    ))}
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                      <button
+                        onClick={() => handleEditPromo(p as any)}
+                        style={{ flex: 1, fontSize: 11, padding: '6px', borderRadius: 6, border: '0.5px solid var(--color-border-default)', background: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)', fontWeight: 500, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                      >
+                        <Pencil size={12} /> 수정
+                      </button>
+                      <button
+                        onClick={() => handleCopyPromo(raw)}
+                        style={{ flex: 1, fontSize: 11, padding: '6px', borderRadius: 6, border: 'none', background: '#00E5A0', color: '#04342C', fontWeight: 500, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                      >
+                        <Copy size={12} /> 프로모션 복사
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+          </>
+          )}
 
         </div>
 
@@ -1405,6 +1677,42 @@ export function DayPanel({
                   기간제한 없음
                 </label>
 
+                {/* 패키지 (선택) */}
+                <div style={{ borderTop: '0.5px solid var(--color-border-default)', paddingTop: 10, marginBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: 10, color: 'var(--color-text-secondary)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                      패키지 (선택)
+                    </span>
+                    <button
+                      onClick={() => setPackages(prev => [...prev, { id: crypto.randomUUID(), name: '', rate: null }])}
+                      style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, border: '0.5px solid var(--color-border-default)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer' }}
+                    >
+                      + 추가
+                    </button>
+                  </div>
+                  {packages.map(pkg => (
+                    <div key={pkg.id} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                      <input
+                        placeholder="패키지명 (예: 조식포함)"
+                        value={pkg.name}
+                        onChange={e => setPackages(prev => prev.map(p => p.id === pkg.id ? { ...p, name: e.target.value } : p))}
+                        style={{ ...inputStyle, flex: 2 }}
+                      />
+                      <input
+                        type="number"
+                        placeholder="금액"
+                        value={pkg.rate ?? ''}
+                        onChange={e => setPackages(prev => prev.map(p => p.id === pkg.id ? { ...p, rate: e.target.value ? Number(e.target.value) : null } : p))}
+                        style={{ ...inputStyle, flex: 1 }}
+                      />
+                      <button
+                        onClick={() => setPackages(prev => prev.filter(p => p.id !== pkg.id))}
+                        style={{ fontSize: 13, color: '#E24B4A', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}
+                      >×</button>
+                    </div>
+                  ))}
+                </div>
+
                 <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
                   {(['active', 'inactive'] as const).map(s => (
                     <button key={s} onClick={() => onPromoFormChange('status', s)} style={{
@@ -1573,8 +1881,9 @@ export function DayPanel({
                     background: 'transparent', color: 'var(--color-text-secondary)',
                     cursor: (selectedDates.length === 0 && selectedBar === null) ? 'default' : 'pointer',
                     opacity: (selectedDates.length === 0 && selectedBar === null) ? 0.4 : 1,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                   }}
-                >초기화</button>
+                ><RotateCcw size={12} aria-hidden="true" />초기화</button>
                 <button
                   onClick={onSave}
                   disabled={!canSave}
@@ -1584,8 +1893,10 @@ export function DayPanel({
                     color: canSave ? '#04342C' : 'rgba(0,229,160,0.5)',
                     fontWeight: 500,
                     cursor: canSave ? 'pointer' : 'default',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                   }}
                 >
+                  <Save size={12} aria-hidden="true" />
                   {isSaving ? '저장 중...' : '저장'}
                 </button>
                 <label

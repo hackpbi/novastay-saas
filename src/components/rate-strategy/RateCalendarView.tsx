@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Pencil } from 'lucide-react'
 import {
   generateCalendarDays, isFriOrSat, toDateStr, dayCellStyle, DOW_LABELS, getKSTDateString,
 } from './BaseCalendar'
@@ -44,6 +45,8 @@ const EMPTY_PROMO_FORM: PromoFormData = {
 
 const PROMO_LINE_H = 18
 const BASE_CELL_H  = 80
+// 지난(inactive) 프로모션 전용 — active 보다 채도 낮은 회색 계열
+const PAST_COLORS = ['#888', '#999', '#aaa', '#777', '#bbb', '#666']
 
 // ── Color helpers ──────────────────────────────────────────────────────────────
 
@@ -117,12 +120,30 @@ export function RateCalendarView({
   occMap = {},
   saleDate,
   pickupRows = [],
+  onPrevMonth,
+  onNextMonth,
+  onToday,
+  onOpenSaleDatePicker,
+  onSaleDateChange,
+  dayModalDate = null,
+  onDayModalOpen,
+  onDayModalClose,
+  visible = true,
 }: {
   year:        number
   month:       number
   occMap?:     Record<string, number>
   saleDate?:   string
   pickupRows?: any[]
+  onPrevMonth?:          () => void
+  onNextMonth?:          () => void
+  onToday?:              () => void
+  onOpenSaleDatePicker?: () => void
+  onSaleDateChange?:     (v: string) => void
+  dayModalDate?:    string | null
+  onDayModalOpen?:  (dateStr: string) => void
+  onDayModalClose?: () => void
+  visible?:         boolean   // 탭 표시 여부 — false면 달력 UI 숨기고 모달만 렌더(어느 탭에서든 모달 표시)
 }) {
   const { currentHotel } = useHotel()
   const hotelId    = currentHotel?.id ?? ''
@@ -154,8 +175,19 @@ export function RateCalendarView({
   const selectedDates = Object.keys(pendingRates)
   const [showAddPromo,  setShowAddPromo]  = useState(false)
   const [promoForm,     setPromoForm]     = useState<PromoFormData>(EMPTY_PROMO_FORM)
-  const [dayModalDate,  setDayModalDate]  = useState<string | null>(null)
+  const [showPastPromos, setShowPastPromos] = useState(false)   // 지난(inactive) 프로모션 오버레이 토글
+  // dayModalDate 는 RateStrategyPage 에서 관리(그래프 pill 클릭 등 외부 트리거 위해 props)
   const [rateUnit,      setRateUnit]      = useState<'k' | 'w'>('k')
+  // 일자 상세 모달 — BAR Rate 변경
+  const [modalEditing,      setModalEditing]      = useState(false)
+  const [modalSelectedRate, setModalSelectedRate] = useState<number | null>(null)
+  const [modalSaving,       setModalSaving]       = useState(false)
+
+  const closeModal = () => {
+    onDayModalClose?.()
+    setModalEditing(false)
+    setModalSelectedRate(null)
+  }
 
   useEffect(() => {
     const today = getKSTDateString()
@@ -175,7 +207,26 @@ export function RateCalendarView({
 
   useEffect(() => {
     if (dayModalDate) setRateUnit('k')
+    setModalEditing(false)
+    setModalSelectedRate(null)
   }, [dayModalDate])
+
+  // BAR Rate 칩 목록 (모달 변경 영역)
+  const { data: barRateList = [] } = useQuery<{ id: string; rate: number; is_favorite: boolean }[]>({
+    queryKey: ['s05_bar_rate_list', hotelId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('s05_bar_rate_list')
+        .select('id, rate, is_favorite')
+        .eq('hotel_id', hotelId)
+        .order('rate', { ascending: true })
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: !!hotelId,
+  })
+  const favRates = barRateList.filter(r => r.is_favorite)
+  const allRates = barRateList
 
   // ── DB 조회 ──────────────────────────────────────────────────────────────────
 
@@ -272,6 +323,26 @@ export function RateCalendarView({
     enabled: !!hotelId,
   })
 
+  // 지난(inactive) 프로모션 — 토글 ON 시에만 조회. dayPastMap 이 getDate() 로 매칭하므로 월 겹침 필터 필수
+  const { data: pastPromoRaw = [] } = useQuery<any[]>({
+    queryKey: ['s03_rate_promotion-past', hotelId, year, month],
+    queryFn: async () => {
+      const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+      const endDate   = new Date(year, month, 0).toISOString().slice(0, 10)
+      const { data, error } = await (supabase as any)
+        .from('s03_rate_promotion')
+        .select('id, name, discount_type, discount_value, stay_start, stay_end')
+        .eq('hotel_id', hotelId)
+        .eq('status', 'inactive')
+        .lte('stay_start', endDate)
+        .gte('stay_end',   startDate)
+        .order('stay_start', { ascending: true })
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: !!hotelId && showPastPromos,
+  })
+
   const { data: roomTypes = [] } = useQuery<{ room_type_code: string; room_type_description: string }[]>({
     queryKey: ['c01_room_types', hotelId],
     queryFn: async () => {
@@ -321,6 +392,16 @@ export function RateCalendarView({
     const result: Record<string, number> = {}
     for (const r of customRates) {
       result[`${r.promotion_id}_${r.stay_date}_${r.room_type_code}`] = r.rate
+    }
+    return result
+  }, [customRates])
+
+  // 지난 fixed 프로모션 대표 요금: promotion_id + stay_date 기준 첫 번째 행 rate
+  const customFirstRateMap = useMemo<Record<string, number>>(() => {
+    const result: Record<string, number> = {}
+    for (const r of customRates) {
+      const key = `${r.promotion_id}_${r.stay_date}`
+      if (result[key] == null) result[key] = r.rate
     }
     return result
   }, [customRates])
@@ -417,8 +498,42 @@ export function RateCalendarView({
     return result
   }, [calPromos, year, month])
 
-  const cellMinHeight = maxPromosPerDay > 0
-    ? BASE_CELL_H + maxPromosPerDay * PROMO_LINE_H + 8
+  // ── 지난 프로모션 파생 데이터 (토글 ON 시) ──────────────────────────────────────
+  type PastPromo = { id: string; name: string; discount_type: string; discount_value: number; stay_start: string; stay_end: string; color: string }
+  const calPastPromos = useMemo<PastPromo[]>(() => {
+    return (pastPromoRaw as any[])
+      .map((p, i) => ({
+        id:             p.id,
+        name:           p.name,
+        discount_type:  p.discount_type,
+        discount_value: p.discount_value,
+        stay_start:     p.stay_start,
+        stay_end:       p.stay_end,
+        color:          PAST_COLORS[i % PAST_COLORS.length],
+      }))
+  }, [pastPromoRaw])
+
+  const dayPastMap = useMemo<Record<number, PastPromo[]>>(() => {
+    const result: Record<number, PastPromo[]> = {}
+    if (!showPastPromos) return result
+    const daysInMonth = new Date(year, month, 0).getDate()
+    for (let d = 1; d <= daysInMonth; d++) {
+      result[d] = calPastPromos.filter(p => {
+        const s = new Date(p.stay_start + 'T00:00:00').getDate()
+        const e = new Date(p.stay_end   + 'T00:00:00').getDate()
+        return d >= s && d <= e
+      })
+    }
+    return result
+  }, [calPastPromos, showPastPromos, year, month])
+
+  const maxPastPerDay = useMemo(() => {
+    if (!showPastPromos) return 0
+    return Object.values(dayPastMap).reduce((m, arr) => Math.max(m, arr.length), 0)
+  }, [dayPastMap, showPastPromos])
+
+  const cellMinHeight = (maxPromosPerDay + maxPastPerDay) > 0
+    ? BASE_CELL_H + (maxPromosPerDay + maxPastPerDay) * PROMO_LINE_H + 8
     : BASE_CELL_H
 
   const adrRevMap = useMemo<Record<string, { adr: number | null; rev: number }>>(() => {
@@ -489,7 +604,7 @@ export function RateCalendarView({
       })
       return
     }
-    setDayModalDate(dateStr)
+    onDayModalOpen?.(dateStr)
   }
 
   const handlePromoFormChange = (field: string, val: string) => {
@@ -519,6 +634,28 @@ export function RateCalendarView({
     return base
   }
 
+  // 모달에서 표시할 BAR Rate (변경 선택 중이면 선택값, 아니면 현재값) — 프로모션 요금 실시간 연동
+  const modalBarBase = dayModalDate
+    ? (effectiveBarRateMap[new Date(dayModalDate + 'T00:00:00').getDate()]?.base_rate ?? null)
+    : null
+  const modalDisplayRate = modalSelectedRate ?? modalBarBase
+
+  function getModalPromoRate(p: CalPromo): number | null {
+    if (p.discount_type === 'fixed') {
+      const dateStr = dayModalDate!
+      const keys = Object.keys(customRateMap).filter(k => k.startsWith(`${p.id}_${dateStr}_`))
+      if (keys.length === 0) return null
+      if (p.room_type_code) return customRateMap[`${p.id}_${dateStr}_${p.room_type_code}`] ?? null
+      return customRateMap[keys[0]] ?? null
+    }
+    const base = modalDisplayRate
+    if (base == null) return null
+    if (p.discount_type === 'pct')    return Math.round(base * (1 - p.discount_value / 100))
+    if (p.discount_type === 'amount') return base - p.discount_value
+    if (p.discount_type === 'addon')  return base + p.discount_value
+    return base
+  }
+
   const todayStr = getKSTDateString()
 
   // ── 주 단위 분할 ──────────────────────────────────────────────────────────────
@@ -532,6 +669,7 @@ export function RateCalendarView({
   return (
     <>
     <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    {visible && (
     <div style={{
       position:     'relative',
       minHeight:    400,
@@ -566,6 +704,29 @@ export function RateCalendarView({
       {/* 달력 영역 */}
       <div style={{ flex: 1, minWidth: 0, padding: '8px 12px', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
 
+        {/* 월 네비게이션 (캘린더 헤더) */}
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 30, marginBottom: 4, flexShrink: 0 }}>
+          <button onClick={() => onPrevMonth?.()}
+            style={{ width: 24, height: 24, border: '0.5px solid var(--color-border-default)', borderRadius: 6, background: 'transparent', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 14, lineHeight: 1 }}>‹</button>
+          <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-text-primary)', minWidth: 110, textAlign: 'center' }}>
+            {year}년 {month}월
+          </span>
+          <button onClick={() => onNextMonth?.()}
+            style={{ width: 24, height: 24, border: '0.5px solid var(--color-border-default)', borderRadius: 6, background: 'transparent', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 14, lineHeight: 1 }}>›</button>
+          {/* 지난 프로모션 토글 — 우측 절대 배치 ([오늘] 버튼 대체) */}
+          <button
+            onClick={() => setShowPastPromos(v => !v)}
+            style={{
+              position: 'absolute', right: 14,
+              fontSize: 11, padding: '3px 11px', borderRadius: 999, cursor: 'pointer', fontWeight: 500,
+              transition: 'all 0.15s',
+              border: showPastPromos ? '1px solid rgba(245,158,11,0.5)' : '1px solid var(--color-border-default)',
+              background: showPastPromos ? 'rgba(245,158,11,0.1)' : 'transparent',
+              color: showPastPromos ? '#F59E0B' : 'var(--color-text-secondary)',
+            }}
+          >지난 프로모션</button>
+        </div>
+
         {/* 요일 헤더 */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3, marginBottom: 2, flexShrink: 0 }}>
           {DOW_LABELS.map((d, i) => (
@@ -599,6 +760,7 @@ export function RateCalendarView({
                     const barDay        = barRateMap[day]
                     const occ           = occMap[dateStr] != null ? Math.round(occMap[dateStr]!) : null
                     const dayPromos     = dayPromosMap[day] ?? []
+                    const dayPast       = showPastPromos ? (dayPastMap[day] ?? []) : []
 
                     const pendingRate = pendingRates[dateStr] != null ? pendingRates[dateStr] : null
                     const histGroup  = rateHistoryGrouped[day] ?? []
@@ -741,6 +903,75 @@ export function RateCalendarView({
                             </div>
                           </>
                         )}
+
+                        {/* 지난(inactive) 프로모션 — 토글 ON 시. 점선·회색 */}
+                        {showPastPromos && maxPastPerDay > 0 && (
+                          <>
+                            <div style={{ height: '0.5px', background: '#222', margin: '4px 0 3px' }} />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              {Array.from({ length: maxPastPerDay }, (_, i) => {
+                                const promo = dayPast[i]
+                                if (!promo) {
+                                  return <div key={`past-${i}`} style={{ height: PROMO_LINE_H }} />
+                                }
+                                const pc = promo.color
+                                // 하이브리드: fixed 타입은 s06_rate_custom 실요금, 나머지는 할인율/액
+                                const customRate = promo.discount_type === 'fixed'
+                                  ? customFirstRateMap[`${promo.id}_${dateStr}`]
+                                  : undefined
+                                const disc = customRate != null
+                                  ? `${Math.round(customRate / 1000)}K`
+                                  : promo.discount_type === 'pct'
+                                    ? `-${promo.discount_value}%`
+                                    : promo.discount_type === 'amount'
+                                      ? `-${Math.round(promo.discount_value / 1000)}K`
+                                      : promo.discount_type === 'addon'
+                                        ? `+${Math.round(promo.discount_value / 1000)}K`
+                                        : `${Math.round(promo.discount_value / 1000)}K`
+                                return (
+                                  <div key={`past-${promo.id}`} style={{
+                                    height:         PROMO_LINE_H,
+                                    display:        'flex',
+                                    alignItems:     'center',
+                                    justifyContent: 'space-between',
+                                    gap:            4,
+                                    padding:        '1px 0',
+                                    opacity:        0.55,
+                                  }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, flex: 1 }}>
+                                      <div style={{
+                                        width:        14,
+                                        height:       5,
+                                        borderRadius: 2,
+                                        flexShrink:   0,
+                                        background:   'transparent',
+                                        border:       `1px dashed ${pc}`,
+                                      }} />
+                                      <span style={{
+                                        fontSize:       9,
+                                        color:          '#888',
+                                        whiteSpace:     'nowrap',
+                                        overflow:       'hidden',
+                                        textOverflow:   'ellipsis',
+                                        textDecoration: 'line-through',
+                                      }}>
+                                        {promo.name}
+                                      </span>
+                                    </div>
+                                    <span style={{
+                                      fontSize:   9,
+                                      fontWeight: 600,
+                                      color:      pc,
+                                      flexShrink: 0,
+                                    }}>
+                                      {disc}
+                                    </span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </>
+                        )}
                       </div>
                     )
                   })}
@@ -764,25 +995,6 @@ export function RateCalendarView({
           </div>
         )}
 
-        {/* 범례 */}
-        <div style={{ display: 'flex', gap: 14, marginTop: 10, flexWrap: 'wrap', flexShrink: 0, paddingBottom: 4 }}>
-          {([
-            { type: 'disc' as PromoType, label: '할인 프로모션', color: '#00e5a0' },
-            { type: 'pkg'  as PromoType, label: '패키지',        color: '#648cff' },
-            { type: 'hot'  as PromoType, label: 'HOT DEAL',      color: '#ff783c' },
-          ]).map(l => (
-            <div key={l.type} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--color-text-secondary)' }}>
-              <div style={{
-                width:        16,
-                height:       6,
-                borderRadius: 2,
-                background:   `${l.color}40`,
-                borderLeft:   `3px solid ${l.color}`,
-              }} />
-              {l.label}
-            </div>
-          ))}
-        </div>
       </div>
 
       {/* 슬라이드 패널 */}
@@ -821,10 +1033,16 @@ export function RateCalendarView({
           onResetDates={handleResetDates}
           isSaving={saveMutation.isPending}
           saveToast={toast}
+          onPrevMonth={onPrevMonth ?? (() => {})}
+          onNextMonth={onNextMonth ?? (() => {})}
+          onOpenSaleDatePicker={onOpenSaleDatePicker ?? (() => {})}
+          saleDate={saleDate ?? ''}
+          onSaleDateChange={onSaleDateChange}
         />
       </div>
 
     </div>
+    )}
 
     {/* 일자 상세 모달 */}
     {dayModalDate && (() => {
@@ -848,6 +1066,26 @@ export function RateCalendarView({
         return rate.toLocaleString('ko-KR')
       }
 
+      // 요금 이력 3단계 체인 (rateHistoryGrouped[day] 기반, 최대 3단계)
+      const histGroup = rateHistoryGrouped[_day] ?? []
+      // 요금 체인: oldRate → … → 현재요금 (각 변경일 포함, 최대 3개)
+      let rateChain: { rate: number; date: string | null }[] = []
+      if (histGroup.length > 0) {
+        rateChain.push({ rate: Math.round(histGroup[0].oldRate / 1000), date: null })  // 최초 이전 요금(변경일 없음)
+        if (histGroup.length >= 2) {
+          histGroup.slice(0, -1).forEach(h => {
+            rateChain.push({ rate: Math.round(h.newRate / 1000), date: h.changedDate })  // 중간 요금
+          })
+        }
+        rateChain.push({                                                                 // 현재(최신) 요금
+          rate: Math.round(histGroup[histGroup.length - 1].newRate / 1000),
+          date: histGroup[histGroup.length - 1].changedDate,
+        })
+      } else if (barDay?.base_rate != null) {
+        rateChain.push({ rate: Math.round(barDay.base_rate / 1000), date: null })
+      }
+      if (rateChain.length > 3) rateChain = [rateChain[0], ...rateChain.slice(-2)]
+
       return (
         <div
           style={{
@@ -855,7 +1093,7 @@ export function RateCalendarView({
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             background: 'rgba(0,0,0,0.55)',
           }}
-          onClick={() => setDayModalDate(null)}
+          onClick={closeModal}
         >
           <div
             onClick={e => e.stopPropagation()}
@@ -904,7 +1142,7 @@ export function RateCalendarView({
                 </div>
                 {hasHist && (
                   <button
-                    onClick={() => { setDayModalDate(null); setHistoryModalDate(dayModalDate) }}
+                    onClick={() => { closeModal(); setHistoryModalDate(dayModalDate) }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 3,
                       fontSize: 10, color: '#555', background: 'transparent',
@@ -918,7 +1156,7 @@ export function RateCalendarView({
                   </button>
                 )}
                 <button
-                  onClick={() => setDayModalDate(null)}
+                  onClick={closeModal}
                   style={{
                     width: 24, height: 24, borderRadius: 5,
                     border: '0.5px solid var(--color-border-default)',
@@ -971,47 +1209,215 @@ export function RateCalendarView({
 
             {/* BAR Rate 섹션 */}
             <div style={{
-              padding:        '10px 16px',
-              borderBottom:   '0.5px solid var(--color-border-default)',
-              display:        'flex',
-              alignItems:     'center',
-              justifyContent: 'space-between',
+              padding:      '10px 16px',
+              borderBottom: modalEditing ? 'none' : '0.5px solid var(--color-border-default)',
             }}>
-              <div style={{
-                fontSize:      10,
-                fontWeight:    500,
-                color:         '#555',
-                letterSpacing: '.05em',
-                textTransform: 'uppercase',
-              }}>
-                BAR Rate
-              </div>
-              {baseRateK != null ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {barDay?.rack_rate != null && barDay.rack_rate !== barDay.base_rate && (
-                    <>
-                      <span style={{ fontSize: 12, color: '#444', textDecoration: 'line-through' }}>
-                        {fmtRate(barDay.rack_rate)}
-                      </span>
-                      <span style={{ fontSize: 10, color: '#ff8c50' }}>→</span>
-                    </>
-                  )}
-                  <span style={{ fontSize: 16, fontWeight: 600, color: getRateColor(baseRateK) }}>
-                    {fmtRate(barDay!.base_rate)}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                {/* 레이블 + 변경 버튼 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: '#555', letterSpacing: '.05em', textTransform: 'uppercase' }}>
+                    BAR Rate
                   </span>
-                  {barDay?.rack_rate != null && barDay.rack_rate !== barDay.base_rate && (
-                    <span style={{
-                      fontSize:   11,
-                      fontWeight: 500,
-                      color:      barDay.base_rate > barDay.rack_rate ? '#00B883' : '#E24B4A',
-                    }}>
-                      {barDay.base_rate > barDay.rack_rate ? '▲' : '▼'}
-                      {fmtRate(Math.abs(barDay.base_rate - barDay.rack_rate))}
-                    </span>
+                  {/* 변경 버튼 (아이콘만) — 과거 날짜는 숨김 */}
+                  {dayModalDate >= getKSTDateString() && (
+                    <button
+                      onClick={() => { setModalEditing(e => !e); setModalSelectedRate(null) }}
+                      title="BAR Rate 변경"
+                      style={{
+                        display:        'flex',
+                        alignItems:     'center',
+                        justifyContent: 'center',
+                        width:          22,
+                        height:         22,
+                        borderRadius:   5,
+                        border:         `0.5px solid ${modalEditing ? '#00E5A0' : 'transparent'}`,
+                        background:     modalEditing ? 'rgba(0,229,160,0.08)' : 'transparent',
+                        color:          modalEditing ? '#00E5A0' : '#555',
+                        cursor:         'pointer',
+                        transition:     'all 0.15s',
+                      }}
+                      onMouseEnter={e => {
+                        if (!modalEditing) {
+                          e.currentTarget.style.color = '#00E5A0'
+                          e.currentTarget.style.borderColor = 'var(--color-border-default)'
+                        }
+                      }}
+                      onMouseLeave={e => {
+                        if (!modalEditing) {
+                          e.currentTarget.style.color = '#555'
+                          e.currentTarget.style.borderColor = 'transparent'
+                        }
+                      }}
+                    >
+                      <Pencil size={12} aria-hidden="true" />
+                    </button>
                   )}
                 </div>
-              ) : (
-                <span style={{ fontSize: 14, color: '#333' }}>—</span>
+
+                {/* 우측: 요금 + 변경일 */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                  {/* 요금 체인 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {modalSelectedRate != null && modalSelectedRate !== barDay?.base_rate ? (
+                    /* 변경 선택 중 — 새 요금 미리보기 */
+                    <>
+                      <span style={{ fontSize: 13, color: '#444', textDecoration: 'line-through' }}>
+                        {fmtRate(barDay?.base_rate ?? 0)}
+                      </span>
+                      <span style={{ fontSize: 10, color: '#ff8c50' }}>→</span>
+                      <span style={{ fontSize: 18, fontWeight: 600, color: getRateColor(Math.round(modalSelectedRate / 1000)) }}>
+                        {fmtRate(modalSelectedRate)}
+                      </span>
+                      <span style={{
+                        fontSize:   11,
+                        fontWeight: 500,
+                        color:      modalSelectedRate > (barDay?.base_rate ?? 0) ? '#00B883' : '#E24B4A',
+                      }}>
+                        {modalSelectedRate > (barDay?.base_rate ?? 0) ? '▲' : '▼'}
+                        {fmtRate(Math.abs(modalSelectedRate - (barDay?.base_rate ?? 0)))}
+                      </span>
+                    </>
+                  ) : rateChain.length > 0 ? (
+                    /* 요금 이력 체인 — 요금줄(22px 밴드) 기준 정렬, 날짜는 아래 줄 정렬 */
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                      {rateChain.map((item, i) => (
+                        <React.Fragment key={i}>
+                          {i > 0 && (
+                            <span style={{ fontSize: 10, color: '#ff8c50', flexShrink: 0, lineHeight: '22px' }}>→</span>
+                          )}
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                            <span style={{
+                              lineHeight:     '22px',
+                              fontSize:       i === rateChain.length - 1 ? 18 : 13,
+                              fontWeight:     i === rateChain.length - 1 ? 600 : 400,
+                              color:          i === rateChain.length - 1 ? getRateColor(item.rate) : '#444',
+                              textDecoration: i < rateChain.length - 1 ? 'line-through' : 'none',
+                            }}>
+                              {fmtRate(item.rate * 1000)}
+                            </span>
+                            <span style={{ fontSize: 8, color: '#555', minHeight: 10, lineHeight: '10px' }}>
+                              {item.date ? item.date.slice(5).replace('-', '/') : ''}
+                            </span>
+                          </div>
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: 14, color: '#333' }}>—</span>
+                  )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 칩 선택 영역 — modalEditing일 때만 */}
+              {modalEditing && (
+                <div style={{
+                  marginTop:    10,
+                  background:   'var(--color-bg-tertiary)',
+                  borderRadius: 8,
+                  border:       '0.5px solid rgba(0,229,160,0.2)',
+                  padding:      10,
+                }}>
+                  {/* 즐겨찾기 */}
+                  {favRates.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 9, color: '#f5a623', marginBottom: 5 }}>★ 즐겨찾기</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+                        {favRates.map(r => (
+                          <button
+                            key={r.id}
+                            onClick={() => setModalSelectedRate(r.rate)}
+                            style={{
+                              padding:      '4px 10px',
+                              borderRadius: 20,
+                              fontSize:     11,
+                              cursor:       'pointer',
+                              border:       `0.5px solid ${modalSelectedRate === r.rate ? '#00E5A0' : r.rate === barDay?.base_rate ? '#444' : '#333'}`,
+                              background:   modalSelectedRate === r.rate ? '#00E5A0' : r.rate === barDay?.base_rate ? '#1a1a1a' : '#1e1e1e',
+                              color:        modalSelectedRate === r.rate ? '#04342C' : r.rate === barDay?.base_rate ? '#666' : '#aaa',
+                              fontWeight:   modalSelectedRate === r.rate ? 600 : 400,
+                            }}
+                          >
+                            {Math.round(r.rate / 1000)}K
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {/* 전체 */}
+                  <div style={{ fontSize: 9, color: '#555', marginBottom: 5 }}>전체</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {allRates.map(r => (
+                      <button
+                        key={r.id}
+                        onClick={() => setModalSelectedRate(r.rate)}
+                        style={{
+                          padding:      '4px 10px',
+                          borderRadius: 20,
+                          fontSize:     11,
+                          cursor:       'pointer',
+                          border:       `0.5px solid ${modalSelectedRate === r.rate ? '#00E5A0' : r.rate === barDay?.base_rate ? '#444' : '#333'}`,
+                          background:   modalSelectedRate === r.rate ? '#00E5A0' : r.rate === barDay?.base_rate ? '#1a1a1a' : '#1e1e1e',
+                          color:        modalSelectedRate === r.rate ? '#04342C' : r.rate === barDay?.base_rate ? '#666' : '#aaa',
+                          fontWeight:   modalSelectedRate === r.rate ? 600 : 400,
+                        }}
+                      >
+                        {Math.round(r.rate / 1000)}K
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* 저장 / 취소 */}
+                  <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                    <button
+                      onClick={() => { setModalEditing(false); setModalSelectedRate(null) }}
+                      style={{
+                        flex: 1, fontSize: 11, padding: '6px',
+                        borderRadius: 6, border: '0.5px solid var(--color-border-default)',
+                        background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer',
+                      }}
+                    >
+                      취소
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!modalSelectedRate || !dayModalDate) return
+                        setModalSaving(true)
+                        try {
+                          const { error } = await (supabase as any)
+                            .from('s02_rate_detail')
+                            .upsert([{
+                              hotel_id:       hotelId,
+                              stay_date:      dayModalDate,
+                              room_type_code: 'BASE',
+                              date_type:      'single',
+                              new_rate:       modalSelectedRate,
+                            }], { onConflict: 'hotel_id,room_type_code,stay_date,date_type' })
+                          if (error) throw error
+                          queryClient.invalidateQueries({ queryKey: ['bar-rate-calendar', hotelId] })
+                          queryClient.invalidateQueries({ queryKey: ['rate-history', hotelId] })
+                          setModalEditing(false)
+                          setModalSelectedRate(null)
+                        } catch (e) {
+                          console.error(e)
+                        } finally {
+                          setModalSaving(false)
+                        }
+                      }}
+                      disabled={!modalSelectedRate || modalSelectedRate === barDay?.base_rate || modalSaving}
+                      style={{
+                        flex: 2, fontSize: 11, padding: '6px',
+                        borderRadius: 6, border: 'none',
+                        background:   '#00E5A0', color: '#04342C',
+                        fontWeight:   500, cursor: 'pointer',
+                        opacity:      (!modalSelectedRate || modalSelectedRate === barDay?.base_rate) ? 0.35 : 1,
+                      }}
+                    >
+                      {modalSaving ? '저장 중...' : '저장'}
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
 
@@ -1025,7 +1431,7 @@ export function RateCalendarView({
                   프로모션 요금
                 </div>
                 {dayPromos.map(promo => {
-                  const rate = getPromoRate(promo, _day)
+                  const rate = getModalPromoRate(promo)
                   return (
                     <div key={promo.id} style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',

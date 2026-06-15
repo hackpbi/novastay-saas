@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, ChevronDown, X, Save, Tag, Loader2, Send,
   CheckSquare, Square, TrendingUp, TrendingDown,
   Minus, Activity, Trash2, FileSpreadsheet,
+  Table, CalendarClock, BarChart3,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { FormDatePicker } from '@/components/DatePicker'
@@ -17,13 +18,14 @@ import PageShell from '@/components/PageShell'
 import SegmentationModal from '@/components/dashboard/SegmentationModal'
 import { PromoCalendarView } from '@/components/rate-strategy/PromoCalendarView'
 import { RateCalendarView }  from '@/components/rate-strategy/RateCalendarView'
+import { RateChartView }     from '@/components/rate-strategy/RateChartView'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type DiscountType   = 'pct' | 'amount' | 'fixed' | 'addon'
 type ChangeMode     = '%' | '+-' | 'direct'
 type PickupView     = 'total' | 'fit' | 'fit_grp'
-type RateTab        = 'list' | 'promo-cal' | 'rate-cal'
+type RateTab        = 'list' | 'promo-cal' | 'rate-cal' | 'chart'
 
 interface RateDetail {
   id:             string
@@ -146,28 +148,6 @@ function pctColor(pct: number | null) {
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
-
-function ModeToggle({ modes, value, onChange }: {
-  modes: ChangeMode[]
-  value: ChangeMode
-  onChange: (m: ChangeMode) => void
-}) {
-  return (
-    <div className="flex gap-0.5 mt-0.5">
-      {modes.map(m => (
-        <button key={m} onClick={() => onChange(m)}
-          className="text-[9px] px-1.5 py-0.5 rounded transition-colors"
-          style={{
-            background: value === m ? 'var(--color-accent-primary)' : 'var(--color-bg-tertiary)',
-            color:      value === m ? '#0A0A0A' : 'var(--color-text-muted)',
-            border:     '1px solid var(--color-border-default)',
-          }}>
-          {m}
-        </button>
-      ))}
-    </div>
-  )
-}
 
 function OccBar({ pct }: { pct: number | null }) {
   if (pct == null) return <span className="text-xs text-brand-muted">—</span>
@@ -504,6 +484,24 @@ export default function RateStrategyPage() {
   const hotelId          = currentHotel?.id ?? ''
   const profileId        = profile?.id ?? ''
 
+  // ── 페이지 진입 시 만료 프로모션 자동 비활성화 (stay_end/sale_end < KST 오늘) ──
+  const { mutate: autoDeactivatePromos } = useMutation({
+    mutationFn: async () => {
+      const { error } = await (supabase as any)
+        .rpc('auto_deactivate_promotions', { p_hotel_id: hotelId })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      // prefix 매칭으로 active/past/달력 등 모든 s03_rate_promotion 쿼리 갱신
+      queryClient.invalidateQueries({ queryKey: ['s03_rate_promotion', hotelId] })
+    },
+  })
+  useEffect(() => {
+    if (hotelId) autoDeactivatePromos()
+    // autoDeactivatePromos 는 의존성에서 제외 (무한루프 방지 — hotelId 변경 시에만 1회)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hotelId])
+
   // ── Filter State ───────────────────────────────────────────────────────────
   const todayKST = getKSTDateString()
   const [otbDate,         setOtbDate]         = useState('')
@@ -511,7 +509,11 @@ export default function RateStrategyPage() {
   const [stayEnd,         setStayEnd]         = useState('')
   const [viewYear,        setViewYear]        = useState(Number(todayKST.slice(0, 4)))
   const [viewMonth,       setViewMonth]       = useState(Number(todayKST.slice(5, 7)))
+  // 프로모션 달력 전용 월 (일자별/요금달력과 독립)
+  const [promoYear,       setPromoYear]       = useState(Number(todayKST.slice(0, 4)))
+  const [promoMonth,      setPromoMonth]      = useState(Number(todayKST.slice(5, 7)))
   const [saleDate,        setSaleDate]        = useState<string>(getKSTDateString())
+  const saleDateRef = useRef<HTMLDivElement>(null)  // 숨긴 FormDatePicker 트리거용
   const [selRoomType,     setSelRoomType]     = useState('')
   const [showAllTypes,    setShowAllTypes]    = useState(false)
 
@@ -535,13 +537,12 @@ export default function RateStrategyPage() {
   const [segModalDate,    setSegModalDate]    = useState<string | null>(null)
   const [pickupView,      setPickupView]      = useState<PickupView>('fit')
   const [activeTab,       setActiveTab]       = useState<RateTab>('list')
+  const [dayModalDate,    setDayModalDate]    = useState<string | null>(null)  // 일자 상세 모달(RateCalendarView)
   const [previewBuffer,   setPreviewBuffer]   = useState<Record<string, Record<string, number>>>({})
   const isPreviewMode = Object.keys(previewBuffer).length > 0
 
-  // col mode: change / 2night / 3night / promoId
-  const [colMode, setColMode] = useState<Record<string, ChangeMode>>({
-    change: '%', '2night': '%', '3night': '%',
-  })
+  // 일괄 적용(변경요금) 모드 — 컬럼 모드 토글 제거 후 고정값
+  const colMode: Record<string, ChangeMode> = { change: '%' }
 
   // ── Queries ────────────────────────────────────────────────────────────────
 
@@ -643,6 +644,27 @@ export default function RateStrategyPage() {
   const padM = String(viewMonth).padStart(2, '0')
   const tableStart = stayStart || `${viewYear}-${padM}-01`
   const tableEnd   = stayEnd   || getKSTEndOfMonth(`${viewYear}-${padM}-01`)
+
+  // 프로모션 fixed 타입 실요금 (s06_rate_custom) — 일자별 테이블 범위
+  const { data: customRates = [] } = useQuery<{ promotion_id: string; stay_date: string; room_type_code: string; rate: number }[]>({
+    queryKey: ['s06_rate_custom_list', hotelId, tableStart, tableEnd],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('s06_rate_custom')
+        .select('promotion_id, stay_date, room_type_code, rate')
+        .eq('hotel_id', hotelId)
+        .gte('stay_date', tableStart)
+        .lte('stay_date', tableEnd)
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: !!hotelId,
+  })
+  const customRateMap = useMemo<Record<string, number>>(() => {
+    const m: Record<string, number> = {}
+    for (const r of customRates) m[`${r.promotion_id}_${r.stay_date}_${r.room_type_code}`] = r.rate
+    return m
+  }, [customRates])
 
   // OCC + 픽업 데이터 (get_pickup_data RPC)
   // vsOtbDate 없으면 otbDate 를 fallback으로 사용 → pu_nights=0, otb_nights만 유효
@@ -848,6 +870,31 @@ export default function RateStrategyPage() {
     setViewYear(y); setViewMonth(m)
     setStayStart(start); setStayEnd(end)
   }, [viewYear, viewMonth, calcMonthRange])
+
+  // 요금달력 '오늘' — 현재 월로 (일자별과 공유 viewYear/viewMonth)
+  const rateToday = useCallback(() => {
+    const kst = getKSTDateString()
+    const y = Number(kst.slice(0, 4)), m = Number(kst.slice(5, 7))
+    const { start, end } = calcMonthRange(y, m)
+    setViewYear(y); setViewMonth(m)
+    setStayStart(start); setStayEnd(end)
+  }, [calcMonthRange])
+
+  // 프로모션 달력 전용 월 네비게이션 (독립)
+  const promoPrev = useCallback(() => {
+    let y = promoYear, m = promoMonth - 1
+    if (m === 0) { y -= 1; m = 12 }
+    setPromoYear(y); setPromoMonth(m)
+  }, [promoYear, promoMonth])
+  const promoNext = useCallback(() => {
+    let y = promoYear, m = promoMonth + 1
+    if (m === 13) { y += 1; m = 1 }
+    setPromoYear(y); setPromoMonth(m)
+  }, [promoYear, promoMonth])
+  const promoToday = useCallback(() => {
+    const kst = getKSTDateString()
+    setPromoYear(Number(kst.slice(0, 4))); setPromoMonth(Number(kst.slice(5, 7)))
+  }, [])
 
   const handleStayStartChange = useCallback((v: string) => {
     setStayStart(v)
@@ -1118,10 +1165,39 @@ export default function RateStrategyPage() {
 
   const extraCols: Array<{ key: string; label: string; modes: ChangeMode[] }> = [
     { key: 'change',  label: '변경 요금', modes: ['%', '+-', 'direct'] },
-    { key: '2night',  label: '2연박',     modes: ['%', '+-'] },
-    { key: '3night',  label: '3연박',     modes: ['%', '+-'] },
     ...promotions.map(p => ({ key: `promo_${p.id}`, label: p.name, modes: ['%', '+-'] as ChangeMode[] })),
   ]
+
+  // ── 프로모션 컬럼 (조회 전용) 헬퍼 ─────────────────────────────────────────────
+  const promoByColKey = (key: string) => promotions.find(p => `promo_${p.id}` === key)
+  const isPromoActive = (promo: Promotion, date: string): boolean => {
+    const afterStart = !promo.stay_start || promo.stay_start === '2000-01-01' || promo.stay_start <= date
+    const beforeEnd  = !promo.stay_end   || promo.stay_end   >= date
+    return afterStart && beforeEnd
+  }
+  // 할인율/할인액 라벨
+  const promoDiscLabel = (promo: Promotion): string => (
+    promo.discount_type === 'pct'    ? `-${promo.discount_value}%`
+    : promo.discount_type === 'amount' ? `-${Math.round(promo.discount_value / 1000)}K`
+    : promo.discount_type === 'addon'  ? `+${Math.round(promo.discount_value / 1000)}K`
+    : '직접'   // fixed
+  )
+  // 적용 요금: fixed → s06_rate_custom, 그 외 → (BASE.new_rate + 객실 surcharge) × 할인
+  const formatPromoRate = (promo: Promotion, date: string, roomTypeCode: string): string => {
+    if (promo.discount_type === 'fixed') {
+      const r = customRateMap[`${promo.id}_${date}_${roomTypeCode}`]
+      return r != null ? `${Math.round(r / 1000)}K` : '—'
+    }
+    const baseRack = getRate(date, 'BASE', 'single')?.new_rate
+    if (baseRack == null) return '—'
+    const surcharge = roomTypes.find(rt => rt.room_type_code === roomTypeCode)?.surcharge ?? 0
+    const bar = baseRack + surcharge
+    const v = promo.discount_type === 'pct'    ? Math.round(bar * (1 - promo.discount_value / 100))
+            : promo.discount_type === 'amount' ? bar - promo.discount_value
+            : promo.discount_type === 'addon'  ? bar + promo.discount_value
+            : bar
+    return `${Math.round(v / 1000)}K`
+  }
 
   const filterStyle = {
     background: 'var(--color-bg-tertiary)',
@@ -1141,87 +1217,73 @@ export default function RateStrategyPage() {
     <div className="space-y-6 animate-fade-in">
       {/* ── 헤더 ── */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
-        {/* 좌측: 타이틀 + 월 네비 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <h1 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--color-text-primary)' }}>
+        {/* 좌측: 타이틀 (판매기준일·월 네비는 DayPanel 헤더로 이동) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 500, color: 'var(--color-text-primary)' }}>
             Rate Strategy
           </h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <button onClick={prevMonth}
-              className="flex items-center justify-center rounded transition-colors"
-              style={{ width: 24, height: 24, background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)', flexShrink: 0 }}>
-              <ChevronDown size={12} style={{ transform: 'rotate(90deg)' }} />
-            </button>
-            <span style={{ fontSize: 12, fontWeight: 500, minWidth: 72, textAlign: 'center', color: 'var(--color-text-secondary)' }}>
-              {viewYear}년 {viewMonth}월
-            </span>
-            <button onClick={nextMonth}
-              className="flex items-center justify-center rounded transition-colors"
-              style={{ width: 24, height: 24, background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)', flexShrink: 0 }}>
-              <ChevronDown size={12} style={{ transform: 'rotate(-90deg)' }} />
-            </button>
 
-            {/* 판매기준일 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 12 }}>
-              <span style={{ fontSize: 11, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
-                판매기준일
-              </span>
-              <FormDatePicker value={saleDate} onChange={setSaleDate} placeholder="날짜 선택" />
-              {saleDate !== getKSTDateString() && (
-                <button
-                  onClick={() => setSaleDate(getKSTDateString())}
-                  style={{
-                    fontSize:     10,
-                    padding:      '2px 7px',
-                    borderRadius: 4,
-                    border:       '0.5px solid var(--color-border-default)',
-                    background:   'transparent',
-                    color:        'var(--color-text-secondary)',
-                    cursor:       'pointer',
-                    whiteSpace:   'nowrap',
-                  }}
-                >
-                  오늘
-                </button>
-              )}
-            </div>
+          {/* 숨긴 FormDatePicker — DayPanel 판매기준일 클릭(onOpenSaleDatePicker)이 .click() 으로 트리거.
+              화면엔 안 보이지만 실제 날짜 선택 메커니즘이라 유지 필요. */}
+          <div ref={saleDateRef} style={{ width: 0, height: 0, overflow: 'hidden' }}>
+            <FormDatePicker value={saleDate} onChange={setSaleDate} placeholder="날짜 선택" />
           </div>
         </div>
 
         {/* 우측: 액션 버튼 */}
         <div className="flex items-end gap-2">
+          {/* 탭 버튼 아이콘 흔들기 애니메이션 */}
+          <style>{`
+            @keyframes shake {
+              0%, 100% { transform: rotate(0deg); }
+              25% { transform: rotate(-12deg); }
+              75% { transform: rotate(12deg); }
+            }
+            .btn-icon { display: inline-block; transition: transform 0.2s; }
+            .rate-tab-btn:hover .btn-icon { animation: shake 0.3s ease; }
+          `}</style>
           {/* 탭 버튼 */}
           <div style={{ display: 'flex', gap: 4 }}>
             {([
-              { id: 'list',      label: '일자별'       },
-              { id: 'promo-cal', label: '프로모션 달력' },
-              { id: 'rate-cal',  label: '요금 달력'    },
-            ] as { id: RateTab; label: string }[]).map(t => (
-              <button
-                key={t.id}
-                onClick={() => setActiveTab(t.id)}
-                style={{
-                  fontSize:     12,
-                  fontWeight:   activeTab === t.id ? 600 : 400,
-                  padding:      '5px 14px',
-                  borderRadius: 8,
-                  border:       activeTab === t.id ? '1.5px solid #00E5A0' : '1px solid var(--color-border-default)',
-                  background:   activeTab === t.id ? 'rgba(0,229,160,0.08)' : 'var(--color-bg-secondary)',
-                  color:        activeTab === t.id ? '#00E5A0' : 'var(--color-text-secondary)',
-                  cursor:       'pointer',
-                  transition:   'all 0.15s',
-                }}
-              >
-                {t.label}
-              </button>
-            ))}
+              { id: 'list',      label: '일자별',       Icon: Table         },
+              { id: 'promo-cal', label: '프로모션 달력', Icon: Tag           },
+              { id: 'rate-cal',  label: '요금 달력',    Icon: CalendarClock },
+              { id: 'chart',     label: '그래프',       Icon: BarChart3     },
+            ] as { id: RateTab; label: string; Icon: typeof Table }[]).map(t => {
+              const active = activeTab === t.id
+              const Icon = t.Icon
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setActiveTab(t.id)}
+                  className={`rate-tab-btn${active ? ' active' : ''}`}
+                  style={{
+                    display:      'inline-flex',
+                    alignItems:   'center',
+                    gap:          6,
+                    fontSize:     12,
+                    fontWeight:   active ? 600 : 400,
+                    padding:      '5px 14px',
+                    borderRadius: 8,
+                    border:       active ? '1.5px solid #00E5A0' : '1px solid var(--color-border-default)',
+                    background:   active ? 'rgba(0,229,160,0.08)' : 'var(--color-bg-secondary)',
+                    color:        active ? '#00E5A0' : 'var(--color-text-secondary)',
+                    cursor:       'pointer',
+                    transition:   'all 0.15s',
+                  }}
+                >
+                  <Icon size={14} className="btn-icon" aria-hidden="true" />
+                  {t.label}
+                </button>
+              )
+            })}
           </div>
 
           {hotelId && (
             <button onClick={handleRpaSend} disabled={rpaSending}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold disabled:opacity-50"
+              className="rate-tab-btn flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold disabled:opacity-50"
               style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)', background: 'var(--color-bg-secondary)' }}>
-              {rpaSending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+              {rpaSending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} className="btn-icon" />}
               RPA 전송
             </button>
           )}
@@ -1487,11 +1549,6 @@ export default function RateStrategyPage() {
                           className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide whitespace-nowrap"
                           style={{ borderLeft: DIVIDER, color: col.key === 'change' ? 'var(--color-accent-primary)' : 'var(--color-text-muted)' }}>
                           <div>{showAllTypes ? `${rt.room_type_code} ${col.label}` : col.label}</div>
-                          <ModeToggle
-                            modes={col.modes}
-                            value={colMode[col.key] ?? col.modes[0]}
-                            onChange={m => setColMode(prev => ({ ...prev, [col.key]: m }))}
-                          />
                         </th>
                       ))
                     ))}
@@ -1660,71 +1717,68 @@ export default function RateStrategyPage() {
                             </td>
                           )
                         })()}
-                        {/* BAR Rate (현재, 편집 가능) */}
+                        {/* BAR Rate = BASE 행(room_type_code='BASE', date_type='single').new_rate + 객실 surcharge */}
                         {displayRTs.map(rt => {
-                          const base        = getRate(date, rt.room_type_code, 'base')
-                          const cellKey     = `${date}__${rt.room_type_code}`
-                          const flash       = baseFlash[cellKey]
+                          const baseRow     = getRate(date, 'BASE', 'single')
+                          const surcharge   = rt.surcharge ?? 0
                           const previewRate = previewBuffer[date]?.[rt.room_type_code]
                           const isPreview   = previewRate !== undefined
-                          const displayVal  = isPreview
-                            ? String(Math.round(previewRate / 1000))
-                            : base?.rack_rate != null ? String(Math.round(base.rack_rate / 1000)) : ''
+                          const effectiveBar = isPreview
+                            ? previewRate
+                            : baseRow?.new_rate != null ? baseRow.new_rate + surcharge : null
                           return (
                             <td key={`${rt.room_type_code}-rack`}
                               className="px-3 py-2 text-right font-mono"
                               style={{
                                 borderRight: '1px solid var(--color-border-default)',
                                 background: isPreview ? 'rgba(255,200,0,0.08)' : undefined,
-                                opacity: flash === 'saving' ? 0.5 : 1,
-                                outline: flash === 'success' ? '1.5px solid #00E5A0' : flash === 'error' ? '1.5px solid #E24B4A' : 'none',
-                                transition: 'outline 0.3s',
                               }}>
-                              <input
-                                key={`${cellKey}-${isPreview ? `prev-${previewRate}` : base?.rack_rate ?? 'empty'}`}
-                                defaultValue={displayVal}
-                                className="w-full text-right font-mono"
-                                style={{
-                                  border: 'none', background: 'transparent',
-                                  color: isPreview ? '#F5B800' : '#00E5A0',
-                                  fontWeight: 600, fontSize: 12,
-                                  padding: 0, outline: 'none', boxShadow: 'none',
-                                }}
-                                placeholder="—"
-                                onBlur={e => {
-                                  const val = e.target.value.trim()
-                                  const cur = base?.rack_rate != null ? String(Math.round(base.rack_rate / 1000)) : ''
-                                  if (!val || val === cur) return
-                                  saveBaseRate(date, rt.room_type_code, val,
-                                    () => setBaseFlash(p => ({ ...p, [cellKey]: 'saving' })),
-                                    ok => {
-                                      setBaseFlash(p => ({ ...p, [cellKey]: ok ? 'success' : 'error' }))
-                                      setTimeout(() => setBaseFlash(p => { const n = { ...p }; delete n[cellKey]; return n }), 900)
-                                    }
-                                  )
-                                }}
-                                onKeyDown={e => {
-                                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-                                  if (e.key === 'Escape') {
-                                    const t = e.target as HTMLInputElement
-                                    t.value = base?.rack_rate != null ? String(Math.round(base.rack_rate / 1000)) : ''
-                                    t.blur()
-                                  }
-                                }}
-                              />
+                              <span style={{ color: isPreview ? '#F5B800' : '#00E5A0', fontWeight: 600, fontSize: 12 }}>
+                                {effectiveBar != null ? `${Math.round(effectiveBar / 1000)}K` : '—'}
+                              </span>
                             </td>
                           )
                         })}
                         {/* 요금 컬럼 데이터 */}
                         {extraCols.map(col =>
                           displayRTs.map(rt => {
-                            const mode = colMode[col.key] ?? col.modes[0]
-                            const base = getRate(date, rt.room_type_code, 'base')
-                            const detail = getRate(date, rt.room_type_code, col.key)
-                            const rack = base?.rack_rate ?? detail?.rack_rate ?? null
-                            const newR = detail?.new_rate ?? null
-                            const pct = rack && newR ? ((newR - rack) / rack * 100) : null
+                            // 프로모션 컬럼 — 조회 전용 (할인율 + 적용 요금)
+                            if (col.key.startsWith('promo_')) {
+                              const promo = promoByColKey(col.key)
+                              const active = promo ? isPromoActive(promo, date) : false
+                              return (
+                                <td key={`${rt.room_type_code}-${col.key}`}
+                                  className="px-3 py-2 text-right"
+                                  style={{ borderLeft: DIVIDER }}>
+                                  {active && promo ? (
+                                    <div className="flex flex-col items-end gap-0.5">
+                                      <span className="text-[10px]" style={{ color: 'var(--color-text-secondary)' }}>
+                                        {promoDiscLabel(promo)}
+                                      </span>
+                                      <span className="font-mono font-medium text-xs" style={{ color: 'var(--color-text-primary)' }}>
+                                        {formatPromoRate(promo, date, rt.room_type_code)}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-brand-muted opacity-40">—</span>
+                                  )}
+                                </td>
+                              )
+                            }
+
+                            // 변경요금 — BAR Rate 셀과 동일: direct 입력(K 단위), 모드 토글 없음
+                            const barRow    = getRate(date, 'BASE', 'single')
+                            const surcharge = rt.surcharge ?? 0
+                            const barRate   = barRow?.new_rate != null ? barRow.new_rate + surcharge : null
+                            const detail    = getRate(date, rt.room_type_code, col.key)
+                            const newR      = detail?.new_rate ?? null
+                            const pct       = barRate && newR ? ((newR - barRate) / barRate * 100) : null
                             const isEditing = editCell?.date === date && editCell?.rateCode === col.key && editCell?.rt === rt.room_type_code
+                            const saveCell  = async () => {
+                              const k = parseFloat(editVal.replace(/,/g, ''))
+                              if (!isNaN(k)) await saveRateCell(date, rt.room_type_code, col.key, 'direct', String(Math.round(k * 1000)), barRate)
+                              setEditCell(null)
+                            }
 
                             return (
                               <td key={`${rt.room_type_code}-${col.key}`}
@@ -1737,15 +1791,9 @@ export default function RateStrategyPage() {
                                     style={{ background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-accent-primary)', color: 'var(--color-text-primary)' }}
                                     value={editVal}
                                     onChange={e => setEditVal(e.target.value)}
-                                    onBlur={async () => {
-                                      await saveRateCell(date, rt.room_type_code, col.key, mode, editVal, rack)
-                                      setEditCell(null)
-                                    }}
-                                    onKeyDown={async e => {
-                                      if (e.key === 'Enter') {
-                                        await saveRateCell(date, rt.room_type_code, col.key, mode, editVal, rack)
-                                        setEditCell(null)
-                                      }
+                                    onBlur={saveCell}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') saveCell()
                                       if (e.key === 'Escape') setEditCell(null)
                                     }}
                                   />
@@ -1753,12 +1801,12 @@ export default function RateStrategyPage() {
                                   <div className="cursor-pointer hover:opacity-80"
                                     onClick={() => {
                                       setEditCell({ date, rateCode: col.key, rt: rt.room_type_code })
-                                      setEditVal(newR != null ? String(newR) : '')
+                                      setEditVal(newR != null ? String(Math.round(newR / 1000)) : '')
                                     }}>
                                     {newR != null ? (
                                       <>
                                         <div className="font-mono font-medium" style={{ color: 'var(--color-text-primary)' }}>
-                                          {fmt(newR)}
+                                          {Math.round(newR / 1000)}K
                                         </div>
                                         <div className="text-[10px]" style={{ color: pctColor(pct) }}>
                                           {pct != null ? `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%` : ''}
@@ -1903,19 +1951,44 @@ export default function RateStrategyPage() {
       {/* ── 프로모션 달력 탭 ── */}
       {activeTab === 'promo-cal' && (
         <div style={{ height: 'calc(100vh - 210px)', minHeight: 400 }}>
-          <PromoCalendarView year={viewYear} month={viewMonth} />
+          <PromoCalendarView
+            year={promoYear}
+            month={promoMonth}
+            onPrevMonth={promoPrev}
+            onNextMonth={promoNext}
+            onToday={promoToday}
+          />
         </div>
       )}
 
-      {/* ── 요금 달력 탭 ── */}
-      {activeTab === 'rate-cal' && (
+      {/* ── 요금 달력 (항상 마운트 — 일자 상세 모달을 어느 탭에서든 표시) ── */}
+      <div style={activeTab === 'rate-cal' ? { minHeight: 400 } : undefined}>
+        <RateCalendarView
+          year={viewYear}
+          month={viewMonth}
+          occMap={occMap}
+          saleDate={saleDate}
+          pickupRows={pickupRows}
+          onPrevMonth={prevMonth}
+          onNextMonth={nextMonth}
+          onToday={rateToday}
+          onOpenSaleDatePicker={() => saleDateRef.current?.querySelector('button')?.click()}
+          onSaleDateChange={setSaleDate}
+          dayModalDate={dayModalDate}
+          onDayModalOpen={setDayModalDate}
+          onDayModalClose={() => setDayModalDate(null)}
+          visible={activeTab === 'rate-cal'}
+        />
+      </div>
+
+      {/* ── 그래프 탭 ── */}
+      {activeTab === 'chart' && (
         <div style={{ minHeight: 400 }}>
-          <RateCalendarView
-            year={viewYear}
-            month={viewMonth}
-            occMap={occMap}
-            saleDate={saleDate}
-            pickupRows={pickupRows}
+          <RateChartView
+            hotelId={hotelId}
+            otbDate={otbDate}
+            vsOtbDate={vsOtbDate || otbDate}
+            onDayClick={setDayModalDate}
           />
         </div>
       )}

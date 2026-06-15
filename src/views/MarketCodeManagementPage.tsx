@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Plus, Trash2,
   Loader2, X, Save, GripVertical, Pencil, Palette, RefreshCw, Pipette,
-  ChevronDown, ChevronLeft,
+  ChevronDown, ChevronLeft, Check, RotateCcw,
 } from 'lucide-react'
 import { HexColorPicker } from 'react-colorful'
 import {
@@ -970,6 +970,10 @@ export default function MarketCodeManagementPage() {
   const addMenuRef    = useRef<HTMLDivElement>(null)
   const darkColorRef  = useRef<HTMLDivElement>(null)
   const lightColorRef = useRef<HTMLDivElement>(null)
+  // 저장 버튼 피드백 상태 (토스트 라이브러리 없음 → 버튼 인라인 피드백)
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }, [])
 
   // segmentation picker 외부 클릭 시 닫기
   useEffect(() => {
@@ -1329,14 +1333,20 @@ export default function MarketCodeManagementPage() {
     setPreviewOverrides(prev => ({ ...prev, [selectedLevel]: { ...LEVEL_DEFAULTS[selectedLevel] } }))
   const handleCancelColors = () => setPreviewOverrides({})
   const handleSaveColors  = async () => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    setSaveState('saving')
+    let failed = 0
     for (const level of ['main', 'mid', 'sub'] as SchemaLevel[]) {
       const ov = previewOverrides[level]; if (!ov) continue
       try {
         await saveLevelColors(level, ov.bgDark ?? '', ov.bgLight ?? '', ov.dark ?? '', ov.light ?? '', ov.bold ?? false)
       } catch {
-        // saveLevelColors 가 콘솔에 원인 로깅 + override 유지. 다음 레벨 계속 진행.
+        failed++  // saveLevelColors 가 콘솔에 원인 로깅 + override 유지. 다음 레벨 계속 진행.
       }
     }
+    const ok = failed === 0
+    setSaveState(ok ? 'saved' : 'error')
+    saveTimerRef.current = setTimeout(() => setSaveState('idle'), ok ? 1500 : 2500)
   }
 
   // [B]/[3] 색상 드롭다운 — 패널이 모드를 결정(mode). 분류 선택(①) → ExcelColorPicker 색 편집(②)
@@ -1430,19 +1440,38 @@ export default function MarketCodeManagementPage() {
         </div>
         {/* 저장 / 취소 / 초기화 — 헤더 우측 */}
         <div className="flex items-center gap-2 shrink-0">
-          <button onClick={handleSaveColors} className="text-xs font-semibold py-1.5 px-5 rounded-lg"
-            style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>저장</button>
-          <button onClick={handleCancelColors} className="text-xs py-1.5 px-4 rounded-lg"
-            style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}>취소</button>
-          <button onClick={handleResetLevel} className="text-xs py-1.5 px-4 rounded-lg"
-            style={{ border: '1px dashed var(--color-border-default)', color: 'var(--color-text-muted)' }}>초기화</button>
+          <button onClick={handleSaveColors} disabled={saveState === 'saving'}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold py-1.5 px-5 rounded-lg disabled:opacity-70"
+            style={saveState === 'error'
+              ? { background: 'var(--negative-bg)', color: 'var(--color-negative)', border: '1px solid var(--negative-border)' }
+              : { background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
+            {saveState === 'saving' ? <Loader2 size={14} className="animate-spin" />
+              : saveState === 'saved' ? <Check size={14} />
+              : saveState === 'error' ? <X size={14} />
+              : <Save size={14} />}
+            {saveState === 'saving' ? '저장 중…'
+              : saveState === 'saved' ? '저장됨'
+              : saveState === 'error' ? '저장 실패'
+              : '저장'}
+          </button>
+          <button onClick={handleCancelColors}
+            className="inline-flex items-center gap-1.5 text-xs py-1.5 px-4 rounded-lg"
+            style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}>
+            <X size={14} />취소
+          </button>
+          <button onClick={handleResetLevel}
+            className="inline-flex items-center gap-1.5 text-xs py-1.5 px-4 rounded-lg"
+            style={{ border: '1px dashed var(--color-border-default)', color: 'var(--color-text-muted)' }}>
+            <RotateCcw size={14} />초기화
+          </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
         {/* ── Left: 마켓 표 스키마 (앱 테마와 무관하게 항상 다크 고정) ── */}
-        <div data-theme="dark" className="rounded-2xl overflow-hidden flex flex-col" style={{ border: '1px solid var(--color-border-default)' }}>
+        {/* 다크 캔버스 배경 — 행/헤더가 덮지 않는 빈 영역도 다크로(라이트 페이지 비침 방지) */}
+        <div data-theme="dark" className="rounded-2xl overflow-hidden flex flex-col" style={{ border: '1px solid var(--color-border-default)', background: 'var(--color-bg-primary)' }}>
           <div className="flex items-center justify-between flex-wrap gap-2 px-4 shrink-0"
             style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-secondary)', height: HEADER_H, boxSizing: 'border-box' }}>
             <div className="flex items-center gap-2">
