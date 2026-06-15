@@ -138,6 +138,13 @@ function calcNewRate(rack: number, mode: ChangeMode, val: number): number {
   return rack
 }
 
+// created_at(ISO) → KST 날짜 문자열 (요금 변경 이력 그룹핑용, RateCalendarView 와 동일)
+function toKSTDateStr(isoStr: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date(isoStr))
+}
+
 function rgb2hex(r: number, g: number, b: number) {
   return `#${[r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')}`
 }
@@ -666,6 +673,46 @@ export default function RateStrategyPage() {
     return m
   }, [customRates])
 
+  // BAR Rate 변경 이력 (s01_rate_detail_history, room_type_code='BASE') — 요금 달력과 동일
+  const { data: rateHistory = [] } = useQuery<{ stay_date: string; old_rate: number; new_rate: number; created_at: string }[]>({
+    queryKey: ['s01_rate_detail_history', hotelId, tableStart, tableEnd],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('s01_rate_detail_history')
+        .select('stay_date, old_rate, new_rate, created_at')
+        .eq('hotel_id', hotelId)
+        .eq('room_type_code', 'BASE')
+        .gte('stay_date', tableStart)
+        .lte('stay_date', tableEnd)
+        .order('created_at', { ascending: true })
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: !!hotelId,
+  })
+
+  // stay_date 별 변경 이력 그룹 (변경일 KST 기준 묶음, firstOld→lastNew, 최근 3단계) — RateCalendarView 동일 로직
+  const rateHistGrouped = useMemo<Record<string, { changedDate: string; oldRate: number; newRate: number }[]>>(() => {
+    const byStayDate: Record<string, Record<string, { firstOld: number; lastNew: number }>> = {}
+    for (const r of rateHistory) {
+      const changedDate = toKSTDateStr(r.created_at)
+      if (!byStayDate[r.stay_date]) byStayDate[r.stay_date] = {}
+      if (!byStayDate[r.stay_date][changedDate]) {
+        byStayDate[r.stay_date][changedDate] = { firstOld: r.old_rate, lastNew: r.new_rate }
+      } else {
+        byStayDate[r.stay_date][changedDate].lastNew = r.new_rate
+      }
+    }
+    const result: Record<string, { changedDate: string; oldRate: number; newRate: number }[]> = {}
+    for (const [stayDateStr, byChanged] of Object.entries(byStayDate)) {
+      result[stayDateStr] = Object.entries(byChanged)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([changedDate, v]) => ({ changedDate, oldRate: v.firstOld, newRate: v.lastNew }))
+        .slice(-3)
+    }
+    return result
+  }, [rateHistory])
+
   // OCC + 픽업 데이터 (get_pickup_data RPC)
   // vsOtbDate 없으면 otbDate 를 fallback으로 사용 → pu_nights=0, otb_nights만 유효
   const minOtbDate = otbDates[otbDates.length - 1] ?? ''
@@ -757,7 +804,12 @@ export default function RateStrategyPage() {
 
   // ── Derived Data ────────────────────────────────────────────────────────────
 
-  const dates = stayStartEff && stayEndEff ? getDateRange(stayStartEff, stayEndEff) : []
+  // 날짜 행 메모이즈 + 역전 구간(start > end) 방어 — 피커 조작 중 일시적 역전 시 getDateRange 무한루프(UI 멈춤) 차단
+  const dates = useMemo(() => {
+    if (!stayStartEff || !stayEndEff) return []
+    if (stayStartEff > stayEndEff) return []
+    return getDateRange(stayStartEff, stayEndEff)
+  }, [stayStartEff, stayEndEff])
   const displayRTs = showAllTypes ? roomTypes : roomTypes.filter(rt => rt.room_type_code === selRoomType)
 
   // OCC map: date → occ% (get_pickup_data의 otb_nights 기반)
@@ -1107,7 +1159,7 @@ export default function RateStrategyPage() {
   }, [runUpload])
 
   const downloadTemplate = useCallback(() => {
-    const dateRange = stayStartEff && stayEndEff ? getDateRange(stayStartEff, stayEndEff) : []
+    const dateRange = stayStartEff && stayEndEff && stayStartEff <= stayEndEff ? getDateRange(stayStartEff, stayEndEff) : []
     const ws = XLSX.utils.aoa_to_sheet([
       ['날짜', 'BAR Rate'],
       ...dateRange.map(d => [d, '']),
@@ -1169,6 +1221,13 @@ export default function RateStrategyPage() {
   ]
 
   // ── 프로모션 컬럼 (조회 전용) 헬퍼 ─────────────────────────────────────────────
+  // 객실타입 surcharge 룩업 (프로모션 요금 계산 시 매 셀 find 방지)
+  const surchargeByCode = useMemo<Record<string, number>>(() => {
+    const m: Record<string, number> = {}
+    for (const rt of roomTypes) m[rt.room_type_code] = rt.surcharge ?? 0
+    return m
+  }, [roomTypes])
+
   const promoByColKey = (key: string) => promotions.find(p => `promo_${p.id}` === key)
   const isPromoActive = (promo: Promotion, date: string): boolean => {
     const afterStart = !promo.stay_start || promo.stay_start === '2000-01-01' || promo.stay_start <= date
@@ -1190,7 +1249,7 @@ export default function RateStrategyPage() {
     }
     const baseRack = getRate(date, 'BASE', 'single')?.new_rate
     if (baseRack == null) return '—'
-    const surcharge = roomTypes.find(rt => rt.room_type_code === roomTypeCode)?.surcharge ?? 0
+    const surcharge = surchargeByCode[roomTypeCode] ?? 0
     const bar = baseRack + surcharge
     const v = promo.discount_type === 'pct'    ? Math.round(bar * (1 - promo.discount_value / 100))
             : promo.discount_type === 'amount' ? bar - promo.discount_value
@@ -1723,9 +1782,19 @@ export default function RateStrategyPage() {
                           const surcharge   = rt.surcharge ?? 0
                           const previewRate = previewBuffer[date]?.[rt.room_type_code]
                           const isPreview   = previewRate !== undefined
-                          const effectiveBar = isPreview
-                            ? previewRate
-                            : baseRow?.new_rate != null ? baseRow.new_rate + surcharge : null
+                          const histGroup   = rateHistGrouped[date] ?? []
+                          // 변경 이력 체인 (요금 달력과 동일): oldRate→…→현재요금, 각 값에 surcharge 가산, 최근 3단계
+                          let chain: { rate: number; isPending?: boolean }[] = []
+                          if (histGroup.length > 0) {
+                            chain.push({ rate: Math.round((histGroup[0].oldRate + surcharge) / 1000) })
+                            for (const h of histGroup) chain.push({ rate: Math.round((h.newRate + surcharge) / 1000) })
+                            if (isPreview) chain.push({ rate: Math.round(previewRate / 1000), isPending: true })
+                          } else if (isPreview) {
+                            chain.push({ rate: Math.round(previewRate / 1000), isPending: true })
+                          } else if (baseRow?.new_rate != null) {
+                            chain.push({ rate: Math.round((baseRow.new_rate + surcharge) / 1000) })
+                          }
+                          if (chain.length > 3) chain = chain.slice(-3)
                           return (
                             <td key={`${rt.room_type_code}-rack`}
                               className="px-3 py-2 text-right font-mono"
@@ -1733,9 +1802,25 @@ export default function RateStrategyPage() {
                                 borderRight: '1px solid var(--color-border-default)',
                                 background: isPreview ? 'rgba(255,200,0,0.08)' : undefined,
                               }}>
-                              <span style={{ color: isPreview ? '#F5B800' : '#00E5A0', fontWeight: 600, fontSize: 12 }}>
-                                {effectiveBar != null ? `${Math.round(effectiveBar / 1000)}K` : '—'}
-                              </span>
+                              {chain.length === 0 ? (
+                                <span style={{ fontSize: 12, color: '#333' }}>—</span>
+                              ) : (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                                  {chain.map((item, i) => (
+                                    <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}>
+                                      {i > 0 && <span style={{ color: '#ff8c50', fontSize: 8, margin: '0 1px' }}>→</span>}
+                                      <span style={{
+                                        color:          item.isPending ? '#F5B800' : i === chain.length - 1 ? '#00E5A0' : '#444',
+                                        fontSize:       chain.length >= 3 ? 9 : 12,
+                                        fontWeight:     i === chain.length - 1 ? 600 : 400,
+                                        textDecoration: i < chain.length - 1 ? 'line-through' : 'none',
+                                      }}>
+                                        {item.rate}K
+                                      </span>
+                                    </span>
+                                  ))}
+                                </span>
+                              )}
                             </td>
                           )
                         })}
