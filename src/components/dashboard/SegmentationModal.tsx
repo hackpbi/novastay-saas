@@ -10,21 +10,6 @@ import { buildSegTable, type SegTableRow, type SegTableSummary } from '@/utils/s
 import DatePicker from '@/components/DatePicker'
 import AccountModal from '@/components/dashboard/AccountModal'
 
-// ─── Nav button ───────────────────────────────────────────────────────────────
-
-function NavBtn({ onClick, disabled, children }: { onClick: () => void; disabled: boolean; children: React.ReactNode }) {
-  return (
-    <button onClick={onClick} disabled={disabled} style={{
-      background: 'transparent', border: '1px solid var(--color-border-default)', borderRadius: 6,
-      padding: '2px 6px', cursor: disabled ? 'not-allowed' : 'pointer',
-      opacity: disabled ? 0.4 : 1, color: 'var(--color-text-secondary)',
-      display: 'flex', alignItems: 'center',
-    }}>
-      {children}
-    </button>
-  )
-}
-
 // ─── Number formatters ─────────────────────────────────────────────────────────
 
 function Dash({ fontColor }: { fontColor?: string }) {
@@ -198,7 +183,7 @@ function DataRow({ row, schema, houRowIds, onPickupCellClick, onRowClick }: {
 
 // ─── DataTable ─────────────────────────────────────────────────────────────────
 
-function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, onRowClick, year, month, day, roomCount, otbDate, otbDates, setOtbDate }: {
+function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, onRowClick, year, month, day, roomCount, curYear, curMonth, onPrevMonth, onNextMonth, canPrevMonth, canNextMonth }: {
   rows:               SegTableRow[]
   summary:            SegTableSummary
   schema:             MarketSchemaRow[]
@@ -209,9 +194,12 @@ function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, onRowC
   month:              number
   day?:               number
   roomCount:          number
-  otbDate:            string
-  otbDates:           string[]
-  setOtbDate:         (v: string) => void
+  curYear:            number
+  curMonth:           number
+  onPrevMonth:        () => void
+  onNextMonth:        () => void
+  canPrevMonth:       boolean
+  canNextMonth:       boolean
 }) {
   const daysInMonth = new Date(year, month, 0).getDate()
   const days        = day !== undefined ? 1 : daysInMonth
@@ -242,12 +230,30 @@ function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, onRowC
       <table className="w-full text-xs" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
         <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
           <tr>
-            <th rowSpan={2} style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE_GROUP, borderBottom: GRID_HEAD }}>Segmentation</th>
+            <th rowSpan={2} style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE_GROUP, borderBottom: GRID_HEAD, height: 42, verticalAlign: 'middle' }}>
+              <div style={{ marginBottom: 4 }}>SEGMENTATION</div>
+              {day === undefined && (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={onPrevMonth} disabled={!canPrevMonth}
+                    style={{ background: 'transparent', border: 'none', padding: 0, display: 'flex', alignItems: 'center', cursor: canPrevMonth ? 'pointer' : 'not-allowed', opacity: canPrevMonth ? 1 : 0.3, color: 'var(--color-text-secondary)' }}
+                  >
+                    <ChevronLeft size={12} />
+                  </button>
+                  <span style={{ fontSize: 11, color: 'var(--color-text-primary)', textTransform: 'none', letterSpacing: 'normal' }}>
+                    {curYear}년 {curMonth}월
+                  </span>
+                  <button
+                    onClick={onNextMonth} disabled={!canNextMonth}
+                    style={{ background: 'transparent', border: 'none', padding: 0, display: 'flex', alignItems: 'center', cursor: canNextMonth ? 'pointer' : 'not-allowed', opacity: canNextMonth ? 1 : 0.3, color: 'var(--color-text-secondary)' }}
+                  >
+                    <ChevronRight size={12} />
+                  </button>
+                </div>
+              )}
+            </th>
             <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: DOUBLE_GROUP, borderRight: DOUBLE_GROUP, height: 42, verticalAlign: 'middle' }}>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', marginBottom: 3 }}>현재 OTB</div>
-              <div style={{ display: 'inline-flex', justifyContent: 'center' }}>
-                <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} availableDates={otbDates} accent bare />
-              </div>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>현재 OTB</div>
             </th>
             <th colSpan={3} style={{ ...thBase, textAlign: 'center', height: 42, verticalAlign: 'middle' }}>
               <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>PICKUP VS OTB</div>
@@ -425,40 +431,38 @@ export default function SegmentationModal({
         style={{ maxHeight: '88vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
-        <div className="flex items-start justify-between px-6 py-4 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
-          <div>
+        <div className="px-6 py-4 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
+          {/* 1줄: 제목 + 닫기 */}
+          <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>
               Segmentation 비교
             </h2>
-            {day !== undefined ? (
-              <p className="text-xs mt-0.5" style={{ color: 'var(--brand-dimmed)' }}>
-                {curYear}년 {curMonth}월 {day}일
-              </p>
-            ) : (
-              <div className="flex items-center gap-2 mt-0.5">
-                <NavBtn onClick={goPrev} disabled={!canGoPrev}><ChevronLeft size={13} /></NavBtn>
-                <span style={{ fontSize: 12, color: 'var(--brand-dimmed)', minWidth: 72, textAlign: 'center' }}>
-                  {curYear}년 {curMonth}월
-                </span>
-                <NavBtn onClick={goNext} disabled={!canGoNext}><ChevronRight size={13} /></NavBtn>
-              </div>
-            )}
-            <div className="flex items-center gap-2 mt-2">
-              <DatePicker
-                label="vs OTB"
-                value={vsOtbDate}
-                onChange={setVsOtbDate}
-                availableDates={otbDates.filter(d => d < otbDate)}
-                bare
-              />
-              <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>
-                {days === 0 ? '당일' : `${days}일간`} 픽업 현황 입니다.
-              </span>
-            </div>
+            <button onClick={onClose} className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1" aria-label="닫기">
+              <X size={22} />
+            </button>
           </div>
-          <button onClick={onClose} className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1" aria-label="닫기">
-            <X size={22} />
-          </button>
+
+          {/* 2줄: OTB + VS OTB DatePicker + 픽업 현황 */}
+          <div className="flex items-center gap-2 mt-1">
+            <DatePicker
+              label="OTB"
+              value={otbDate}
+              onChange={setOtbDate}
+              availableDates={otbDates}
+              accent
+            />
+            <DatePicker
+              label="VS OTB"
+              value={vsOtbDate}
+              onChange={setVsOtbDate}
+              availableDates={otbDates.filter(d => d < otbDate)}
+            />
+            <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>
+              {day !== undefined
+                ? `${curYear}년 ${curMonth}월 ${day}일`
+                : `${days === 0 ? '당일' : `${days}일간`} 픽업 현황 입니다.`}
+            </span>
+          </div>
         </div>
 
         {/* Body */}
@@ -485,9 +489,12 @@ export default function SegmentationModal({
               month={curMonth}
               day={day}
               roomCount={roomCount}
-              otbDate={otbDate}
-              otbDates={otbDates}
-              setOtbDate={setOtbDate}
+              curYear={curYear}
+              curMonth={curMonth}
+              onPrevMonth={goPrev}
+              onNextMonth={goNext}
+              canPrevMonth={canGoPrev}
+              canNextMonth={canGoNext}
             />
           )}
         </div>
