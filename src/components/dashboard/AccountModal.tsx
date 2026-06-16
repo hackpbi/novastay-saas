@@ -122,14 +122,20 @@ function GroupHeaderRow({ group, collapsed, onToggle }: {
   const headerBg    = (isDark ? group.bgDarkColor  : group.bgLightColor)  ?? '#111111'
   const headerColor = '#ffffff'   // 그룹 헤더 이름/수치는 흰색 (PICKUP 음수만 red — Delta 포맷터 처리)
 
+  // separate 모드에서 tr 배경은 sticky thead 위로 칠해지므로, 배경은 td에 적용
+  const hcell = (extra: React.CSSProperties): React.CSSProperties => ({
+    ...tdBase, textAlign: 'right', fontWeight: 600, background: headerBg, ...extra,
+  })
   return (
     <tr
       onClick={onToggle} tabIndex={0}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle() } }}
-      className="cursor-pointer hover:bg-white/5 focus:outline-none focus:bg-white/5"
-      style={{ borderTop: BORDER, background: headerBg, color: headerColor }}
+      className="cursor-pointer focus:outline-none"
+      style={{ color: headerColor }}
+      onMouseEnter={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${headerBg}` })}
+      onMouseLeave={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = headerBg })}
     >
-      <td style={{ ...tdBase, paddingLeft: 12 }}>
+      <td style={{ ...tdBase, paddingLeft: 12, background: headerBg }}>
         <div className="flex items-center gap-2">
           {collapsed
             ? <ChevronRight size={14} style={{ color: headerColor, flexShrink: 0, opacity: 0.7 }} />
@@ -139,22 +145,22 @@ function GroupHeaderRow({ group, collapsed, onToggle }: {
           <span style={{ fontSize: 11, opacity: 0.6 }}>{group.rows.length}개</span>
         </div>
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600, borderLeft: DOUBLE }}>
+      <td className="font-mono" style={hcell({ borderLeft: DOUBLE })}>
         <FmtNights n={t.otbNights} fontColor={headerColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600, borderLeft: GRID }}>
+      <td className="font-mono" style={hcell({ borderLeft: GRID })}>
         <FmtAdr n={t.otbAdr} fontColor={headerColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600, borderLeft: GRID }}>
+      <td className="font-mono" style={hcell({ borderLeft: GRID })}>
         <FmtRev n={t.otbRevenue} fontColor={headerColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600, borderLeft: DOUBLE }}>
+      <td className="font-mono" style={hcell({ borderLeft: DOUBLE })}>
         <DeltaNights v={t.puNights} fontColor={headerColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600, borderLeft: GRID }}>
+      <td className="font-mono" style={hcell({ borderLeft: GRID })}>
         <DeltaAdr v={t.puAdr} fontColor={headerColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600, borderLeft: GRID }}>
+      <td className="font-mono" style={hcell({ borderLeft: GRID })}>
         <DeltaRev v={t.puRevenue} fontColor={headerColor} />
       </td>
     </tr>
