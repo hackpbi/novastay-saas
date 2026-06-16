@@ -7,21 +7,6 @@ import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
 import { usePickupData } from '@/hooks/usePickupData'
 import { buildAccountTable, type AccountGroup, type AccountTableSummary } from '@/utils/accountTable'
 
-// ─── Nav button ───────────────────────────────────────────────────────────────
-
-function NavBtn({ onClick, disabled, children }: { onClick: () => void; disabled: boolean; children: React.ReactNode }) {
-  return (
-    <button onClick={onClick} disabled={disabled} style={{
-      background: 'transparent', border: '1px solid var(--color-border-default)', borderRadius: 6,
-      padding: '2px 6px', cursor: disabled ? 'not-allowed' : 'pointer',
-      opacity: disabled ? 0.4 : 1, color: 'var(--color-text-secondary)',
-      display: 'flex', alignItems: 'center',
-    }}>
-      {children}
-    </button>
-  )
-}
-
 // ─── Formatters ─────────────────────────────────────────────────────────────────
 
 function Dash({ fontColor }: { fontColor?: string }) {
@@ -133,7 +118,7 @@ function GroupHeaderRow({ group, collapsed, onToggle }: {
     ? `${group.parentName} · ${group.segmentationName}`
     : group.segmentationName
   const headerBg    = (isDark ? group.bgDarkColor  : group.bgLightColor)  ?? '#111111'
-  const headerColor = (isDark ? group.fontDarkColor : group.fontLightColor) ?? 'var(--color-text-primary)'
+  const headerColor = '#ffffff'   // 그룹 헤더 이름/수치는 흰색 (PICKUP 음수만 red — Delta 포맷터 처리)
 
   return (
     <tr
@@ -176,7 +161,7 @@ function GroupHeaderRow({ group, collapsed, onToggle }: {
 
 // ─── Data Table ─────────────────────────────────────────────────────────────────
 
-function DataTable({ groups, summary, collapsedKeys, onToggle, isSearching, year, month, roomCount }: {
+function DataTable({ groups, summary, collapsedKeys, onToggle, isSearching, year, month, roomCount, onPrevMonth, onNextMonth, canPrevMonth, canNextMonth }: {
   groups:        AccountGroup[]
   summary:       AccountTableSummary
   collapsedKeys: Set<string>
@@ -185,6 +170,10 @@ function DataTable({ groups, summary, collapsedKeys, onToggle, isSearching, year
   year:          number
   month:         number
   roomCount:     number
+  onPrevMonth:   () => void
+  onNextMonth:   () => void
+  canPrevMonth:  boolean
+  canNextMonth:  boolean
 }) {
   const daysInMonth = new Date(year, month, 0).getDate()
   const capacity    = roomCount * daysInMonth
@@ -207,12 +196,36 @@ function DataTable({ groups, summary, collapsedKeys, onToggle, isSearching, year
 
   const sumTd: React.CSSProperties = {
     ...tdBase, fontWeight: 600, color: 'var(--color-text-primary)', paddingTop: 10, paddingBottom: 10, background: '#111111',
+    borderTop: '1px solid rgba(0,229,160,0.6)',   // 합계 행 위 초록선 (separate 모드: 셀 보더만 렌더)
   }
   const ACCOUNT_FONT = 'rgba(255,255,255,0.45)'
   return (
     <div>
-      <table className="w-full text-sm" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+      <table className="w-full text-xs" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
         <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+          {/* 0줄: 월 네비게이션 — 표 상단 가운데 */}
+          <tr>
+            <th colSpan={7} style={{ ...thBase, height: 36, verticalAlign: 'top', padding: 0, borderBottom: GRID }}>
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
+                <button
+                  onClick={onPrevMonth} disabled={!canPrevMonth}
+                  style={{ background: 'transparent', border: '1px solid var(--color-border-default)', borderRadius: 6, padding: '2px 4px', display: 'flex', alignItems: 'center', cursor: canPrevMonth ? 'pointer' : 'not-allowed', opacity: canPrevMonth ? 1 : 0.35, color: 'var(--color-text-secondary)' }}
+                >
+                  <ChevronLeft size={13} />
+                </button>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)', textTransform: 'none', letterSpacing: 'normal', whiteSpace: 'nowrap' }}>
+                  {year}년 {month}월
+                </span>
+                <button
+                  onClick={onNextMonth} disabled={!canNextMonth}
+                  style={{ background: 'transparent', border: '1px solid var(--color-border-default)', borderRadius: 6, padding: '2px 4px', display: 'flex', alignItems: 'center', cursor: canNextMonth ? 'pointer' : 'not-allowed', opacity: canNextMonth ? 1 : 0.35, color: 'var(--color-text-secondary)' }}
+                >
+                  <ChevronRight size={13} />
+                </button>
+              </div>
+            </th>
+          </tr>
+          {/* 1줄: 섹션 헤더 */}
           <tr>
             <th rowSpan={2} style={{ ...thBase, textAlign: 'left', minWidth: 200, borderRight: DOUBLE, borderBottom: GRID_HEAD }}>Account</th>
             <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: DOUBLE, borderRight: DOUBLE }}>현재 OTB</th>
@@ -268,7 +281,7 @@ function DataTable({ groups, summary, collapsedKeys, onToggle, isSearching, year
         </tbody>
 
         <tfoot>
-          <tr style={{ borderTop: '2px solid var(--color-accent-primary)' }}>
+          <tr>
             <td style={{ ...sumTd, paddingLeft: 12, borderRight: DOUBLE }}>합계 (HOU 제외)</td>
             <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}>
               <FmtNights n={summary.totalNights} />
@@ -449,18 +462,9 @@ export default function AccountModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between gap-4 px-6 py-4 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
-          {/* 좌측: 제목 + 월 네비게이션 */}
+          {/* 좌측: 제목 */}
           <div className="shrink-0">
-            <div className="flex items-center gap-2 mb-0.5">
-              <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>Account 비교</h2>
-            </div>
-            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-              <NavBtn onClick={goPrev} disabled={!canGoPrev}><ChevronLeft size={13} /></NavBtn>
-              <span style={{ fontSize: 12, color: 'var(--brand-dimmed)', minWidth: 72, textAlign: 'center' }}>
-                {curYear}년 {curMonth}월
-              </span>
-              <NavBtn onClick={goNext} disabled={!canGoNext}><ChevronRight size={13} /></NavBtn>
-            </div>
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>Pick-Up Status By Accounts</h2>
           </div>
 
           {/* 우측: 닫기 (→ Seg로 복귀) */}
@@ -497,6 +501,10 @@ export default function AccountModal({
               year={curYear}
               month={curMonth}
               roomCount={roomCount}
+              onPrevMonth={goPrev}
+              onNextMonth={goNext}
+              canPrevMonth={canGoPrev}
+              canNextMonth={canGoNext}
             />
           )}
         </div>

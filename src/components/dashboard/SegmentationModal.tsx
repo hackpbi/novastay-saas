@@ -261,7 +261,7 @@ function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, onRowC
               <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>현재 OTB</div>
             </th>
             <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: DOUBLE_GROUP, height: 42, verticalAlign: 'middle' }}>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>PICKUP VS OTB</div>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>PICK-UP</div>
             </th>
           </tr>
           {/* 2줄: 컬럼명 */}
@@ -441,7 +441,7 @@ export default function SegmentationModal({
           {/* 1줄: 제목 + 닫기 */}
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-              Segmentation 비교
+              Pick-Up Status By Segmentation
             </h2>
             <button onClick={onClose} className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1" aria-label="닫기">
               <X size={22} />
