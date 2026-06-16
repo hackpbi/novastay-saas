@@ -382,7 +382,7 @@ export default function MonthlyPickupAccountModal({
                   <tr>
                     <th style={{ ...thBase, textAlign: 'left', borderRight: BORDER }} rowSpan={2}>Account</th>
                     {visiblePageMonths.map(mk => (
-                      <th key={mk} colSpan={3} style={{ ...thBase, textAlign: 'center', background: 'rgba(0,229,160,0.06)', color: 'rgba(0,229,160,0.7)', borderLeft: MONTH_SEP, borderRight: BORDER }}>
+                      <th key={mk} colSpan={3} style={{ ...thBase, textAlign: 'center', color: '#00E5A0', borderLeft: MONTH_SEP, borderRight: BORDER }}>
                         {formatYYYYMM(mk)}
                       </th>
                     ))}
