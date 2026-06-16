@@ -26,7 +26,8 @@ const tdBase: React.CSSProperties = {
   padding: '6px 10px', verticalAlign: 'middle',
 }
 const BORDER = '1px solid var(--divider-color)'
-const MONTH_SEP = '1.5px solid rgba(0,229,160,0.3)'   // 월 경계 (각 월 첫 컬럼 좌측)
+// 월 경계 (각 월 첫 컬럼 좌측) — border-collapse 환경에서 묻히지 않도록 box-shadow inset
+const MONTH_SEP: React.CSSProperties = { boxShadow: 'inset 1.5px 0 0 rgba(0,229,160,0.4)' }
 const ZERO_CELL: MonthlyPickupCell = { pickupNights: 0, pickupAdr: 0, pickupRevenue: 0 }
 
 // ─── Format helpers ────────────────────────────────────────────────────────────
@@ -83,7 +84,7 @@ function FmtRevpar({ n }: { n: number }) {
 function MonthCells({ cell, fontColor }: { cell: MonthlyPickupCell; isLast?: boolean; fontColor?: string }) {
   return (
     <>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: MONTH_SEP, borderRight: BORDER }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', ...MONTH_SEP, borderRight: BORDER }}>
         <FmtPickupNights n={cell.pickupNights} fontColor={fontColor} />
       </td>
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: BORDER }}>
@@ -382,14 +383,14 @@ export default function MonthlyPickupAccountModal({
                   <tr>
                     <th style={{ ...thBase, textAlign: 'left', borderRight: BORDER }} rowSpan={2}>Account</th>
                     {visiblePageMonths.map(mk => (
-                      <th key={mk} colSpan={3} style={{ ...thBase, textAlign: 'center', color: '#00E5A0', borderLeft: MONTH_SEP, borderRight: BORDER }}>
+                      <th key={mk} colSpan={3} style={{ ...thBase, textAlign: 'center', color: '#00E5A0', ...MONTH_SEP, borderRight: BORDER }}>
                         {formatYYYYMM(mk)}
                       </th>
                     ))}
                   </tr>
                   <tr>
                     {visiblePageMonths.map(mk => ([
-                      <th key={`${mk}-rn`}  style={{ ...thBase, textAlign: 'right', borderLeft: MONTH_SEP, borderBottom: BORDER }}>ΔR-N</th>,
+                      <th key={`${mk}-rn`}  style={{ ...thBase, textAlign: 'right', ...MONTH_SEP, borderBottom: BORDER }}>ΔR-N</th>,
                       <th key={`${mk}-adr`} style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>,
                       <th key={`${mk}-rev`} style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>ΔREV</th>,
                     ]))}
@@ -469,7 +470,7 @@ export default function MonthlyPickupAccountModal({
                   <tr style={{ borderTop: BORDER, background: '#111111' }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER }}>OCC</td>
                     {visiblePageMonths.map((mk, idx) => (
-                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: MONTH_SEP, borderRight: BORDER }}>
+                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, ...MONTH_SEP, borderRight: BORDER }}>
                         <FmtOcc n={summary.monthlyTotals[mk]?.occ ?? 0} />
                       </td>
                     ))}
@@ -478,7 +479,7 @@ export default function MonthlyPickupAccountModal({
                   <tr style={{ borderTop: BORDER, background: '#111111' }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER }}>RevPAR</td>
                     {visiblePageMonths.map((mk, idx) => (
-                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: MONTH_SEP, borderRight: BORDER }}>
+                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, ...MONTH_SEP, borderRight: BORDER }}>
                         <FmtRevpar n={summary.monthlyTotals[mk]?.revpar ?? 0} />
                       </td>
                     ))}
