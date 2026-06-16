@@ -233,7 +233,7 @@ function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, onRowC
           {/* 0줄: 월 네비게이션 — 표 상단 가운데 */}
           {day === undefined && (
             <tr>
-              <th colSpan={7} style={{ ...thBase, padding: '6px 0', borderBottom: GRID }}>
+              <th colSpan={7} style={{ ...thBase, height: 36, verticalAlign: 'top', padding: 0, borderBottom: GRID }}>
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
                   <button
                     onClick={onPrevMonth} disabled={!canPrevMonth}
