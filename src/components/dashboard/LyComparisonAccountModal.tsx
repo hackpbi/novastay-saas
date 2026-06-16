@@ -6,6 +6,7 @@ import { X, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
+import DatePicker from '@/components/DatePicker'
 import { useLyPacing, type LyPacingMode } from '@/hooks/useLyPacing'
 import {
   buildLyComparisonAccountTable,
@@ -164,7 +165,7 @@ export default function LyComparisonAccountModal({
   onBackToSeg?:           (monthKey: string) => void
 }) {
   const { currentHotel }                                 = useHotel()
-  const { otbDate }                                      = useDateContext()
+  const { otbDate, otbDates, setOtbDate }                = useDateContext()
   const { data: schema, loading: schemaLoading }         = useMarketSchema()
   const [mode, setMode]                                  = useState<LyPacingMode>('v1')
   const [tooltip, setTooltip]                            = useState<{ visible: boolean; x: number; y: number; text: string }>({ visible: false, x: 0, y: 0, text: '' })
@@ -275,9 +276,6 @@ export default function LyComparisonAccountModal({
           <div className="flex items-start gap-3 min-w-0">
             <div className="min-w-0">
               <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>전년 동기간 비교 — Account</h2>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--brand-dimmed)' }}>
-                현재 OTB {otbDate ?? '-'}{' · '}전년 동기간 OTB {lyMatchUpdateDate ?? '-'}
-              </p>
             </div>
           </div>
 
@@ -377,9 +375,19 @@ export default function LyComparisonAccountModal({
                 <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                   <tr>
                     <th style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE }} rowSpan={2}>Account</th>
-                    <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: DOUBLE }}>현재 OTB</th>
-                    <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderRight: DOUBLE }}>작년 OTB</th>
-                    <th colSpan={3} style={{ ...thBase, textAlign: 'center' }}>GAP</th>
+                    <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: DOUBLE, borderRight: DOUBLE, height: 42, verticalAlign: 'middle' }}>
+                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', marginBottom: 3 }}>현재 OTB</div>
+                      <div style={{ display: 'inline-flex', justifyContent: 'center' }}>
+                        <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} availableDates={otbDates} accent bare />
+                      </div>
+                    </th>
+                    <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderRight: DOUBLE, height: 42, verticalAlign: 'middle' }}>
+                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', marginBottom: 3 }}>작년 OTB</div>
+                      <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>{lyMatchUpdateDate ?? '-'}</div>
+                    </th>
+                    <th colSpan={3} style={{ ...thBase, textAlign: 'center', height: 42, verticalAlign: 'middle' }}>
+                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>GAP</div>
+                    </th>
                   </tr>
                   <tr>
                     <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>R-N</th>
