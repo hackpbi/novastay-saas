@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { X, Search, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft } from 'lucide-react'
+import { X, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
 import { usePickupData } from '@/hooks/usePickupData'
@@ -24,43 +24,38 @@ function NavBtn({ onClick, disabled, children }: { onClick: () => void; disabled
 
 // ─── Formatters ─────────────────────────────────────────────────────────────────
 
-function Dash() {
-  return <span style={{ color: 'var(--brand-dimmed)' }}>—</span>
+function Dash({ fontColor }: { fontColor?: string }) {
+  return <span style={{ color: fontColor ?? 'var(--brand-dimmed)' }}>—</span>
 }
 
-function FmtNights({ n }: { n: number }) {
-  return n === 0 ? <Dash /> : <>{n.toLocaleString('ko-KR')}</>
+function FmtNights({ n, fontColor }: { n: number; fontColor?: string }) {
+  return n === 0 ? <Dash fontColor={fontColor} /> : <span style={{ color: fontColor }}>{n.toLocaleString('ko-KR')}</span>
 }
-
-function FmtAdr({ n }: { n: number }) {
+function FmtAdr({ n, fontColor }: { n: number; fontColor?: string }) {
   const k = Math.round(n / 1000)
-  return k === 0 ? <Dash /> : <>{k}k</>
+  return k === 0 ? <Dash fontColor={fontColor} /> : <span style={{ color: fontColor }}>{k}k</span>
 }
-
-function FmtRev({ n }: { n: number }) {
-  return n === 0 ? <Dash /> : <>{(n / 1_000_000).toFixed(1)}M</>
+function FmtRev({ n, fontColor }: { n: number; fontColor?: string }) {
+  return n === 0 ? <Dash fontColor={fontColor} /> : <span style={{ color: fontColor }}>{(n / 1_000_000).toFixed(1)}M</span>
 }
-
-// fontWeight 제거 — 그룹 헤더 td의 fontWeight:600 or 행의 inherited weight 사용
-function DeltaNights({ v }: { v: number }) {
-  if (v === 0) return <Dash />
-  const cls = v > 0 ? 'text-status-positive' : 'text-status-negative'
-  return <span className={cls}>{v > 0 ? '+' : ''}{v.toLocaleString('ko-KR')}</span>
+// Pickup(Δ) — 양수 fontColor(없으면 흰색), 음수 red, 0/Dash fontColor
+function DeltaNights({ v, fontColor }: { v: number; fontColor?: string }) {
+  if (v === 0) return <Dash fontColor={fontColor} />
+  const color = v > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
+  return <span style={{ color }}>{v > 0 ? '+' : ''}{v.toLocaleString('ko-KR')}</span>
 }
-
-function DeltaAdr({ v }: { v: number }) {
-  if (v === 0) return <Dash />
+function DeltaAdr({ v, fontColor }: { v: number; fontColor?: string }) {
+  if (v === 0) return <Dash fontColor={fontColor} />
   const k = Math.round(v / 1000)
-  if (k === 0) return <Dash />
-  const cls = k > 0 ? 'text-status-positive' : 'text-status-negative'
-  return <span className={cls}>{k > 0 ? '+' : ''}{k}k</span>
+  if (k === 0) return <Dash fontColor={fontColor} />
+  const color = k > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
+  return <span style={{ color }}>{k > 0 ? '+' : ''}{k}k</span>
 }
-
-function DeltaRev({ v }: { v: number }) {
-  if (v === 0) return <Dash />
+function DeltaRev({ v, fontColor }: { v: number; fontColor?: string }) {
+  if (v === 0) return <Dash fontColor={fontColor} />
   const m = v / 1_000_000
-  const cls = m > 0 ? 'text-status-positive' : 'text-status-negative'
-  return <span className={cls}>{m > 0 ? '+' : ''}{m.toFixed(1)}M</span>
+  const color = m > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
+  return <span style={{ color }}>{m > 0 ? '+' : ''}{m.toFixed(1)}M</span>
 }
 
 // ─── StatCard ──────────────────────────────────────────────────────────────────
@@ -96,13 +91,16 @@ function Skeleton() {
 const thBase: React.CSSProperties = {
   fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
   letterSpacing: '0.07em', color: 'var(--color-text-secondary)',
-  padding: '6px 10px', background: 'var(--color-bg-elevated)', whiteSpace: 'nowrap',
+  padding: '6px 10px', background: '#0a0a0a', whiteSpace: 'nowrap',
 }
 
-const tdBase: React.CSSProperties = { padding: '7px 10px', verticalAlign: 'middle' }
+const GRID = '0.5px solid rgba(255,255,255,0.06)'
+const GRID_HEAD = '0.5px solid rgba(255,255,255,0.12)'
+
+const tdBase: React.CSSProperties = { padding: '7px 10px', verticalAlign: 'middle', borderBottom: GRID }
 
 const BORDER = '1px solid var(--divider-color)'
-const DOUBLE = '3px double rgba(255, 255, 255, 0.25)'
+const DOUBLE = '1px solid rgba(0,229,160,0.3)'   // 섹션 구분선 (초록)
 
 // ─── Filter helper ──────────────────────────────────────────────────────────────
 
@@ -134,7 +132,7 @@ function GroupHeaderRow({ group, collapsed, onToggle }: {
   const label = group.parentName
     ? `${group.parentName} · ${group.segmentationName}`
     : group.segmentationName
-  const headerBg    = (isDark ? group.bgDarkColor  : group.bgLightColor)  ?? 'var(--color-bg-elevated)'
+  const headerBg    = (isDark ? group.bgDarkColor  : group.bgLightColor)  ?? '#111111'
   const headerColor = (isDark ? group.fontDarkColor : group.fontLightColor) ?? 'var(--color-text-primary)'
 
   return (
@@ -154,24 +152,23 @@ function GroupHeaderRow({ group, collapsed, onToggle }: {
           <span style={{ fontSize: 11, opacity: 0.6 }}>{group.rows.length}개</span>
         </div>
       </td>
-      {/* fontWeight: 600 on td — Delta spans inherit this */}
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600 }}>
-        <FmtNights n={t.otbNights} />
+        <FmtNights n={t.otbNights} fontColor={headerColor} />
       </td>
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600 }}>
-        <FmtAdr n={t.otbAdr} />
+        <FmtAdr n={t.otbAdr} fontColor={headerColor} />
       </td>
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600, borderRight: DOUBLE }}>
-        <FmtRev n={t.otbRevenue} />
+        <FmtRev n={t.otbRevenue} fontColor={headerColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600, borderLeft: BORDER }}>
-        <DeltaNights v={t.puNights} />
-      </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600 }}>
-        <DeltaAdr v={t.puAdr} />
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600, borderLeft: DOUBLE }}>
+        <DeltaNights v={t.puNights} fontColor={headerColor} />
       </td>
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600 }}>
-        <DeltaRev v={t.puRevenue} />
+        <DeltaAdr v={t.puAdr} fontColor={headerColor} />
+      </td>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600 }}>
+        <DeltaRev v={t.puRevenue} fontColor={headerColor} />
       </td>
     </tr>
   )
@@ -209,25 +206,25 @@ function DataTable({ groups, summary, collapsedKeys, onToggle, isSearching, year
   }
 
   const sumTd: React.CSSProperties = {
-    ...tdBase, fontWeight: 600, color: 'var(--color-text-primary)', paddingTop: 10, paddingBottom: 10,
+    ...tdBase, fontWeight: 600, color: 'var(--color-text-primary)', paddingTop: 10, paddingBottom: 10, background: '#111111',
   }
+  const ACCOUNT_FONT = 'rgba(255,255,255,0.45)'
   return (
     <div>
-      <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
+      <table className="w-full text-sm" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
         <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
           <tr>
-            <th style={{ ...thBase, textAlign: 'left', minWidth: 200, borderRight: DOUBLE }}>Account</th>
-            <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderRight: DOUBLE }}>현재 OTB</th>
-            <th colSpan={3} style={{ ...thBase, textAlign: 'center' }}>Pickup vs OTB</th>
+            <th rowSpan={2} style={{ ...thBase, textAlign: 'left', minWidth: 200, borderRight: DOUBLE, borderBottom: GRID_HEAD }}>Account</th>
+            <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: DOUBLE, borderRight: DOUBLE }}>현재 OTB</th>
+            <th colSpan={3} style={{ ...thBase, textAlign: 'center' }}>PICKUP VS OTB</th>
           </tr>
           <tr>
-            <th style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE, borderBottom: BORDER }} />
-            <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>R-N</th>
-            <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ADR</th>
-            <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE, borderBottom: BORDER }}>REV</th>
-            <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>ΔR-N</th>
-            <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>
-            <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔREV</th>
+            <th style={{ ...thBase, textAlign: 'right', borderLeft: DOUBLE, borderBottom: GRID_HEAD }}>R-N</th>
+            <th style={{ ...thBase, textAlign: 'right', borderBottom: GRID_HEAD }}>ADR</th>
+            <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE, borderBottom: GRID_HEAD }}>REV</th>
+            <th style={{ ...thBase, textAlign: 'right', borderLeft: DOUBLE, borderBottom: GRID_HEAD }}>ΔR-N</th>
+            <th style={{ ...thBase, textAlign: 'right', borderBottom: GRID_HEAD }}>ΔADR</th>
+            <th style={{ ...thBase, textAlign: 'right', borderBottom: GRID_HEAD }}>ΔREV</th>
           </tr>
         </thead>
 
@@ -238,30 +235,30 @@ function DataTable({ groups, summary, collapsedKeys, onToggle, isSearching, year
               <>
                 <GroupHeaderRow key={`hdr-${g.key}`} group={g} collapsed={isCollapsed} onToggle={() => onToggle(g.key)} />
                 {!isCollapsed && g.rows.map((row, i) => (
-                  <tr key={`${g.key}-${i}`} className="hover:bg-white/5" style={{ borderBottom: BORDER }}>
+                  <tr key={`${g.key}-${i}`} className="hover:bg-white/5" style={{ borderBottom: BORDER, color: ACCOUNT_FONT }}>
                     <td style={{ ...tdBase, paddingLeft: 40, borderRight: DOUBLE }}>
-                      <span style={{ color: 'var(--brand-dimmed)' }}>└ </span>
-                      <span style={{ color: row.account_name === '(미지정)' ? 'var(--brand-dimmed)' : 'var(--color-text-primary)' }}>
+                      <span style={{ color: ACCOUNT_FONT }}>└ </span>
+                      <span style={{ color: ACCOUNT_FONT }}>
                         {row.account_name}
                       </span>
                     </td>
                     <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}>
-                      <FmtNights n={row.otbNights} />
+                      <FmtNights n={row.otbNights} fontColor={ACCOUNT_FONT} />
                     </td>
                     <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}>
-                      <FmtAdr n={row.otbAdr} />
+                      <FmtAdr n={row.otbAdr} fontColor={ACCOUNT_FONT} />
                     </td>
                     <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: DOUBLE }}>
-                      <FmtRev n={row.otbRevenue} />
+                      <FmtRev n={row.otbRevenue} fontColor={ACCOUNT_FONT} />
                     </td>
-                    <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: BORDER }}>
-                      <DeltaNights v={row.puNights} />
-                    </td>
-                    <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}>
-                      <DeltaAdr v={row.puAdr} />
+                    <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: DOUBLE }}>
+                      <DeltaNights v={row.puNights} fontColor={ACCOUNT_FONT} />
                     </td>
                     <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}>
-                      <DeltaRev v={row.puRevenue} />
+                      <DeltaAdr v={row.puAdr} fontColor={ACCOUNT_FONT} />
+                    </td>
+                    <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}>
+                      <DeltaRev v={row.puRevenue} fontColor={ACCOUNT_FONT} />
                     </td>
                   </tr>
                 ))}
@@ -282,7 +279,7 @@ function DataTable({ groups, summary, collapsedKeys, onToggle, isSearching, year
             <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderRight: DOUBLE }}>
               <FmtRev n={summary.totalRevenue} />
             </td>
-            <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderLeft: BORDER }}>
+            <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderLeft: DOUBLE }}>
               <DeltaNights v={summary.puNights} />
             </td>
             <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}>
@@ -292,21 +289,21 @@ function DataTable({ groups, summary, collapsedKeys, onToggle, isSearching, year
               <DeltaRev v={summary.puRevenue} />
             </td>
           </tr>
-          <tr style={{ borderTop: '1px solid var(--divider-color)', background: 'var(--color-bg-secondary)' }}>
-            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '10px 12px', borderRight: DOUBLE }}>OCC</td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: DOUBLE }}>
+          <tr style={{ borderTop: GRID }}>
+            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '10px 12px', borderRight: DOUBLE, borderBottom: GRID, background: '#111111' }}>OCC</td>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: DOUBLE, borderBottom: GRID, background: '#111111' }}>
               {otbOcc.toFixed(1)}%
             </td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: puColor(puOcc) }}>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: puColor(puOcc), borderBottom: GRID, background: '#111111' }}>
               {fmtPuOcc(puOcc)}
             </td>
           </tr>
-          <tr style={{ borderTop: '1px solid var(--divider-color)', background: 'var(--color-bg-secondary)' }}>
-            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '10px 12px', borderRight: DOUBLE }}>RevPAR</td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: DOUBLE }}>
+          <tr style={{ borderTop: GRID }}>
+            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '10px 12px', borderRight: DOUBLE, borderBottom: GRID, background: '#111111' }}>RevPAR</td>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: DOUBLE, borderBottom: GRID, background: '#111111' }}>
               {Math.round(otbRevpar / 1000)}k
             </td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: puColor(puRevpar) }}>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: puColor(puRevpar), borderBottom: GRID, background: '#111111' }}>
               {fmtPuRevpar(puRevpar)}
             </td>
           </tr>
@@ -342,7 +339,6 @@ export default function AccountModal({
 
   const [searchQuery,   setSearchQuery]   = useState('')
   const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(new Set())
-  const [filterCleared, setFilterCleared] = useState(false)
   const [curYear,  setCurYear]  = useState(year)
   const [curMonth, setCurMonth] = useState(month)
 
@@ -376,15 +372,10 @@ export default function AccountModal({
     [schema, pickup, curYear, curMonth, roomCount, loading],
   )
 
-  const filterActive = !filterCleared && !!initialFilterSegCodes?.length
+  // 1. 모든 그룹 표시 (필터 없음 — 클릭 세그는 펼침/나머지 접힘으로 처리)
+  const filterGrouped = groups
 
-  // 1. Segment filter (후처리)
-  const filterGrouped = useMemo(() => {
-    if (!filterActive || !initialFilterSegCodes?.length) return groups
-    return groups.filter(g => groupHasFilterCode(g, initialFilterSegCodes, schema))
-  }, [groups, filterActive, initialFilterSegCodes, schema])
-
-  // 2. Search within filtered groups
+  // 2. Search within all groups
   const query = searchQuery.trim().toLowerCase()
   const isSearching = query.length > 0
 
@@ -395,39 +386,9 @@ export default function AccountModal({
       .filter(g => g.rows.length > 0)
   }, [filterGrouped, query, isSearching])
 
-  // 3. Summary: filtered R-N/REV/ADR/PU, but OCC/RevPAR from full data
-  const displaySummary = useMemo((): AccountTableSummary => {
-    if (!filterActive || !initialFilterSegCodes?.length) return summary
-    let nights = 0, rev = 0, vsN = 0, vsR = 0
-    for (const g of filterGrouped) {
-      if (g.isHou) continue
-      for (const r of g.rows) {
-        nights += r.otbNights
-        rev    += r.otbRevenue
-        vsN    += r.otbNights  - r.puNights
-        vsR    += r.otbRevenue - r.puRevenue
-      }
-    }
-    const adr  = nights > 0 ? rev / nights : 0
-    const vsAdr = vsN  > 0 ? vsR / vsN  : 0
-    return {
-      ...summary,   // OCC/RevPAR from full data
-      totalNights:  nights,
-      totalAdr:     adr,
-      totalRevenue: rev,
-      puNights:     nights - vsN,
-      puAdr:        adr - vsAdr,
-      puRevenue:    rev - vsR,
-      accountCount: filterGrouped.reduce((s, g) => s + g.rows.length, 0),
-      groupCount:   filterGrouped.length,
-    }
-  }, [filterActive, filterGrouped, summary, initialFilterSegCodes])
+  // 3. Summary: 전체 기준
+  const displaySummary = summary
 
-  // 모두 접기 / 펼치기
-  const allCollapsed = collapsedKeys.size === filterGrouped.length && filterGrouped.length > 0
-  function toggleAll() {
-    setCollapsedKeys(allCollapsed ? new Set() : new Set(filterGrouped.map(g => g.key)))
-  }
   function toggleGroup(key: string) {
     setCollapsedKeys(prev => {
       const next = new Set(prev)
@@ -455,10 +416,20 @@ export default function AccountModal({
   useEffect(() => {
     if (open) {
       setSearchQuery('')
-      setCollapsedKeys(new Set())
-      setFilterCleared(false)
     }
   }, [open, initialFilterSegCodes])
+
+  // 클릭한 세그먼트만 펼치고 나머지는 접기
+  useEffect(() => {
+    if (!open || groups.length === 0) return
+    const codes = initialFilterSegCodes
+    if (codes && codes.length > 0) {
+      setCollapsedKeys(new Set(groups.filter(g => !groupHasFilterCode(g, codes, schema)).map(g => g.key)))
+    } else {
+      setCollapsedKeys(new Set())
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, groups, initialFilterSegCodes])
 
   if (!open) return null
 
@@ -474,37 +445,13 @@ export default function AccountModal({
       {/* Modal */}
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col w-[94vw] max-w-5xl"
-        style={{ maxHeight: '88vh', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
+        style={{ maxHeight: '88vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between gap-4 px-6 py-4 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
-          {/* 좌측: 돌아가기 버튼 + 제목 + 필터 칩 */}
+          {/* 좌측: 제목 + 월 네비게이션 */}
           <div className="shrink-0">
             <div className="flex items-center gap-2 mb-0.5">
-              {onBackToSeg && !!initialFilterSegCodes?.length && (
-                <button
-                  onClick={() => { setFilterCleared(true); onBackToSeg(curYear, curMonth) }}
-                  className="flex items-center gap-1 px-2 py-1 rounded-md text-xs transition-colors"
-                  style={{
-                    border:  '1px solid var(--color-border-default)',
-                    color:   'var(--color-text-secondary)',
-                    cursor:  'pointer',
-                    background: 'transparent',
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.borderColor = 'var(--color-accent-primary)'
-                    e.currentTarget.style.color = 'var(--color-accent-primary)'
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.borderColor = 'var(--color-border-default)'
-                    e.currentTarget.style.color = 'var(--color-text-secondary)'
-                  }}
-                  aria-label="Segmentation 모달로 돌아가기"
-                >
-                  <ArrowLeft size={14} />
-                  Seg로
-                </button>
-              )}
               <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>Account 비교</h2>
             </div>
             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
@@ -513,56 +460,16 @@ export default function AccountModal({
                 {curYear}년 {curMonth}월
               </span>
               <NavBtn onClick={goNext} disabled={!canGoNext}><ChevronRight size={13} /></NavBtn>
-              {filterActive && initialFilterLabel && (
-                <span
-                  className="flex items-center gap-1"
-                  style={{
-                    fontSize: 11, background: 'var(--color-bg-elevated)',
-                    border: '1px solid var(--color-accent-primary)',
-                    paddingLeft: 8, paddingRight: 4, paddingTop: 2, paddingBottom: 2,
-                    borderRadius: 9999, color: 'var(--color-accent-primary)',
-                  }}
-                >
-                  필터: {initialFilterLabel}
-                  <button
-                    onClick={() => setFilterCleared(true)}
-                    className="flex items-center hover:opacity-60 transition-opacity"
-                    aria-label="필터 해제"
-                  >
-                    <X size={12} />
-                  </button>
-                </span>
-              )}
             </div>
           </div>
 
-          {/* 우측: 검색 + 모두 접기/펼치기 + 닫기 */}
+          {/* 우측: 닫기 (→ Seg로 복귀) */}
           <div className="flex items-center gap-3 min-w-0">
-            <div className="relative">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--brand-dimmed)' }} />
-              <input
-                type="text"
-                autoFocus
-                placeholder="account 검색..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="h-8 pl-8 pr-3 text-sm rounded-lg focus:outline-none"
-                style={{
-                  width: 224,
-                  background: 'var(--color-bg-elevated)',
-                  border: `1px solid ${searchQuery ? 'var(--color-accent-primary)' : 'var(--color-border-default)'}`,
-                  color: 'var(--color-text-primary)',
-                }}
-              />
-            </div>
-
-            {!isSearching && hasData && (
-              <button onClick={toggleAll} className="text-xs whitespace-nowrap hover:opacity-80 transition-opacity" style={{ color: 'var(--color-text-secondary)' }}>
-                {allCollapsed ? '모두 펼치기' : '모두 접기'}
-              </button>
-            )}
-
-            <button onClick={onClose} className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1 shrink-0" aria-label="닫기">
+            <button
+              onClick={() => onBackToSeg ? onBackToSeg(curYear, curMonth) : onClose()}
+              className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1 shrink-0"
+              aria-label="닫기"
+            >
               <X size={20} />
             </button>
           </div>

@@ -27,41 +27,38 @@ function NavBtn({ onClick, disabled, children }: { onClick: () => void; disabled
 
 // ─── Number formatters ─────────────────────────────────────────────────────────
 
-function Dash() {
-  return <span style={{ color: 'var(--brand-dimmed)' }}>—</span>
+function Dash({ fontColor }: { fontColor?: string }) {
+  return <span style={{ color: fontColor ?? 'var(--brand-dimmed)' }}>—</span>
 }
 
-function FmtNights({ n }: { n: number }) {
-  return n === 0 ? <Dash /> : <>{n.toLocaleString('ko-KR')}</>
+// 현재 OTB 수치 — 항상 fontColor(없으면 상속), 음수도 fontColor
+function FmtNights({ n, fontColor }: { n: number; fontColor?: string }) {
+  return n === 0 ? <Dash fontColor={fontColor} /> : <span style={{ color: fontColor }}>{n.toLocaleString('ko-KR')}</span>
 }
-
-function FmtAdr({ n }: { n: number }) {
-  return n === 0 ? <Dash /> : <>{Math.round(n / 1000)}k</>
+function FmtAdr({ n, fontColor }: { n: number; fontColor?: string }) {
+  return n === 0 ? <Dash fontColor={fontColor} /> : <span style={{ color: fontColor }}>{Math.round(n / 1000)}k</span>
 }
-
-function FmtRev({ n }: { n: number }) {
-  return n === 0 ? <Dash /> : <>{(n / 1_000_000).toFixed(1)}M</>
+function FmtRev({ n, fontColor }: { n: number; fontColor?: string }) {
+  return n === 0 ? <Dash fontColor={fontColor} /> : <span style={{ color: fontColor }}>{(n / 1_000_000).toFixed(1)}M</span>
 }
-
-function DeltaNights({ v }: { v: number }) {
-  if (v === 0) return <Dash />
-  const cls = v > 0 ? 'text-status-positive' : 'text-status-negative'
-  return <span className={cls}>{v > 0 ? '+' : ''}{v.toLocaleString('ko-KR')}</span>
+// Pickup(Δ) — 양수 fontColor(없으면 흰색), 음수 red, 0/Dash fontColor
+function DeltaNights({ v, fontColor }: { v: number; fontColor?: string }) {
+  if (v === 0) return <Dash fontColor={fontColor} />
+  const color = v > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
+  return <span style={{ color }}>{v > 0 ? '+' : ''}{v.toLocaleString('ko-KR')}</span>
 }
-
-function DeltaAdr({ v }: { v: number }) {
-  if (v === 0) return <Dash />
+function DeltaAdr({ v, fontColor }: { v: number; fontColor?: string }) {
+  if (v === 0) return <Dash fontColor={fontColor} />
   const k = Math.round(v / 1000)
-  if (k === 0) return <Dash />
-  const cls = k > 0 ? 'text-status-positive' : 'text-status-negative'
-  return <span className={cls}>{k > 0 ? '+' : ''}{k}k</span>
+  if (k === 0) return <Dash fontColor={fontColor} />
+  const color = k > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
+  return <span style={{ color }}>{k > 0 ? '+' : ''}{k}k</span>
 }
-
-function DeltaRev({ v }: { v: number }) {
-  if (v === 0) return <Dash />
+function DeltaRev({ v, fontColor }: { v: number; fontColor?: string }) {
+  if (v === 0) return <Dash fontColor={fontColor} />
   const m = v / 1_000_000
-  const cls = m > 0 ? 'text-status-positive' : 'text-status-negative'
-  return <span className={cls}>{m > 0 ? '+' : ''}{m.toFixed(1)}M</span>
+  const color = m > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
+  return <span style={{ color }}>{m > 0 ? '+' : ''}{m.toFixed(1)}M</span>
 }
 
 // ─── StatCard ──────────────────────────────────────────────────────────────────
@@ -99,15 +96,18 @@ function Skeleton() {
 const thBase: React.CSSProperties = {
   fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
   letterSpacing: '0.07em', color: 'var(--color-text-secondary)',
-  padding: '6px 10px', background: 'var(--color-bg-elevated)', whiteSpace: 'nowrap',
+  padding: '6px 10px', background: '#0a0a0a', whiteSpace: 'nowrap',
 }
 
+const GRID = '0.5px solid rgba(255,255,255,0.06)'
+const GRID_HEAD = '0.5px solid rgba(255,255,255,0.12)'
+
 const tdBase: React.CSSProperties = {
-  padding: '6px 10px', verticalAlign: 'middle',
+  padding: '6px 10px', verticalAlign: 'middle', borderBottom: GRID,
 }
 
 const BORDER_GROUP = '1px solid var(--divider-color)'
-const DOUBLE_GROUP = '3px double rgba(255, 255, 255, 0.25)'
+const DOUBLE_GROUP = '1px solid rgba(0,229,160,0.3)'   // 섹션 구분선 (초록)
 
 // ─── Seg code / label helpers ──────────────────────────────────────────────────
 
@@ -140,8 +140,9 @@ function DataRow({ row, schema, houRowIds, onPickupCellClick, onRowClick }: {
 }) {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
-  const rowBg    = (isDark ? row.bgDarkColor  : row.bgLightColor)  ?? 'var(--color-bg-secondary)'
+  const rowBg    = (isDark ? row.bgDarkColor  : row.bgLightColor)  ?? '#111111'
   const rowColor = (isDark ? row.fontDarkColor : row.fontLightColor) ?? 'var(--color-text-primary)'
+  const nameColor = row.indent ? 'rgba(255,255,255,0.45)' : rowColor
 
   const isHou      = houRowIds.has(row.id)
   const segCodes   = getSegCodes(row, schema)
@@ -155,43 +156,41 @@ function DataRow({ row, schema, houRowIds, onPickupCellClick, onRowClick }: {
   const handleRowClick = rowClickable ? () => onRowClick!(segCodes, label) : undefined
 
   const puTd = (extra: React.CSSProperties): React.CSSProperties => ({
-    ...tdBase, textAlign: 'right', cursor: clickable ? 'pointer' : 'default', ...extra,
+    ...tdBase, textAlign: 'right', cursor: clickable ? 'pointer' : 'default', background: rowBg, ...extra,
   })
 
   return (
     <tr
-      style={{ borderBottom: BORDER_GROUP, background: rowBg, color: rowColor, fontWeight: row.isBold ? 600 : 400, cursor: rowClickable ? 'pointer' : 'default' }}
+      style={{ borderBottom: BORDER_GROUP, color: rowColor, fontWeight: row.isBold ? 600 : 400, cursor: rowClickable ? 'pointer' : 'default' }}
       onClick={handleRowClick}
-      onMouseEnter={e => {
-        e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${rowBg}`
-      }}
-      onMouseLeave={e => { e.currentTarget.style.background = rowBg }}
+      onMouseEnter={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${rowBg}` })}
+      onMouseLeave={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = rowBg })}
     >
-      <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: DOUBLE_GROUP }}>
+      <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: DOUBLE_GROUP, background: rowBg, color: nameColor }}>
         {row.indent ? (
           <>
-            <span style={{ color: 'var(--brand-dimmed)' }}>└ </span>
+            <span style={{ color: nameColor }}>└ </span>
             {row.name}
           </>
         ) : row.name}
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}>
-        <FmtNights n={row.otbNights} />
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', background: rowBg }}>
+        <FmtNights n={row.otbNights} fontColor={rowColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}>
-        <FmtAdr n={row.otbAdr} />
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', background: rowBg }}>
+        <FmtAdr n={row.otbAdr} fontColor={rowColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: DOUBLE_GROUP }}>
-        <FmtRev n={row.otbRevenue} />
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: DOUBLE_GROUP, background: rowBg }}>
+        <FmtRev n={row.otbRevenue} fontColor={rowColor} />
       </td>
-      <td className="font-mono" style={puTd({ borderLeft: BORDER_GROUP })} onClick={handlePickup}>
-        <DeltaNights v={row.puNights} />
-      </td>
-      <td className="font-mono" style={puTd({})} onClick={handlePickup}>
-        <DeltaAdr v={row.puAdr} />
+      <td className="font-mono" style={puTd({ borderLeft: DOUBLE_GROUP })} onClick={handlePickup}>
+        <DeltaNights v={row.puNights} fontColor={rowColor} />
       </td>
       <td className="font-mono" style={puTd({})} onClick={handlePickup}>
-        <DeltaRev v={row.puRevenue} />
+        <DeltaAdr v={row.puAdr} fontColor={rowColor} />
+      </td>
+      <td className="font-mono" style={puTd({})} onClick={handlePickup}>
+        <DeltaRev v={row.puRevenue} fontColor={rowColor} />
       </td>
     </tr>
   )
@@ -199,7 +198,7 @@ function DataRow({ row, schema, houRowIds, onPickupCellClick, onRowClick }: {
 
 // ─── DataTable ─────────────────────────────────────────────────────────────────
 
-function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, onRowClick, year, month, day, roomCount }: {
+function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, onRowClick, year, month, day, roomCount, otbDate, otbDates, setOtbDate }: {
   rows:               SegTableRow[]
   summary:            SegTableSummary
   schema:             MarketSchemaRow[]
@@ -210,6 +209,9 @@ function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, onRowC
   month:              number
   day?:               number
   roomCount:          number
+  otbDate:            string
+  otbDates:           string[]
+  setOtbDate:         (v: string) => void
 }) {
   const daysInMonth = new Date(year, month, 0).getDate()
   const days        = day !== undefined ? 1 : daysInMonth
@@ -232,25 +234,32 @@ function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, onRowC
   }
 
   const sumTdBase: React.CSSProperties = {
-    ...tdBase, fontWeight: 600, color: 'var(--color-text-primary)', paddingTop: 8, paddingBottom: 8,
+    ...tdBase, fontWeight: 600, color: 'var(--color-text-primary)', paddingTop: 8, paddingBottom: 8, background: '#111111',
   }
+  const footCell: React.CSSProperties = { textAlign: 'center', paddingTop: 8, paddingBottom: 8, fontWeight: 600, borderBottom: GRID, background: '#111111' }
   return (
     <div>
-      <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+      <table className="w-full text-xs" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
         <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
           <tr>
-            <th style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE_GROUP }}>Segmentation</th>
-            <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderRight: DOUBLE_GROUP }}>현재 OTB</th>
-            <th colSpan={3} style={{ ...thBase, textAlign: 'center' }}>Pickup vs OTB</th>
+            <th rowSpan={2} style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE_GROUP, borderBottom: GRID_HEAD }}>Segmentation</th>
+            <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: DOUBLE_GROUP, borderRight: DOUBLE_GROUP, height: 42, verticalAlign: 'middle' }}>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', marginBottom: 3 }}>현재 OTB</div>
+              <div style={{ display: 'inline-flex', justifyContent: 'center' }}>
+                <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} availableDates={otbDates} accent bare />
+              </div>
+            </th>
+            <th colSpan={3} style={{ ...thBase, textAlign: 'center', height: 42, verticalAlign: 'middle' }}>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>PICKUP VS OTB</div>
+            </th>
           </tr>
           <tr>
-            <th style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE_GROUP, borderBottom: BORDER_GROUP }} />
-            <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER_GROUP }}>R-N</th>
-            <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER_GROUP }}>ADR</th>
-            <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE_GROUP, borderBottom: BORDER_GROUP }}>REV</th>
-            <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER_GROUP, borderBottom: BORDER_GROUP }}>ΔR-N</th>
-            <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER_GROUP }}>ΔADR</th>
-            <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER_GROUP }}>ΔREV</th>
+            <th style={{ ...thBase, textAlign: 'right', borderLeft: DOUBLE_GROUP, borderBottom: GRID_HEAD }}>R-N</th>
+            <th style={{ ...thBase, textAlign: 'right', borderBottom: GRID_HEAD }}>ADR</th>
+            <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE_GROUP, borderBottom: GRID_HEAD }}>REV</th>
+            <th style={{ ...thBase, textAlign: 'right', borderLeft: DOUBLE_GROUP, borderBottom: GRID_HEAD }}>ΔR-N</th>
+            <th style={{ ...thBase, textAlign: 'right', borderBottom: GRID_HEAD }}>ΔADR</th>
+            <th style={{ ...thBase, textAlign: 'right', borderBottom: GRID_HEAD }}>ΔREV</th>
           </tr>
         </thead>
 
@@ -268,7 +277,7 @@ function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, onRowC
         </tbody>
 
         <tfoot>
-          <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: 'var(--color-bg-secondary)' }}>
+          <tr style={{ borderTop: '2px solid var(--color-accent-primary)' }}>
             <td style={{ ...sumTdBase, paddingLeft: 12, borderRight: DOUBLE_GROUP }}>합계 (HOU 제외)</td>
             <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right' }}>
               <FmtNights n={summary.totalNights} />
@@ -279,7 +288,7 @@ function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, onRowC
             <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right', borderRight: DOUBLE_GROUP }}>
               <FmtRev n={summary.totalRevenue} />
             </td>
-            <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right', borderLeft: BORDER_GROUP }}>
+            <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right', borderLeft: DOUBLE_GROUP }}>
               <DeltaNights v={summary.puNights} />
             </td>
             <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right' }}>
@@ -289,21 +298,21 @@ function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, onRowC
               <DeltaRev v={summary.puRevenue} />
             </td>
           </tr>
-          <tr style={{ borderTop: '1px solid var(--divider-color)', background: 'var(--color-bg-secondary)' }}>
-            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '8px 12px', borderRight: DOUBLE_GROUP }}>OCC</td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'center', paddingTop: 8, paddingBottom: 8, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: DOUBLE_GROUP }}>
+          <tr style={{ borderTop: GRID }}>
+            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '8px 12px', borderRight: DOUBLE_GROUP, borderBottom: GRID, background: '#111111' }}>OCC</td>
+            <td colSpan={3} className="font-mono" style={{ ...footCell, color: 'var(--color-text-primary)', borderRight: DOUBLE_GROUP }}>
               {otbOcc.toFixed(1)}%
             </td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'center', paddingTop: 8, paddingBottom: 8, fontWeight: 600, color: puColor(puOcc) }}>
+            <td colSpan={3} className="font-mono" style={{ ...footCell, color: puColor(puOcc) }}>
               {fmtPuOcc(puOcc)}
             </td>
           </tr>
-          <tr style={{ borderTop: '1px solid var(--divider-color)', background: 'var(--color-bg-secondary)' }}>
-            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '8px 12px', borderRight: DOUBLE_GROUP }}>RevPAR</td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'center', paddingTop: 8, paddingBottom: 8, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: DOUBLE_GROUP }}>
+          <tr style={{ borderTop: GRID }}>
+            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '8px 12px', borderRight: DOUBLE_GROUP, borderBottom: GRID, background: '#111111' }}>RevPAR</td>
+            <td colSpan={3} className="font-mono" style={{ ...footCell, color: 'var(--color-text-primary)', borderRight: DOUBLE_GROUP }}>
               {Math.round(otbRevpar / 1000)}k
             </td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'center', paddingTop: 8, paddingBottom: 8, fontWeight: 600, color: puColor(puRevpar) }}>
+            <td colSpan={3} className="font-mono" style={{ ...footCell, color: puColor(puRevpar) }}>
               {fmtPuRevpar(puRevpar)}
             </td>
           </tr>
@@ -413,7 +422,7 @@ export default function SegmentationModal({
 
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-4xl"
-        style={{ maxHeight: '88vh', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
+        style={{ maxHeight: '88vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-4 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
@@ -436,18 +445,11 @@ export default function SegmentationModal({
             )}
             <div className="flex items-center gap-2 mt-2">
               <DatePicker
-                label="OTB"
-                value={otbDate}
-                onChange={setOtbDate}
-                accent
-                availableDates={otbDates}
-              />
-              <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>vs</span>
-              <DatePicker
                 label="vs OTB"
                 value={vsOtbDate}
                 onChange={setVsOtbDate}
                 availableDates={otbDates.filter(d => d < otbDate)}
+                bare
               />
               <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>
                 {days === 0 ? '당일' : `${days}일간`} 픽업 현황 입니다.
@@ -483,6 +485,9 @@ export default function SegmentationModal({
               month={curMonth}
               day={day}
               roomCount={roomCount}
+              otbDate={otbDate}
+              otbDates={otbDates}
+              setOtbDate={setOtbDate}
             />
           )}
         </div>
