@@ -83,16 +83,17 @@ function Skeleton({ cols }: { cols: number }) {
 
 // ─── Month cell group ──────────────────────────────────────────────────────────
 
-function MonthCells({ cell, clickable, onClick, fontColor, bg }: {
+function MonthCells({ cell, clickable, onClick, fontColor, bg, borderTop }: {
   cell:      MonthlyPickupCell
   clickable: boolean
   onClick?:  () => void
   isLast?:   boolean
   fontColor?: string
   bg?:       string
+  borderTop?: string
 }) {
   const cursor = clickable ? 'pointer' : 'default'
-  const td: React.CSSProperties = { ...tdBase, textAlign: 'right', cursor, background: bg }
+  const td: React.CSSProperties = { ...tdBase, textAlign: 'right', cursor, background: bg, ...(borderTop ? { borderTop } : {}) }
   return (
     <>
       <td className="font-mono" style={{ ...td, ...MONTH_SEP, borderRight: BORDER }} onClick={onClick}>
@@ -321,10 +322,10 @@ export default function MonthlyPickupSegModal({
 
                 <tfoot>
                   {/* 합계 */}
-                  <tr style={{ borderTop: '2px solid var(--color-accent-primary)' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: BORDER, background: '#111111' }}>합계 (HOU 제외)</td>
+                  <tr>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: BORDER, background: '#111111', borderTop: '1px solid rgba(0,229,160,0.6)' }}>합계 (HOU 제외)</td>
                     {visibleMonths.map((mk, idx) => (
-                      <MonthCells key={mk} cell={summary.monthlyTotals[mk] ?? { pickupNights: 0, pickupAdr: 0, pickupRevenue: 0 }} clickable={false} isLast={idx === visibleMonths.length - 1} bg="#111111" />
+                      <MonthCells key={mk} cell={summary.monthlyTotals[mk] ?? { pickupNights: 0, pickupAdr: 0, pickupRevenue: 0 }} clickable={false} isLast={idx === visibleMonths.length - 1} bg="#111111" borderTop="1px solid rgba(0,229,160,0.6)" />
                     ))}
                   </tr>
                   {/* OCC */}

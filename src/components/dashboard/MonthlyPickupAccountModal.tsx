@@ -81,16 +81,17 @@ function FmtRevpar({ n }: { n: number }) {
 
 // ─── Month cells ───────────────────────────────────────────────────────────────
 
-function MonthCells({ cell, fontColor, bg }: { cell: MonthlyPickupCell; isLast?: boolean; fontColor?: string; bg?: string }) {
+function MonthCells({ cell, fontColor, bg, borderTop }: { cell: MonthlyPickupCell; isLast?: boolean; fontColor?: string; bg?: string; borderTop?: string }) {
+  const bt = borderTop ? { borderTop } : {}
   return (
     <>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', ...MONTH_SEP, borderRight: BORDER, background: bg }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', ...MONTH_SEP, borderRight: BORDER, background: bg, ...bt }}>
         <FmtPickupNights n={cell.pickupNights} fontColor={fontColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: BORDER, background: bg }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: BORDER, background: bg, ...bt }}>
         <FmtPickupAdr n={cell.pickupAdr} fontColor={fontColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: BORDER, background: bg }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: BORDER, background: bg, ...bt }}>
         <FmtPickupRevenue n={cell.pickupRevenue} fontColor={fontColor} />
       </td>
     </>
@@ -458,12 +459,12 @@ export default function MonthlyPickupAccountModal({
 
                 <tfoot>
                   {/* 합계 */}
-                  <tr style={{ borderTop: '2px solid var(--color-accent-primary)' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: BORDER, background: '#111111' }}>
+                  <tr>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: BORDER, background: '#111111', borderTop: '1px solid rgba(0,229,160,0.6)' }}>
                       합계 (HOU 제외)
                     </td>
                     {visiblePageMonths.map(mk => (
-                      <MonthCells key={mk} cell={summary.monthlyTotals[mk] ?? ZERO_CELL} isLast={visiblePageMonths.indexOf(mk) === visiblePageMonths.length - 1} bg="#111111" />
+                      <MonthCells key={mk} cell={summary.monthlyTotals[mk] ?? ZERO_CELL} isLast={visiblePageMonths.indexOf(mk) === visiblePageMonths.length - 1} bg="#111111" borderTop="1px solid rgba(0,229,160,0.6)" />
                     ))}
                   </tr>
                   {/* OCC */}
