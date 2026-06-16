@@ -36,69 +36,70 @@ const ZERO_MONTHLY: LyComparisonMonthly = {
 // ─── Format helpers ────────────────────────────────────────────────────────────
 
 function Dash() { return <span style={{ color: 'var(--brand-dimmed)' }}>—</span> }
-function GapDash() { return <span style={{ color: 'rgba(255,255,255,0.4)' }}>—</span> }
 
-function FmtNights({ n }: { n: number }) {
-  if (n === 0) return <Dash />
-  return <>{n.toLocaleString('ko-KR')}</>
+// 현재OTB/작년OTB 수치 — 항상 fontColor(없으면 td 상속), 음수도 fontColor(red 아님)
+function FmtNights({ n, fontColor }: { n: number; fontColor?: string }) {
+  if (n === 0) return <span style={{ color: fontColor ?? 'var(--brand-dimmed)' }}>—</span>
+  return <span style={{ color: fontColor }}>{n.toLocaleString('ko-KR')}</span>
 }
-function FmtAdr({ n }: { n: number }) {
-  if (Math.abs(n) < 500) return <Dash />
-  return <>{Math.round(n / 1000)}k</>
+function FmtAdr({ n, fontColor }: { n: number; fontColor?: string }) {
+  if (Math.abs(n) < 500) return <span style={{ color: fontColor ?? 'var(--brand-dimmed)' }}>—</span>
+  return <span style={{ color: fontColor }}>{Math.round(n / 1000)}k</span>
 }
-function FmtRevenue({ n }: { n: number }) {
-  if (Math.abs(n) < 50_000) return <Dash />
-  return <>{(n / 1_000_000).toFixed(1)}M</>
+function FmtRevenue({ n, fontColor }: { n: number; fontColor?: string }) {
+  if (Math.abs(n) < 50_000) return <span style={{ color: fontColor ?? 'var(--brand-dimmed)' }}>—</span>
+  return <span style={{ color: fontColor }}>{(n / 1_000_000).toFixed(1)}M</span>
 }
-function FmtGapNights({ n }: { n: number }) {
-  if (n === 0) return <GapDash />
-  const sign = n > 0 ? '+' : ''; const color = n > 0 ? 'var(--color-text-primary)' : 'var(--color-negative)'
+// GAP — 양수 fontColor(없으면 흰색), 음수 red, 0/Dash fontColor
+function FmtGapNights({ n, fontColor }: { n: number; fontColor?: string }) {
+  if (n === 0) return <span style={{ color: fontColor ?? 'rgba(255,255,255,0.4)' }}>—</span>
+  const sign = n > 0 ? '+' : ''; const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{n.toLocaleString('ko-KR')}</span>
 }
-function FmtGapAdr({ n }: { n: number }) {
-  if (Math.abs(n) < 500) return <GapDash />
-  const k = Math.round(n / 1000); const sign = k > 0 ? '+' : ''; const color = k > 0 ? 'var(--color-text-primary)' : 'var(--color-negative)'
+function FmtGapAdr({ n, fontColor }: { n: number; fontColor?: string }) {
+  if (Math.abs(n) < 500) return <span style={{ color: fontColor ?? 'rgba(255,255,255,0.4)' }}>—</span>
+  const k = Math.round(n / 1000); const sign = k > 0 ? '+' : ''; const color = k > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{k}k</span>
 }
-function FmtGapRevenue({ n }: { n: number }) {
-  if (Math.abs(n) < 50_000) return <Dash />
-  const m = (n / 1_000_000).toFixed(1); const sign = n > 0 ? '+' : ''; const color = n > 0 ? 'var(--color-text-primary)' : 'var(--color-negative)'
+function FmtGapRevenue({ n, fontColor }: { n: number; fontColor?: string }) {
+  if (Math.abs(n) < 50_000) return <span style={{ color: fontColor ?? 'rgba(255,255,255,0.4)' }}>—</span>
+  const m = (n / 1_000_000).toFixed(1); const sign = n > 0 ? '+' : ''; const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{m}M</span>
 }
 function FmtOcc({ n }: { n: number }) {
   if (Math.abs(n) < 0.1) return <Dash />
   return <>{n.toFixed(1)}%</>
 }
-function FmtGapPct({ n }: { n: number }) {
-  if (Math.abs(n) < 0.1) return <GapDash />
-  const sign = n > 0 ? '+' : ''; const color = n > 0 ? 'var(--color-text-primary)' : 'var(--color-negative)'
+function FmtGapPct({ n, fontColor }: { n: number; fontColor?: string }) {
+  if (Math.abs(n) < 0.1) return <span style={{ color: fontColor ?? 'rgba(255,255,255,0.4)' }}>—</span>
+  const sign = n > 0 ? '+' : ''; const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{n.toFixed(1)}%p</span>
 }
 function FmtRevpar({ n }: { n: number }) {
   if (Math.abs(n) < 500) return <Dash />
   return <>{Math.round(n / 1000)}k</>
 }
-function FmtGapRevpar({ n }: { n: number }) {
-  if (Math.abs(n) < 500) return <GapDash />
-  const k = Math.round(n / 1000); const sign = k > 0 ? '+' : ''; const color = k > 0 ? 'var(--color-text-primary)' : 'var(--color-negative)'
+function FmtGapRevpar({ n, fontColor }: { n: number; fontColor?: string }) {
+  if (Math.abs(n) < 500) return <span style={{ color: fontColor ?? 'rgba(255,255,255,0.4)' }}>—</span>
+  const k = Math.round(n / 1000); const sign = k > 0 ? '+' : ''; const color = k > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{k}k</span>
 }
 
 // ─── Row cells (shared) ───────────────────────────────────────────────────────
 
-function MonthCells({ m, bg }: { m: LyComparisonMonthly; bg?: string }) {
+function MonthCells({ m, bg, fontColor }: { m: LyComparisonMonthly; bg?: string; fontColor?: string }) {
   const c: React.CSSProperties = { ...tdBase, textAlign: 'right', background: bg }
   return (
     <>
-      <td className="font-mono" style={{ ...c, borderLeft: BORDER }}><FmtNights n={m.otb.nights} /></td>
-      <td className="font-mono" style={c}><FmtAdr n={m.otb.adr} /></td>
-      <td className="font-mono" style={{ ...c, borderRight: DOUBLE }}><FmtRevenue n={m.otb.revenue} /></td>
-      <td className="font-mono" style={c}><FmtNights n={m.ly.nights} /></td>
-      <td className="font-mono" style={c}><FmtAdr n={m.ly.adr} /></td>
-      <td className="font-mono" style={{ ...c, borderRight: DOUBLE }}><FmtRevenue n={m.ly.revenue} /></td>
-      <td className="font-mono" style={c}><FmtGapNights n={m.gap.nights} /></td>
-      <td className="font-mono" style={c}><FmtGapAdr n={m.gap.adr} /></td>
-      <td className="font-mono" style={c}><FmtGapRevenue n={m.gap.revenue} /></td>
+      <td className="font-mono" style={{ ...c, borderLeft: BORDER }}><FmtNights n={m.otb.nights} fontColor={fontColor} /></td>
+      <td className="font-mono" style={c}><FmtAdr n={m.otb.adr} fontColor={fontColor} /></td>
+      <td className="font-mono" style={{ ...c, borderRight: DOUBLE }}><FmtRevenue n={m.otb.revenue} fontColor={fontColor} /></td>
+      <td className="font-mono" style={c}><FmtNights n={m.ly.nights} fontColor={fontColor} /></td>
+      <td className="font-mono" style={c}><FmtAdr n={m.ly.adr} fontColor={fontColor} /></td>
+      <td className="font-mono" style={{ ...c, borderRight: DOUBLE }}><FmtRevenue n={m.ly.revenue} fontColor={fontColor} /></td>
+      <td className="font-mono" style={c}><FmtGapNights n={m.gap.nights} fontColor={fontColor} /></td>
+      <td className="font-mono" style={c}><FmtGapAdr n={m.gap.adr} fontColor={fontColor} /></td>
+      <td className="font-mono" style={c}><FmtGapRevenue n={m.gap.revenue} fontColor={fontColor} /></td>
     </>
   )
 }
@@ -411,7 +412,7 @@ export default function LyComparisonAccountModal({
                               <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>({group.rows.length}개)</span>
                             </div>
                           </td>
-                          <MonthCells m={gm} bg="#111111" />
+                          <MonthCells m={gm} bg="#111111" fontColor="#fff" />
                         </tr>
 
                         {!collapsed && group.rows.map(row => {
@@ -428,7 +429,7 @@ export default function LyComparisonAccountModal({
                                   ? <span style={{ color: 'var(--brand-dimmed)' }}>(미지정)</span>
                                   : row.account_name}
                               </td>
-                              <MonthCells m={rm} bg="var(--color-bg-primary)" />
+                              <MonthCells m={rm} bg="var(--color-bg-primary)" fontColor="rgba(255,255,255,0.45)" />
                             </tr>
                           )
                         })}
