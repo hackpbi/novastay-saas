@@ -21,7 +21,7 @@ const thBase: React.CSSProperties = {
   padding: '6px 10px', background: '#0a0a0a', whiteSpace: 'nowrap',
 }
 const tdBase: React.CSSProperties = {
-  padding: '6px 10px', verticalAlign: 'middle',
+  padding: '6px 10px', verticalAlign: 'middle', borderBottom: '0.5px solid rgba(255,255,255,0.06)',
 }
 const BORDER = '1px solid var(--divider-color)'
 // 섹션 구분선(현재 OTB / 작년 OTB / GAP 경계) — 초록
@@ -48,58 +48,61 @@ function FmtRevenue({ n }: { n: number }) {
   if (Math.abs(n) < 50_000) return <Dash />
   return <>{(n / 1_000_000).toFixed(1)}M</>
 }
-function FmtGapNights({ n }: { n: number }) {
+function FmtGapNights({ n, fontColor }: { n: number; fontColor?: string }) {
   if (n === 0) return <GapDash />
   const sign =n > 0 ? '+' : ''
-  const color = n > 0 ? 'var(--color-text-primary)' : 'var(--color-negative)'
+  const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{n.toLocaleString('ko-KR')}</span>
 }
-function FmtGapAdr({ n }: { n: number }) {
+function FmtGapAdr({ n, fontColor }: { n: number; fontColor?: string }) {
   if (Math.abs(n) < 500) return <GapDash />
   const k = Math.round(n / 1000)
   const sign = k > 0 ? '+' : ''
-  const color = k > 0 ? 'var(--color-text-primary)' : 'var(--color-negative)'
+  const color = k > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{k}k</span>
 }
-function FmtGapRevenue({ n }: { n: number }) {
+function FmtGapRevenue({ n, fontColor }: { n: number; fontColor?: string }) {
   if (Math.abs(n) < 50_000) return <Dash />
   const m = (n / 1_000_000).toFixed(1)
   const sign = n > 0 ? '+' : ''
-  const color = n > 0 ? 'var(--color-text-primary)' : 'var(--color-negative)'
+  const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{m}M</span>
 }
 function FmtOcc({ n }: { n: number }) {
   if (Math.abs(n) < 0.1) return <Dash />
   return <>{n.toFixed(1)}%</>
 }
-function FmtGapPct({ n }: { n: number }) {
+function FmtGapPct({ n, fontColor }: { n: number; fontColor?: string }) {
   if (Math.abs(n) < 0.1) return <GapDash />
   const sign =n > 0 ? '+' : ''
-  const color = n > 0 ? 'var(--color-text-primary)' : 'var(--color-negative)'
+  const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{n.toFixed(1)}%p</span>
 }
 function FmtRevpar({ n }: { n: number }) {
   if (Math.abs(n) < 500) return <Dash />
   return <>{Math.round(n / 1000)}k</>
 }
-function FmtGapRevpar({ n }: { n: number }) {
+function FmtGapRevpar({ n, fontColor }: { n: number; fontColor?: string }) {
   if (Math.abs(n) < 500) return <GapDash />
   const k = Math.round(n / 1000)
   const sign = k > 0 ? '+' : ''
-  const color = k > 0 ? 'var(--color-text-primary)' : 'var(--color-negative)'
+  const color = k > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{k}k</span>
 }
 
 // ─── Cell group components ─────────────────────────────────────────────────────
 
-function MonthCells({ m, clickable, onGapClick, bg }: {
+function MonthCells({ m, clickable, onGapClick, bg, gapColor, gapBold }: {
   m: LyComparisonMonthly
   clickable: boolean
   onGapClick?: () => void
   bg?: string
+  gapColor?: string
+  gapBold?: boolean
 }) {
   const cursor = clickable ? 'pointer' : 'default'
   const c: React.CSSProperties = { ...tdBase, textAlign: 'right', background: bg }
+  const g: React.CSSProperties = { ...c, cursor, fontWeight: gapBold ? 600 : 400 }
   return (
     <>
       {/* OTB */}
@@ -111,9 +114,9 @@ function MonthCells({ m, clickable, onGapClick, bg }: {
       <td className="font-mono" style={c}><FmtAdr n={m.ly.adr} /></td>
       <td className="font-mono" style={{ ...c, borderRight: DOUBLE }}><FmtRevenue n={m.ly.revenue} /></td>
       {/* GAP */}
-      <td className="font-mono" style={{ ...c, cursor }} onClick={onGapClick}><FmtGapNights n={m.gap.nights} /></td>
-      <td className="font-mono" style={{ ...c, cursor }} onClick={onGapClick}><FmtGapAdr n={m.gap.adr} /></td>
-      <td className="font-mono" style={{ ...c, cursor }} onClick={onGapClick}><FmtGapRevenue n={m.gap.revenue} /></td>
+      <td className="font-mono" style={g} onClick={onGapClick}><FmtGapNights n={m.gap.nights} fontColor={gapColor} /></td>
+      <td className="font-mono" style={g} onClick={onGapClick}><FmtGapAdr n={m.gap.adr} fontColor={gapColor} /></td>
+      <td className="font-mono" style={g} onClick={onGapClick}><FmtGapRevenue n={m.gap.revenue} fontColor={gapColor} /></td>
     </>
   )
 }
@@ -345,15 +348,15 @@ export default function LyComparisonSegModal({
                     <th colSpan={3} style={{ ...thBase, textAlign: 'center' }}>GAP</th>
                   </tr>
                   <tr>
-                    <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>R-N</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ADR</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE, borderBottom: BORDER }}>REV</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>R-N</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ADR</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE, borderBottom: BORDER }}>REV</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔR-N</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔREV</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>R-N</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>ADR</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE, borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>REV</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>R-N</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>ADR</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE, borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>REV</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>ΔR-N</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>ΔADR</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>ΔREV</th>
                   </tr>
                 </thead>
 
@@ -379,6 +382,8 @@ export default function LyComparisonSegModal({
                           m={m}
                           clickable={clickable}
                           bg={rowBg}
+                          gapColor={rowColor}
+                          gapBold={row.isBold}
                           onGapClick={clickable ? () => onAccountDrillDown!(row.segmentationCodes, currentMonthKey, row.name) : undefined}
                         />
                       </tr>
@@ -398,36 +403,36 @@ export default function LyComparisonSegModal({
                         <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtNights n={sumMonth.ly.nights} /></td>
                         <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtAdr n={sumMonth.ly.adr} /></td>
                         <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderRight: DOUBLE }}><FmtRevenue n={sumMonth.ly.revenue} /></td>
-                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtGapNights n={sumMonth.gap.nights} /></td>
-                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtGapAdr n={sumMonth.gap.adr} /></td>
-                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtGapRevenue n={sumMonth.gap.revenue} /></td>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtGapNights n={sumMonth.gap.nights} fontColor="var(--color-text-primary)" /></td>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtGapAdr n={sumMonth.gap.adr} fontColor="var(--color-text-primary)" /></td>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtGapRevenue n={sumMonth.gap.revenue} fontColor="var(--color-text-primary)" /></td>
                       </>
                     ) : <td colSpan={9} />}
                   </tr>
                   {/* OCC */}
                   <tr style={{ borderTop: BORDER }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: DOUBLE, background: '#111111' }}>OCC</td>
-                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER, borderRight: DOUBLE, background: '#111111' }}>
+                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderBottom: '0.5px solid rgba(255,255,255,0.06)', borderLeft: BORDER, borderRight: DOUBLE, background: '#111111' }}>
                       <FmtOcc n={sumMonth?.otb.occ ?? 0} />
                     </td>
-                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderRight: DOUBLE, background: '#111111' }}>
+                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderBottom: '0.5px solid rgba(255,255,255,0.06)', borderRight: DOUBLE, background: '#111111' }}>
                       <FmtOcc n={sumMonth?.ly.occ ?? 0} />
                     </td>
-                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, background: '#111111' }}>
-                      <FmtGapPct n={sumMonth?.gap.occDiff ?? 0} />
+                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderBottom: '0.5px solid rgba(255,255,255,0.06)', background: '#111111' }}>
+                      <FmtGapPct n={sumMonth?.gap.occDiff ?? 0} fontColor="var(--color-text-primary)" />
                     </td>
                   </tr>
                   {/* Rev.PAR */}
                   <tr style={{ borderTop: BORDER }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: DOUBLE, background: '#111111' }}>RevPAR</td>
-                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER, borderRight: DOUBLE, background: '#111111' }}>
+                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderBottom: '0.5px solid rgba(255,255,255,0.06)', borderLeft: BORDER, borderRight: DOUBLE, background: '#111111' }}>
                       <FmtRevpar n={sumMonth?.otb.revpar ?? 0} />
                     </td>
-                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderRight: DOUBLE, background: '#111111' }}>
+                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderBottom: '0.5px solid rgba(255,255,255,0.06)', borderRight: DOUBLE, background: '#111111' }}>
                       <FmtRevpar n={sumMonth?.ly.revpar ?? 0} />
                     </td>
-                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, background: '#111111' }}>
-                      <FmtGapRevpar n={sumMonth?.gap.revparDiff ?? 0} />
+                    <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderBottom: '0.5px solid rgba(255,255,255,0.06)', background: '#111111' }}>
+                      <FmtGapRevpar n={sumMonth?.gap.revparDiff ?? 0} fontColor="var(--color-text-primary)" />
                     </td>
                   </tr>
                 </tfoot>
