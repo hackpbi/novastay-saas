@@ -151,7 +151,7 @@ function DataRow({ row, schema, houRowIds, onPickupCellClick, onRowClick }: {
       onMouseEnter={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${rowBg}` })}
       onMouseLeave={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = rowBg })}
     >
-      <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: DOUBLE_GROUP, background: rowBg, color: nameColor }}>
+      <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, background: rowBg, color: nameColor }}>
         {row.indent ? (
           <>
             <span style={{ color: nameColor }}>└ </span>
@@ -159,22 +159,22 @@ function DataRow({ row, schema, houRowIds, onPickupCellClick, onRowClick }: {
           </>
         ) : row.name}
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', background: rowBg }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: DOUBLE_GROUP, background: rowBg }}>
         <FmtNights n={row.otbNights} fontColor={rowColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', background: rowBg }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: GRID, background: rowBg }}>
         <FmtAdr n={row.otbAdr} fontColor={rowColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: DOUBLE_GROUP, background: rowBg }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: GRID, background: rowBg }}>
         <FmtRev n={row.otbRevenue} fontColor={rowColor} />
       </td>
       <td className="font-mono" style={puTd({ borderLeft: DOUBLE_GROUP })} onClick={handlePickup}>
         <DeltaNights v={row.puNights} fontColor={rowColor} />
       </td>
-      <td className="font-mono" style={puTd({})} onClick={handlePickup}>
+      <td className="font-mono" style={puTd({ borderLeft: GRID })} onClick={handlePickup}>
         <DeltaAdr v={row.puAdr} fontColor={rowColor} />
       </td>
-      <td className="font-mono" style={puTd({})} onClick={handlePickup}>
+      <td className="font-mono" style={puTd({ borderLeft: GRID })} onClick={handlePickup}>
         <DeltaRev v={row.puRevenue} fontColor={rowColor} />
       </td>
     </tr>
@@ -230,43 +230,48 @@ function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, onRowC
     <div>
       <table className="w-full text-xs" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
         <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
-          <tr>
-            <th rowSpan={2} style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE_GROUP, borderBottom: GRID_HEAD, verticalAlign: 'top', paddingTop: 8 }}>
-              <div style={{ fontSize: 10, color: 'var(--color-text-secondary)', marginBottom: 6 }}>SEGMENTATION</div>
-              {day === undefined && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {/* 0줄: 월 네비게이션 — 표 상단 가운데 */}
+          {day === undefined && (
+            <tr>
+              <th colSpan={7} style={{ ...thBase, padding: '6px 0', borderBottom: GRID }}>
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
                   <button
                     onClick={onPrevMonth} disabled={!canPrevMonth}
                     style={{ background: 'transparent', border: '1px solid var(--color-border-default)', borderRadius: 6, padding: '2px 4px', display: 'flex', alignItems: 'center', cursor: canPrevMonth ? 'pointer' : 'not-allowed', opacity: canPrevMonth ? 1 : 0.35, color: 'var(--color-text-secondary)' }}
                   >
-                    <ChevronLeft size={14} />
+                    <ChevronLeft size={13} />
                   </button>
-                  <span style={{ fontSize: 12, color: 'var(--color-text-primary)', fontWeight: 600, textTransform: 'none', letterSpacing: 'normal', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)', textTransform: 'none', letterSpacing: 'normal', whiteSpace: 'nowrap' }}>
                     {curYear}년 {curMonth}월
                   </span>
                   <button
                     onClick={onNextMonth} disabled={!canNextMonth}
                     style={{ background: 'transparent', border: '1px solid var(--color-border-default)', borderRadius: 6, padding: '2px 4px', display: 'flex', alignItems: 'center', cursor: canNextMonth ? 'pointer' : 'not-allowed', opacity: canNextMonth ? 1 : 0.35, color: 'var(--color-text-secondary)' }}
                   >
-                    <ChevronRight size={14} />
+                    <ChevronRight size={13} />
                   </button>
                 </div>
-              )}
-            </th>
-            <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: DOUBLE_GROUP, borderRight: DOUBLE_GROUP, height: 42, verticalAlign: 'middle' }}>
+              </th>
+            </tr>
+          )}
+          {/* 1줄: 섹션 헤더 */}
+          <tr>
+            <th rowSpan={2} style={{ ...thBase, textAlign: 'left', borderBottom: GRID_HEAD, verticalAlign: 'middle' }}>SEGMENTATION</th>
+            <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: DOUBLE_GROUP, height: 42, verticalAlign: 'middle' }}>
               <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>현재 OTB</div>
             </th>
-            <th colSpan={3} style={{ ...thBase, textAlign: 'center', height: 42, verticalAlign: 'middle' }}>
+            <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: DOUBLE_GROUP, height: 42, verticalAlign: 'middle' }}>
               <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>PICKUP VS OTB</div>
             </th>
           </tr>
+          {/* 2줄: 컬럼명 */}
           <tr>
             <th style={{ ...thBase, textAlign: 'right', borderLeft: DOUBLE_GROUP, borderBottom: GRID_HEAD }}>R-N</th>
-            <th style={{ ...thBase, textAlign: 'right', borderBottom: GRID_HEAD }}>ADR</th>
-            <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE_GROUP, borderBottom: GRID_HEAD }}>REV</th>
+            <th style={{ ...thBase, textAlign: 'right', borderLeft: GRID, borderBottom: GRID_HEAD }}>ADR</th>
+            <th style={{ ...thBase, textAlign: 'right', borderLeft: GRID, borderBottom: GRID_HEAD }}>REV</th>
             <th style={{ ...thBase, textAlign: 'right', borderLeft: DOUBLE_GROUP, borderBottom: GRID_HEAD }}>ΔR-N</th>
-            <th style={{ ...thBase, textAlign: 'right', borderBottom: GRID_HEAD }}>ΔADR</th>
-            <th style={{ ...thBase, textAlign: 'right', borderBottom: GRID_HEAD }}>ΔREV</th>
+            <th style={{ ...thBase, textAlign: 'right', borderLeft: GRID, borderBottom: GRID_HEAD }}>ΔADR</th>
+            <th style={{ ...thBase, textAlign: 'right', borderLeft: GRID, borderBottom: GRID_HEAD }}>ΔREV</th>
           </tr>
         </thead>
 
@@ -285,41 +290,41 @@ function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, onRowC
 
         <tfoot>
           <tr>
-            <td style={{ ...sumTdBase, paddingLeft: 12, borderRight: DOUBLE_GROUP }}>합계 (HOU 제외)</td>
-            <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right' }}>
+            <td style={{ ...sumTdBase, paddingLeft: 12 }}>합계 (HOU 제외)</td>
+            <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right', borderLeft: DOUBLE_GROUP }}>
               <FmtNights n={summary.totalNights} />
             </td>
-            <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right' }}>
+            <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right', borderLeft: GRID }}>
               <FmtAdr n={summary.totalAdr} />
             </td>
-            <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right', borderRight: DOUBLE_GROUP }}>
+            <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right', borderLeft: GRID }}>
               <FmtRev n={summary.totalRevenue} />
             </td>
             <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right', borderLeft: DOUBLE_GROUP }}>
               <DeltaNights v={summary.puNights} />
             </td>
-            <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right' }}>
+            <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right', borderLeft: GRID }}>
               <DeltaAdr v={summary.puAdr} />
             </td>
-            <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right' }}>
+            <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right', borderLeft: GRID }}>
               <DeltaRev v={summary.puRevenue} />
             </td>
           </tr>
           <tr style={{ borderTop: GRID }}>
-            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '8px 12px', borderRight: DOUBLE_GROUP, borderBottom: GRID, background: '#111111' }}>OCC</td>
-            <td colSpan={3} className="font-mono" style={{ ...footCell, color: 'var(--color-text-primary)', borderRight: DOUBLE_GROUP }}>
+            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '8px 12px', borderBottom: GRID, background: '#111111' }}>OCC</td>
+            <td colSpan={3} className="font-mono" style={{ ...footCell, color: 'var(--color-text-primary)', borderLeft: DOUBLE_GROUP }}>
               {otbOcc.toFixed(1)}%
             </td>
-            <td colSpan={3} className="font-mono" style={{ ...footCell, color: puColor(puOcc) }}>
+            <td colSpan={3} className="font-mono" style={{ ...footCell, color: puColor(puOcc), borderLeft: DOUBLE_GROUP }}>
               {fmtPuOcc(puOcc)}
             </td>
           </tr>
           <tr style={{ borderTop: GRID }}>
-            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '8px 12px', borderRight: DOUBLE_GROUP, borderBottom: GRID, background: '#111111' }}>RevPAR</td>
-            <td colSpan={3} className="font-mono" style={{ ...footCell, color: 'var(--color-text-primary)', borderRight: DOUBLE_GROUP }}>
+            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '8px 12px', borderBottom: GRID, background: '#111111' }}>RevPAR</td>
+            <td colSpan={3} className="font-mono" style={{ ...footCell, color: 'var(--color-text-primary)', borderLeft: DOUBLE_GROUP }}>
               {Math.round(otbRevpar / 1000)}k
             </td>
-            <td colSpan={3} className="font-mono" style={{ ...footCell, color: puColor(puRevpar) }}>
+            <td colSpan={3} className="font-mono" style={{ ...footCell, color: puColor(puRevpar), borderLeft: DOUBLE_GROUP }}>
               {fmtPuRevpar(puRevpar)}
             </td>
           </tr>
