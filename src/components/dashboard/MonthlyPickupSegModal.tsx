@@ -28,7 +28,7 @@ const tdBase: React.CSSProperties = {
 }
 const BORDER = '1px solid var(--divider-color)'
 // 월 경계 (각 월 첫 컬럼 좌측) — border-collapse 환경에서 묻히지 않도록 box-shadow inset
-const MONTH_SEP: React.CSSProperties = { boxShadow: 'inset 1.5px 0 0 rgba(0,229,160,0.4)' }
+const MONTH_SEP: React.CSSProperties = { boxShadow: 'inset 1px 0 0 rgba(0,229,160,0.25)' }
 
 // ─── Format helpers (fontColor: 양수 schema 폰트색 / 음수 red / Dash 폰트색) ──────────
 
@@ -83,15 +83,16 @@ function Skeleton({ cols }: { cols: number }) {
 
 // ─── Month cell group ──────────────────────────────────────────────────────────
 
-function MonthCells({ cell, clickable, onClick, fontColor }: {
+function MonthCells({ cell, clickable, onClick, fontColor, bg }: {
   cell:      MonthlyPickupCell
   clickable: boolean
   onClick?:  () => void
   isLast?:   boolean
   fontColor?: string
+  bg?:       string
 }) {
   const cursor = clickable ? 'pointer' : 'default'
-  const td: React.CSSProperties = { ...tdBase, textAlign: 'right', cursor }
+  const td: React.CSSProperties = { ...tdBase, textAlign: 'right', cursor, background: bg }
   return (
     <>
       <td className="font-mono" style={{ ...td, ...MONTH_SEP, borderRight: BORDER }} onClick={onClick}>
@@ -297,13 +298,11 @@ export default function MonthlyPickupSegModal({
                     return (
                       <tr
                         key={row.id}
-                        style={{ borderBottom: BORDER, background: rowBg, color: rowColor, fontWeight: row.isBold ? 600 : 400 }}
-                        onMouseEnter={e => {
-                          e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${rowBg}`
-                        }}
-                        onMouseLeave={e => { e.currentTarget.style.background = rowBg }}
+                        style={{ borderBottom: BORDER, color: rowColor, fontWeight: row.isBold ? 600 : 400 }}
+                        onMouseEnter={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${rowBg}` })}
+                        onMouseLeave={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = rowBg })}
                       >
-                        <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: BORDER, color: nameColor }}>
+                        <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: BORDER, color: nameColor, background: rowBg }}>
                           {row.indent ? (
                             <><span style={{ color: nameColor }}>└ </span>{row.name}</>
                           ) : row.name}
@@ -313,7 +312,7 @@ export default function MonthlyPickupSegModal({
                           const handleClick = clickable
                             ? () => onPickupCellClick!(row.segmentationCodes, mk, `${row.name} · ${formatYYYYMM(mk)}`)
                             : undefined
-                          return <MonthCells key={mk} cell={cell} clickable={clickable} onClick={handleClick} isLast={idx === visibleMonths.length - 1} fontColor={rowColor} />
+                          return <MonthCells key={mk} cell={cell} clickable={clickable} onClick={handleClick} isLast={idx === visibleMonths.length - 1} fontColor={rowColor} bg={rowBg} />
                         })}
                       </tr>
                     )
@@ -322,26 +321,26 @@ export default function MonthlyPickupSegModal({
 
                 <tfoot>
                   {/* 합계 */}
-                  <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: '#111111' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: BORDER }}>합계 (HOU 제외)</td>
+                  <tr style={{ borderTop: '2px solid var(--color-accent-primary)' }}>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: BORDER, background: '#111111' }}>합계 (HOU 제외)</td>
                     {visibleMonths.map((mk, idx) => (
-                      <MonthCells key={mk} cell={summary.monthlyTotals[mk] ?? { pickupNights: 0, pickupAdr: 0, pickupRevenue: 0 }} clickable={false} isLast={idx === visibleMonths.length - 1} />
+                      <MonthCells key={mk} cell={summary.monthlyTotals[mk] ?? { pickupNights: 0, pickupAdr: 0, pickupRevenue: 0 }} clickable={false} isLast={idx === visibleMonths.length - 1} bg="#111111" />
                     ))}
                   </tr>
                   {/* OCC */}
-                  <tr style={{ borderTop: BORDER, background: '#111111' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER }}>OCC</td>
-                    {visibleMonths.map((mk, idx) => (
-                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, ...MONTH_SEP, borderRight: BORDER }}>
+                  <tr style={{ borderTop: BORDER }}>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER, background: '#111111' }}>OCC</td>
+                    {visibleMonths.map(mk => (
+                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, ...MONTH_SEP, borderRight: BORDER, background: '#111111' }}>
                         <FmtOcc n={summary.monthlyTotals[mk]?.occ ?? 0} />
                       </td>
                     ))}
                   </tr>
                   {/* RevPAR */}
-                  <tr style={{ borderTop: BORDER, background: '#111111' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER }}>RevPAR</td>
-                    {visibleMonths.map((mk, idx) => (
-                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, ...MONTH_SEP, borderRight: BORDER }}>
+                  <tr style={{ borderTop: BORDER }}>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER, background: '#111111' }}>RevPAR</td>
+                    {visibleMonths.map(mk => (
+                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, ...MONTH_SEP, borderRight: BORDER, background: '#111111' }}>
                         <FmtRevpar n={summary.monthlyTotals[mk]?.revpar ?? 0} />
                       </td>
                     ))}

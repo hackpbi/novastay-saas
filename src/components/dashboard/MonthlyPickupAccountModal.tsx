@@ -27,7 +27,7 @@ const tdBase: React.CSSProperties = {
 }
 const BORDER = '1px solid var(--divider-color)'
 // 월 경계 (각 월 첫 컬럼 좌측) — border-collapse 환경에서 묻히지 않도록 box-shadow inset
-const MONTH_SEP: React.CSSProperties = { boxShadow: 'inset 1.5px 0 0 rgba(0,229,160,0.4)' }
+const MONTH_SEP: React.CSSProperties = { boxShadow: 'inset 1px 0 0 rgba(0,229,160,0.25)' }
 const ZERO_CELL: MonthlyPickupCell = { pickupNights: 0, pickupAdr: 0, pickupRevenue: 0 }
 
 // ─── Format helpers ────────────────────────────────────────────────────────────
@@ -81,16 +81,16 @@ function FmtRevpar({ n }: { n: number }) {
 
 // ─── Month cells ───────────────────────────────────────────────────────────────
 
-function MonthCells({ cell, fontColor }: { cell: MonthlyPickupCell; isLast?: boolean; fontColor?: string }) {
+function MonthCells({ cell, fontColor, bg }: { cell: MonthlyPickupCell; isLast?: boolean; fontColor?: string; bg?: string }) {
   return (
     <>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', ...MONTH_SEP, borderRight: BORDER }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', ...MONTH_SEP, borderRight: BORDER, background: bg }}>
         <FmtPickupNights n={cell.pickupNights} fontColor={fontColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: BORDER }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: BORDER, background: bg }}>
         <FmtPickupAdr n={cell.pickupAdr} fontColor={fontColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: BORDER }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: BORDER, background: bg }}>
         <FmtPickupRevenue n={cell.pickupRevenue} fontColor={fontColor} />
       </td>
     </>
@@ -413,11 +413,11 @@ export default function MonthlyPickupAccountModal({
                           key={`hdr-${group.key}`}
                           onClick={() => toggleCollapse(group.key)}
                           className="cursor-pointer"
-                          style={{ borderTop: BORDER, background: groupBg, color: groupFont }}
-                          onMouseEnter={e => e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${groupBg}`}
-                          onMouseLeave={e => e.currentTarget.style.background = groupBg}
+                          style={{ borderTop: BORDER, color: groupFont }}
+                          onMouseEnter={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${groupBg}` })}
+                          onMouseLeave={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = groupBg })}
                         >
-                          <td style={{ ...tdBase, paddingLeft: 12, color: '#ffffff', fontWeight: 600 }}>
+                          <td style={{ ...tdBase, paddingLeft: 12, color: '#ffffff', fontWeight: 600, background: groupBg }}>
                             <div className="flex items-center gap-2">
                               {collapsed
                                 ? <ChevronRight size={13} style={{ color: '#ffffff', flexShrink: 0 }} />
@@ -428,7 +428,7 @@ export default function MonthlyPickupAccountModal({
                             </div>
                           </td>
                           {visiblePageMonths.map(mk => (
-                            <MonthCells key={mk} cell={group.monthlyTotals[mk] ?? ZERO_CELL} isLast={visiblePageMonths.indexOf(mk) === visiblePageMonths.length - 1} fontColor="#ffffff" />
+                            <MonthCells key={mk} cell={group.monthlyTotals[mk] ?? ZERO_CELL} isLast={visiblePageMonths.indexOf(mk) === visiblePageMonths.length - 1} fontColor="#ffffff" bg={groupBg} />
                           ))}
                         </tr>
 
@@ -436,18 +436,18 @@ export default function MonthlyPickupAccountModal({
                         {!collapsed && group.rows.map(row => (
                           <tr
                             key={`${group.key}-${row.account_name}`}
-                            style={{ borderBottom: `1px solid var(--color-border-subtle)`, background: '#111111', color: ACCOUNT_FONT }}
-                            onMouseEnter={e => e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), #111111`}
-                            onMouseLeave={e => e.currentTarget.style.background = '#111111'}
+                            style={{ borderBottom: `1px solid var(--color-border-subtle)`, color: ACCOUNT_FONT }}
+                            onMouseEnter={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), #111111` })}
+                            onMouseLeave={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = '#111111' })}
                           >
-                            <td style={{ ...tdBase, paddingLeft: 28, color: ACCOUNT_FONT }}>
+                            <td style={{ ...tdBase, paddingLeft: 28, color: ACCOUNT_FONT, background: '#111111' }}>
                               <span style={{ color: ACCOUNT_FONT }}>└ </span>
                               {!row.account_name || row.account_name === '(미지정)'
                                 ? <span style={{ color: ACCOUNT_FONT }}>(미지정)</span>
                                 : row.account_name}
                             </td>
                             {visiblePageMonths.map(mk => (
-                              <MonthCells key={mk} cell={row.monthlyPickup[mk] ?? ZERO_CELL} isLast={visiblePageMonths.indexOf(mk) === visiblePageMonths.length - 1} fontColor={ACCOUNT_FONT} />
+                              <MonthCells key={mk} cell={row.monthlyPickup[mk] ?? ZERO_CELL} isLast={visiblePageMonths.indexOf(mk) === visiblePageMonths.length - 1} fontColor={ACCOUNT_FONT} bg="#111111" />
                             ))}
                           </tr>
                         ))}
@@ -458,28 +458,28 @@ export default function MonthlyPickupAccountModal({
 
                 <tfoot>
                   {/* 합계 */}
-                  <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: '#111111' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: BORDER }}>
+                  <tr style={{ borderTop: '2px solid var(--color-accent-primary)' }}>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: BORDER, background: '#111111' }}>
                       합계 (HOU 제외)
                     </td>
                     {visiblePageMonths.map(mk => (
-                      <MonthCells key={mk} cell={summary.monthlyTotals[mk] ?? ZERO_CELL} isLast={visiblePageMonths.indexOf(mk) === visiblePageMonths.length - 1} />
+                      <MonthCells key={mk} cell={summary.monthlyTotals[mk] ?? ZERO_CELL} isLast={visiblePageMonths.indexOf(mk) === visiblePageMonths.length - 1} bg="#111111" />
                     ))}
                   </tr>
                   {/* OCC */}
-                  <tr style={{ borderTop: BORDER, background: '#111111' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER }}>OCC</td>
-                    {visiblePageMonths.map((mk, idx) => (
-                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, ...MONTH_SEP, borderRight: BORDER }}>
+                  <tr style={{ borderTop: BORDER }}>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER, background: '#111111' }}>OCC</td>
+                    {visiblePageMonths.map(mk => (
+                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, ...MONTH_SEP, borderRight: BORDER, background: '#111111' }}>
                         <FmtOcc n={summary.monthlyTotals[mk]?.occ ?? 0} />
                       </td>
                     ))}
                   </tr>
                   {/* RevPAR */}
-                  <tr style={{ borderTop: BORDER, background: '#111111' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER }}>RevPAR</td>
-                    {visiblePageMonths.map((mk, idx) => (
-                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, ...MONTH_SEP, borderRight: BORDER }}>
+                  <tr style={{ borderTop: BORDER }}>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER, background: '#111111' }}>RevPAR</td>
+                    {visiblePageMonths.map(mk => (
+                      <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, ...MONTH_SEP, borderRight: BORDER, background: '#111111' }}>
                         <FmtRevpar n={summary.monthlyTotals[mk]?.revpar ?? 0} />
                       </td>
                     ))}
