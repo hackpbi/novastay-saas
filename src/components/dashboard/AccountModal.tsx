@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { X, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
+import { useDateContext } from '@/contexts/DateContext'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
 import { usePickupData } from '@/hooks/usePickupData'
 import { buildAccountTable, type AccountGroup, type AccountTableSummary } from '@/utils/accountTable'
+import DatePicker from '@/components/DatePicker'
 
 // ─── Formatters ─────────────────────────────────────────────────────────────────
 
@@ -127,7 +129,7 @@ function GroupHeaderRow({ group, collapsed, onToggle }: {
       className="cursor-pointer hover:bg-white/5 focus:outline-none focus:bg-white/5"
       style={{ borderTop: BORDER, background: headerBg, color: headerColor }}
     >
-      <td style={{ ...tdBase, paddingLeft: 12, borderRight: DOUBLE }}>
+      <td style={{ ...tdBase, paddingLeft: 12 }}>
         <div className="flex items-center gap-2">
           {collapsed
             ? <ChevronRight size={14} style={{ color: headerColor, flexShrink: 0, opacity: 0.7 }} />
@@ -137,22 +139,22 @@ function GroupHeaderRow({ group, collapsed, onToggle }: {
           <span style={{ fontSize: 11, opacity: 0.6 }}>{group.rows.length}개</span>
         </div>
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600 }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600, borderLeft: DOUBLE }}>
         <FmtNights n={t.otbNights} fontColor={headerColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600 }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600, borderLeft: GRID }}>
         <FmtAdr n={t.otbAdr} fontColor={headerColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600, borderRight: DOUBLE }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600, borderLeft: GRID }}>
         <FmtRev n={t.otbRevenue} fontColor={headerColor} />
       </td>
       <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600, borderLeft: DOUBLE }}>
         <DeltaNights v={t.puNights} fontColor={headerColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600 }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600, borderLeft: GRID }}>
         <DeltaAdr v={t.puAdr} fontColor={headerColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600 }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', fontWeight: 600, borderLeft: GRID }}>
         <DeltaRev v={t.puRevenue} fontColor={headerColor} />
       </td>
     </tr>
@@ -227,17 +229,17 @@ function DataTable({ groups, summary, collapsedKeys, onToggle, isSearching, year
           </tr>
           {/* 1줄: 섹션 헤더 */}
           <tr>
-            <th rowSpan={2} style={{ ...thBase, textAlign: 'left', minWidth: 200, borderRight: DOUBLE, borderBottom: GRID_HEAD }}>Account</th>
-            <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: DOUBLE, borderRight: DOUBLE }}>현재 OTB</th>
-            <th colSpan={3} style={{ ...thBase, textAlign: 'center' }}>PICKUP VS OTB</th>
+            <th rowSpan={2} style={{ ...thBase, textAlign: 'left', minWidth: 200, borderBottom: GRID_HEAD }}>Account</th>
+            <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: DOUBLE }}>현재 OTB</th>
+            <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: DOUBLE }}>PICKUP VS OTB</th>
           </tr>
           <tr>
             <th style={{ ...thBase, textAlign: 'right', borderLeft: DOUBLE, borderBottom: GRID_HEAD }}>R-N</th>
-            <th style={{ ...thBase, textAlign: 'right', borderBottom: GRID_HEAD }}>ADR</th>
-            <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE, borderBottom: GRID_HEAD }}>REV</th>
+            <th style={{ ...thBase, textAlign: 'right', borderLeft: GRID, borderBottom: GRID_HEAD }}>ADR</th>
+            <th style={{ ...thBase, textAlign: 'right', borderLeft: GRID, borderBottom: GRID_HEAD }}>REV</th>
             <th style={{ ...thBase, textAlign: 'right', borderLeft: DOUBLE, borderBottom: GRID_HEAD }}>ΔR-N</th>
-            <th style={{ ...thBase, textAlign: 'right', borderBottom: GRID_HEAD }}>ΔADR</th>
-            <th style={{ ...thBase, textAlign: 'right', borderBottom: GRID_HEAD }}>ΔREV</th>
+            <th style={{ ...thBase, textAlign: 'right', borderLeft: GRID, borderBottom: GRID_HEAD }}>ΔADR</th>
+            <th style={{ ...thBase, textAlign: 'right', borderLeft: GRID, borderBottom: GRID_HEAD }}>ΔREV</th>
           </tr>
         </thead>
 
@@ -249,28 +251,28 @@ function DataTable({ groups, summary, collapsedKeys, onToggle, isSearching, year
                 <GroupHeaderRow key={`hdr-${g.key}`} group={g} collapsed={isCollapsed} onToggle={() => onToggle(g.key)} />
                 {!isCollapsed && g.rows.map((row, i) => (
                   <tr key={`${g.key}-${i}`} className="hover:bg-white/5" style={{ borderBottom: BORDER, color: ACCOUNT_FONT }}>
-                    <td style={{ ...tdBase, paddingLeft: 40, borderRight: DOUBLE }}>
+                    <td style={{ ...tdBase, paddingLeft: 40 }}>
                       <span style={{ color: ACCOUNT_FONT }}>└ </span>
                       <span style={{ color: ACCOUNT_FONT }}>
                         {row.account_name}
                       </span>
                     </td>
-                    <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}>
+                    <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: DOUBLE }}>
                       <FmtNights n={row.otbNights} fontColor={ACCOUNT_FONT} />
                     </td>
-                    <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}>
+                    <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: GRID }}>
                       <FmtAdr n={row.otbAdr} fontColor={ACCOUNT_FONT} />
                     </td>
-                    <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderRight: DOUBLE }}>
+                    <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: GRID }}>
                       <FmtRev n={row.otbRevenue} fontColor={ACCOUNT_FONT} />
                     </td>
                     <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: DOUBLE }}>
                       <DeltaNights v={row.puNights} fontColor={ACCOUNT_FONT} />
                     </td>
-                    <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}>
+                    <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: GRID }}>
                       <DeltaAdr v={row.puAdr} fontColor={ACCOUNT_FONT} />
                     </td>
-                    <td className="font-mono" style={{ ...tdBase, textAlign: 'right' }}>
+                    <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: GRID }}>
                       <DeltaRev v={row.puRevenue} fontColor={ACCOUNT_FONT} />
                     </td>
                   </tr>
@@ -282,41 +284,41 @@ function DataTable({ groups, summary, collapsedKeys, onToggle, isSearching, year
 
         <tfoot>
           <tr>
-            <td style={{ ...sumTd, paddingLeft: 12, borderRight: DOUBLE }}>합계 (HOU 제외)</td>
-            <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}>
+            <td style={{ ...sumTd, paddingLeft: 12 }}>합계 (HOU 제외)</td>
+            <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderLeft: DOUBLE }}>
               <FmtNights n={summary.totalNights} />
             </td>
-            <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}>
+            <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderLeft: GRID }}>
               <FmtAdr n={summary.totalAdr} />
             </td>
-            <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderRight: DOUBLE }}>
+            <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderLeft: GRID }}>
               <FmtRev n={summary.totalRevenue} />
             </td>
             <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderLeft: DOUBLE }}>
               <DeltaNights v={summary.puNights} />
             </td>
-            <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}>
+            <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderLeft: GRID }}>
               <DeltaAdr v={summary.puAdr} />
             </td>
-            <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}>
+            <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderLeft: GRID }}>
               <DeltaRev v={summary.puRevenue} />
             </td>
           </tr>
           <tr style={{ borderTop: GRID }}>
-            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '10px 12px', borderRight: DOUBLE, borderBottom: GRID, background: '#111111' }}>OCC</td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: DOUBLE, borderBottom: GRID, background: '#111111' }}>
+            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '10px 12px', borderBottom: GRID, background: '#111111' }}>OCC</td>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: 'var(--color-text-primary)', borderLeft: DOUBLE, borderBottom: GRID, background: '#111111' }}>
               {otbOcc.toFixed(1)}%
             </td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: puColor(puOcc), borderBottom: GRID, background: '#111111' }}>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: puColor(puOcc), borderLeft: DOUBLE, borderBottom: GRID, background: '#111111' }}>
               {fmtPuOcc(puOcc)}
             </td>
           </tr>
           <tr style={{ borderTop: GRID }}>
-            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '10px 12px', borderRight: DOUBLE, borderBottom: GRID, background: '#111111' }}>RevPAR</td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: DOUBLE, borderBottom: GRID, background: '#111111' }}>
+            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '10px 12px', borderBottom: GRID, background: '#111111' }}>RevPAR</td>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: 'var(--color-text-primary)', borderLeft: DOUBLE, borderBottom: GRID, background: '#111111' }}>
               {Math.round(otbRevpar / 1000)}k
             </td>
-            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: puColor(puRevpar), borderBottom: GRID, background: '#111111' }}>
+            <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: puColor(puRevpar), borderLeft: DOUBLE, borderBottom: GRID, background: '#111111' }}>
               {fmtPuRevpar(puRevpar)}
             </td>
           </tr>
@@ -347,8 +349,13 @@ export default function AccountModal({
   initialFilterLabel?:     string
   onBackToSeg?:            (year: number, month: number) => void
 }) {
+  const { otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate } = useDateContext()
   const { data: schema, loading: schemaLoading, error: schemaError } = useMarketSchema()
   const { data: pickup, loading: pickupLoading } = usePickupData()
+
+  const days = otbDate && vsOtbDate
+    ? Math.round((new Date(otbDate).getTime() - new Date(vsOtbDate).getTime()) / 86400000)
+    : 0
 
   const [searchQuery,   setSearchQuery]   = useState('')
   const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(new Set())
@@ -461,21 +468,39 @@ export default function AccountModal({
         style={{ maxHeight: '88vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between gap-4 px-6 py-4 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
-          {/* 좌측: 제목 */}
-          <div className="shrink-0">
+        <div className="px-6 py-4 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
+          {/* 1줄: 제목 + 닫기 (→ Seg로 복귀) */}
+          <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>Pick-Up Status By Accounts</h2>
-          </div>
-
-          {/* 우측: 닫기 (→ Seg로 복귀) */}
-          <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => onBackToSeg ? onBackToSeg(curYear, curMonth) : onClose()}
               className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1 shrink-0"
               aria-label="닫기"
             >
-              <X size={20} />
+              <X size={22} />
             </button>
+          </div>
+
+          {/* 2줄: OTB + VS OTB DatePicker */}
+          <div className="flex items-center gap-2 mt-1">
+            <DatePicker
+              label="OTB"
+              value={otbDate}
+              onChange={setOtbDate}
+              availableDates={otbDates}
+              accent
+              bare
+            />
+            <DatePicker
+              label="VS OTB"
+              value={vsOtbDate}
+              onChange={setVsOtbDate}
+              availableDates={otbDates.filter(d => d < otbDate)}
+              bare
+            />
+            <span className="text-xs" style={{ color: 'var(--brand-dimmed)', whiteSpace: 'nowrap' }}>
+              {days === 0 ? '당일' : `${days}일간`} 픽업 현황 입니다.
+            </span>
           </div>
         </div>
 
