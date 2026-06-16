@@ -260,7 +260,7 @@ export default function LyComparisonAccountModal({
   if (!open) return null
 
   const sumMonth = summary.monthly[currentMonthKey]
-  const sumTd: React.CSSProperties = { ...tdBase, fontWeight: 600, color: 'var(--color-text-primary)', paddingTop: 8, paddingBottom: 8, background: '#111111' }
+  const sumTd: React.CSSProperties = { ...tdBase, fontWeight: 600, color: 'var(--color-text-primary)', paddingTop: 8, paddingBottom: 8, background: '#111111', borderTop: '1px solid rgba(0,229,160,0.6)' }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -447,7 +447,7 @@ export default function LyComparisonAccountModal({
                 </tbody>
 
                 <tfoot>
-                  <tr style={{ borderTop: '2px solid var(--color-accent-primary)' }}>
+                  <tr>
                     <td style={{ ...sumTd, paddingLeft: 12, borderRight: DOUBLE }}>합계 (HOU 제외)</td>
                     {sumMonth ? (
                       <>
