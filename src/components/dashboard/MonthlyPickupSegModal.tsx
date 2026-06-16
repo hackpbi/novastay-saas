@@ -26,9 +26,9 @@ const thBase: React.CSSProperties = {
 const tdBase: React.CSSProperties = {
   padding: '6px 10px', verticalAlign: 'middle',
 }
-const BORDER = '1px solid var(--divider-color)'
-// 월 경계 (각 월 첫 컬럼 좌측) — border-collapse 환경에서 묻히지 않도록 box-shadow inset
-const MONTH_SEP: React.CSSProperties = { boxShadow: 'inset 1px 0 0 rgba(0,229,160,0.25)' }
+const BORDER = '0.5px solid rgba(255,255,255,0.06)'
+// 월 경계 (각 월 첫 컬럼 좌측) — border-collapse: separate 라 borderLeft가 독립 렌더
+const MONTH_SEP: React.CSSProperties = { borderLeft: '1px solid rgba(0,229,160,0.35)' }
 
 // ─── Format helpers (fontColor: 양수 schema 폰트색 / 음수 red / Dash 폰트색) ──────────
 
@@ -267,7 +267,7 @@ export default function MonthlyPickupSegModal({
             </p>
           ) : (
             <div className="px-6 py-4">
-              <table className="w-full text-xs" style={{ borderCollapse: 'collapse', position: 'relative', zIndex: 1 }}>
+              <table className="w-full text-xs" style={{ borderCollapse: 'separate', borderSpacing: 0, position: 'relative', zIndex: 1 }}>
                 {/* 헤더 2단 */}
                 <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                   <tr>
