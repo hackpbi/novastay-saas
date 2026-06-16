@@ -18,13 +18,14 @@ import type { LyComparisonMonthly } from '@/utils/lyComparisonSegTable'
 const thBase: React.CSSProperties = {
   fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
   letterSpacing: '0.07em', color: 'var(--color-text-secondary)',
-  padding: '6px 10px', background: 'var(--color-bg-elevated)', whiteSpace: 'nowrap',
+  padding: '6px 10px', background: '#0a0a0a', whiteSpace: 'nowrap',
 }
 const tdBase: React.CSSProperties = {
   padding: '6px 10px', verticalAlign: 'middle',
 }
 const BORDER = '1px solid var(--divider-color)'
-const DOUBLE = '3px double rgba(255, 255, 255, 0.25)'
+// 섹션 구분선(현재 OTB / 작년 OTB / GAP 경계) — 초록
+const DOUBLE = '1px solid rgba(0,229,160,0.3)'
 
 // ─── Format helpers ────────────────────────────────────────────────────────────
 
@@ -227,7 +228,7 @@ export default function LyComparisonSegModal({
 
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-5xl"
-        style={{ maxHeight: '88vh', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
+        style={{ maxHeight: '88vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 shrink-0" style={{ borderBottom: BORDER }}>
@@ -355,7 +356,7 @@ export default function LyComparisonSegModal({
 
                 <tbody>
                   {rows.map(row => {
-                    const rowBg    = (isDark ? row.bgDarkColor  : row.bgLightColor)  ?? 'var(--color-bg-secondary)'
+                    const rowBg    = (isDark ? row.bgDarkColor  : row.bgLightColor)  ?? '#111111'
                     const rowColor = (isDark ? row.fontDarkColor : row.fontLightColor) ?? 'var(--color-text-primary)'
                     const isHou    = houRowIds.has(row.id)
                     const clickable = !!onAccountDrillDown && !isHou && row.segmentationCodes.length > 0
@@ -383,7 +384,7 @@ export default function LyComparisonSegModal({
 
                 <tfoot>
                   {/* 합계 */}
-                  <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: 'var(--color-bg-secondary)' }}>
+                  <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: '#111111' }}>
                     <td style={{ ...sumTd, paddingLeft: 12, borderRight: DOUBLE }}>합계 (HOU 제외)</td>
                     {sumMonth ? (
                       <>
@@ -400,7 +401,7 @@ export default function LyComparisonSegModal({
                     ) : <td colSpan={9} />}
                   </tr>
                   {/* OCC */}
-                  <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
+                  <tr style={{ borderTop: BORDER, background: '#111111' }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: DOUBLE }}>OCC</td>
                     <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER, borderRight: DOUBLE }}>
                       <FmtOcc n={sumMonth?.otb.occ ?? 0} />
@@ -413,7 +414,7 @@ export default function LyComparisonSegModal({
                     </td>
                   </tr>
                   {/* Rev.PAR */}
-                  <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
+                  <tr style={{ borderTop: BORDER, background: '#111111' }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: DOUBLE }}>RevPAR</td>
                     <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER, borderRight: DOUBLE }}>
                       <FmtRevpar n={sumMonth?.otb.revpar ?? 0} />

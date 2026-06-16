@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X, ChevronDown, ChevronRight, ChevronLeft, Search, ArrowLeft } from 'lucide-react'
+import { X, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
@@ -18,13 +18,14 @@ import type { LyComparisonMonthly } from '@/utils/lyComparisonSegTable'
 const thBase: React.CSSProperties = {
   fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
   letterSpacing: '0.07em', color: 'var(--color-text-secondary)',
-  padding: '6px 10px', background: 'var(--color-bg-elevated)', whiteSpace: 'nowrap',
+  padding: '6px 10px', background: '#0a0a0a', whiteSpace: 'nowrap',
 }
 const tdBase: React.CSSProperties = {
   padding: '6px 10px', verticalAlign: 'middle',
 }
 const BORDER = '1px solid var(--divider-color)'
-const DOUBLE = '3px double rgba(255, 255, 255, 0.25)'
+// 섹션 구분선(현재 OTB / 작년 OTB / GAP 경계) — 초록
+const DOUBLE = '1px solid rgba(0,229,160,0.3)'
 
 const ZERO_MONTHLY: LyComparisonMonthly = {
   otb: { nights: 0, adr: 0, revenue: 0 },
@@ -170,7 +171,6 @@ export default function LyComparisonAccountModal({
   const [currentMonthIndex, setCurrentMonthIndex] = useState(0)
   const [searchQuery,   setSearchQuery]   = useState('')
   const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(new Set())
-  const [filterCleared, setFilterCleared] = useState(false)
 
   const loading = schemaLoading || lyLoading
 
@@ -180,9 +180,6 @@ export default function LyComparisonAccountModal({
       : { groups: [], summary: { monthly: {}, accountCount: 0, groupCount: 0 }, monthKeys: [] },
     [schema, lyPacing, roomCount, loading],
   )
-
-  const effectiveSegCodes = !filterCleared ? initialFilterSegCodes : undefined
-  const isFilterMode      = !!effectiveSegCodes && effectiveSegCodes.length > 0
 
   // 월 인덱스 초기화
   useEffect(() => {
@@ -197,12 +194,9 @@ export default function LyComparisonAccountModal({
 
   const currentMonthKey = monthKeys[currentMonthIndex] ?? ''
 
-  // 필터 + 검색
+  // 그룹 전체 표시(필터 없음) + 검색 + 빈데이터 필터
   const visibleGroups = useMemo(() => {
     let g = groups
-    if (effectiveSegCodes && effectiveSegCodes.length > 0) {
-      g = g.filter(group => groupHasFilterCode(group, effectiveSegCodes, schema))
-    }
     const q = searchQuery.trim().toLowerCase()
     if (q) {
       g = g.map(group => ({ ...group, rows: group.rows.filter(r => r.account_name.toLowerCase().includes(q)) }))
@@ -222,29 +216,28 @@ export default function LyComparisonAccountModal({
     }
 
     return g
-  }, [groups, effectiveSegCodes, searchQuery, schema, currentMonthKey])
+  }, [groups, searchQuery, currentMonthKey])
 
-  // 초기 접힘 상태
+  // 진입 시: 클릭한 세그(initialFilterSegCodes)에 해당하는 그룹만 펼침, 나머지는 접힘
   useEffect(() => {
     if (!open) return
-    if (isFilterMode && !filterCleared) {
-      setCollapsedKeys(new Set())
+    const codes = initialFilterSegCodes
+    if (codes && codes.length > 0) {
+      setCollapsedKeys(new Set(groups.filter(g => !groupHasFilterCode(g, codes, schema)).map(g => g.key)))
     } else {
-      setCollapsedKeys(new Set(visibleGroups.map(g => g.key)))
+      setCollapsedKeys(new Set(groups.map(g => g.key)))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, isFilterMode, filterCleared, visibleGroups.length])
+  }, [open, groups, initialFilterSegCodes])
 
   const effectiveCollapsedKeys = searchQuery.trim() ? new Set<string>() : collapsedKeys
 
   const toggleCollapse = (key: string) =>
     setCollapsedKeys(prev => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next })
 
-  const allCollapsed = collapsedKeys.size >= visibleGroups.length && visibleGroups.length > 0
-  const toggleAll    = () => setCollapsedKeys(allCollapsed ? new Set() : new Set(visibleGroups.map(g => g.key)))
 
   useEffect(() => {
-    if (open) { setSearchQuery(''); setFilterCleared(false) }
+    if (open) { setSearchQuery('') }
   }, [open])
 
   useEffect(() => {
@@ -271,37 +264,17 @@ export default function LyComparisonAccountModal({
 
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-6xl"
-        style={{ maxHeight: '88vh', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
+        style={{ maxHeight: '88vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
         <div className="flex items-start justify-between gap-3 px-6 py-4 shrink-0" style={{ borderBottom: BORDER }}>
           {/* Left */}
           <div className="flex items-start gap-3 min-w-0">
-            {onBackToSeg && isFilterMode && !filterCleared && (
-              <button
-                onClick={() => onBackToSeg(currentMonthKey)}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs transition-colors shrink-0 mt-0.5"
-                style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}
-                onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-accent-primary)'; e.currentTarget.style.borderColor = 'var(--color-accent-primary)' }}
-                onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-secondary)'; e.currentTarget.style.borderColor = 'var(--color-border-default)' }}
-              >
-                <ArrowLeft size={12} />Seg로
-              </button>
-            )}
             <div className="min-w-0">
               <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>전년 동기간 비교 — Account</h2>
               <p className="text-xs mt-0.5" style={{ color: 'var(--brand-dimmed)' }}>
                 현재 OTB {otbDate ?? '-'}{' · '}전년 동기간 OTB {lyMatchUpdateDate ?? '-'}
               </p>
-              {isFilterMode && initialFilterLabel && !filterCleared && (
-                <div className="flex items-center gap-1 mt-1.5">
-                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px]"
-                    style={{ background: 'var(--accent-badge-bg)', color: 'var(--color-accent-primary)', border: '1px solid var(--color-accent-primary)' }}>
-                    {initialFilterLabel}
-                    <button onClick={() => setFilterCleared(true)} className="hover:opacity-60 transition-opacity leading-none ml-0.5" aria-label="필터 해제">×</button>
-                  </span>
-                </div>
-              )}
             </div>
           </div>
 
@@ -379,23 +352,7 @@ export default function LyComparisonAccountModal({
                 </div>
               ))}
             </div>
-            <div className="relative">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--color-text-muted)' }} />
-              <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                placeholder="account 검색..." autoFocus
-                className="text-xs pl-7 pr-3 py-1.5 rounded-lg focus:outline-none"
-                style={{ width: 160, background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }}
-              />
-            </div>
-            {visibleGroups.length > 0 && (
-              <button onClick={toggleAll} className="text-xs px-2.5 py-1.5 rounded-lg transition-colors"
-                style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}
-                onMouseEnter={e => e.currentTarget.style.color = 'var(--color-accent-primary)'}
-                onMouseLeave={e => e.currentTarget.style.color = 'var(--color-text-secondary)'}>
-                {allCollapsed ? '모두 펼치기' : '모두 접기'}
-              </button>
-            )}
-            <button onClick={onClose} className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1" aria-label="닫기">
+            <button onClick={() => (onBackToSeg ? onBackToSeg(currentMonthKey) : onClose())} className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1" aria-label="Seg로">
               <X size={22} />
             </button>
           </div>
@@ -441,9 +398,9 @@ export default function LyComparisonAccountModal({
                     return (
                       <>
                         <tr key={`hdr-${group.key}`} onClick={() => toggleCollapse(group.key)} className="cursor-pointer"
-                          style={{ borderTop: BORDER, background: 'var(--color-bg-elevated)' }}
-                          onMouseEnter={e => e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), var(--color-bg-elevated)`}
-                          onMouseLeave={e => e.currentTarget.style.background = 'var(--color-bg-elevated)'}
+                          style={{ borderTop: BORDER, background: '#111111' }}
+                          onMouseEnter={e => e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), #111111`}
+                          onMouseLeave={e => e.currentTarget.style.background = '#111111'}
                         >
                           <td style={{ ...tdBase, paddingLeft: 12 }}>
                             <div className="flex items-center gap-2">
@@ -479,7 +436,7 @@ export default function LyComparisonAccountModal({
                 </tbody>
 
                 <tfoot>
-                  <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: 'var(--color-bg-secondary)' }}>
+                  <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: '#111111' }}>
                     <td style={{ ...sumTd, paddingLeft: 12, borderRight: DOUBLE }}>합계 (HOU 제외)</td>
                     {sumMonth ? (
                       <>
@@ -495,13 +452,13 @@ export default function LyComparisonAccountModal({
                       </>
                     ) : <td colSpan={9} />}
                   </tr>
-                  <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
+                  <tr style={{ borderTop: BORDER, background: '#111111' }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: DOUBLE }}>OCC</td>
                     <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER, borderRight: DOUBLE }}><FmtOcc n={sumMonth?.otb.occ ?? 0} /></td>
                     <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderRight: DOUBLE }}><FmtOcc n={sumMonth?.ly.occ ?? 0} /></td>
                     <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600 }}><FmtGapPct n={sumMonth?.gap.occDiff ?? 0} /></td>
                   </tr>
-                  <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
+                  <tr style={{ borderTop: BORDER, background: '#111111' }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: DOUBLE }}>RevPAR</td>
                     <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER, borderRight: DOUBLE }}><FmtRevpar n={sumMonth?.otb.revpar ?? 0} /></td>
                     <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderRight: DOUBLE }}><FmtRevpar n={sumMonth?.ly.revpar ?? 0} /></td>
