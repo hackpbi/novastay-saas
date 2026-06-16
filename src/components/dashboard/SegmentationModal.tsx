@@ -223,6 +223,7 @@ function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, onRowC
 
   const sumTdBase: React.CSSProperties = {
     ...tdBase, fontWeight: 600, color: 'var(--color-text-primary)', paddingTop: 8, paddingBottom: 8, background: '#111111',
+    borderTop: '1px solid rgba(0,229,160,0.6)',   // 합계 행 위 초록선 (separate 모드: 셀 보더만 렌더)
   }
   const footCell: React.CSSProperties = { textAlign: 'center', paddingTop: 8, paddingBottom: 8, fontWeight: 600, borderBottom: GRID, background: '#111111' }
   return (
@@ -230,24 +231,24 @@ function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, onRowC
       <table className="w-full text-xs" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
         <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
           <tr>
-            <th rowSpan={2} style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE_GROUP, borderBottom: GRID_HEAD, height: 42, verticalAlign: 'middle' }}>
-              <div style={{ marginBottom: 4 }}>SEGMENTATION</div>
+            <th rowSpan={2} style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE_GROUP, borderBottom: GRID_HEAD, verticalAlign: 'top', paddingTop: 8 }}>
+              <div style={{ fontSize: 10, color: 'var(--color-text-secondary)', marginBottom: 6 }}>SEGMENTATION</div>
               {day === undefined && (
-                <div className="flex items-center gap-1">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <button
                     onClick={onPrevMonth} disabled={!canPrevMonth}
-                    style={{ background: 'transparent', border: 'none', padding: 0, display: 'flex', alignItems: 'center', cursor: canPrevMonth ? 'pointer' : 'not-allowed', opacity: canPrevMonth ? 1 : 0.3, color: 'var(--color-text-secondary)' }}
+                    style={{ background: 'transparent', border: '1px solid var(--color-border-default)', borderRadius: 6, padding: '2px 4px', display: 'flex', alignItems: 'center', cursor: canPrevMonth ? 'pointer' : 'not-allowed', opacity: canPrevMonth ? 1 : 0.35, color: 'var(--color-text-secondary)' }}
                   >
-                    <ChevronLeft size={12} />
+                    <ChevronLeft size={14} />
                   </button>
-                  <span style={{ fontSize: 11, color: 'var(--color-text-primary)', textTransform: 'none', letterSpacing: 'normal' }}>
+                  <span style={{ fontSize: 12, color: 'var(--color-text-primary)', fontWeight: 600, textTransform: 'none', letterSpacing: 'normal', whiteSpace: 'nowrap' }}>
                     {curYear}년 {curMonth}월
                   </span>
                   <button
                     onClick={onNextMonth} disabled={!canNextMonth}
-                    style={{ background: 'transparent', border: 'none', padding: 0, display: 'flex', alignItems: 'center', cursor: canNextMonth ? 'pointer' : 'not-allowed', opacity: canNextMonth ? 1 : 0.3, color: 'var(--color-text-secondary)' }}
+                    style={{ background: 'transparent', border: '1px solid var(--color-border-default)', borderRadius: 6, padding: '2px 4px', display: 'flex', alignItems: 'center', cursor: canNextMonth ? 'pointer' : 'not-allowed', opacity: canNextMonth ? 1 : 0.35, color: 'var(--color-text-secondary)' }}
                   >
-                    <ChevronRight size={12} />
+                    <ChevronRight size={14} />
                   </button>
                 </div>
               )}
@@ -283,7 +284,7 @@ function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, onRowC
         </tbody>
 
         <tfoot>
-          <tr style={{ borderTop: '2px solid var(--color-accent-primary)' }}>
+          <tr>
             <td style={{ ...sumTdBase, paddingLeft: 12, borderRight: DOUBLE_GROUP }}>합계 (HOU 제외)</td>
             <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right' }}>
               <FmtNights n={summary.totalNights} />
@@ -450,12 +451,14 @@ export default function SegmentationModal({
               onChange={setOtbDate}
               availableDates={otbDates}
               accent
+              bare
             />
             <DatePicker
               label="VS OTB"
               value={vsOtbDate}
               onChange={setVsOtbDate}
               availableDates={otbDates.filter(d => d < otbDate)}
+              bare
             />
             <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>
               {day !== undefined
