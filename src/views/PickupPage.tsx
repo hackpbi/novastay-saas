@@ -81,7 +81,7 @@ export default function PickupPage() {
   })
 
   return (
-    <div className="px-6 py-5 max-w-[1400px] mx-auto">
+    <div>
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <h1 className="text-xl font-bold" style={{ color: 'var(--color-text-primary)' }}>Pick-up</h1>
