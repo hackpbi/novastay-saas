@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
-import { ArrowUp, ArrowDown } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForecastMonthly } from '@/hooks/useForecastMonthly'
 import { useBudgetMonthly } from '@/hooks/useBudgetMonthly'
 import type { PickupRow } from '@/hooks/usePickupData'
 import type { LyPacingRow } from '@/hooks/useLyPacing'
+import LyComparisonSegModal from '@/components/dashboard/LyComparisonSegModal'
+import LyComparisonAccountModal from '@/components/dashboard/LyComparisonAccountModal'
 import { lastDayOfMonth, inMonth, fmtK, fmtM, type PickupDaily } from '@/utils/pickupPageUtils'
 
 const SPARK_MINT    = 'rgba(0,229,160,0.28)'
@@ -25,19 +26,66 @@ function getAchievementColor(pct: number | null): string {
   return 'var(--color-negative)'
 }
 
-const rowStyle: React.CSSProperties = {
-  display: 'grid', gridTemplateColumns: '1fr 1fr',
-  alignItems: 'flex-start', padding: '12px 16px', borderBottom: COL_BT, gap: 8,
+// 전년비 뱃지 (대시보드 ChangeTag 복제)
+function ChangeTag({ value, unit, onClick }: { value: number; unit: string; onClick?: () => void }) {
+  const pos = value >= 0
+  const inner = (
+    <span
+      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[12px] font-semibold leading-none ${pos ? 'text-status-positive' : 'text-status-negative'}`}
+      style={{ background: pos ? 'var(--accent-badge-bg)' : 'var(--negative-bg)', border: `1px solid ${pos ? 'var(--accent-badge-border)' : 'var(--negative-border)'}` }}
+    >
+      {pos ? '▲' : '▼'}&nbsp;{Math.abs(value)}{unit}
+    </span>
+  )
+  if (!onClick) return inner
+  return (
+    <button
+      onClick={onClick} title="전년 비교 보기"
+      style={{ background: 'transparent', border: 'none', padding: '2px 4px', cursor: 'pointer', borderRadius: 4, transition: 'background 0.15s', display: 'inline-flex' }}
+      onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-elevated)')}
+      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+    >
+      {inner}
+    </button>
+  )
 }
-const puLabel: React.CSSProperties = { fontSize: 11, fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }
-const otbLabel: React.CSSProperties = { fontSize: 10, color: 'var(--color-text-secondary)', marginBottom: 4 }
-const otbBig: React.CSSProperties = { fontSize: 22, fontWeight: 500, color: '#00E5A0', lineHeight: 1.1 }
-const sub: React.CSSProperties = { fontSize: 11, color: 'var(--color-text-secondary)' }
+
+// 전년 동일자 영역 (세로: 라벨 / 뱃지 / FIT·GRP 항상 표시)
+function LyCell({ modeNode, varValue, unit, fitPct, grpPct, tooltip, onOpen }: {
+  modeNode: React.ReactNode; varValue: number | null; unit: string; fitPct?: number | null; grpPct?: number | null
+  tooltip: boolean; onOpen: () => void
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, cursor: 'pointer', position: 'relative', flexShrink: 0 }}
+      onClick={onOpen}>
+      {modeNode}
+      {varValue !== null
+        ? <ChangeTag value={varValue} unit={unit} />
+        : <span className="text-[11px] text-brand-dimmed">-</span>}
+      {tooltip && fitPct != null && grpPct != null && (
+        <div style={{ display: 'flex', gap: 6, fontSize: 10 }}>
+          <span style={{ color: fitPct >= 0 ? '#00B883' : '#E24B4A' }}>FIT {fitPct >= 0 ? '▲' : '▼'}{Math.abs(Math.round(fitPct))}%</span>
+          <span style={{ color: grpPct >= 0 ? '#00B883' : '#E24B4A' }}>GRP {grpPct >= 0 ? '▲' : '▼'}{Math.abs(Math.round(grpPct))}%</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+const rowStyle: React.CSSProperties = { padding: '12px 16px', borderBottom: COL_BT }
+const rowFlex: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }
+const bigLabel: React.CSSProperties = { fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)', lineHeight: 1, marginBottom: 4 }
+const rnMuted: React.CSSProperties = { fontSize: 11, color: 'var(--color-text-secondary)' }
+const rnStrike: React.CSSProperties = { fontSize: 11, color: 'var(--color-text-secondary)' }
+const vsGroup: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 6 }
+const vsStrike: React.CSSProperties = { fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)' }
+const arrowStyle: React.CSSProperties = { fontSize: 11, color: 'var(--color-text-secondary)' }
+const otbVal: React.CSSProperties = { fontSize: 13, fontWeight: 500, color: '#00E5A0' }
 
 // ─── PickupMonthCard ─────────────────────────────────────────────────────────────
 export default function PickupMonthCard({
   year, month, hotelId, roomCount, fcstDate, budgetDate,
-  pickupRows, lyDjRows, onExpand,
+  pickupRows, lyDjRows, lyDgRows, onExpand,
 }: {
   year:       number
   month:      number   // 0-based
@@ -108,15 +156,40 @@ export default function PickupMonthCard({
       })
     }
 
+    // 전년비 통계 (대시보드 getMonthLyStats 복제) — v1=동일자 / v2=동기간
+    const lyStatsFor = (rows: LyPacingRow[]) => {
+      const md = rows.filter(x => inMonth(x.business_date, year, month1) && x.segmentation !== 'HOU')
+      const oN = md.reduce((s, r) => s + (r.otb_nights ?? 0), 0)
+      const lN = md.reduce((s, r) => s + (r.ly_nights ?? 0), 0)
+      const oR = md.reduce((s, r) => s + (r.otb_revenue ?? 0), 0)
+      const lR = md.reduce((s, r) => s + (r.ly_revenue ?? 0), 0)
+      const grpVar = (g: string) => {
+        const gd = md.filter(r => r.sorting2 === g)
+        const goN = gd.reduce((s, r) => s + (r.otb_nights ?? 0), 0)
+        const glN = gd.reduce((s, r) => s + (r.ly_nights ?? 0), 0)
+        return glN > 0 ? ((goN - glN) / glN) * 100 : null
+      }
+      return {
+        varNightsPct:  lN > 0 ? ((oN - lN) / lN) * 100 : null,
+        varRevenuePct: lR > 0 ? ((oR - lR) / lR) * 100 : null,
+        varAdr:        (oN > 0 ? oR / oN : 0) - (lN > 0 ? lR / lN : 0),
+        fitPct:        grpVar('fit'),
+        grpPct:        grpVar('group'),
+      }
+    }
+
     return {
+      hasData: pm.length > 0,
       otbN, otbOcc: occ(otbN), otbAdr: adr(otbR, otbN), otbRev: otbR,
-      puN, puR, puOccPp: occ(puN), vsAdr: adr(vsR, vsN),
+      vsN, vsOcc: occ(vsN), vsRev: vsR, vsAdr: adr(vsR, vsN),
+      puN, puR, puOccPp: occ(puN),
+      lyV1: lyStatsFor(lyDjRows), lyV2: lyStatsFor(lyDgRows),
       lyDj: aggLy(lyDjRows),
       fcst: sumMonthly(forecastRows, 'forecast_nights', 'forecast_revenue'),
       bud:  sumMonthly(budgetRows, 'budget_nights', 'budget_revenue'),
       daily,
     }
-  }, [pickupRows, lyDjRows, forecastRows, budgetRows, roomCount, year, month, month1])
+  }, [pickupRows, lyDjRows, lyDgRows, forecastRows, budgetRows, roomCount, year, month, month1])
 
   // ── 스파크라인 (Chart.js) ──────────────────────────────────────────────────────
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -146,6 +219,27 @@ export default function PickupMonthCard({
     return () => { cancelled = true; chartRef.current?.destroy(); chartRef.current = null }
   }, [m.daily])
 
+  // ── 전년 동일자 모달/토글 ──────────────────────────────────────────────────────
+  const [lyMode, setLyMode] = useState<'v1' | 'v2'>('v1')
+  const [lySegOpen, setLySegOpen] = useState(false)
+  const [lyAcc, setLyAcc] = useState<{ open: boolean; filterSegCodes?: string[]; filterLabel?: string }>({ open: false })
+  const monthKey = `${year}-${String(month1).padStart(2, '0')}`
+  const ly = lyMode === 'v1' ? m.lyV1 : m.lyV2
+  const modeToggle = (
+    <span
+      onClick={e => { e.stopPropagation(); setLyMode(p => (p === 'v1' ? 'v2' : 'v1')) }}
+      className="text-[9px] cursor-pointer"
+      style={{ color: 'rgba(255,255,255,0.4)', borderBottom: '1px dashed rgba(255,255,255,0.3)' }}
+    >
+      {lyMode === 'v1' ? '전년 동일자 ⇅' : '전년 동기간 ⇅'}
+    </span>
+  )
+  const modeStatic = (
+    <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
+      {lyMode === 'v1' ? '전년 동일자' : '전년 동기간'}
+    </span>
+  )
+
   // ── 파생값 ───────────────────────────────────────────────────────────────────
   const adrDelta = m.otbAdr - m.vsAdr
 
@@ -168,49 +262,80 @@ export default function PickupMonthCard({
         </div>
       </div>
 
+      {/* ── Pick-up 요약 (강조: 민트 배경 + 좌측 3px 라인) ── */}
+      <div style={{ padding: '12px 14px', borderBottom: COL_BT, background: 'rgba(0,229,160,0.07)', borderLeft: '3px solid #00E5A0' }}>
+        <div style={{ fontSize: 10, fontWeight: 500, color: '#00B883', marginBottom: 6, textAlign: 'center' }}>Pick-up</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 22, fontWeight: 500, color: m.puOccPp >= 0 ? '#00B883' : '#E24B4A' }}>
+            {m.puOccPp >= 0 ? '+' : ''}{m.puOccPp.toFixed(1)}%{m.puOccPp >= 0 ? '↑' : '↓'}
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--color-border-default)' }}>|</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)' }}>ADR</span>
+            <span style={{ fontSize: 15, fontWeight: 500, color: adrDelta >= 0 ? '#00B883' : '#E24B4A' }}>
+              {adrDelta >= 0 ? '+' : ''}{Math.round(adrDelta / 1000)}k
+            </span>
+          </div>
+          <span style={{ fontSize: 11, color: 'var(--color-border-default)' }}>|</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)' }}>REV</span>
+            <span style={{ fontSize: 15, fontWeight: 500, color: m.puR >= 0 ? '#00B883' : '#E24B4A' }}>
+              {m.puR >= 0 ? '+' : ''}{fmtM(m.puR)}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* ── OCC 행 ── */}
       <div style={rowStyle}>
-        <div>
-          <div style={puLabel}>Pick-Up</div>
-          <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 2 }}>
-            {m.puOccPp >= 0 ? '+' : ''}{m.puOccPp.toFixed(1)}%
+        <div style={rowFlex}>
+          <div>
+            <div style={bigLabel}>OCC</div>
+            <div style={vsGroup}>
+              {m.vsN > 0 && <span style={vsStrike}>{m.vsOcc.toFixed(1)}%</span>}
+              {m.vsN > 0 && <span style={arrowStyle}>→</span>}
+              <span style={otbVal}>{m.otbOcc.toFixed(1)}%</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
+              {m.vsN > 0 && <span style={rnStrike}>{m.vsN.toLocaleString('ko-KR')} R/N</span>}
+              {m.vsN > 0 && <span style={rnMuted}>→</span>}
+              <span style={rnMuted}>{m.otbN.toLocaleString('ko-KR')} R/N</span>
+            </div>
           </div>
-          <div style={sub}>{m.puN.toLocaleString('ko-KR')} nights</div>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={otbLabel}>OCC</div>
-          <div style={otbBig}>{m.otbOcc.toFixed(1)}%</div>
-          <div style={{ ...sub, marginTop: 3 }}>{m.otbN.toLocaleString('ko-KR')} nights</div>
+          <LyCell modeNode={modeToggle} varValue={ly.varNightsPct != null ? Math.round(ly.varNightsPct * 10) / 10 : null} unit="%" tooltip fitPct={ly.fitPct} grpPct={ly.grpPct}
+            onOpen={() => setLySegOpen(true)} />
         </div>
       </div>
 
       {/* ── ADR 행 ── */}
       <div style={rowStyle}>
-        <div>
-          <div style={puLabel}>ADR</div>
-          <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--color-text-primary)' }}>
-            {m.vsAdr > 0
-              ? `${fmtK(m.vsAdr)} → ${fmtK(m.otbAdr)}(${adrDelta >= 0 ? '+' : ''}${Math.round(adrDelta / 1000)}K${adrDelta >= 0 ? '↑' : '↓'})`
-              : `${adrDelta >= 0 ? '+' : ''}${fmtK(adrDelta)}`}
+        <div style={rowFlex}>
+          <div>
+            <div style={bigLabel}>ADR</div>
+            <div style={vsGroup}>
+              {m.vsAdr > 0 && <span style={vsStrike}>{fmtK(m.vsAdr)}</span>}
+              {m.vsAdr > 0 && <span style={arrowStyle}>→</span>}
+              <span style={otbVal}>{fmtK(m.otbAdr)}</span>
+            </div>
           </div>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={otbLabel}>ADR</div>
-          <div style={otbBig}>{fmtK(m.otbAdr)}</div>
+          <LyCell modeNode={modeStatic} varValue={ly.varAdr != null ? Math.round(ly.varAdr / 1000) : null} unit="k" tooltip={false}
+            onOpen={() => setLySegOpen(true)} />
         </div>
       </div>
 
       {/* ── REV 행 ── */}
       <div style={rowStyle}>
-        <div>
-          <div style={puLabel}>REV</div>
-          <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--color-text-primary)' }}>
-            {m.puR === 0 ? '—' : `${m.puR >= 0 ? '+' : ''}${fmtM(m.puR)} ${m.puR >= 0 ? '↑' : '↓'}`}
+        <div style={rowFlex}>
+          <div>
+            <div style={bigLabel}>REV</div>
+            <div style={vsGroup}>
+              {m.vsRev > 0 && <span style={vsStrike}>{fmtM(m.vsRev)}</span>}
+              {m.vsRev > 0 && <span style={arrowStyle}>→</span>}
+              <span style={otbVal}>{fmtM(m.otbRev)}</span>
+            </div>
           </div>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={otbLabel}>REV</div>
-          <div style={otbBig}>{fmtM(m.otbRev)}</div>
+          <LyCell modeNode={modeStatic} varValue={ly.varRevenuePct != null ? Math.round(ly.varRevenuePct * 10) / 10 : null} unit="%" tooltip fitPct={ly.fitPct} grpPct={ly.grpPct}
+            onOpen={() => setLySegOpen(true)} />
         </div>
       </div>
 
@@ -237,30 +362,6 @@ export default function PickupMonthCard({
         </div>
       </div>
 
-      {/* ── P/U pill ── */}
-      <div className="px-4 pb-4" style={{ marginTop: 14 }}>
-        <button
-          className="w-full flex items-center justify-center gap-1.5 rounded-full py-2.5 text-[12px] font-bold transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0"
-          style={{ background: 'var(--gradient-cta)', boxShadow: 'var(--accent-btn-glow)', color: '#0A0A0A' }}
-        >
-          {m.puN >= 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
-          P/U {m.puN >= 0 ? '+' : ''}{m.puN} rooms
-        </button>
-      </div>
-
-      {/* ── RM Action ── */}
-      <div className="bg-bg-secondary px-4 py-3 flex items-center gap-2.5" style={{ borderTop: '1px solid var(--divider-color)' }}>
-        <div className="w-6 h-6 rounded-md flex items-center justify-center shrink-0" style={{ background: 'var(--rm-icon-bg)', border: '1px solid var(--rm-icon-border)' }}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
-            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" stroke="var(--rm-icon-stroke)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </div>
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold text-accent-primary leading-none mb-0.5">RM 액션</p>
-          <p className="text-[10px] text-brand-dimmed truncate">RM 액션 데이터가 준비되지 않았습니다.</p>
-        </div>
-      </div>
-
       {/* ── 픽업 추이 (Pick-up 전용) ── */}
       <div style={{ padding: '8px 16px 10px', borderTop: '0.5px solid var(--color-border-tertiary)', cursor: 'pointer' }} onClick={() => onExpand(m.daily)}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
@@ -271,6 +372,27 @@ export default function PickupMonthCard({
           <canvas ref={canvasRef} role="img" aria-label={`${month1}월 픽업 추이`} />
         </div>
       </div>
+
+      {/* ── 전년 동일자 모달 (대시보드 그대로 재사용) ── */}
+      <LyComparisonSegModal
+        open={lySegOpen}
+        onClose={() => setLySegOpen(false)}
+        roomCount={roomCount}
+        initialMonthKey={monthKey}
+        onAccountDrillDown={(segCodes, _mk, label) => {
+          setLySegOpen(false)
+          setLyAcc({ open: true, filterSegCodes: segCodes, filterLabel: label })
+        }}
+      />
+      <LyComparisonAccountModal
+        open={lyAcc.open}
+        onClose={() => setLyAcc({ open: false })}
+        roomCount={roomCount}
+        initialMonthKey={monthKey}
+        initialFilterSegCodes={lyAcc.filterSegCodes}
+        initialFilterLabel={lyAcc.filterLabel}
+        onBackToSeg={lyAcc.filterSegCodes ? () => { setLyAcc({ open: false }); setLySegOpen(true) } : undefined}
+      />
     </div>
   )
 }

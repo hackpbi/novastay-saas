@@ -1,24 +1,34 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CalendarDays } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import { useFcstDateContext } from '@/contexts/FcstDateContext'
+import { usePickupData } from '@/hooks/usePickupData'
 import { useLyPacing } from '@/hooks/useLyPacing'
 import { useLatestConfirmedBudgetDate } from '@/hooks/useLatestConfirmedBudgetDate'
-import type { PickupRow } from '@/hooks/usePickupData'
 import DatePicker from '@/components/DatePicker'
 import PickupMonthCard from '@/components/pickup/PickupMonthCard'
 import PickupChartModal from '@/components/pickup/PickupChartModal'
-import { toKST, type PickupDaily } from '@/utils/pickupPageUtils'
+import MonthlyPickupSegModal from '@/components/dashboard/MonthlyPickupSegModal'
+import { type PickupDaily } from '@/utils/pickupPageUtils'
+
+// 대시보드 배너 숫자 포맷 복제
+function formatPuParts(n: number, type: 'nights' | 'currency'): { num: string; unit: string } {
+  const sign = n >= 0 ? '+' : ''
+  if (type === 'nights') return { num: `${sign}${n.toLocaleString('ko-KR')}`, unit: '실' }
+  if (Math.abs(n) >= 1_000_000) return { num: `${sign}${(n / 1_000_000).toFixed(1)}`, unit: 'M' }
+  if (Math.abs(n) >= 1_000)     return { num: `${sign}${(n / 1_000).toFixed(0)}`,     unit: 'k' }
+  return { num: `${sign}${n.toLocaleString('ko-KR')}`, unit: '' }
+}
 
 export default function PickupPage() {
   const { currentHotel } = useHotel()
   const hotelId = currentHotel?.id
-  const { otbDate, otbDates } = useDateContext()
+  const { otbDate, vsOtbDate, otbDates, setVsOtbDate } = useDateContext()
   const { fcstDate } = useFcstDateContext()
   const { data: budgetDate = null } = useLatestConfirmedBudgetDate(hotelId || undefined)
 
@@ -36,48 +46,39 @@ export default function PickupPage() {
   })
   const roomCount = hotelDetail?.room_count ?? 0
 
-  // ── 3개월 (KST 오늘 기준) ────────────────────────────────────────────────────
+  // ── 3개월 구간 (KST 오늘 기준 + monthOffset) ─────────────────────────────────
   const now = new Date()
+  const [monthOffset, setMonthOffset] = useState(0)
   const targetMonths = useMemo(
-    () => [0, 1, 2].map(offset => {
-      const d = new Date(now.getFullYear(), now.getMonth() + offset, 1)
+    () => [0, 1, 2].map(i => {
+      const d = new Date(now.getFullYear(), now.getMonth() + monthOffset + i, 1)
       return { year: d.getFullYear(), month: d.getMonth(), label: `${d.getMonth() + 1}월` }
     }),
-    [now.getFullYear(), now.getMonth()],
+    [now.getFullYear(), now.getMonth(), monthOffset],
   )
 
-  // ── vs Date (로컬 상태, 7일 전 근접값 기본) ────────────────────────────────────
-  const [vsDate, setVsDate] = useState<string | null>(null)
-  useEffect(() => {
-    if (!otbDates?.length || vsDate) return
-    const d = new Date(); d.setDate(d.getDate() - 7)
-    const target = toKST(d)
-    const best = [...otbDates].reverse().find(x => x <= target) ?? otbDates[0]
-    setVsDate(best)
-  }, [otbDates, vsDate])
-
-  // ── 픽업 데이터 (페이지 1회 호출 → 카드별 월 필터) ─────────────────────────────
-  const minDate = otbDates?.[otbDates.length - 1] ?? ''
-  const { data: pickupRows = [], isLoading: pickupLoading } = useQuery<PickupRow[]>({
-    queryKey: ['pickup_page', hotelId, otbDate, vsDate, minDate],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc('get_pickup_data', {
-        p_hotel_id:    hotelId,
-        p_otb_date:    otbDate,
-        p_vs_otb_date: vsDate,
-        p_min_date:    minDate,
-      })
-      if (error) throw error
-      return (data ?? []) as PickupRow[]
-    },
-    enabled: !!hotelId && !!otbDate && !!vsDate && !!minDate,
-  })
+  // ── 픽업 데이터 (대시보드와 동일: usePickupData / DateContext vsOtbDate) ─────────
+  // 전체 stay-date rows 반환 → 카드별로 business_date 월 필터
+  const { data: pickupRows, loading: pickupLoading } = usePickupData()
 
   // ── LY (전년 동일자 v1 / 전년 동기간 v2) ───────────────────────────────────────
   const { data: lyDjRows = [] } = useLyPacing('v1')
   const { data: lyDgRows = [] } = useLyPacing('v2')
 
   const [chartModal, setChartModal] = useState<{ year: number; month: number; daily: PickupDaily[] } | null>(null)
+  const [mpOpen, setMpOpen] = useState(false)
+
+  // ── 요약 배너 데이터 (대시보드와 동일) ───────────────────────────────────────────
+  const pickupDays = otbDate && vsOtbDate
+    ? Math.round((new Date(otbDate).getTime() - new Date(vsOtbDate).getTime()) / 86400000)
+    : 0
+  const totalPuNights  = pickupRows.reduce((s, r) => s + (r.pu_nights ?? 0), 0)
+  const totalPuRevenue = pickupRows.reduce((s, r) => s + (r.pu_revenue ?? 0), 0)
+  const totalPuAdr     = totalPuNights > 0 ? Math.round(totalPuRevenue / totalPuNights) : 0
+  const puBtn = (color: string): React.CSSProperties => ({
+    color, fontWeight: 600, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
+    textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3,
+  })
 
   return (
     <div className="px-6 py-5 max-w-[1400px] mx-auto">
@@ -90,10 +91,67 @@ export default function PickupPage() {
           </span>
           <DatePicker
             label="vs"
-            value={vsDate ?? ''}
-            onChange={setVsDate}
+            value={vsOtbDate}
+            onChange={setVsOtbDate}
             availableDates={(otbDates ?? []).filter(d => d < otbDate)}
           />
+        </div>
+      </div>
+
+      {/* 상단 요약 배너 (대시보드 동일) */}
+      {pickupLoading ? (
+        <div className="h-5 w-80 rounded animate-pulse mb-5" style={{ background: 'var(--color-bg-tertiary)' }} />
+      ) : (
+        <p className="text-sm mb-5" style={{ color: 'var(--color-text-secondary)' }}>
+          오늘 ({otbDate}) 기준{' '}
+          {pickupDays > 0 ? (
+            <span style={{ color: 'var(--color-accent-primary)' }}>
+              <span style={{ fontSize: '1.5em', fontWeight: 700 }}>{pickupDays}</span>일간
+            </span>
+          ) : (
+            <span style={{ color: 'var(--color-accent-primary)' }}>당일</span>
+          )}
+          {' '}6개월 실적은 총{' '}
+          <button onClick={() => setMpOpen(true)} title="월별 픽업 추이 보기" style={puBtn(totalPuNights >= 0 ? '#00A86B' : '#E53E3E')}>
+            {(() => { const { num, unit } = formatPuParts(totalPuNights, 'nights'); return <><span style={{ fontSize: '1.5em' }}>{num}</span>{unit}</> })()}
+          </button>
+          ,{' '}ADR{' '}
+          <button onClick={() => setMpOpen(true)} title="월별 픽업 추이 보기" style={puBtn(totalPuAdr >= 0 ? '#00A86B' : '#E53E3E')}>
+            {(() => { const { num, unit } = formatPuParts(totalPuAdr, 'currency'); return <><span style={{ fontSize: '1.5em' }}>{num}</span>{unit}</> })()}
+          </button>
+          ,{' '}REV{' '}
+          <button onClick={() => setMpOpen(true)} title="월별 픽업 추이 보기" style={puBtn(totalPuRevenue >= 0 ? '#00A86B' : '#E53E3E')}>
+            {(() => { const { num, unit } = formatPuParts(totalPuRevenue, 'currency'); return <><span style={{ fontSize: '1.5em' }}>{num}</span>{unit}</> })()}
+          </button>
+          {' '}픽업 되었습니다.
+        </p>
+      )}
+
+      {/* 월 범위 네비게이션 (대시보드 스타일) */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2.5">
+          <span className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+            {targetMonths[0].month + 1}월 &mdash; {targetMonths[2].month + 1}월
+          </span>
+          <span className="text-xs text-brand-dimmed font-mono">{targetMonths[0].year}년</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setMonthOffset(p => p - 1)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-brand-muted hover:text-brand-text transition-all duration-150"
+            style={{ border: '1px solid var(--control-border)' }}
+          >
+            <ChevronLeft size={13} />
+            이전
+          </button>
+          <button
+            onClick={() => setMonthOffset(p => p + 1)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-brand-muted hover:text-brand-text transition-all duration-150"
+            style={{ border: '1px solid var(--control-border)' }}
+          >
+            다음
+            <ChevronRight size={13} />
+          </button>
         </div>
       </div>
 
@@ -128,6 +186,8 @@ export default function PickupPage() {
         month={chartModal?.month ?? now.getMonth()}
         daily={chartModal?.daily ?? []}
       />
+
+      <MonthlyPickupSegModal open={mpOpen} onClose={() => setMpOpen(false)} roomCount={roomCount} />
     </div>
   )
 }
