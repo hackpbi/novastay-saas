@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useTheme } from '@/contexts/ThemeContext'
 import { supabase } from '@/lib/supabase'
 import { useForecastMonthly } from '@/hooks/useForecastMonthly'
 import { useBudgetMonthly } from '@/hooks/useBudgetMonthly'
@@ -121,30 +120,33 @@ function groupConsecutiveEvents(rows: CalendarRow[]): EventGroup[] {
 
 const HOLI_POS: React.CSSProperties = { color: '#00B883', fontWeight: 500 }
 const HOLI_NEG: React.CSSProperties = { color: '#E24B4A', fontWeight: 500 }
+const HOLI_GRAY: React.CSSProperties = { color: 'var(--color-text-secondary)' }
 const DOW_KR = ['일', '월', '화', '수', '목', '금', '토']
 
-// 픽업 R/N 을 동그라미(숫자) + 아래 점선으로 그리는 커스텀 플러그인 (label==='pickup' 데이터셋만)
+// 픽업 R/N 을 막대 위 숫자 + 위쪽 점선으로 그리는 커스텀 플러그인 (label==='pickup' 데이터셋만)
 let circlePluginRegistered = false
 const circlePlugin = {
   id: 'circleLabels',
   afterDraw(chart: any) {
-    const { ctx, data, chartArea } = chart
+    const { ctx, data } = chart
     const dsIdx = data.datasets.findIndex((d: any) => d.label === 'pickup')
     if (dsIdx < 0) return
     const ds = data.datasets[dsIdx]
     const meta = chart.getDatasetMeta(dsIdx)
-    const fill = ds.circleFill || 'rgba(15,15,15,1)'
+    const barDsIdx = data.datasets.findIndex((d: any) => d.label === 'OCC%')
+    const barMeta = barDsIdx >= 0 ? chart.getDatasetMeta(barDsIdx) : null
     meta.data.forEach((point: any, i: number) => {
       const raw = ds.data[i]
       const val = raw && typeof raw === 'object' ? raw.y : raw
-      if (val == null) return
-      const x = point.x, y = point.y, r = 12
+      if (val == null || val === 0) return   // 0 이면 숫자·점선 모두 생략
+      const x = point.x
+      const barTop = barMeta?.data[i]?.y ?? point.y
+      // 점선 (숫자 아래 → 막대 상단 위)
       ctx.save(); ctx.setLineDash([3, 3]); ctx.strokeStyle = 'rgba(96,165,250,0.45)'; ctx.lineWidth = 1
-      ctx.beginPath(); ctx.moveTo(x, y + r + 1); ctx.lineTo(x, chartArea.bottom); ctx.stroke(); ctx.restore()
-      ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = fill; ctx.fill()
-      ctx.strokeStyle = '#60A5FA'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.restore()
-      ctx.save(); ctx.font = '600 9px -apple-system, sans-serif'; ctx.fillStyle = '#60A5FA'
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(`${val >= 0 ? '+' : ''}${val}`, x, y); ctx.restore()
+      ctx.beginPath(); ctx.moveTo(x, barTop - 18); ctx.lineTo(x, barTop - 2); ctx.stroke(); ctx.restore()
+      // 막대 위 숫자 (원 없이)
+      ctx.save(); ctx.font = '600 10px -apple-system, sans-serif'; ctx.fillStyle = '#60A5FA'
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(`${val >= 0 ? '+' : ''}${val}`, x, barTop - 10); ctx.restore()
     })
   },
 }
@@ -152,8 +154,6 @@ const circlePlugin = {
 // 이벤트 뱃지 + 호버 툴팁 (기간 픽업 R/N, 일자별 OTB/픽업 OCC·ADR·REV)
 function EventBadge({ group, dayAgg, totalRooms }: { group: EventGroup; dayAgg: DayAgg; totalRooms: number }) {
   const [hovered, setHovered] = useState(false)
-  const { theme } = useTheme()
-  const isDark = theme === 'dark'
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const chartRef  = useRef<any>(null)
 
@@ -177,7 +177,7 @@ function EventBadge({ group, dayAgg, totalRooms }: { group: EventGroup; dayAgg: 
           labels,
           datasets: [
             { type: 'bar', label: 'OCC%', data: occArr, backgroundColor: 'rgba(0,229,160,0.38)', borderColor: 'rgba(0,229,160,0.6)', borderWidth: 1, yAxisID: 'yL', order: 2, barPercentage: labels.length === 1 ? 0.2 : 0.5 },
-            { type: 'scatter', label: 'pickup', data: puArr.map((v, i) => ({ x: labels[i], y: v })), pointRadius: 0, showLine: false, yAxisID: 'yR', order: 1, circleFill: isDark ? 'rgba(15,15,15,1)' : 'rgba(255,255,255,1)' } as any,
+            { type: 'scatter', label: 'pickup', data: puArr.map((v, i) => ({ x: labels[i], y: v })), pointRadius: 0, showLine: false, yAxisID: 'yR', order: 1 } as any,
           ],
         },
         options: {
@@ -185,7 +185,7 @@ function EventBadge({ group, dayAgg, totalRooms }: { group: EventGroup; dayAgg: 
           plugins: { legend: { display: false }, tooltip: { enabled: false } },
           scales: {
             x:  { type: 'category', grid: { color: gc }, ticks: { color: tc, font: { size: 10 } } },
-            yL: { position: 'left', min: 0, max: 110, grid: { color: gc }, ticks: { color: tc, font: { size: 10 }, stepSize: 25, callback: (v: any) => v + '%' } },
+            yL: { position: 'left', min: 0, max: 100, grid: { color: gc }, ticks: { color: tc, font: { size: 10 }, stepSize: 25, callback: (v: any) => v + '%' } },
             yR: { position: 'right', min: -2, max: maxPu + 8, grid: { display: false }, ticks: { display: false } },
           },
         },
@@ -193,7 +193,7 @@ function EventBadge({ group, dayAgg, totalRooms }: { group: EventGroup; dayAgg: 
     })()
     return () => { cancelled = true; chartRef.current?.destroy(); chartRef.current = null }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hovered, isDark])
+  }, [hovered])
 
   const start = group.days[0].date
   const end   = group.days[group.days.length - 1].date
@@ -240,7 +240,7 @@ function EventBadge({ group, dayAgg, totalRooms }: { group: EventGroup; dayAgg: 
               OCC%
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--color-text-secondary)' }}>
-              <span style={{ width: 18, height: 18, borderRadius: '50%', flexShrink: 0, border: '1.5px solid #60A5FA', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, color: '#60A5FA', fontWeight: 600 }}>N</span>
+              <span style={{ fontSize: 10, fontWeight: 600, color: '#60A5FA', minWidth: 18, textAlign: 'center' }}>+N</span>
               픽업 R/N
             </span>
           </div>
@@ -273,17 +273,18 @@ function EventBadge({ group, dayAgg, totalRooms }: { group: EventGroup; dayAgg: 
                 const otbOcc = a ? `${(a.otbN / totalRooms * 100).toFixed(1)}%` : '—'
                 const otbAdr = a && a.otbN > 0 ? `${Math.round(a.otbR / a.otbN / 1000)}k` : '—'
                 const otbRev = a ? `${(a.otbR / 1e6).toFixed(1)}M` : '—'
-                const puOcc  = a ? (a.otbN - a.vsN) / totalRooms * 100 : null
+                const puOcc  = a && totalRooms ? Math.round((a.otbN - a.vsN) / totalRooms * 1000) / 10 : null
                 const puAdr  = a && a.otbN > 0 && a.vsN > 0 ? Math.round(a.otbR / a.otbN / 1000 - a.vsR / a.vsN / 1000) : null
-                const puRev  = a ? (a.otbR - a.vsR) / 1e6 : null
+                const puRev  = a ? Math.round((a.otbR - a.vsR) / 1e6 * 10) / 10 : null
+                const puStyle = (v: number | null) => (v === null || v === 0 ? HOLI_GRAY : v > 0 ? HOLI_POS : HOLI_NEG)
                 return (
                   <tr key={day.date} style={{ borderTop: '0.5px solid var(--color-border-tertiary)' }}>
                     <td style={{ color: 'var(--color-text-secondary)', padding: '4px 4px 4px 0', whiteSpace: 'nowrap' }}>{label}</td>
                     <td style={td}>{otbOcc}</td><td style={td}>{otbAdr}</td><td style={td}>{otbRev}</td>
                     <td />
-                    <td style={{ ...td, ...(puOcc !== null ? (puOcc >= 0 ? HOLI_POS : HOLI_NEG) : {}) }}>{puOcc !== null ? `${puOcc >= 0 ? '+' : ''}${puOcc.toFixed(1)}%` : '—'}</td>
-                    <td style={{ ...td, ...(puAdr !== null ? (puAdr >= 0 ? HOLI_POS : HOLI_NEG) : {}) }}>{puAdr !== null ? `${puAdr >= 0 ? '+' : ''}${puAdr}k` : '—'}</td>
-                    <td style={{ ...td, ...(puRev !== null ? (puRev >= 0 ? HOLI_POS : HOLI_NEG) : {}) }}>{puRev !== null ? `${puRev >= 0 ? '+' : ''}${puRev.toFixed(1)}M` : '—'}</td>
+                    <td style={{ ...td, ...puStyle(puOcc) }}>{puOcc === null || puOcc === 0 ? '—' : `${puOcc > 0 ? '+' : ''}${puOcc.toFixed(1)}%`}</td>
+                    <td style={{ ...td, ...puStyle(puAdr) }}>{puAdr === null || puAdr === 0 ? '—' : `${puAdr > 0 ? '+' : ''}${puAdr}k`}</td>
+                    <td style={{ ...td, ...puStyle(puRev) }}>{puRev === null || puRev === 0 ? '—' : `${puRev > 0 ? '+' : ''}${puRev.toFixed(1)}M`}</td>
                   </tr>
                 )
               })}
