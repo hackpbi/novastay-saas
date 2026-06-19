@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { supabase } from '@/lib/supabase'
 import { useForecastMonthly } from '@/hooks/useForecastMonthly'
 import { useBudgetMonthly } from '@/hooks/useBudgetMonthly'
 import type { PickupRow } from '@/hooks/usePickupData'
@@ -82,6 +84,117 @@ const vsStrike: React.CSSProperties = { fontSize: 13, fontWeight: 500, color: 'v
 const arrowStyle: React.CSSProperties = { fontSize: 11, color: 'var(--color-text-secondary)' }
 const otbVal: React.CSSProperties = { fontSize: 13, fontWeight: 500, color: '#00E5A0' }
 
+// ─── 공휴일 ──────────────────────────────────────────────────────────────────────
+type Holiday = { date: string; holiday_name: string }
+type HolidayGroup = { name: string; days: Holiday[] }
+type DayAgg = Record<string, { otbN: number; vsN: number; otbR: number; vsR: number }>
+
+// 연속 날짜를 하나의 이벤트 그룹으로 묶기
+function groupConsecutiveHolidays(holidays: Holiday[]): HolidayGroup[] {
+  if (!holidays.length) return []
+  const sorted = [...holidays].sort((a, b) => a.date.localeCompare(b.date))
+  const groups: HolidayGroup[] = []
+  let cur: HolidayGroup = { name: sorted[0].holiday_name, days: [sorted[0]] }
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = new Date(cur.days[cur.days.length - 1].date)
+    const curr = new Date(sorted[i].date)
+    const diff = (curr.getTime() - prev.getTime()) / 86400000
+    if (diff <= 1) cur.days.push(sorted[i])
+    else { groups.push(cur); cur = { name: sorted[i].holiday_name, days: [sorted[i]] } }
+  }
+  groups.push(cur)
+  return groups
+}
+
+const HOLI_POS: React.CSSProperties = { color: '#00B883', fontWeight: 500 }
+const HOLI_NEG: React.CSSProperties = { color: '#E24B4A', fontWeight: 500 }
+const DOW_KR = ['일', '월', '화', '수', '목', '금', '토']
+
+// 공휴일 뱃지 + 호버 툴팁 (기간 픽업 R/N, 일자별 OTB/픽업 OCC·ADR·REV)
+function HolidayBadge({ group, dayAgg, totalRooms }: { group: HolidayGroup; dayAgg: DayAgg; totalRooms: number }) {
+  const [hovered, setHovered] = useState(false)
+  const start = group.days[0].date
+  const end   = group.days[group.days.length - 1].date
+  const isSingle = group.days.length === 1
+  const mm = new Date(start).getMonth() + 1
+  const d1 = new Date(start).getDate()
+  const d2 = new Date(end).getDate()
+  const dateLabel = isSingle ? `${mm}/${d1}` : `${mm}/${d1}~${d2}`
+  const totalPuRn = group.days.reduce((s, day) => { const a = dayAgg[day.date]; return s + (a ? a.otbN - a.vsN : 0) }, 0)
+
+  const th: React.CSSProperties = { textAlign: 'right', color: 'var(--color-text-secondary)', fontWeight: 400, padding: '0 4px 4px' }
+  const td: React.CSSProperties = { textAlign: 'right', padding: 4, color: 'var(--color-text-primary)' }
+
+  return (
+    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
+      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 500, padding: '3px 8px', borderRadius: 20,
+        background: 'rgba(251,191,36,0.12)', color: '#FBBF24', border: '0.5px solid rgba(251,191,36,0.25)', cursor: 'default', whiteSpace: 'nowrap',
+      }}>
+        🎌 {group.name}
+        <span style={{ fontSize: 9, opacity: 0.8 }}>{dateLabel}</span>
+        {totalPuRn !== 0 && (
+          <span style={{ fontSize: 9, fontWeight: 500, color: '#00B883', background: 'rgba(0,180,130,0.15)', padding: '1px 5px', borderRadius: 10, marginLeft: 2 }}>
+            {totalPuRn > 0 ? '+' : ''}{totalPuRn} R/N
+          </span>
+        )}
+      </span>
+
+      {hovered && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 300, minWidth: 280,
+          background: 'var(--color-bg-elevated)', border: '0.5px solid var(--color-border-default)',
+          borderRadius: 8, padding: '10px 12px', boxShadow: '0 6px 20px rgba(0,0,0,0.35)', pointerEvents: 'none',
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 8, paddingBottom: 7, borderBottom: '0.5px solid var(--color-border-tertiary)' }}>
+            {group.name}{!isSingle ? ' 연휴' : ''} · {dateLabel} · {group.days.length}일
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+            <thead>
+              <tr>
+                <th />
+                <th colSpan={3} style={{ textAlign: 'center', color: 'var(--color-text-secondary)', fontWeight: 500, paddingBottom: 3, borderBottom: '0.5px solid var(--color-border-tertiary)' }}>OTB</th>
+                <th style={{ width: 8 }} />
+                <th colSpan={3} style={{ textAlign: 'center', color: '#00B883', fontWeight: 500, paddingBottom: 3, borderBottom: '0.5px solid var(--color-border-tertiary)' }}>픽업</th>
+              </tr>
+              <tr>
+                <th />
+                <th style={th}>OCC</th><th style={th}>ADR</th><th style={th}>REV</th>
+                <th />
+                <th style={th}>OCC</th><th style={th}>ADR</th><th style={th}>REV</th>
+              </tr>
+            </thead>
+            <tbody className="font-mono">
+              {group.days.map(day => {
+                const a = dayAgg[day.date]
+                const dd = new Date(day.date)
+                const label = `${dd.getMonth() + 1}/${dd.getDate()} ${DOW_KR[dd.getDay()]}`
+                const otbOcc = a ? `${(a.otbN / totalRooms * 100).toFixed(1)}%` : '—'
+                const otbAdr = a && a.otbN > 0 ? `${Math.round(a.otbR / a.otbN / 1000)}k` : '—'
+                const otbRev = a ? `${(a.otbR / 1e6).toFixed(1)}M` : '—'
+                const puOcc  = a ? (a.otbN - a.vsN) / totalRooms * 100 : null
+                const puAdr  = a && a.otbN > 0 && a.vsN > 0 ? Math.round(a.otbR / a.otbN / 1000 - a.vsR / a.vsN / 1000) : null
+                const puRev  = a ? (a.otbR - a.vsR) / 1e6 : null
+                return (
+                  <tr key={day.date} style={{ borderTop: '0.5px solid var(--color-border-tertiary)' }}>
+                    <td style={{ color: 'var(--color-text-secondary)', padding: '4px 4px 4px 0', whiteSpace: 'nowrap' }}>{label}</td>
+                    <td style={td}>{otbOcc}</td><td style={td}>{otbAdr}</td><td style={td}>{otbRev}</td>
+                    <td />
+                    <td style={{ ...td, ...(puOcc !== null ? (puOcc >= 0 ? HOLI_POS : HOLI_NEG) : {}) }}>{puOcc !== null ? `${puOcc >= 0 ? '+' : ''}${puOcc.toFixed(1)}%` : '—'}</td>
+                    <td style={{ ...td, ...(puAdr !== null ? (puAdr >= 0 ? HOLI_POS : HOLI_NEG) : {}) }}>{puAdr !== null ? `${puAdr >= 0 ? '+' : ''}${puAdr}k` : '—'}</td>
+                    <td style={{ ...td, ...(puRev !== null ? (puRev >= 0 ? HOLI_POS : HOLI_NEG) : {}) }}>{puRev !== null ? `${puRev >= 0 ? '+' : ''}${puRev.toFixed(1)}M` : '—'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── PickupMonthCard ─────────────────────────────────────────────────────────────
 export default function PickupMonthCard({
   year, month, hotelId, roomCount, fcstDate, budgetDate,
@@ -102,6 +215,23 @@ export default function PickupMonthCard({
   const month1 = month + 1
   const { data: forecastRows = [] } = useForecastMonthly({ hotelId, year, updateDate: fcstDate })
   const { data: budgetRows = [] }   = useBudgetMonthly({ hotelId, year, updateDate: budgetDate })
+
+  // 공휴일 (c07_public_calendar: date / holiday_name / is_holiday)
+  const { data: holidays = [] } = useQuery<Holiday[]>({
+    queryKey: ['holidays', year, month1],
+    queryFn: async () => {
+      const start = `${year}-${String(month1).padStart(2, '0')}-01`
+      const end   = `${year}-${String(month1).padStart(2, '0')}-${String(lastDayOfMonth(year, month1)).padStart(2, '0')}`
+      const { data, error } = await (supabase as any)
+        .from('c07_public_calendar')
+        .select('date, holiday_name, is_holiday')
+        .gte('date', start).lte('date', end).eq('is_holiday', true).order('date')
+      if (error) throw error
+      return (data ?? []).map((r: any) => ({ date: r.date, holiday_name: r.holiday_name }))
+    },
+    staleTime: 60 * 60 * 1000,
+  })
+  const holidayGroups = useMemo(() => groupConsecutiveHolidays(holidays), [holidays])
 
   const m = useMemo(() => {
     const days = lastDayOfMonth(year, month1)
@@ -130,11 +260,15 @@ export default function PickupMonthCard({
     }
 
     // 일자별
-    const byDate = new Map<string, { otbN: number; puN: number }>()
+    const byDate = new Map<string, { otbN: number; vsN: number; otbR: number; vsR: number; puN: number }>()
     for (const r of pm) {
       if (r.segmentation === 'HOU') continue
-      const a = byDate.get(r.business_date) ?? { otbN: 0, puN: 0 }
-      a.otbN += r.otb_nights ?? 0; a.puN += r.pu_nights ?? 0
+      const a = byDate.get(r.business_date) ?? { otbN: 0, vsN: 0, otbR: 0, vsR: 0, puN: 0 }
+      a.otbN += r.otb_nights ?? 0
+      a.vsN  += r.vs_otb_nights ?? 0
+      a.otbR += r.otb_revenue ?? 0
+      a.vsR  += r.vs_otb_revenue ?? 0
+      a.puN  += r.pu_nights ?? 0
       byDate.set(r.business_date, a)
     }
     const lyByDate = new Map<string, number>()
@@ -146,7 +280,7 @@ export default function PickupMonthCard({
     for (let day = 1; day <= days; day++) {
       const dateStr = `${year}-${String(month1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
       const dow = new Date(year, month, day).getDay()
-      const a = byDate.get(dateStr) ?? { otbN: 0, puN: 0 }
+      const a = byDate.get(dateStr) ?? { otbN: 0, vsN: 0, otbR: 0, vsR: 0, puN: 0 }
       const dOcc = roomCount > 0 ? (a.otbN / roomCount) * 100 : 0
       const dLy  = roomCount > 0 ? ((lyByDate.get(dateStr) ?? 0) / roomCount) * 100 : 0
       daily.push({
@@ -188,6 +322,7 @@ export default function PickupMonthCard({
       fcst: sumMonthly(forecastRows, 'forecast_nights', 'forecast_revenue'),
       bud:  sumMonthly(budgetRows, 'budget_nights', 'budget_revenue'),
       daily,
+      dayAgg: Object.fromEntries([...byDate].map(([k, v]) => [k, { otbN: v.otbN, vsN: v.vsN, otbR: v.otbR, vsR: v.vsR }])) as Record<string, { otbN: number; vsN: number; otbR: number; vsR: number }>,
     }
   }, [pickupRows, lyDjRows, lyDgRows, forecastRows, budgetRows, roomCount, year, month, month1])
 
@@ -252,13 +387,26 @@ export default function PickupMonthCard({
 
   return (
     <div className="flex flex-col rounded-2xl bg-bg-surface overflow-hidden" style={{ border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}>
-      {/* ── Month header ── */}
-      <div className="relative px-5 pt-5 pb-2 overflow-hidden" style={{ background: 'var(--card-header-bg)' }}>
-        <div className="pointer-events-none absolute -top-6 -left-6 w-28 h-28 rounded-full opacity-20" style={{ background: 'radial-gradient(circle, var(--card-header-glow-color) 0%, transparent 70%)' }} />
-        <div className="relative flex items-end gap-1.5">
-          <span className="font-bold leading-none" style={{ fontSize: 54, color: 'var(--color-text-primary)' }}>{month1}</span>
-          <span className="text-lg font-medium text-brand-muted mb-1.5">월</span>
-          <span className="text-xs font-medium text-brand-dimmed mb-2 ml-0.5">{year}</span>
+      {/* ── Month header (좌: 월 / 우: 공휴일 이벤트) ── */}
+      <div className="relative px-5 pt-5 pb-2" style={{ background: 'var(--card-header-bg)' }}>
+        {/* 글로우는 별도 overflow-hidden 래퍼로 헤더에 가둠 (툴팁은 헤더 밖으로 나가야 하므로 헤더 자체는 overflow visible) */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-6 -left-6 w-28 h-28 rounded-full opacity-20" style={{ background: 'radial-gradient(circle, var(--card-header-glow-color) 0%, transparent 70%)' }} />
+        </div>
+        <div className="relative flex items-start justify-between gap-2">
+          <div className="flex items-end gap-1.5 shrink-0">
+            <span className="font-bold leading-none" style={{ fontSize: 54, color: 'var(--color-text-primary)' }}>{month1}</span>
+            <span className="text-lg font-medium text-brand-muted mb-1.5">월</span>
+            <span className="text-xs font-medium text-brand-dimmed mb-2 ml-0.5">{year}</span>
+          </div>
+          {/* 우: 공휴일 이벤트 뱃지 */}
+          <div className="flex flex-col items-end gap-1" style={{ flex: 1, paddingLeft: 8, paddingTop: 4 }}>
+            {holidayGroups.length === 0 ? (
+              <span style={{ fontSize: 10, color: 'var(--color-text-secondary)', opacity: 0.4 }}>이벤트 없음</span>
+            ) : (
+              holidayGroups.map((g, i) => <HolidayBadge key={i} group={g} dayAgg={m.dayAgg} totalRooms={roomCount} />)
+            )}
+          </div>
         </div>
       </div>
 
