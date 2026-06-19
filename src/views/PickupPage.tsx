@@ -13,6 +13,9 @@ import { useLatestConfirmedBudgetDate } from '@/hooks/useLatestConfirmedBudgetDa
 import PickupMonthCard from '@/components/pickup/PickupMonthCard'
 import PickupChartModal from '@/components/pickup/PickupChartModal'
 import MonthlyPickupSegModal from '@/components/dashboard/MonthlyPickupSegModal'
+import MonthlyPickupSegTotalModal from '@/components/dashboard/MonthlyPickupSegTotalModal'
+import MonthlyPickupAccountModal from '@/components/dashboard/MonthlyPickupAccountModal'
+import MonthlyPickupAccountTotalModal from '@/components/dashboard/MonthlyPickupAccountTotalModal'
 import { fmtK, fmtM, type PickupDaily } from '@/utils/pickupPageUtils'
 
 // 문구 안 인라인 달력 칩 (폰트는 배너 문구와 동일 14px)
@@ -139,6 +142,10 @@ export default function PickupPage() {
 
   const [chartModal, setChartModal] = useState<{ year: number; month: number; daily: PickupDaily[] } | null>(null)
   const [mpOpen, setMpOpen] = useState(false)
+  const [pickupViewMode, setPickupViewMode] = useState<'monthly' | 'total'>('total')
+  const [pickupAccountModal, setPickupAccountModal] = useState<{
+    open: boolean; filterSegCodes?: string[]; filterMonthKey?: string; filterLabel?: string; initialViewMode?: 'monthly' | 'total'
+  }>({ open: false })
 
   // ── 요약 배너 데이터 (대시보드와 동일) ───────────────────────────────────────────
   const pickupDays = otbDate && vsOtbDate
@@ -239,7 +246,53 @@ export default function PickupPage() {
         daily={chartModal?.daily ?? []}
       />
 
-      <MonthlyPickupSegModal open={mpOpen} onClose={() => setMpOpen(false)} roomCount={roomCount} />
+      {/* 픽업 추이 모달 — pickupViewMode(월별/합계) 토글 + Seg→Account 드릴 (대시보드 동일) */}
+      <MonthlyPickupSegModal
+        open={mpOpen && pickupViewMode === 'monthly'}
+        onClose={() => setMpOpen(false)}
+        roomCount={roomCount}
+        onSwitchToTotal={() => setPickupViewMode('total')}
+        onPickupCellClick={(segCodes, monthKey, label) => {
+          setMpOpen(false)
+          setPickupAccountModal({
+            open: true, filterSegCodes: segCodes, filterMonthKey: monthKey ?? undefined,
+            filterLabel: label, initialViewMode: monthKey === null ? 'total' : 'monthly',
+          })
+        }}
+      />
+      <MonthlyPickupSegTotalModal
+        open={mpOpen && pickupViewMode === 'total'}
+        onClose={() => setMpOpen(false)}
+        roomCount={roomCount}
+        onSwitchToMonthly={() => setPickupViewMode('monthly')}
+        onPickupCellClick={(segCodes, monthKey, label) => {
+          setMpOpen(false)
+          setPickupAccountModal({
+            open: true, filterSegCodes: segCodes, filterMonthKey: monthKey ?? undefined,
+            filterLabel: label, initialViewMode: monthKey === null ? 'total' : 'monthly',
+          })
+        }}
+      />
+      <MonthlyPickupAccountModal
+        open={pickupAccountModal.open && pickupViewMode === 'monthly'}
+        onClose={() => setPickupAccountModal({ open: false })}
+        roomCount={roomCount}
+        initialFilterSegCodes={pickupAccountModal.filterSegCodes}
+        initialFilterMonthKey={pickupAccountModal.filterMonthKey}
+        initialFilterLabel={pickupAccountModal.filterLabel}
+        initialViewMode={pickupAccountModal.initialViewMode}
+        onSwitchToTotal={() => setPickupViewMode('total')}
+        onBackToSeg={() => { setPickupAccountModal({ open: false }); setMpOpen(true) }}
+      />
+      <MonthlyPickupAccountTotalModal
+        open={pickupAccountModal.open && pickupViewMode === 'total'}
+        onClose={() => setPickupAccountModal({ open: false })}
+        roomCount={roomCount}
+        initialFilterSegCodes={pickupAccountModal.filterSegCodes}
+        initialFilterLabel={pickupAccountModal.filterLabel}
+        onSwitchToMonthly={() => setPickupViewMode('monthly')}
+        onBackToSeg={() => { setPickupAccountModal({ open: false }); setMpOpen(true) }}
+      />
     </div>
   )
 }
