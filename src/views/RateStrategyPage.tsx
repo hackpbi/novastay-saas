@@ -6,7 +6,7 @@ import {
   Plus, ChevronDown, X, Save, Tag, Loader2, Send,
   CheckSquare, Square, TrendingUp, TrendingDown,
   Minus, Activity, Trash2, FileSpreadsheet,
-  Table, CalendarClock, BarChart3,
+  Table, CalendarClock, BarChart3, Calculator,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { FormDatePicker } from '@/components/DatePicker'
@@ -19,6 +19,7 @@ import SegmentationModal from '@/components/dashboard/SegmentationModal'
 import { PromoCalendarView } from '@/components/rate-strategy/PromoCalendarView'
 import { RateCalendarView }  from '@/components/rate-strategy/RateCalendarView'
 import { RateChartView }     from '@/components/rate-strategy/RateChartView'
+import AdrSimulatorModal from '@/components/rate-strategy/AdrSimulatorModal'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -526,6 +527,8 @@ export default function RateStrategyPage() {
 
   // ── UI State ───────────────────────────────────────────────────────────────
   const [showPromoModal,  setShowPromoModal]  = useState(false)
+  const [adrSimOpen,      setAdrSimOpen]      = useState(false)
+  const [simDate,         setSimDate]         = useState('')
   const [selectedDates,   setSelectedDates]   = useState<string[]>([])
   const [bulkValue,       setBulkValue]       = useState('')
   const [bulkBaseValue,   setBulkBaseValue]   = useState('')
@@ -845,6 +848,10 @@ export default function RateStrategyPage() {
 
   const getRate = (date: string, rt: string, code: string) =>
     rateMap[`${date}__${rt}__${code}`]
+
+  // ── ADR 시뮬레이터용 (임시 OTB: get_pickup_data otb_nights 합 / BASE single BAR) ──
+  const simBooked  = pickupRows.filter(r => r.business_date === simDate).reduce((s, r) => s + (r.otb_nights ?? 0), 0)
+  const simBaseBar = getRate(simDate, 'BASE', 'single')?.new_rate ?? 0
 
   // summary stats
   const { up, down, flat, avgPct } = useMemo(() => {
@@ -1420,6 +1427,11 @@ export default function RateStrategyPage() {
               <Tag size={11} />프로모션
             </button>
           )}
+          <button onClick={() => { setSimDate(otbDate); setAdrSimOpen(true) }}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium"
+            style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)', background: 'var(--color-bg-secondary)' }}>
+            <Calculator size={11} />ADR 시뮬레이터
+          </button>
         </div>
       </div>
 
@@ -2140,6 +2152,17 @@ export default function RateStrategyPage() {
             queryClient.invalidateQueries({ queryKey: ['s03_rate_promotion', hotelId] })
           }} />
       )}
+
+      <AdrSimulatorModal
+        isOpen={adrSimOpen}
+        onClose={() => setAdrSimOpen(false)}
+        date={simDate}
+        onDateChange={setSimDate}
+        totalRooms={roomCount}
+        roomTypes={roomTypes}
+        baseBarRate={simBaseBar}
+        booked={simBooked}
+      />
     </div>
   )
 }
