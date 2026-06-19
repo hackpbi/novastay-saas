@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useTheme } from '@/contexts/ThemeContext'
 import { supabase } from '@/lib/supabase'
 import { useForecastMonthly } from '@/hooks/useForecastMonthly'
 import { useBudgetMonthly } from '@/hooks/useBudgetMonthly'
@@ -84,25 +85,37 @@ const vsStrike: React.CSSProperties = { fontSize: 13, fontWeight: 500, color: 'v
 const arrowStyle: React.CSSProperties = { fontSize: 11, color: 'var(--color-text-secondary)' }
 const otbVal: React.CSSProperties = { fontSize: 13, fontWeight: 500, color: '#00E5A0' }
 
-// ─── 공휴일 ──────────────────────────────────────────────────────────────────────
-type Holiday = { date: string; holiday_name: string }
-type HolidayGroup = { name: string; days: Holiday[] }
+// ─── 이벤트 (c06_calendar) ──────────────────────────────────────────────────────
+type CalendarRow = { date: string; event: string; is_holiday: boolean }
+type EventGroup = { name: string; parenText: string; isHoliday: boolean; days: CalendarRow[] }
 type DayAgg = Record<string, { otbN: number; vsN: number; otbR: number; vsR: number }>
 
-// 연속 날짜를 하나의 이벤트 그룹으로 묶기
-function groupConsecutiveHolidays(holidays: Holiday[]): HolidayGroup[] {
-  if (!holidays.length) return []
-  const sorted = [...holidays].sort((a, b) => a.date.localeCompare(b.date))
-  const groups: HolidayGroup[] = []
-  let cur: HolidayGroup = { name: sorted[0].holiday_name, days: [sorted[0]] }
-  for (let i = 1; i < sorted.length; i++) {
-    const prev = new Date(cur.days[cur.days.length - 1].date)
-    const curr = new Date(sorted[i].date)
-    const diff = (curr.getTime() - prev.getTime()) / 86400000
-    if (diff <= 1) cur.days.push(sorted[i])
-    else { groups.push(cur); cur = { name: sorted[i].holiday_name, days: [sorted[i]] } }
+// 괄호 () 안 텍스트 추출 (없으면 null)
+function extractParenText(event: string): string | null {
+  const m = event.match(/\(([^)]+)\)/)
+  return m ? m[1].trim() : null
+}
+
+// 연속 날짜를 하나의 이벤트 그룹으로 묶기 (괄호 텍스트 있는 행만 대상)
+function groupConsecutiveEvents(rows: CalendarRow[]): EventGroup[] {
+  if (!rows.length) return []
+  const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date))
+  const groups: EventGroup[] = []
+  let cur: EventGroup | null = null
+  for (const row of sorted) {
+    const paren = extractParenText(row.event)!
+    const baseName = row.event.replace(/\s*\([^)]*\)/, '').trim() || paren
+    if (!cur) {
+      cur = { name: baseName, parenText: paren, isHoliday: row.is_holiday, days: [row] }
+    } else {
+      const prev = new Date(cur.days[cur.days.length - 1].date)
+      const curr = new Date(row.date)
+      const diff = (curr.getTime() - prev.getTime()) / 86400000
+      if (diff <= 1) cur.days.push(row)
+      else { groups.push(cur); cur = { name: baseName, parenText: paren, isHoliday: row.is_holiday, days: [row] } }
+    }
   }
-  groups.push(cur)
+  if (cur) groups.push(cur)
   return groups
 }
 
@@ -110,9 +123,78 @@ const HOLI_POS: React.CSSProperties = { color: '#00B883', fontWeight: 500 }
 const HOLI_NEG: React.CSSProperties = { color: '#E24B4A', fontWeight: 500 }
 const DOW_KR = ['일', '월', '화', '수', '목', '금', '토']
 
-// 공휴일 뱃지 + 호버 툴팁 (기간 픽업 R/N, 일자별 OTB/픽업 OCC·ADR·REV)
-function HolidayBadge({ group, dayAgg, totalRooms }: { group: HolidayGroup; dayAgg: DayAgg; totalRooms: number }) {
+// 픽업 R/N 을 동그라미(숫자) + 아래 점선으로 그리는 커스텀 플러그인 (label==='pickup' 데이터셋만)
+let circlePluginRegistered = false
+const circlePlugin = {
+  id: 'circleLabels',
+  afterDraw(chart: any) {
+    const { ctx, data, chartArea } = chart
+    const dsIdx = data.datasets.findIndex((d: any) => d.label === 'pickup')
+    if (dsIdx < 0) return
+    const ds = data.datasets[dsIdx]
+    const meta = chart.getDatasetMeta(dsIdx)
+    const fill = ds.circleFill || 'rgba(15,15,15,1)'
+    meta.data.forEach((point: any, i: number) => {
+      const raw = ds.data[i]
+      const val = raw && typeof raw === 'object' ? raw.y : raw
+      if (val == null) return
+      const x = point.x, y = point.y, r = 12
+      ctx.save(); ctx.setLineDash([3, 3]); ctx.strokeStyle = 'rgba(96,165,250,0.45)'; ctx.lineWidth = 1
+      ctx.beginPath(); ctx.moveTo(x, y + r + 1); ctx.lineTo(x, chartArea.bottom); ctx.stroke(); ctx.restore()
+      ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = fill; ctx.fill()
+      ctx.strokeStyle = '#60A5FA'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.restore()
+      ctx.save(); ctx.font = '600 9px -apple-system, sans-serif'; ctx.fillStyle = '#60A5FA'
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(`${val >= 0 ? '+' : ''}${val}`, x, y); ctx.restore()
+    })
+  },
+}
+
+// 이벤트 뱃지 + 호버 툴팁 (기간 픽업 R/N, 일자별 OTB/픽업 OCC·ADR·REV)
+function EventBadge({ group, dayAgg, totalRooms }: { group: EventGroup; dayAgg: DayAgg; totalRooms: number }) {
   const [hovered, setHovered] = useState(false)
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const chartRef  = useRef<any>(null)
+
+  // 호버 시 미니차트 (막대 OCC% + 픽업 R/N 동그라미)
+  useEffect(() => {
+    if (!hovered) return
+    let cancelled = false
+    ;(async () => {
+      const { Chart, registerables } = await import('chart.js')
+      Chart.register(...registerables)
+      if (!circlePluginRegistered) { Chart.register(circlePlugin); circlePluginRegistered = true }
+      if (cancelled || !canvasRef.current) return
+      chartRef.current?.destroy()
+      const labels = group.days.map(day => { const dd = new Date(day.date); return `${dd.getMonth() + 1}/${dd.getDate()}` })
+      const occArr = group.days.map(day => { const a = dayAgg[day.date]; return a && totalRooms ? Math.round((a.otbN / totalRooms) * 1000) / 10 : null })
+      const puArr  = group.days.map(day => { const a = dayAgg[day.date]; return a ? a.otbN - a.vsN : null })
+      const maxPu  = Math.max(0, ...puArr.filter((v): v is number => v != null))
+      const gc = 'rgba(255,255,255,0.06)', tc = 'rgba(255,255,255,0.5)'
+      chartRef.current = new Chart(canvasRef.current, {
+        data: {
+          labels,
+          datasets: [
+            { type: 'bar', label: 'OCC%', data: occArr, backgroundColor: 'rgba(0,229,160,0.38)', borderColor: 'rgba(0,229,160,0.6)', borderWidth: 1, yAxisID: 'yL', order: 2, barPercentage: labels.length === 1 ? 0.2 : 0.5 },
+            { type: 'scatter', label: 'pickup', data: puArr.map((v, i) => ({ x: labels[i], y: v })), pointRadius: 0, showLine: false, yAxisID: 'yR', order: 1, circleFill: isDark ? 'rgba(15,15,15,1)' : 'rgba(255,255,255,1)' } as any,
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, animation: false,
+          plugins: { legend: { display: false }, tooltip: { enabled: false } },
+          scales: {
+            x:  { type: 'category', grid: { color: gc }, ticks: { color: tc, font: { size: 10 } } },
+            yL: { position: 'left', min: 0, max: 110, grid: { color: gc }, ticks: { color: tc, font: { size: 10 }, stepSize: 25, callback: (v: any) => v + '%' } },
+            yR: { position: 'right', min: -2, max: maxPu + 8, grid: { display: false }, ticks: { display: false } },
+          },
+        },
+      })
+    })()
+    return () => { cancelled = true; chartRef.current?.destroy(); chartRef.current = null }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hovered, isDark])
+
   const start = group.days[0].date
   const end   = group.days[group.days.length - 1].date
   const isSingle = group.days.length === 1
@@ -132,7 +214,7 @@ function HolidayBadge({ group, dayAgg, totalRooms }: { group: HolidayGroup; dayA
         display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 500, padding: '3px 8px', borderRadius: 20,
         background: 'rgba(251,191,36,0.12)', color: '#FBBF24', border: '0.5px solid rgba(251,191,36,0.25)', cursor: 'default', whiteSpace: 'nowrap',
       }}>
-        🎌 {group.name}
+        🎌 {group.parenText}
         <span style={{ fontSize: 9, opacity: 0.8 }}>{dateLabel}</span>
         {totalPuRn !== 0 && (
           <span style={{ fontSize: 9, fontWeight: 500, color: '#00B883', background: 'rgba(0,180,130,0.15)', padding: '1px 5px', borderRadius: 10, marginLeft: 2 }}>
@@ -150,6 +232,24 @@ function HolidayBadge({ group, dayAgg, totalRooms }: { group: HolidayGroup; dayA
           <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 8, paddingBottom: 7, borderBottom: '0.5px solid var(--color-border-tertiary)' }}>
             {group.name}{!isSingle ? ' 연휴' : ''} · {dateLabel} · {group.days.length}일
           </div>
+
+          {/* 범례 */}
+          <div style={{ display: 'flex', gap: 12, marginBottom: 6, alignItems: 'center' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--color-text-secondary)' }}>
+              <span style={{ width: 10, height: 10, borderRadius: 2, flexShrink: 0, background: 'rgba(0,229,160,0.5)' }} />
+              OCC%
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--color-text-secondary)' }}>
+              <span style={{ width: 18, height: 18, borderRadius: '50%', flexShrink: 0, border: '1.5px solid #60A5FA', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, color: '#60A5FA', fontWeight: 600 }}>N</span>
+              픽업 R/N
+            </span>
+          </div>
+
+          {/* 미니차트 */}
+          <div style={{ position: 'relative', width: '100%', height: 96, marginBottom: 8 }}>
+            <canvas ref={canvasRef} />
+          </div>
+
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
             <thead>
               <tr>
@@ -216,22 +316,24 @@ export default function PickupMonthCard({
   const { data: forecastRows = [] } = useForecastMonthly({ hotelId, year, updateDate: fcstDate })
   const { data: budgetRows = [] }   = useBudgetMonthly({ hotelId, year, updateDate: budgetDate })
 
-  // 공휴일 (c07_public_calendar: date / holiday_name / is_holiday)
-  const { data: holidays = [] } = useQuery<Holiday[]>({
-    queryKey: ['holidays', year, month1],
+  // 이벤트 (c06_calendar: date / event / is_holiday) — 괄호 텍스트 있는 행만
+  const { data: calendarRows = [] } = useQuery<CalendarRow[]>({
+    queryKey: ['calendar-events', year, month1],
     queryFn: async () => {
       const start = `${year}-${String(month1).padStart(2, '0')}-01`
       const end   = `${year}-${String(month1).padStart(2, '0')}-${String(lastDayOfMonth(year, month1)).padStart(2, '0')}`
       const { data, error } = await (supabase as any)
-        .from('c07_public_calendar')
-        .select('date, holiday_name, is_holiday')
-        .gte('date', start).lte('date', end).eq('is_holiday', true).order('date')
+        .from('c06_calendar')
+        .select('date, event, is_holiday')
+        .gte('date', start).lte('date', end)
+        .not('event', 'is', null).neq('event', '').order('date')
       if (error) throw error
-      return (data ?? []).map((r: any) => ({ date: r.date, holiday_name: r.holiday_name }))
+      return (data ?? []).filter((r: any) => r.event && extractParenText(r.event))
+        .map((r: any) => ({ date: r.date, event: r.event, is_holiday: !!r.is_holiday }))
     },
     staleTime: 60 * 60 * 1000,
   })
-  const holidayGroups = useMemo(() => groupConsecutiveHolidays(holidays), [holidays])
+  const eventGroups = useMemo(() => groupConsecutiveEvents(calendarRows), [calendarRows])
 
   const m = useMemo(() => {
     const days = lastDayOfMonth(year, month1)
@@ -401,10 +503,10 @@ export default function PickupMonthCard({
           </div>
           {/* 우: 공휴일 이벤트 뱃지 */}
           <div className="flex flex-col items-end gap-1" style={{ flex: 1, paddingLeft: 8, paddingTop: 4 }}>
-            {holidayGroups.length === 0 ? (
+            {eventGroups.length === 0 ? (
               <span style={{ fontSize: 10, color: 'var(--color-text-secondary)', opacity: 0.4 }}>이벤트 없음</span>
             ) : (
-              holidayGroups.map((g, i) => <HolidayBadge key={i} group={g} dayAgg={m.dayAgg} totalRooms={roomCount} />)
+              eventGroups.map((g, i) => <EventBadge key={i} group={g} dayAgg={m.dayAgg} totalRooms={roomCount} />)
             )}
           </div>
         </div>

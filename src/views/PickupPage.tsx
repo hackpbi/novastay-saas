@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
@@ -10,6 +10,7 @@ import { useFcstDateContext } from '@/contexts/FcstDateContext'
 import { usePickupData } from '@/hooks/usePickupData'
 import { useLyPacing } from '@/hooks/useLyPacing'
 import { useLatestConfirmedBudgetDate } from '@/hooks/useLatestConfirmedBudgetDate'
+import DatePicker from '@/components/DatePicker'
 import PickupMonthCard from '@/components/pickup/PickupMonthCard'
 import PickupChartModal from '@/components/pickup/PickupChartModal'
 import MonthlyPickupSegModal from '@/components/dashboard/MonthlyPickupSegModal'
@@ -17,88 +18,6 @@ import MonthlyPickupSegTotalModal from '@/components/dashboard/MonthlyPickupSegT
 import MonthlyPickupAccountModal from '@/components/dashboard/MonthlyPickupAccountModal'
 import MonthlyPickupAccountTotalModal from '@/components/dashboard/MonthlyPickupAccountTotalModal'
 import { fmtK, fmtM, type PickupDaily } from '@/utils/pickupPageUtils'
-
-// 문구 안 인라인 달력 칩 (폰트는 배너 문구와 동일 14px)
-function DateChip({ value, onChange, dates }: { value: string; onChange: (d: string) => void; dates: string[] }) {
-  const [open, setOpen] = useState(false)
-  const init = value ? new Date(value) : new Date()
-  const [calYear,  setCalYear]  = useState(init.getFullYear())
-  const [calMonth, setCalMonth] = useState(init.getMonth())   // 0-based
-  const ref = useRef<HTMLSpanElement>(null)
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
-
-  const toggle = () => {
-    if (!open && value) { const d = new Date(value); setCalYear(d.getFullYear()); setCalMonth(d.getMonth()) }
-    setOpen(o => !o)
-  }
-
-  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate()
-  const firstDay    = new Date(calYear, calMonth, 1).getDay()   // 0=일
-  const dateSet     = new Set(dates)
-  const prevMonth   = () => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1) } else setCalMonth(m => m - 1) }
-  const nextMonth   = () => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1) } else setCalMonth(m => m + 1) }
-  const navBtn: React.CSSProperties = { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 15, padding: '2px 6px', lineHeight: 1 }
-
-  return (
-    <span ref={ref} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-      <span onClick={toggle}
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 14, fontWeight: 500, color: '#00E5A0', cursor: 'pointer', borderBottom: '1px dashed rgba(0,229,160,0.4)', paddingBottom: 1 }}>
-        {value || '—'}
-        <CalendarDays size={13} aria-hidden="true" />
-      </span>
-
-      {open && (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200, width: 240, padding: 12,
-          background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-default)',
-          borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <button onClick={prevMonth} style={navBtn} aria-label="이전 달">‹</button>
-            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)' }}>{calYear}년 {calMonth + 1}월</span>
-            <button onClick={nextMonth} style={navBtn} aria-label="다음 달">›</button>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 4 }}>
-            {['일', '월', '화', '수', '목', '금', '토'].map(d => (
-              <div key={d} style={{ textAlign: 'center', fontSize: 10, color: 'var(--color-text-secondary)', padding: '2px 0' }}>{d}</div>
-            ))}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
-            {Array.from({ length: firstDay }).map((_, i) => <div key={`e-${i}`} />)}
-            {Array.from({ length: daysInMonth }).map((_, i) => {
-              const day = i + 1
-              const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-              const isValid = dateSet.has(dateStr)
-              const isSelected = dateStr === value
-              const dow = (firstDay + i) % 7
-              const isWeekend = dow === 0 || dow === 6
-              return (
-                <div key={day}
-                  onClick={() => { if (isValid) { onChange(dateStr); setOpen(false) } }}
-                  style={{
-                    textAlign: 'center', fontSize: 11, padding: '5px 2px', borderRadius: 4,
-                    cursor: isValid ? 'pointer' : 'default',
-                    background: isSelected ? '#00E5A0' : 'transparent',
-                    color: isSelected ? '#0a0a0a' : !isValid ? 'rgba(255,255,255,0.2)' : isWeekend ? '#60A5FA' : 'var(--color-text-primary)',
-                    fontWeight: isSelected ? 600 : 400,
-                  }}
-                  onMouseEnter={e => { if (isValid && !isSelected) e.currentTarget.style.background = 'var(--color-bg-tertiary)' }}
-                  onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}>
-                  {day}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-    </span>
-  )
-}
 
 export default function PickupPage() {
   const { currentHotel } = useHotel()
@@ -166,10 +85,13 @@ export default function PickupPage() {
         <div className="h-5 w-80 rounded animate-pulse mb-5" style={{ background: 'var(--color-bg-tertiary)' }} />
       ) : (
         <p className="text-sm mb-5" style={{ color: 'var(--color-text-secondary)', lineHeight: 1.8 }}>
-          <span style={{ color: 'var(--color-text-secondary)' }}>OTB</span>{' '}
-          <DateChip value={otbDate} onChange={setOtbDate} dates={otbDates ?? []} />
-          {' '}<span style={{ color: 'var(--color-text-secondary)' }}>vs</span>{' '}
-          <DateChip value={vsOtbDate} onChange={setVsOtbDate} dates={(otbDates ?? []).filter(d => d < otbDate)} />
+          <span style={{ display: 'inline-flex', verticalAlign: 'middle' }}>
+            <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} availableDates={otbDates ?? []} accent bare />
+          </span>
+          {' '}
+          <span style={{ display: 'inline-flex', verticalAlign: 'middle' }}>
+            <DatePicker label="vs" value={vsOtbDate} onChange={setVsOtbDate} availableDates={(otbDates ?? []).filter(d => d < otbDate)} accent bare />
+          </span>
           {' '}{pickupDays === 0 ? '당일' : `${pickupDays}일간`} 6개월 픽업은 총{' '}
           <span onClick={() => setMpOpen(true)} title="월별 픽업 추이 보기" style={valStyle(totalPuNights)}>
             {totalPuNights >= 0 ? '+' : ''}{totalPuNights.toLocaleString('ko-KR')}실
