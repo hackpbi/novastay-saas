@@ -82,7 +82,7 @@ const rnStrike: React.CSSProperties = { fontSize: 11, color: 'var(--color-text-s
 const vsGroup: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 6 }
 const vsStrike: React.CSSProperties = { fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)' }
 const arrowStyle: React.CSSProperties = { fontSize: 11, color: 'var(--color-text-secondary)' }
-const otbVal: React.CSSProperties = { fontSize: 13, fontWeight: 500, color: '#00E5A0' }
+const otbVal: React.CSSProperties = { fontSize: 24, fontWeight: 600, color: '#00E5A0' }
 
 // ─── 이벤트 (c06_calendar) ──────────────────────────────────────────────────────
 type CalendarRow = { date: string; event: string; is_holiday: boolean }
@@ -120,7 +120,7 @@ function groupConsecutiveEvents(rows: CalendarRow[]): EventGroup[] {
 
 const HOLI_POS: React.CSSProperties = { color: '#00B883', fontWeight: 500 }
 const HOLI_NEG: React.CSSProperties = { color: '#E24B4A', fontWeight: 500 }
-const HOLI_GRAY: React.CSSProperties = { color: 'var(--color-text-secondary)' }
+const HOLI_GRAY: React.CSSProperties = { color: '#555' }
 const DOW_KR = ['일', '월', '화', '수', '목', '금', '토']
 
 // 픽업 R/N 을 막대 위 숫자 + 위쪽 점선으로 그리는 커스텀 플러그인 (label==='pickup' 데이터셋만)
@@ -128,26 +128,49 @@ let circlePluginRegistered = false
 const circlePlugin = {
   id: 'circleLabels',
   afterDraw(chart: any) {
-    const { ctx, data } = chart
-    const dsIdx = data.datasets.findIndex((d: any) => d.label === 'pickup')
-    if (dsIdx < 0) return
-    const ds = data.datasets[dsIdx]
-    const meta = chart.getDatasetMeta(dsIdx)
+    const { ctx, data, chartArea } = chart
     const barDsIdx = data.datasets.findIndex((d: any) => d.label === 'OCC%')
     const barMeta = barDsIdx >= 0 ? chart.getDatasetMeta(barDsIdx) : null
-    meta.data.forEach((point: any, i: number) => {
-      const raw = ds.data[i]
-      const val = raw && typeof raw === 'object' ? raw.y : raw
-      if (val == null || val === 0) return   // 0 이면 숫자·점선 모두 생략
-      const x = point.x
-      const barTop = barMeta?.data[i]?.y ?? point.y
-      // 점선 (숫자 아래 → 막대 상단 위)
-      ctx.save(); ctx.setLineDash([3, 3]); ctx.strokeStyle = 'rgba(96,165,250,0.45)'; ctx.lineWidth = 1
-      ctx.beginPath(); ctx.moveTo(x, barTop - 18); ctx.lineTo(x, barTop - 2); ctx.stroke(); ctx.restore()
-      // 막대 위 숫자 (원 없이)
-      ctx.save(); ctx.font = '600 10px -apple-system, sans-serif'; ctx.fillStyle = '#60A5FA'
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(`${val >= 0 ? '+' : ''}${val}`, x, barTop - 10); ctx.restore()
-    })
+
+    // ── 픽업 R/N 숫자 (막대 위, 점선 없음) ───────────────────────────
+    const dsIdx = data.datasets.findIndex((d: any) => d.label === 'pickup')
+    if (dsIdx >= 0) {
+      const ds = data.datasets[dsIdx]
+      const meta = chart.getDatasetMeta(dsIdx)
+      meta.data.forEach((point: any, i: number) => {
+        const raw = ds.data[i]
+        const val = raw && typeof raw === 'object' ? raw.y : raw
+        if (val == null || val === 0) return   // 0 이면 숫자 생략
+        const x = point.x
+        const barTop = barMeta?.data[i]?.y ?? point.y
+        ctx.save(); ctx.font = '600 10px -apple-system, sans-serif'; ctx.fillStyle = val >= 0 ? '#60A5FA' : '#E24B4A'
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+        ctx.fillText(`${val >= 0 ? '+' : ''}${val}`, x, barTop - 10); ctx.restore()
+      })
+    }
+
+    // ── OCC% pill (x축 아래, 날짜 위) ──────────────────────────────
+    if (barMeta && chartArea) {
+      barMeta.data.forEach((bar: any, i: number) => {
+        const occVal = data.datasets[barDsIdx].data[i]
+        if (occVal == null) return
+        const txt = `${occVal}%`
+        const x = bar.x
+        const y = chartArea.bottom + 14
+        ctx.save()
+        ctx.font = '600 9px -apple-system, sans-serif'
+        const tw = ctx.measureText(txt).width
+        const pw = tw + 10, ph = 13, pr = 5
+        const px = x - pw / 2
+        ctx.beginPath()
+        if (ctx.roundRect) ctx.roundRect(px, y, pw, ph, pr)
+        else ctx.rect(px, y, pw, ph)
+        ctx.fillStyle = 'rgba(0,229,160,0.12)'; ctx.fill()
+        ctx.strokeStyle = 'rgba(0,229,160,0.3)'; ctx.lineWidth = 0.5; ctx.stroke()
+        ctx.fillStyle = '#00E5A0'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+        ctx.fillText(txt, x, y + ph / 2); ctx.restore()
+      })
+    }
   },
 }
 
@@ -184,7 +207,7 @@ function EventBadge({ group, dayAgg, totalRooms }: { group: EventGroup; dayAgg: 
           responsive: true, maintainAspectRatio: false, animation: false,
           plugins: { legend: { display: false }, tooltip: { enabled: false } },
           scales: {
-            x:  { type: 'category', grid: { color: gc }, ticks: { color: tc, font: { size: 10 } } },
+            x:  { type: 'category', grid: { color: gc }, ticks: { color: tc, font: { size: 10 }, padding: 32 } },
             yL: { position: 'left', min: 0, max: 100, grid: { color: gc }, ticks: { color: tc, font: { size: 10 }, stepSize: 25, callback: (v: any) => v + '%' } },
             yR: { position: 'right', min: -2, max: maxPu + 8, grid: { display: false }, ticks: { display: false } },
           },
@@ -204,8 +227,9 @@ function EventBadge({ group, dayAgg, totalRooms }: { group: EventGroup; dayAgg: 
   const dateLabel = isSingle ? `${mm}/${d1}` : `${mm}/${d1}~${d2}`
   const totalPuRn = group.days.reduce((s, day) => { const a = dayAgg[day.date]; return s + (a ? a.otbN - a.vsN : 0) }, 0)
 
-  const th: React.CSSProperties = { textAlign: 'right', color: 'var(--color-text-secondary)', fontWeight: 400, padding: '0 4px 4px' }
-  const td: React.CSSProperties = { textAlign: 'right', padding: 4, color: 'var(--color-text-primary)' }
+  const th: React.CSSProperties = { textAlign: 'right', color: '#666', fontWeight: 400, padding: '0 4px 4px' }
+  const td: React.CSSProperties = { textAlign: 'right', padding: 4, color: '#e5e5e5' }
+  const divider: React.CSSProperties = { width: 1, padding: 0, background: '#333' }
 
   return (
     <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
@@ -218,18 +242,18 @@ function EventBadge({ group, dayAgg, totalRooms }: { group: EventGroup; dayAgg: 
         <span style={{ fontSize: 9, opacity: 0.8 }}>{dateLabel}</span>
         {totalPuRn !== 0 && (
           <span style={{ fontSize: 9, fontWeight: 500, color: '#00B883', background: 'rgba(0,180,130,0.15)', padding: '1px 5px', borderRadius: 10, marginLeft: 2 }}>
-            {totalPuRn > 0 ? '+' : ''}{totalPuRn} R/N
+            {totalPuRn > 0 ? '+' : ''}{totalPuRn}
           </span>
         )}
       </span>
 
       {hovered && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 300, minWidth: 280,
-          background: 'var(--color-bg-elevated)', border: '0.5px solid var(--color-border-default)',
-          borderRadius: 8, padding: '10px 12px', boxShadow: '0 6px 20px rgba(0,0,0,0.35)', pointerEvents: 'none',
+          position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 500, minWidth: 280,
+          background: '#0a0a0a', border: '0.5px solid #333',
+          borderRadius: 8, padding: '10px 12px', boxShadow: '0 6px 20px rgba(0,0,0,0.6)', pointerEvents: 'none',
         }}>
-          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 8, paddingBottom: 7, borderBottom: '0.5px solid var(--color-border-tertiary)' }}>
+          <div style={{ fontSize: 11, fontWeight: 500, color: '#e5e5e5', marginBottom: 8, paddingBottom: 7, borderBottom: '0.5px solid #333' }}>
             {group.name}{!isSingle ? ' 연휴' : ''} · {dateLabel} · {group.days.length}일
           </div>
 
@@ -246,22 +270,23 @@ function EventBadge({ group, dayAgg, totalRooms }: { group: EventGroup; dayAgg: 
           </div>
 
           {/* 미니차트 */}
-          <div style={{ position: 'relative', width: '100%', height: 96, marginBottom: 8 }}>
+          <div style={{ position: 'relative', width: '100%', height: 118, marginBottom: 8 }}>
             <canvas ref={canvasRef} />
           </div>
 
+          <div style={{ border: '0.5px solid #444', borderRadius: 4, overflow: 'hidden', marginTop: 8 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
             <thead>
               <tr>
                 <th />
-                <th colSpan={3} style={{ textAlign: 'center', color: 'var(--color-text-secondary)', fontWeight: 500, paddingBottom: 3, borderBottom: '0.5px solid var(--color-border-tertiary)' }}>OTB</th>
-                <th style={{ width: 8 }} />
-                <th colSpan={3} style={{ textAlign: 'center', color: '#00B883', fontWeight: 500, paddingBottom: 3, borderBottom: '0.5px solid var(--color-border-tertiary)' }}>픽업</th>
+                <th colSpan={3} style={{ textAlign: 'center', color: 'var(--color-text-secondary)', fontWeight: 500, paddingBottom: 3 }}>OTB</th>
+                <th style={divider} />
+                <th colSpan={3} style={{ textAlign: 'center', color: '#00B883', fontWeight: 500, paddingBottom: 3 }}>픽업</th>
               </tr>
               <tr>
                 <th />
                 <th style={th}>OCC</th><th style={th}>ADR</th><th style={th}>REV</th>
-                <th />
+                <th style={divider} />
                 <th style={th}>OCC</th><th style={th}>ADR</th><th style={th}>REV</th>
               </tr>
             </thead>
@@ -278,10 +303,10 @@ function EventBadge({ group, dayAgg, totalRooms }: { group: EventGroup; dayAgg: 
                 const puRev  = a ? Math.round((a.otbR - a.vsR) / 1e6 * 10) / 10 : null
                 const puStyle = (v: number | null) => (v === null || v === 0 ? HOLI_GRAY : v > 0 ? HOLI_POS : HOLI_NEG)
                 return (
-                  <tr key={day.date} style={{ borderTop: '0.5px solid var(--color-border-tertiary)' }}>
-                    <td style={{ color: 'var(--color-text-secondary)', padding: '4px 4px 4px 0', whiteSpace: 'nowrap' }}>{label}</td>
+                  <tr key={day.date} style={{ borderTop: '0.5px solid #333' }}>
+                    <td style={{ color: '#999', padding: '4px 4px 4px 0', whiteSpace: 'nowrap' }}>{label}</td>
                     <td style={td}>{otbOcc}</td><td style={td}>{otbAdr}</td><td style={td}>{otbRev}</td>
-                    <td />
+                    <td style={divider} />
                     <td style={{ ...td, ...puStyle(puOcc) }}>{puOcc === null || puOcc === 0 ? '—' : `${puOcc > 0 ? '+' : ''}${puOcc.toFixed(1)}%`}</td>
                     <td style={{ ...td, ...puStyle(puAdr) }}>{puAdr === null || puAdr === 0 ? '—' : `${puAdr > 0 ? '+' : ''}${puAdr}k`}</td>
                     <td style={{ ...td, ...puStyle(puRev) }}>{puRev === null || puRev === 0 ? '—' : `${puRev > 0 ? '+' : ''}${puRev.toFixed(1)}M`}</td>
@@ -290,6 +315,7 @@ function EventBadge({ group, dayAgg, totalRooms }: { group: EventGroup; dayAgg: 
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>
@@ -489,21 +515,21 @@ export default function PickupMonthCard({
   const borderTop = '1px solid var(--color-border-default)'
 
   return (
-    <div className="flex flex-col rounded-2xl bg-bg-surface overflow-hidden" style={{ border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}>
+    <div className="flex flex-col rounded-2xl bg-bg-surface overflow-visible" style={{ border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}>
       {/* ── Month header (좌: 월 / 우: 공휴일 이벤트) ── */}
-      <div className="relative px-5 pt-5 pb-2" style={{ background: 'var(--card-header-bg)' }}>
+      <div className="relative px-5 pt-5 pb-2 rounded-t-2xl" style={{ background: 'var(--card-header-bg)' }}>
         {/* 글로우는 별도 overflow-hidden 래퍼로 헤더에 가둠 (툴팁은 헤더 밖으로 나가야 하므로 헤더 자체는 overflow visible) */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute inset-0 overflow-hidden rounded-t-2xl pointer-events-none">
           <div className="absolute -top-6 -left-6 w-28 h-28 rounded-full opacity-20" style={{ background: 'radial-gradient(circle, var(--card-header-glow-color) 0%, transparent 70%)' }} />
         </div>
-        <div className="relative flex items-start justify-between gap-2">
+        <div className="relative flex items-end justify-between gap-2">
           <div className="flex items-end gap-1.5 shrink-0">
             <span className="font-bold leading-none" style={{ fontSize: 54, color: 'var(--color-text-primary)' }}>{month1}</span>
             <span className="text-lg font-medium text-brand-muted mb-1.5">월</span>
             <span className="text-xs font-medium text-brand-dimmed mb-2 ml-0.5">{year}</span>
           </div>
           {/* 우: 공휴일 이벤트 뱃지 */}
-          <div className="flex flex-col items-end gap-1" style={{ flex: 1, paddingLeft: 8, paddingTop: 4 }}>
+          <div style={{ display: 'flex', flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', flex: 1, paddingLeft: 8, paddingBottom: 2 }}>
             {eventGroups.length === 0 ? (
               <span style={{ fontSize: 10, color: 'var(--color-text-secondary)', opacity: 0.4 }}>이벤트 없음</span>
             ) : (
@@ -514,23 +540,28 @@ export default function PickupMonthCard({
       </div>
 
       {/* ── Pick-up 요약 (강조: 민트 배경 + 좌측 3px 라인) ── */}
-      <div style={{ padding: '12px 14px', borderBottom: COL_BT, background: 'rgba(0,229,160,0.07)', borderLeft: '3px solid #00E5A0' }}>
+      <div style={{ padding: '12px 14px', borderBottom: COL_BT, background: 'rgba(0,40,25,0.9)', borderLeft: '3px solid #00E5A0' }}>
         <div style={{ fontSize: 10, fontWeight: 500, color: '#00B883', marginBottom: 6, textAlign: 'center' }}>Pick-up</div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 22, fontWeight: 500, color: m.puOccPp >= 0 ? '#00B883' : '#E24B4A' }}>
-            {m.puOccPp >= 0 ? '+' : ''}{m.puOccPp.toFixed(1)}%{m.puOccPp >= 0 ? '↑' : '↓'}
-          </span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <span style={{ fontSize: 26, fontWeight: 600, color: '#ffffff', lineHeight: 1 }}>
+              {m.puOccPp >= 0 ? '+' : ''}{m.puOccPp.toFixed(1)}%{m.puOccPp >= 0 ? '↑' : '↓'}
+            </span>
+            <span style={{ fontSize: 12, color: '#00B883', marginTop: 3 }}>
+              {m.puN >= 0 ? '+' : ''}{m.puN.toLocaleString('ko-KR')} R/N
+            </span>
+          </div>
           <span style={{ fontSize: 11, color: 'var(--color-border-default)' }}>|</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
             <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)' }}>ADR</span>
-            <span style={{ fontSize: 15, fontWeight: 500, color: adrDelta >= 0 ? '#00B883' : '#E24B4A' }}>
+            <span style={{ fontSize: 16, fontWeight: 500, color: adrDelta === 0 ? '#aaa' : adrDelta > 0 ? '#ffffff' : '#E24B4A' }}>
               {adrDelta >= 0 ? '+' : ''}{Math.round(adrDelta / 1000)}k
             </span>
           </div>
           <span style={{ fontSize: 11, color: 'var(--color-border-default)' }}>|</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
             <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)' }}>REV</span>
-            <span style={{ fontSize: 15, fontWeight: 500, color: m.puR >= 0 ? '#00B883' : '#E24B4A' }}>
+            <span style={{ fontSize: 16, fontWeight: 500, color: m.puR === 0 ? '#aaa' : m.puR > 0 ? '#ffffff' : '#E24B4A' }}>
               {m.puR >= 0 ? '+' : ''}{fmtM(m.puR)}
             </span>
           </div>

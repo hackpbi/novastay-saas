@@ -13,6 +13,8 @@ export interface DatePickerProps {
   onConfirm?:      (v: string) => void
   confirmLabel?:   string
   bare?:           boolean   // 테두리/배경 제거 (텍스트만)
+  fontPx?:         number    // 트리거 라벨·날짜 폰트 통일용 (지정 시 text-[9px]/text-[11px] 대체)
+  plain?:          boolean    // 칩 평문화: mono 제거 + 라벨 대문자/볼드/세로구분선 제거 (문장 인라인용)
 }
 
 export interface FormDatePickerProps {
@@ -42,7 +44,7 @@ function buildGrid(year: number, month: number): (number | null)[] {
 
 // ─── DatePicker ────────────────────────────────────────────────────────────────
 
-export default function DatePicker({ label, value, onChange, accent = false, availableDates, confirmMode = false, onConfirm, confirmLabel = '불러오기', bare = false }: DatePickerProps) {
+export default function DatePicker({ label, value, onChange, accent = false, availableDates, confirmMode = false, onConfirm, confirmLabel = '불러오기', bare = false, fontPx, plain = false }: DatePickerProps) {
   const [todayStr,     setTodayStr]     = useState('')
   const [open,         setOpen]         = useState(false)
   const [pendingDate,  setPendingDate]  = useState<string | null>(null)
@@ -154,20 +156,20 @@ export default function DatePicker({ label, value, onChange, accent = false, ava
         }}
       >
         <span
-          className="text-[9px] font-bold uppercase tracking-wider shrink-0"
-          style={{ color: open || accent ? 'var(--color-accent-primary)' : 'var(--color-text-muted)' }}
+          className={`shrink-0${fontPx ? '' : ' text-[9px]'}${plain ? '' : ' font-bold uppercase tracking-wider'}`}
+          style={{ color: open || accent ? 'var(--color-accent-primary)' : 'var(--color-text-muted)', ...(fontPx ? { fontSize: fontPx } : {}) }}
         >
           {label}
         </span>
-        <span style={{ width: 1, height: 12, background: 'var(--color-border-default)', display: 'inline-block' }} />
+        {!plain && <span style={{ width: 1, height: 12, background: 'var(--color-border-default)', display: 'inline-block' }} />}
         <span
-          className="text-[11px] font-mono font-medium"
-          style={{ color: open || accent ? 'var(--color-accent-primary)' : 'var(--color-text-primary)' }}
+          className={`font-medium${fontPx ? '' : ' text-[11px]'}${plain ? '' : ' font-mono'}`}
+          style={{ color: open || accent ? 'var(--color-accent-primary)' : 'var(--color-text-primary)', ...(fontPx ? { fontSize: fontPx } : {}) }}
         >
           {display}
         </span>
         <CalendarDays
-          size={10}
+          size={fontPx ?? 10}
           className="shrink-0"
           style={{ color: open || accent ? 'var(--color-accent-primary)' : 'var(--color-text-muted)' }}
         />

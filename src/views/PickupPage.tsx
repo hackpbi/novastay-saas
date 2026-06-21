@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -17,7 +17,7 @@ import MonthlyPickupSegModal from '@/components/dashboard/MonthlyPickupSegModal'
 import MonthlyPickupSegTotalModal from '@/components/dashboard/MonthlyPickupSegTotalModal'
 import MonthlyPickupAccountModal from '@/components/dashboard/MonthlyPickupAccountModal'
 import MonthlyPickupAccountTotalModal from '@/components/dashboard/MonthlyPickupAccountTotalModal'
-import { fmtK, fmtM, type PickupDaily } from '@/utils/pickupPageUtils'
+import { fmtK, fmtM } from '@/utils/pickupPageUtils'
 
 export default function PickupPage() {
   const { currentHotel } = useHotel()
@@ -51,6 +51,25 @@ export default function PickupPage() {
     [now.getFullYear(), now.getMonth(), monthOffset],
   )
 
+  // ── 월 네비게이션 제한 (OTB 날짜 월이 최소값, 대시보드 disabled 패턴) ─────────────
+  const otbYear  = otbDate ? parseInt(otbDate.slice(0, 4)) : now.getFullYear()
+  const otbMonth = otbDate ? parseInt(otbDate.slice(5, 7)) - 1 : now.getMonth()  // 0-based
+  const startDate  = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
+  const startYear  = startDate.getFullYear()
+  const startMonth = startDate.getMonth()
+  const isPrevDisabled = startYear < otbYear || (startYear === otbYear && startMonth <= otbMonth)
+  const handlePrev = () => { if (!isPrevDisabled) setMonthOffset(p => p - 1) }
+  const handleNext = () => setMonthOffset(p => p + 1)
+
+  // otbDate 변경 시 시작월이 OTB 월보다 이전이면 monthOffset 리셋
+  useEffect(() => {
+    const sd = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
+    if (sd.getFullYear() < otbYear || (sd.getFullYear() === otbYear && sd.getMonth() < otbMonth)) {
+      setMonthOffset(0)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otbDate])
+
   // ── 픽업 데이터 (대시보드와 동일: usePickupData / DateContext vsOtbDate) ─────────
   // 전체 stay-date rows 반환 → 카드별로 business_date 월 필터
   const { data: pickupRows, loading: pickupLoading } = usePickupData()
@@ -59,7 +78,7 @@ export default function PickupPage() {
   const { data: lyDjRows = [] } = useLyPacing('v1')
   const { data: lyDgRows = [] } = useLyPacing('v2')
 
-  const [chartModal, setChartModal] = useState<{ year: number; month: number; daily: PickupDaily[] } | null>(null)
+  const [chartModal, setChartModal] = useState<{ year: number; month: number } | null>(null)
   const [mpOpen, setMpOpen] = useState(false)
   const [pickupViewMode, setPickupViewMode] = useState<'monthly' | 'total'>('total')
   const [pickupAccountModal, setPickupAccountModal] = useState<{
@@ -78,19 +97,19 @@ export default function PickupPage() {
   return (
     <div>
       {/* 헤더 — 제목 + 바로 아래 배너 */}
-      <h1 className="text-xl font-bold mb-2" style={{ color: 'var(--color-text-primary)' }}>Pick-up</h1>
+      <h1 className="text-xl font-bold mb-1" style={{ color: 'var(--color-text-primary)' }}>Pick-up</h1>
 
       {/* 상단 요약 배너 — OTB/vs 날짜를 문구 안 인라인으로 (날짜 폰트 = 문구 14px) */}
       {pickupLoading ? (
         <div className="h-5 w-80 rounded animate-pulse mb-5" style={{ background: 'var(--color-bg-tertiary)' }} />
       ) : (
-        <p className="text-sm mb-5" style={{ color: 'var(--color-text-secondary)', lineHeight: 1.8 }}>
+        <p className="text-[13px] mb-5" style={{ color: 'var(--color-text-secondary)', lineHeight: 1.8 }}>
           <span style={{ display: 'inline-flex', verticalAlign: 'middle' }}>
-            <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} availableDates={otbDates ?? []} accent bare />
+            <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} availableDates={otbDates ?? []} accent bare fontPx={13} plain />
           </span>
           {' '}
           <span style={{ display: 'inline-flex', verticalAlign: 'middle' }}>
-            <DatePicker label="vs" value={vsOtbDate} onChange={setVsOtbDate} availableDates={(otbDates ?? []).filter(d => d < otbDate)} accent bare />
+            <DatePicker label="vs" value={vsOtbDate} onChange={setVsOtbDate} availableDates={(otbDates ?? []).filter(d => d < otbDate)} accent bare fontPx={13} plain />
           </span>
           {' '}{pickupDays === 0 ? '당일' : `${pickupDays}일간`} 6개월 픽업은 총{' '}
           <span onClick={() => setMpOpen(true)} title="월별 픽업 추이 보기" style={valStyle(totalPuNights)}>
@@ -118,15 +137,16 @@ export default function PickupPage() {
         </div>
         <div className="flex items-center gap-1.5">
           <button
-            onClick={() => setMonthOffset(p => p - 1)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-brand-muted hover:text-brand-text transition-all duration-150"
+            onClick={handlePrev}
+            disabled={isPrevDisabled}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-brand-muted hover:text-brand-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150"
             style={{ border: '1px solid var(--control-border)' }}
           >
             <ChevronLeft size={13} />
             이전
           </button>
           <button
-            onClick={() => setMonthOffset(p => p + 1)}
+            onClick={handleNext}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-brand-muted hover:text-brand-text transition-all duration-150"
             style={{ border: '1px solid var(--control-border)' }}
           >
@@ -155,7 +175,7 @@ export default function PickupPage() {
                 pickupRows={pickupRows}
                 lyDjRows={lyDjRows}
                 lyDgRows={lyDgRows}
-                onExpand={(daily) => setChartModal({ year: t.year, month: t.month, daily })}
+                onExpand={() => setChartModal({ year: t.year, month: t.month })}
               />
             ))}
       </div>
@@ -165,7 +185,12 @@ export default function PickupPage() {
         onClose={() => setChartModal(null)}
         year={chartModal?.year ?? now.getFullYear()}
         month={chartModal?.month ?? now.getMonth()}
-        daily={chartModal?.daily ?? []}
+        pickupRows={pickupRows}
+        otbDate={otbDate}
+        vsOtbDate={vsOtbDate}
+        otbDates={otbDates ?? []}
+        setOtbDate={setOtbDate}
+        setVsOtbDate={setVsOtbDate}
       />
 
       {/* 픽업 추이 모달 — pickupViewMode(월별/합계) 토글 + Seg→Account 드릴 (대시보드 동일) */}
