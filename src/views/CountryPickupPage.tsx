@@ -6,11 +6,10 @@ import { ChevronDown, BarChart2, Coins, TrendingUp } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
-import DatePicker from '@/components/DatePicker'
-import { fmtM } from '@/utils/pickupPageUtils'
+import { fmtK, fmtM } from '@/utils/pickupPageUtils'
 import CountryPickupChart from '@/components/country-pickup/CountryPickupChart'
 import CountryPickupTable from '@/components/country-pickup/CountryPickupTable'
-import { enrichCountryRow, type CountryAgg, type CountryPickupRpcRow } from '@/components/country-pickup/types'
+import { type CountryPickupRpcRow } from '@/components/country-pickup/types'
 
 // ─── 세그먼트 드롭다운 (FIT/GRP) — 다중선택 ────────────────────────────────────────
 function SegDropdown({ label, segs, selected, onToggle }: {
@@ -116,7 +115,7 @@ function AccDropdown({ accounts, selected, onToggle, onSelectAll }: {
 export default function CountryPickupPage() {
   const { currentHotel } = useHotel()
   const hotelId = currentHotel?.id
-  const { otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate } = useDateContext()
+  const { otbDate, vsOtbDate } = useDateContext()
 
   // vs 날짜 — 없으면 OTB 전일 (KST-safe)
   const vsDate = useMemo(() => {
@@ -189,30 +188,25 @@ export default function CountryPickupPage() {
     return [...new Set(base.map(r => r.account_name))].filter(Boolean).sort()
   }, [rpcRows, selectedSegs])
 
-  // 클라이언트 필터(세그+어카운트) + country별 합산
-  const aggregated = useMemo<CountryAgg[]>(() => {
-    let filtered = selectedSegs.size === 0 ? rpcRows : rpcRows.filter(r => selectedSegs.has(r.segmentation))
-    if (selectedAccounts.size > 0) filtered = filtered.filter(r => selectedAccounts.has(r.account_name))
-    const map = new Map<string, CountryAgg>()
-    for (const r of filtered) {
-      const cur = map.get(r.country) ?? { country: r.country, otb_nights: 0, vs_nights: 0, otb_revenue: 0, vs_revenue: 0 }
-      cur.otb_nights  += r.otb_nights ?? 0
-      cur.vs_nights   += r.vs_nights ?? 0
-      cur.otb_revenue += r.otb_revenue ?? 0
-      cur.vs_revenue  += r.vs_revenue ?? 0
-      map.set(r.country, cur)
-    }
-    return [...map.values()].sort((a, b) => b.otb_nights - a.otb_nights)
+  // 클라이언트 필터(세그+어카운트) — 세그 단위 행 (차트/테이블에서 country 집계)
+  const filtered = useMemo(() => {
+    let f = selectedSegs.size === 0 ? rpcRows : rpcRows.filter(r => selectedSegs.has(r.segmentation))
+    if (selectedAccounts.size > 0) f = f.filter(r => selectedAccounts.has(r.account_name))
+    return f
   }, [rpcRows, selectedSegs, selectedAccounts])
 
-  const data = useMemo(() => aggregated.map(enrichCountryRow), [aggregated])
-
+  // KPI — filtered 전체 합산 (ADR은 WON, 표시 시 fmtK)
   const kpi = useMemo(() => {
-    const t = data.reduce((a, r) => { a.otbRn += r.otbRn; a.vsRn += r.vsRn; a.otbRev += r.otbRev; a.vsRev += r.vsRev; return a }, { otbRn: 0, vsRn: 0, otbRev: 0, vsRev: 0 })
-    const otbAdr = t.otbRn > 0 ? Math.round(t.otbRev / t.otbRn / 1000) : 0
-    const puAdr  = t.otbRn > 0 && t.vsRn > 0 ? Math.round(t.otbRev / t.otbRn / 1000 - t.vsRev / t.vsRn / 1000) : 0
-    return { countries: data.length, otbRn: t.otbRn, puRn: t.otbRn - t.vsRn, otbAdr, puAdr, otbRev: t.otbRev, puRev: t.otbRev - t.vsRev }
-  }, [data])
+    let otbRn = 0, vsRn = 0, otbRev = 0, vsRev = 0
+    const countries = new Set<string>()
+    for (const r of filtered) {
+      otbRn += r.otb_nights ?? 0; vsRn += r.vs_nights ?? 0
+      otbRev += r.otb_revenue ?? 0; vsRev += r.vs_revenue ?? 0
+      countries.add(r.country)
+    }
+    const totalOtbAdr = otbRn > 0 ? Math.round(otbRev / otbRn) : 0
+    return { countryCount: countries.size, totalOtbRn: otbRn, puRn: otbRn - vsRn, totalOtbAdr, totalOtbRev: otbRev, puRev: otbRev - vsRev }
+  }, [filtered])
 
   const cardStyle: React.CSSProperties = {
     background: 'var(--color-bg-secondary)', border: '0.5px solid var(--color-border-subtle)', borderRadius: 10,
@@ -234,13 +228,9 @@ export default function CountryPickupPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           <div style={{ fontSize: 17, fontWeight: 500, color: 'var(--color-text-primary)' }}>Country Pick-up</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span style={{ display: 'inline-flex' }}>
-              <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} availableDates={otbDates ?? []} accent bare fontPx={11} plain />
-            </span>
+            <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 4, background: 'rgba(0,229,160,0.12)', color: '#00C98A' }}>OTB {otbDate || '—'}</span>
             <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>vs</span>
-            <span style={{ display: 'inline-flex' }}>
-              <DatePicker label="vs" value={vsOtbDate} onChange={setVsOtbDate} availableDates={(otbDates ?? []).filter(d => d < otbDate)} accent bare fontPx={11} plain />
-            </span>
+            <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 4, background: 'rgba(245,158,11,0.12)', color: '#D97706' }}>{vsDate || '—'}</span>
             <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>· 기준 국가별 OTB 픽업</span>
           </div>
         </div>
@@ -276,7 +266,7 @@ export default function CountryPickupPage() {
             {cardLabel('현재 국가 수', 'Active Countries')}
             <span style={{ fontSize: 22, opacity: 0.55 }}>🌏</span>
           </div>
-          <div style={cardBig}>{dash ?? kpi.countries}<span style={cardUnit}>개국</span></div>
+          <div style={cardBig}>{dash ?? kpi.countryCount}<span style={cardUnit}>개국</span></div>
           <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)' }}>선택 조건 기준</div>
         </div>
         {/* 2 — OTB R/N */}
@@ -285,7 +275,7 @@ export default function CountryPickupPage() {
             {cardLabel('현재 OTB R/N', 'Room Nights')}
             <BarChart2 size={22} style={{ opacity: 0.55, color: 'var(--color-text-secondary)', flexShrink: 0 }} />
           </div>
-          <div style={cardBig}>{dash ?? kpi.otbRn.toLocaleString('ko-KR')}</div>
+          <div style={cardBig}>{dash ?? kpi.totalOtbRn.toLocaleString('ko-KR')}</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 11, fontWeight: 500, color: kpi.puRn >= 0 ? '#00B883' : '#E24B4A' }}>Pickup {kpi.puRn >= 0 ? '+' : ''}{kpi.puRn}</span>
             <span style={{ fontSize: 10, color: 'rgba(0,184,131,0.7)' }}>전일 대비 {kpi.puRn >= 0 ? '+' : ''}{kpi.puRn}</span>
@@ -297,10 +287,10 @@ export default function CountryPickupPage() {
             {cardLabel('현재 OTB ADR', 'Average Daily Rate')}
             <Coins size={22} style={{ opacity: 0.55, color: 'var(--color-text-secondary)', flexShrink: 0 }} />
           </div>
-          <div style={cardBig}>{dash ?? kpi.otbAdr}<span style={cardUnit}>k KRW</span></div>
+          <div style={cardBig}>{dash ?? fmtK(kpi.totalOtbAdr)}<span style={cardUnit}>KRW</span></div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 11, fontWeight: 500, color: kpi.puAdr > 0 ? '#00B883' : kpi.puAdr < 0 ? '#E24B4A' : 'var(--color-text-tertiary)' }}>Pickup {kpi.puAdr === 0 ? '0' : `${kpi.puAdr > 0 ? '+' : ''}${kpi.puAdr}k`}</span>
-            <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>가중평균</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)' }}>Pickup OK</span>
+            <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>변동 없음</span>
           </div>
         </div>
         {/* 4 — OTB REV */}
@@ -309,7 +299,7 @@ export default function CountryPickupPage() {
             {cardLabel('현재 OTB REV', 'Revenue')}
             <TrendingUp size={22} style={{ opacity: 0.55, color: 'var(--color-text-secondary)', flexShrink: 0 }} />
           </div>
-          <div style={cardBig}>{dash ?? fmtM(kpi.otbRev)}<span style={cardUnit}>KRW</span></div>
+          <div style={cardBig}>{dash ?? fmtM(kpi.totalOtbRev)}<span style={cardUnit}>KRW</span></div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 11, fontWeight: 500, color: kpi.puRev >= 0 ? '#00B883' : '#E24B4A' }}>Pickup {kpi.puRev >= 0 ? '+' : ''}{fmtM(kpi.puRev)}</span>
             <span style={{ fontSize: 10, color: 'rgba(0,184,131,0.7)' }}>전일 대비 {kpi.puRev >= 0 ? '+' : ''}{fmtM(kpi.puRev)}</span>
@@ -323,14 +313,14 @@ export default function CountryPickupPage() {
           <div className="animate-pulse" style={{ height: 360, background: 'var(--color-bg-tertiary)', borderRadius: 10 }} />
           <div className="animate-pulse" style={{ height: 360, background: 'var(--color-bg-tertiary)', borderRadius: 10 }} />
         </div>
-      ) : data.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div style={{ background: 'var(--color-bg-secondary)', border: '0.5px solid var(--color-border-subtle)', borderRadius: 10, padding: 40, textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 13 }}>
           해당 조건의 국가별 픽업 데이터가 없습니다.
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.45fr', gap: 10, alignItems: 'start' }}>
-          <CountryPickupChart data={data} />
-          <CountryPickupTable data={data} />
+          <CountryPickupChart data={filtered} />
+          <CountryPickupTable data={filtered} />
         </div>
       )}
     </div>
