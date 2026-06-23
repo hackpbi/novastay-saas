@@ -37,7 +37,7 @@ const barLabelPlugin = {
 }
 
 export default function MarketPickupMonthBlock({
-  year, month, monthKey, pickupRows, groups, selected, onToggleSeg, onBarClick, roomCount,
+  year, month, monthKey, pickupRows, groups, selected, onToggleSeg, onBarClick, roomCount, allSegIds,
 }: {
   year:        number
   month:       number   // 0-based
@@ -48,11 +48,13 @@ export default function MarketPickupMonthBlock({
   onToggleSeg: (segId: string) => void
   onBarClick:  (day: number) => void
   roomCount:   number
+  allSegIds:   Set<string>
 }) {
   const month1 = month + 1
   const days   = lastDayOfMonth(year, month1)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const chartRef  = useRef<any>(null)
+  const tooltipRef = useRef<HTMLDivElement>(null)
   const [openGroup, setOpenGroup] = useState<string | null>(null)
   const [allDaysOpen, setAllDaysOpen] = useState(false)
 
@@ -143,6 +145,25 @@ export default function MarketPickupMonthBlock({
     return arr.map(v => Math.round(v))
   }, [groups, selected, codeDay, days])
 
+  // 세그별 일별 픽업 Map: segId → (day → pu_nights) — 커스텀 툴팁용
+  const segDayMap = useMemo(() => {
+    const map = new Map<string, Map<number, number>>()
+    for (const r of pickupRows) {
+      if (!inMonth(r.business_date, year, month1)) continue
+      const d = new Date(r.business_date).getDate()
+      groups.forEach(g => {
+        g.segs.forEach(seg => {
+          if (!selected.has(seg.id)) return
+          if (!seg.codes.includes(r.segmentation)) return
+          if (!map.has(seg.id)) map.set(seg.id, new Map())
+          const dayMap = map.get(seg.id)!
+          dayMap.set(d, (dayMap.get(d) ?? 0) + (r.pu_nights ?? 0))
+        })
+      })
+    }
+    return map
+  }, [pickupRows, groups, selected, year, month1])
+
   // ── 차트 ───────────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
@@ -171,16 +192,74 @@ export default function MarketPickupMonthBlock({
           responsive: true, maintainAspectRatio: false, animation: false,
           interaction: { mode: 'index', intersect: false },
           onClick: (_e: any, els: any[]) => { if (els.length) onBarClick(els[0].index + 1) },
+          onHover: (_event: any, elements: any[]) => {
+            const tip = tooltipRef.current
+            if (!tip) return
+            if (!elements.length) { tip.style.display = 'none'; return }
+
+            const idx = elements[0].index
+            const day = idx + 1            // 1-based
+            const dayTotal = dailyTotals[idx] ?? 0
+
+            // 요일 (month는 0-based)
+            const DOW = ['일', '월', '화', '수', '목', '금', '토']
+            const dow = DOW[new Date(year, month, day).getDay()]
+
+            // 세그별 픽업 (0 제외)
+            const segRows = groups.flatMap(g => g.segs)
+              .filter(seg => selected.has(seg.id))
+              .map(seg => ({ name: seg.name, color: seg.color, val: segDayMap.get(seg.id)?.get(day) ?? 0 }))
+              .filter(s => s.val !== 0)
+
+            const rowsHtml = segRows.length > 0
+              ? segRows.map(s => `
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:3px 0;font-size:11px;">
+                    <span style="color:rgba(255,255,255,0.6);display:flex;align-items:center;gap:5px;">
+                      <span style="width:7px;height:7px;border-radius:2px;background:${s.color};flex-shrink:0;display:inline-block;"></span>
+                      ${s.name}
+                    </span>
+                    <span style="font-weight:500;font-variant-numeric:tabular-nums;color:${s.val > 0 ? '#00B883' : '#E24B4A'};">
+                      ${s.val > 0 ? '+' : ''}${s.val}
+                    </span>
+                  </div>
+                `).join('')
+              : '<div style="font-size:10px;color:rgba(255,255,255,0.3);padding:2px 0;">No pickup</div>'
+
+            tip.innerHTML = `
+              <div style="font-size:12px;font-weight:500;color:#fff;margin-bottom:8px;border-bottom:0.5px solid rgba(255,255,255,0.08);padding-bottom:6px;">
+                ${month1}월 ${day}일 (${dow})
+              </div>
+              ${rowsHtml}
+              <div style="height:0.5px;background:rgba(255,255,255,0.08);margin:5px 0;"></div>
+              <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:600;">
+                <span style="color:rgba(255,255,255,0.5);">Total</span>
+                <span style="color:${dayTotal > 0 ? '#00B883' : dayTotal < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)'};">
+                  ${dayTotal >= 0 ? '+' : ''}${dayTotal}
+                </span>
+              </div>
+            `
+
+            // 위치 계산
+            tip.style.display = 'block'
+            const canvas = canvasRef.current
+            const chart = chartRef.current
+            if (!canvas || !chart) return
+            const meta = chart.getDatasetMeta(0).data[idx]
+            if (!meta) return
+            const canvasRect = canvas.getBoundingClientRect()
+            const wrapRect = canvas.parentElement!.getBoundingClientRect()
+            let x = meta.x - (wrapRect.left - canvasRect.left)
+            let y = meta.y - (wrapRect.top - canvasRect.top) - 10
+            const tipW = tip.offsetWidth
+            const tipH = tip.offsetHeight
+            if (x + tipW > wrapRect.width - 10) x = x - tipW - 10
+            if (y - tipH < 0) y = y + 20
+            tip.style.left = `${x}px`
+            tip.style.top  = `${y - tipH}px`
+          },
           plugins: {
             legend: { display: false },
-            tooltip: {
-              backgroundColor: '#1E1E1E', borderColor: '#2C2C2C', borderWidth: 1,
-              titleColor: '#fff', bodyColor: '#ddd', padding: 10,
-              callbacks: {
-                title: (items: any) => `${month1}월 ${items[0]?.label ?? ''}일`,
-                label: (ctx: any) => ` 픽업 R/N: ${ctx.parsed.y >= 0 ? '+' : ''}${ctx.parsed.y}`,
-              },
-            },
+            tooltip: { enabled: false },
           },
           scales: {
             x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: tc, font: { size: 9 } } },
@@ -203,6 +282,17 @@ export default function MarketPickupMonthBlock({
       {/* 월 헤더 + 세그 드롭다운 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '12px 16px 8px', flexWrap: 'wrap' }}>
         <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)' }}>{month1}월 {year}</span>
+        {/* 전체 선택 */}
+        <button
+          onClick={() => { allSegIds.forEach(id => { if (!selected.has(id)) onToggleSeg(id) }) }}
+          style={{ padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 500, cursor: 'pointer', border: '0.5px solid var(--color-border-tertiary)', background: 'transparent', color: 'var(--color-text-secondary)' }}
+        >All</button>
+        {/* 전체 해제 */}
+        <button
+          onClick={() => { selected.forEach(id => onToggleSeg(id)) }}
+          style={{ padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 500, cursor: 'pointer', border: '0.5px solid var(--color-border-tertiary)', background: 'transparent', color: 'var(--color-text-secondary)' }}
+        >Reset</button>
+        <span style={{ color: 'var(--color-border-tertiary)' }}>|</span>
         {groups.map((g, gi) => {
           const gt = groupTotal(g)
           return (
@@ -284,7 +374,20 @@ export default function MarketPickupMonthBlock({
       </div>
 
       {/* 차트 */}
-      <div style={{ position: 'relative', width: '100%', height: 180, padding: '0 12px 12px' }}>
+      <div
+        style={{ position: 'relative', width: '100%', height: 180, padding: '0 12px 12px' }}
+        onMouseLeave={() => { if (tooltipRef.current) tooltipRef.current.style.display = 'none' }}
+      >
+        {/* 커스텀 HTML 툴팁 */}
+        <div
+          ref={tooltipRef}
+          style={{
+            position: 'absolute', background: '#0a0a0a',
+            border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 8,
+            padding: '10px 14px', pointerEvents: 'none', display: 'none',
+            minWidth: 180, boxShadow: '0 4px 16px rgba(0,0,0,0.5)', zIndex: 100,
+          }}
+        />
         <canvas ref={canvasRef} role="img" aria-label={`${month1}월 마켓 픽업`} />
       </div>
 
