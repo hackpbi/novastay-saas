@@ -211,7 +211,8 @@ export default function CountryPickupPage() {
       countries.add(r.country)
     }
     const totalOtbAdr = otbRn > 0 ? Math.round(otbRev / otbRn) : 0
-    return { countryCount: countries.size, totalOtbRn: otbRn, puRn: otbRn - vsRn, totalOtbAdr, totalOtbRev: otbRev, puRev: otbRev - vsRev }
+    const totalVsAdr  = vsRn  > 0 ? Math.round(vsRev / vsRn)  : 0
+    return { countryCount: countries.size, totalOtbRn: otbRn, puRn: otbRn - vsRn, totalOtbAdr, puAdr: totalOtbAdr - totalVsAdr, totalOtbRev: otbRev, puRev: otbRev - vsRev }
   }, [filtered])
 
   const cardStyle: React.CSSProperties = {
@@ -226,6 +227,7 @@ export default function CountryPickupPage() {
   const cardBig: React.CSSProperties = { fontSize: 24, fontWeight: 500, color: 'var(--color-text-primary)', lineHeight: 1 }
   const cardUnit: React.CSSProperties = { fontSize: 13, color: 'var(--color-text-secondary)', fontWeight: 400, marginLeft: 3 }
   const dash = isLoading ? '—' : null
+  const puAdr = kpi.puAdr
 
   return (
     <div>
@@ -289,10 +291,10 @@ export default function CountryPickupPage() {
         <div style={cardStyle}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
             {cardLabel('Active Countries')}
-            <span style={{ fontSize: 22, opacity: 0.55 }}>🌏</span>
+            <span style={{ fontSize: 22, opacity: 0.55, lineHeight: 1, height: 22, display: 'flex', alignItems: 'center', flexShrink: 0 }}>🌏</span>
           </div>
-          <div style={cardBig}>{dash ?? kpi.countryCount}<span style={cardUnit}>개국</span></div>
-          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)' }}>선택 조건 기준</div>
+          <div style={cardBig}>{dash ?? kpi.countryCount}<span style={cardUnit}>countries</span></div>
+          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)' }}>Based on filters</div>
         </div>
         {/* 2 — OTB R/N */}
         <div style={cardStyle}>
@@ -313,7 +315,16 @@ export default function CountryPickupPage() {
           </div>
           <div style={cardBig}>{dash ?? fmtK(kpi.totalOtbAdr)}<span style={cardUnit}>KRW</span></div>
           <div>
-            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)' }}>Pickup OK</span>
+            <span style={{
+              fontSize: 11, fontWeight: 500,
+              color: puAdr > 0 ? '#00B883' : puAdr < 0 ? '#E24B4A' : 'var(--color-text-tertiary)',
+            }}>
+              {puAdr === 0
+                ? 'Change —'
+                : puAdr > 0
+                  ? `Change +${fmtK(puAdr)}`
+                  : `Change ${fmtK(puAdr)}`}
+            </span>
           </div>
         </div>
         {/* 4 — OTB REV */}
