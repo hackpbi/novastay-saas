@@ -1,5 +1,6 @@
 'use client'
 
+import { ChartPie } from 'lucide-react'
 import { fmtK, fmtM } from '@/utils/pickupPageUtils'
 import { getFlagClass, type CountryPickupRpcRow } from './types'
 
@@ -13,12 +14,13 @@ const fmtPu   = (v: number) => (v === 0 ? '—' : v > 0 ? `+${v}` : `${v}`)
 const fmtPuK  = (v: number) => (v === 0 ? '—' : `${v > 0 ? '+' : ''}${fmtK(v)}`)
 const fmtPuM  = (v: number) => (v === 0 ? '—' : `${v > 0 ? '+' : ''}${fmtM(v)}`)
 
-export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, onToggleLyMode }: {
+export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, onToggleLyMode, onOpenDistribution }: {
   data: CountryPickupRpcRow[]
   isPastMonth: boolean
   lyData?: CountryPickupRpcRow[] | null
   lyMode: 'date' | 'match'
   onToggleLyMode: () => void
+  onOpenDistribution: () => void
 }) {
   const aggregated: Agg[] = Object.values(
     data.reduce((acc, row) => {
@@ -80,7 +82,22 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
       {/* 패널 헤더 */}
       <div style={{ padding: '10px 14px', borderBottom: '0.5px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-secondary)' }}>Detailed Data Analysis</span>
-        <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>vs LY: {lyMode === 'date' ? 'Same date' : 'Same period'}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>vs LY: {lyMode === 'date' ? 'Same date' : 'Same period'}</span>
+          <button
+            onClick={onOpenDistribution}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '4px 10px', borderRadius: 6,
+              border: '0.5px solid var(--color-border-subtle)',
+              background: 'transparent', color: 'var(--color-text-secondary)',
+              fontSize: 11, cursor: 'pointer',
+            }}
+          >
+            <ChartPie size={13} />
+            Distribution
+          </button>
+        </div>
       </div>
 
       <div style={{ overflowX: 'auto' }}>

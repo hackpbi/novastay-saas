@@ -12,6 +12,7 @@ import DatePicker from '@/components/DatePicker'
 import { fmtK, fmtM } from '@/utils/pickupPageUtils'
 import CountryPickupTable from '@/components/country-pickup/CountryPickupTable'
 import CountryPickupDownloadModal from '@/components/country-pickup/CountryPickupDownloadModal'
+import CountryDistributionModal from '@/components/country-pickup/CountryDistributionModal'
 import { type CountryPickupRpcRow } from '@/components/country-pickup/types'
 
 // ─── 세그먼트 드롭다운 (FIT/GRP) — 다중선택 ────────────────────────────────────────
@@ -188,6 +189,7 @@ export default function CountryPickupPage() {
   // vs LY 모드 (date=동일자 / match=동기간)
   const [lyMode, setLyMode] = useState<'date' | 'match'>('date')
   const [showDownloadModal, setShowDownloadModal] = useState(false)
+  const [showDistModal, setShowDistModal] = useState(false)
 
   // 국가별 픽업 — 전체 1회 호출 (p_segmentation=NULL), 클라이언트에서 필터/합산
   const { data: rpcRows = [], isLoading } = useQuery<CountryPickupRpcRow[]>({
@@ -541,7 +543,7 @@ export default function CountryPickupPage() {
           해당 조건의 국가별 픽업 데이터가 없습니다.
         </div>
       ) : (
-        <CountryPickupTable data={filtered} isPastMonth={isPastMonth} lyData={lyFiltered} lyMode={lyMode} onToggleLyMode={() => setLyMode(m => (m === 'date' ? 'match' : 'date'))} />
+        <CountryPickupTable data={filtered} isPastMonth={isPastMonth} lyData={lyFiltered} lyMode={lyMode} onToggleLyMode={() => setLyMode(m => (m === 'date' ? 'match' : 'date'))} onOpenDistribution={() => setShowDistModal(true)} />
       )}
 
       {showDownloadModal && (
@@ -552,6 +554,13 @@ export default function CountryPickupPage() {
           otbDate={otbDate}
           hotelId={hotelId}
           onClose={() => setShowDownloadModal(false)}
+        />
+      )}
+
+      {showDistModal && (
+        <CountryDistributionModal
+          data={rpcRows}
+          onClose={() => setShowDistModal(false)}
         />
       )}
     </div>
