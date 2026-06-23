@@ -280,6 +280,16 @@
 /* Transition for theme switch */
 aside, header, main { transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease; }
 
+/* Country Pick-up — Active Countries 세계지도 펄스/리플 */
+@keyframes dp {
+  0%   { opacity: 1;   transform: scale(1); }
+  100% { opacity: 0.3; transform: scale(0.6); }
+}
+@keyframes rp {
+  0%   { transform: scale(1);   opacity: 0.5; }
+  100% { transform: scale(2.8); opacity: 0; }
+}
+
 /* Excel upload card buttons */
 .btn-excel-action {
   color: var(--color-text-secondary);

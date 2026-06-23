@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, BarChart2, Coins, TrendingUp, FileSpreadsheet } from 'lucide-react'
+import * as d3 from 'd3'
+import * as topojson from 'topojson-client'
 import { supabase } from '@/lib/supabase'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
@@ -113,6 +115,27 @@ function AccDropdown({ accounts, selected, onToggle, onSelectAll }: {
   )
 }
 
+// ─── 세계지도 매핑 (alpha-3 → ISO numeric / 대표 좌표) ──────────────────────────────
+const ALPHA3_TO_NUMERIC: Record<string, string> = {
+  KOR:'410', CHN:'156', JPN:'392', USA:'840',
+  GBR:'826', DEU:'276', AUS:'036', HKG:'344',
+  SGP:'702', ISR:'376', NZL:'554', FRA:'250',
+  CAN:'124', ITA:'380', ESP:'724', NLD:'528',
+  CHE:'756', ARE:'784', MYS:'458', IDN:'360',
+  IRL:'372', AUT:'040', BEL:'056', ARG:'032',
+  BGD:'050', CZE:'203', EGY:'818', KAZ:'398',
+  MCO:'492', MLT:'470', MNG:'496', THA:'764',
+  VNM:'704', PHL:'608', RUS:'643', SAU:'682',
+  QAT:'634', TUR:'792', MEX:'484', BRA:'076',
+}
+
+const COUNTRY_COORDS: Record<string, [number, number]> = {
+  KOR:[127.7,35.9], CHN:[104.1,35.8], JPN:[138.2,36.2],
+  USA:[-95.7,37.1], GBR:[-3.4,55.3],  DEU:[10.4,51.1],
+  AUS:[133.7,-25.2],SGP:[103.8,1.3],  ISR:[34.8,31.0],
+  NZL:[172.5,-40.9],HKG:[114.1,22.3],
+}
+
 export default function CountryPickupPage() {
   const { currentHotel } = useHotel()
   const hotelId = currentHotel?.id
@@ -182,6 +205,101 @@ export default function CountryPickupPage() {
     },
   })
 
+  // ─── Active Countries 세계지도 (D3 + topojson) ──────────────────────────────────
+  const mapCardRef    = useRef<HTMLDivElement>(null)
+  const canvasRef     = useRef<HTMLCanvasElement>(null)
+  const pulseLayerRef = useRef<HTMLDivElement>(null)
+
+  const activeNums = useMemo(() => {
+    const set = new Set<string>()
+    rpcRows.forEach(r => {
+      const num = ALPHA3_TO_NUMERIC[r.country]
+      if (num) set.add(num)
+    })
+    return set
+  }, [rpcRows])
+
+  useEffect(() => {
+    const card   = mapCardRef.current
+    const canvas = canvasRef.current
+    const layer  = pulseLayerRef.current
+    if (!card || !canvas || !layer) return
+
+    const W = card.offsetWidth
+    const H = card.offsetHeight
+    canvas.width  = W
+    canvas.height = H
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    layer.innerHTML = ''
+
+    d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
+      .then((world: any) => {
+        const countries = topojson.feature(world, world.objects.countries) as any
+        const proj = d3.geoNaturalEarth1()
+          .scale(W / 5.6)
+          .translate([W * 0.5, H * 0.54])
+        const path = d3.geoPath().projection(proj).context(ctx)
+
+        // 전체 국가
+        ctx.beginPath()
+        countries.features.forEach((f: any) => path(f))
+        ctx.fillStyle = 'rgba(255,255,255,0.08)'
+        ctx.fill()
+
+        // 활성 국가 민트
+        countries.features.forEach((f: any) => {
+          const id = String(f.id).padStart(3, '0')
+          if (activeNums.has(id)) {
+            ctx.beginPath(); path(f)
+            ctx.fillStyle = 'rgba(0,229,160,0.35)'
+            ctx.fill()
+          }
+        })
+
+        // 국경선
+        ctx.beginPath()
+        path(topojson.mesh(world, world.objects.countries, (a: any, b: any) => a !== b))
+        ctx.strokeStyle = 'rgba(0,0,0,0.5)'
+        ctx.lineWidth   = 0.4
+        ctx.stroke()
+
+        // 펄스 점 (동일 국가 중복 방지)
+        const seen = new Set<string>()
+        rpcRows.forEach((row, i) => {
+          if (seen.has(row.country)) return
+          seen.add(row.country)
+          const coords = COUNTRY_COORDS[row.country]
+          if (!coords) return
+          const [px, py] = proj(coords) ?? [0, 0]
+          const isKor = row.country === 'KOR'
+          const size  = isKor ? 7 : 4
+
+          const dot = document.createElement('div')
+          dot.style.cssText = `
+            position:absolute;left:${px - size/2}px;top:${py - size/2}px;
+            width:${size}px;height:${size}px;border-radius:50%;
+            background:#00E5A0;box-shadow:0 0 ${isKor ? 10 : 5}px #00E5A0;
+            z-index:3;animation:dp 2s ease-in-out ${i * 0.18}s infinite alternate;
+          `
+          layer.appendChild(dot)
+
+          if (isKor) {
+            const ripple = document.createElement('div')
+            ripple.style.cssText = `
+              position:absolute;left:${px - 14}px;top:${py - 14}px;
+              width:28px;height:28px;border-radius:50%;
+              border:1.5px solid rgba(0,229,160,0.4);
+              z-index:2;animation:rp 2s ease-out infinite;
+            `
+            layer.appendChild(ripple)
+          }
+        })
+      })
+      .catch(console.error)
+  }, [activeNums, rpcRows])
+
   // FIT/GRP 세그먼트 목록 (RPC 결과의 sorting2 기준)
   const isFit = (v: any) => String(v ?? '').toLowerCase().includes('fit')
   const isGrp = (v: any) => { const s = String(v ?? '').toLowerCase(); return s.includes('grp') || s.includes('group') }
@@ -217,7 +335,7 @@ export default function CountryPickupPage() {
 
   const cardStyle: React.CSSProperties = {
     background: 'var(--color-bg-secondary)', border: '0.5px solid var(--color-border-subtle)', borderRadius: 10,
-    padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6,
+    padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6, position: 'relative',
   }
   const cardLabel = (en: string) => (
     <div style={{ fontSize: 10, color: 'var(--color-text-tertiary)', lineHeight: 1.4 }}>
@@ -287,34 +405,45 @@ export default function CountryPickupPage() {
 
       {/* KPI 카드 4개 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-3">
-        {/* 1 — 국가 수 */}
-        <div style={cardStyle}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-            {cardLabel('Active Countries')}
-            <span style={{ fontSize: 22, opacity: 0.55, lineHeight: 1, height: 22, display: 'flex', alignItems: 'center', flexShrink: 0 }}>🌏</span>
+        {/* 1 — 국가 수 (세계지도 배경) */}
+        <div
+          ref={mapCardRef}
+          style={{
+            background: '#0d1117',
+            border: '0.5px solid rgba(255,255,255,0.08)',
+            borderRadius: 10,
+            padding: '12px 14px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6,
+            position: 'relative',
+            overflow: 'hidden',
+          }}
+        >
+          <canvas ref={canvasRef} style={{ position: 'absolute', top: 0, left: 0, zIndex: 0, opacity: 0.9 }} />
+          <div ref={pulseLayerRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 2 }} />
+          <div style={{ fontSize: 10, lineHeight: 1.4, color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1, textShadow: '0 0 8px rgba(0,0,0,1), 0 0 16px rgba(0,0,0,1)' }}>Active Countries</div>
+          <div style={{ fontSize: 24, fontWeight: 500, color: '#fff', lineHeight: 1, position: 'relative', zIndex: 1, textShadow: '0 0 8px rgba(0,0,0,1), 0 0 16px rgba(0,0,0,1)' }}>
+            {dash ?? kpi.countryCount}
+            <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: 400, marginLeft: 3 }}>countries</span>
           </div>
-          <div style={cardBig}>{dash ?? kpi.countryCount}<span style={cardUnit}>countries</span></div>
-          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)' }}>Based on filters</div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', position: 'relative', zIndex: 1, marginTop: 'auto', textShadow: '0 0 8px rgba(0,0,0,1), 0 0 16px rgba(0,0,0,1)' }}>Based on filters</div>
         </div>
         {/* 2 — OTB R/N */}
         <div style={cardStyle}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-            {cardLabel('Room Nights')}
-            <BarChart2 size={22} style={{ opacity: 0.55, color: 'var(--color-text-secondary)', flexShrink: 0 }} />
-          </div>
+          <BarChart2 size={28} style={{ position: 'absolute', top: 12, right: 14, opacity: 0.35, color: 'var(--color-text-secondary)' }} />
+          {cardLabel('Room Nights')}
           <div style={cardBig}>{dash ?? kpi.totalOtbRn.toLocaleString('ko-KR')}</div>
-          <div>
+          <div style={{ marginTop: 'auto' }}>
             <span style={{ fontSize: 11, fontWeight: 500, color: kpi.puRn >= 0 ? '#00B883' : '#E24B4A' }}>Pickup {kpi.puRn >= 0 ? '+' : ''}{kpi.puRn}</span>
           </div>
         </div>
         {/* 3 — OTB ADR */}
         <div style={cardStyle}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-            {cardLabel('Average Daily Rate')}
-            <Coins size={22} style={{ opacity: 0.55, color: 'var(--color-text-secondary)', flexShrink: 0 }} />
-          </div>
+          <Coins size={28} style={{ position: 'absolute', top: 12, right: 14, opacity: 0.35, color: 'var(--color-text-secondary)' }} />
+          {cardLabel('Average Daily Rate')}
           <div style={cardBig}>{dash ?? fmtK(kpi.totalOtbAdr)}<span style={cardUnit}>KRW</span></div>
-          <div>
+          <div style={{ marginTop: 'auto' }}>
             <span style={{
               fontSize: 11, fontWeight: 500,
               color: puAdr > 0 ? '#00B883' : puAdr < 0 ? '#E24B4A' : 'var(--color-text-tertiary)',
@@ -329,12 +458,10 @@ export default function CountryPickupPage() {
         </div>
         {/* 4 — OTB REV */}
         <div style={cardStyle}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-            {cardLabel('Revenue')}
-            <TrendingUp size={22} style={{ opacity: 0.55, color: 'var(--color-text-secondary)', flexShrink: 0 }} />
-          </div>
+          <TrendingUp size={28} style={{ position: 'absolute', top: 12, right: 14, opacity: 0.35, color: 'var(--color-text-secondary)' }} />
+          {cardLabel('Revenue')}
           <div style={cardBig}>{dash ?? fmtM(kpi.totalOtbRev)}<span style={cardUnit}>KRW</span></div>
-          <div>
+          <div style={{ marginTop: 'auto' }}>
             <span style={{ fontSize: 11, fontWeight: 500, color: kpi.puRev >= 0 ? '#00B883' : '#E24B4A' }}>Pickup {kpi.puRev >= 0 ? '+' : ''}{fmtM(kpi.puRev)}</span>
           </div>
         </div>
