@@ -196,7 +196,9 @@ export default function MarketPickupMonthBlock({
             const idx = elements[0].index
             onBarClick(idx + 1, (dailyTotals[idx] ?? 0) === 0 ? 'otb' : 'pickup')
           },
-          onHover: (_event: any, elements: any[]) => {
+          onHover: (event: any, elements: any[]) => {
+            const hoverCanvas = event.native?.target as HTMLCanvasElement | undefined
+            if (hoverCanvas) hoverCanvas.style.cursor = elements.length ? 'pointer' : 'default'
             const tip = tooltipRef.current
             if (!tip) return
             if (!elements.length) { tip.style.display = 'none'; return }

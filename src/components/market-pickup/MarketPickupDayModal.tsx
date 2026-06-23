@@ -21,20 +21,26 @@ type AccStat = {
 }
 
 export default function MarketPickupDayModal({
-  open, onClose, year, month, day, schema, pickupRows, roomCount, defaultTab,
+  open, onClose, year, month, day, schema, pickupRows, roomCount, defaultTab, otbDate, vsDate, onDateChange,
 }: {
-  open:        boolean
-  onClose:     () => void
-  year:        number
-  month:       number   // 0-based
-  day:         number   // 1-based
-  schema:      MarketSchemaRow[]
-  pickupRows:  PickupRow[]
-  roomCount:   number
-  defaultTab?: 'pickup' | 'otb'
+  open:          boolean
+  onClose:       () => void
+  year:          number
+  month:         number   // 0-based
+  day:           number   // 1-based
+  schema:        MarketSchemaRow[]
+  pickupRows:    PickupRow[]
+  roomCount:     number
+  defaultTab?:   'pickup' | 'otb'
+  otbDate:       string   // 'YYYY-MM-DD'
+  vsDate:        string   // 'YYYY-MM-DD'
+  onDateChange?: (otbDate: string, vsDate: string) => void
 }) {
   const [tab,     setTab]     = useState<'pickup' | 'otb'>(defaultTab ?? 'pickup')
   const [selMain, setSelMain] = useState<string | null>(null)
+  const [localOtbDate, setLocalOtbDate] = useState(otbDate)
+  const [localVsDate,  setLocalVsDate]  = useState(vsDate)
+  const [localDay,     setLocalDay]     = useState(day)
 
   useEffect(() => {
     if (!open) return
@@ -44,13 +50,24 @@ export default function MarketPickupDayModal({
     return () => { window.removeEventListener('keydown', h); document.body.style.overflow = '' }
   }, [open, onClose])
 
-  // open / defaultTab 변경 시 탭·선택 동기화
+  // open 시 로컬 상태(날짜·일자·탭·선택) 초기화
   useEffect(() => {
     if (open) {
+      setLocalOtbDate(otbDate)
+      setLocalVsDate(vsDate)
+      setLocalDay(day)
       setTab(defaultTab ?? 'pickup')
       setSelMain(null)
     }
-  }, [open, defaultTab])
+  }, [open, otbDate, vsDate, day, defaultTab])
+
+  // 날짜 변경 시 페이지에 반영 (onDateChange 있을 때만)
+  useEffect(() => {
+    if (localOtbDate !== otbDate || localVsDate !== vsDate) {
+      onDateChange?.(localOtbDate, localVsDate)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localOtbDate, localVsDate])
 
   // 선택된 세그(main/sub)의 어카운트별 집계 — 훅은 early-return 위에서 호출
   const accountRows = useMemo(() => {
@@ -65,7 +82,7 @@ export default function MarketPickupDayModal({
 
     const map = new Map<string, AccStat>()
     for (const r of pickupRows) {
-      if (!inDay(r.business_date, year, month + 1, day)) continue
+      if (!inDay(r.business_date, year, month + 1, localDay)) continue
       if (!codeSet.has(r.segmentation)) continue
       const acc = r.account_name || '(미지정)'
       if (!map.has(acc)) map.set(acc, { otbNights: 0, otbRevenue: 0, vsNights: 0, vsRevenue: 0, puNights: 0, puRevenue: 0 })
@@ -89,15 +106,15 @@ export default function MarketPickupDayModal({
       }))
       .filter(a => a.otbNights > 0 || a.puNights !== 0)
       .sort((a, b) => Math.abs(b.puNights) - Math.abs(a.puNights))
-  }, [open, selMain, schema, pickupRows, year, month, day])
+  }, [open, selMain, schema, pickupRows, year, month, localDay])
 
   if (!open) return null
 
-  const { rows, summary } = buildSegTable({ schema, pickup: pickupRows, year, month: month + 1, roomCount, day })
+  const { rows, summary } = buildSegTable({ schema, pickup: pickupRows, year, month: month + 1, roomCount, day: localDay })
   const selRow = rows.find(r => r.id === selMain)
 
-  const dow     = new Date(year, month, day).getDay()
-  const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  const dow     = new Date(year, month, localDay).getDay()
+  const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(localDay).padStart(2, '0')}`
 
   // ── 포맷 헬퍼 ───────────────────────────────────────────────────────────────
   const fmtPuRn  = (v: number) => v === 0 ? '—' : `${v > 0 ? '+' : ''}${Math.round(v)}`
@@ -144,14 +161,51 @@ export default function MarketPickupDayModal({
 
         {/* 헤더 */}
         <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexShrink: 0 }}>
-          <div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {/* 제목 */}
             <h2 style={{ fontSize: 13, fontWeight: 500, color: getDayColor(dateStr) }}>
-              {month + 1}/{day} ({WEEKDAY_KR[dow]}) · Pickup by Segment
+              {month + 1}/{localDay} ({WEEKDAY_KR[dow]}) · Pickup by Segment
             </h2>
-            <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
-              Click a segment to see account breakdown →
-            </p>
+
+            {/* 날짜 피커 행 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              {/* OTB Date */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 10, color: '#00E5A0', fontWeight: 500 }}>OTB</span>
+                <input
+                  type="date"
+                  value={localOtbDate}
+                  onChange={e => setLocalOtbDate(e.target.value)}
+                  style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, border: '0.5px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'var(--color-text-primary)', cursor: 'pointer' }}
+                />
+              </div>
+
+              {/* vs Date */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>vs</span>
+                <input
+                  type="date"
+                  value={localVsDate}
+                  onChange={e => setLocalVsDate(e.target.value)}
+                  style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, border: '0.5px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'var(--color-text-primary)', cursor: 'pointer' }}
+                />
+              </div>
+
+              {/* 일자 변경 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <button
+                  onClick={() => setLocalDay(d => Math.max(1, d - 1))}
+                  style={{ width: 22, height: 22, borderRadius: 4, border: '0.5px solid rgba(255,255,255,0.2)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 12 }}
+                >‹</button>
+                <span style={{ fontSize: 11, color: 'var(--color-text-primary)', minWidth: 20, textAlign: 'center' }}>{localDay}</span>
+                <button
+                  onClick={() => setLocalDay(d => Math.min(new Date(year, month + 1, 0).getDate(), d + 1))}
+                  style={{ width: 22, height: 22, borderRadius: 4, border: '0.5px solid rgba(255,255,255,0.2)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 12 }}
+                >›</button>
+              </div>
+            </div>
           </div>
+
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', marginTop: 2 }} aria-label="닫기">
             <X size={18} />
           </button>

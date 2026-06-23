@@ -167,6 +167,9 @@ export default function MarketPickupPage() {
         pickupRows={pickupRows}
         roomCount={roomCount}
         defaultTab={dayModal?.defaultTab ?? 'pickup'}
+        otbDate={otbDate}
+        vsDate={vsOtbDate}
+        onDateChange={(newOtb, newVs) => { setOtbDate(newOtb); setVsOtbDate(newVs) }}
       />
     </div>
   )
