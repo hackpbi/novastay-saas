@@ -46,7 +46,7 @@ export default function CountryPickupTable({ data }: { data: CountryPickupRpcRow
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
           <thead>
             <tr>
-              <th rowSpan={2} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 10, fontWeight: 500, color: 'var(--color-text-tertiary)', borderBottom: '0.5px solid var(--color-border-subtle)', width: 110 }}>국가</th>
+              <th rowSpan={2} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 10, fontWeight: 500, color: 'var(--color-text-tertiary)', borderBottom: '0.5px solid var(--color-border-subtle)', width: 160 }}>국가</th>
               <th colSpan={3} style={{ textAlign: 'center', padding: '6px 10px 2px', fontSize: 9, fontWeight: 500, color: 'var(--color-text-tertiary)', letterSpacing: '0.05em' }}>Current OTB</th>
               <th colSpan={3} style={{ textAlign: 'center', padding: '6px 10px 2px', fontSize: 9, fontWeight: 500, color: 'rgba(0,229,160,0.7)', letterSpacing: '0.05em' }}>Pickup</th>
             </tr>

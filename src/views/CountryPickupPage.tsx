@@ -8,7 +8,6 @@ import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import DatePicker from '@/components/DatePicker'
 import { fmtK, fmtM } from '@/utils/pickupPageUtils'
-import CountryPickupChart from '@/components/country-pickup/CountryPickupChart'
 import CountryPickupTable from '@/components/country-pickup/CountryPickupTable'
 import { type CountryPickupRpcRow } from '@/components/country-pickup/types'
 
@@ -315,21 +314,15 @@ export default function CountryPickupPage() {
         </div>
       </div>
 
-      {/* 본문: 좌 차트 / 우 테이블 */}
+      {/* 본문: 테이블 단독 풀사이즈 */}
       {isLoading ? (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.45fr', gap: 10, alignItems: 'start' }}>
-          <div className="animate-pulse" style={{ height: 360, background: 'var(--color-bg-tertiary)', borderRadius: 10 }} />
-          <div className="animate-pulse" style={{ height: 360, background: 'var(--color-bg-tertiary)', borderRadius: 10 }} />
-        </div>
+        <div className="animate-pulse" style={{ height: 360, background: 'var(--color-bg-tertiary)', borderRadius: 10 }} />
       ) : filtered.length === 0 ? (
         <div style={{ background: 'var(--color-bg-secondary)', border: '0.5px solid var(--color-border-subtle)', borderRadius: 10, padding: 40, textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 13 }}>
           해당 조건의 국가별 픽업 데이터가 없습니다.
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.45fr', gap: 10, alignItems: 'start' }}>
-          <CountryPickupChart data={filtered} />
-          <CountryPickupTable data={filtered} />
-        </div>
+        <CountryPickupTable data={filtered} />
       )}
     </div>
   )
