@@ -66,6 +66,35 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
     return groupOk && segOk && accOk
   }
 
+  // actual_daily(a01) 행 → 엑셀 행
+  const mapActualRow = (row: any, year: number, month: number) => {
+    const adr = row.nights > 0 ? Math.round(row.room_revenue / row.nights) : 0
+    return {
+      'Year'        : year,
+      'Month'       : month,
+      'Country'     : row.country_name_en || row.country_name_ko || row.country,
+      'Account'     : row.account_name  || '(미지정)',
+      'Segmentation': row.segmentation  || '(미지정)',
+      'R/N'         : row.nights,
+      'ADR'         : adr,
+      'REV'         : row.room_revenue,
+    }
+  }
+
+  // 전체 월/연 기준 actual_daily(a01) RPC 호출 + 필터 + 매핑
+  const fetchActualRows = async (year: number, month: number) => {
+    const { data: actualData, error } = await (supabase as any)
+      .rpc('get_country_actual_data', {
+        p_hotel_id     : hotelId,
+        p_year         : year,
+        p_month        : month,
+        p_segmentation : null,
+        p_account_name : null,
+      })
+    if (error || !actualData) return []
+    return (actualData as any[]).filter(matchesFilter).map(row => mapActualRow(row, year, month))
+  }
+
   const handleDownload = async () => {
     // otbDate 기준 월 파싱 (KST — getMonth()/getFullYear() 사용)
     const otbBase  = new Date(otbDate)
@@ -80,56 +109,38 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
         currentYear < otbYear ||
         (currentYear === otbYear && month < otbMonth)
 
-      let rows: any[] = []
-
+      // ── 당해년도 데이터 ──────────────────────────────
       if (isPast) {
-        // 이전월 → a01_actual_daily (get_country_actual_data)
-        const { data: actualData, error } = await (supabase as any)
-          .rpc('get_country_actual_data', {
-            p_hotel_id     : hotelId,
-            p_year         : currentYear,
-            p_month        : month,
-            p_segmentation : null,
-            p_account_name : null,
-          })
-        if (error) { console.error(error); continue }
-
-        rows = (actualData ?? [])
-          .filter(matchesFilter)
-          .map((row: any) => {
-            const adr = (row.nights ?? 0) > 0 ? Math.round((row.room_revenue ?? 0) / row.nights) : 0
-            return {
-              'Year'        : currentYear,
-              'Month'       : month,
-              'Country'     : row.country_name_en || row.country_name_ko || row.country,
-              'Account'     : row.account_name  || '(미지정)',
-              'Segmentation': row.segmentation  || '(미지정)',
-              'R/N'         : row.nights,
-              'ADR'         : adr,
-              'REV'         : row.room_revenue,
-            }
-          })
+        // 이전월 → a01_actual_daily
+        allRows.push(...await fetchActualRows(currentYear, month))
       } else {
-        // 현재월 이후 → a02_otb_daily (기존 data 사용)
-        rows = data
-          .filter(matchesFilter)
-          .map(row => {
-            const adr = (row.otb_nights ?? 0) > 0 ? Math.round((row.otb_revenue ?? 0) / (row.otb_nights ?? 0)) : 0
-            return {
-              'Year'        : currentYear,
-              'Month'       : month,
-              'Country'     : row.country_name_en || row.country_name_ko || row.country,
-              'Account'     : row.account_name  || '(미지정)',
-              'Segmentation': row.segmentation  || '(미지정)',
-              'R/N'         : row.otb_nights,
-              'ADR'         : adr,
-              'REV'         : row.otb_revenue,
-            }
+        // 현재월 이후 → 기존 data (OTB)
+        data.filter(matchesFilter).forEach(row => {
+          const adr = row.otb_nights > 0 ? Math.round(row.otb_revenue / row.otb_nights) : 0
+          allRows.push({
+            'Year'        : currentYear,
+            'Month'       : month,
+            'Country'     : row.country_name_en || row.country_name_ko || row.country,
+            'Account'     : row.account_name  || '(미지정)',
+            'Segmentation': row.segmentation  || '(미지정)',
+            'R/N'         : row.otb_nights,
+            'ADR'         : adr,
+            'REV'         : row.otb_revenue,
           })
+        })
       }
 
-      allRows.push(...rows.sort((a, b) => a.Account.localeCompare(b.Account)))
+      // ── 전년도 데이터 (항상 a01_actual_daily) ────────
+      allRows.push(...await fetchActualRows(currentYear - 1, month))
     }
+
+    // Year → Month → Country → Account 순 정렬
+    allRows.sort((a, b) =>
+      a.Year - b.Year ||
+      a.Month - b.Month ||
+      a.Country.localeCompare(b.Country) ||
+      a.Account.localeCompare(b.Account)
+    )
 
     const ws = XLSX.utils.json_to_sheet(allRows)
     const wb = XLSX.utils.book_new()
