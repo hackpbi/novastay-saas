@@ -7,6 +7,7 @@ import type { MarketSchemaRow } from '@/hooks/useMarketSchema'
 import { buildSegTable, type SegTableRow } from '@/utils/segmentationTable'
 import { WEEKDAY_KR } from '@/utils/pickupPageUtils'
 import { getDayColor } from '@/utils/dateUtils'
+import DatePicker from '@/components/DatePicker'
 
 // 날짜 문자열 직접 파싱 (KST 이슈 없음)
 const inDay = (dateStr: string, year: number, month: number, day: number) => {
@@ -21,7 +22,7 @@ type AccStat = {
 }
 
 export default function MarketPickupDayModal({
-  open, onClose, year, month, day, schema, pickupRows, roomCount, defaultTab, otbDate, vsDate, onDateChange,
+  open, onClose, year, month, day, schema, pickupRows, roomCount, defaultTab, otbDate, vsDate, otbDates = [], onDateChange,
 }: {
   open:          boolean
   onClose:       () => void
@@ -34,6 +35,7 @@ export default function MarketPickupDayModal({
   defaultTab?:   'pickup' | 'otb'
   otbDate:       string   // 'YYYY-MM-DD'
   vsDate:        string   // 'YYYY-MM-DD'
+  otbDates?:     string[]
   onDateChange?: (otbDate: string, vsDate: string) => void
 }) {
   const [tab,     setTab]     = useState<'pickup' | 'otb'>(defaultTab ?? 'pickup')
@@ -166,7 +168,7 @@ export default function MarketPickupDayModal({
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <button
                 onClick={() => setLocalDay(d => Math.max(1, d - 1))}
-                style={{ width: 22, height: 22, borderRadius: 4, border: '0.5px solid rgba(255,255,255,0.2)', background: 'transparent', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                style={{ width: 22, height: 22, borderRadius: 4, border: 'none', background: 'transparent', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >‹</button>
 
               <h2 style={{ fontSize: 13, fontWeight: 600, color: getDayColor(localDateStr) }}>
@@ -175,30 +177,26 @@ export default function MarketPickupDayModal({
 
               <button
                 onClick={() => setLocalDay(d => Math.min(new Date(year, month + 1, 0).getDate(), d + 1))}
-                style={{ width: 22, height: 22, borderRadius: 4, border: '0.5px solid rgba(255,255,255,0.2)', background: 'transparent', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                style={{ width: 22, height: 22, borderRadius: 4, border: 'none', background: 'transparent', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >›</button>
             </div>
 
             {/* OTB / vs date picker */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ fontSize: 10, fontWeight: 500, color: '#00E5A0' }}>OTB</span>
-                <input
-                  type="date"
-                  value={localOtbDate}
-                  onChange={e => setLocalOtbDate(e.target.value)}
-                  style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, border: '0.5px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: 'var(--color-text-primary)', cursor: 'pointer', colorScheme: 'dark' }}
-                />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>vs</span>
-                <input
-                  type="date"
-                  value={localVsDate}
-                  onChange={e => setLocalVsDate(e.target.value)}
-                  style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, border: '0.5px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: 'var(--color-text-primary)', cursor: 'pointer', colorScheme: 'dark' }}
-                />
-              </div>
+              <DatePicker
+                label="OTB"
+                value={localOtbDate}
+                onChange={setLocalOtbDate}
+                availableDates={otbDates}
+                accent bare plain fontPx={11}
+              />
+              <DatePicker
+                label="vs"
+                value={localVsDate}
+                onChange={setLocalVsDate}
+                availableDates={otbDates.filter(d => d < localOtbDate)}
+                accent bare plain fontPx={11}
+              />
             </div>
 
           </div>

@@ -170,6 +170,7 @@ export default function MarketPickupPage() {
         defaultTab={dayModal?.defaultTab ?? 'pickup'}
         otbDate={otbDate}
         vsDate={vsOtbDate}
+        otbDates={otbDates ?? []}
         onDateChange={(newOtb, newVs) => { setOtbDate(newOtb); setVsOtbDate(newVs) }}
       />
     </div>
