@@ -37,7 +37,7 @@ const barLabelPlugin = {
 }
 
 export default function MarketPickupMonthBlock({
-  year, month, monthKey, pickupRows, groups, selected, onToggleSeg, onBarClick,
+  year, month, monthKey, pickupRows, groups, selected, onToggleSeg, onBarClick, roomCount,
 }: {
   year:        number
   month:       number   // 0-based
@@ -47,6 +47,7 @@ export default function MarketPickupMonthBlock({
   selected:    Set<string>
   onToggleSeg: (segId: string) => void
   onBarClick:  (day: number) => void
+  roomCount:   number
 }) {
   const month1 = month + 1
   const days   = lastDayOfMonth(year, month1)
@@ -54,6 +55,16 @@ export default function MarketPickupMonthBlock({
   const chartRef  = useRef<any>(null)
   const [openGroup, setOpenGroup] = useState<string | null>(null)
   const [allDaysOpen, setAllDaysOpen] = useState(false)
+
+  // 세그 그룹 드롭다운 외부 클릭 시 닫힘
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('[data-group-drop]')) setOpenGroup(null)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const activeSegs = useMemo(
     () => groups.flatMap(g => g.segs).filter(s => selected.has(s.id)),
@@ -79,6 +90,42 @@ export default function MarketPickupMonthBlock({
   const segTotal   = (seg: SegLeaf) => seg.codes.reduce((s, c) => s + (codeMonthTotal.get(c) ?? 0), 0)
   const groupTotal = (g: SegGroup) => g.segs.filter(s => selected.has(s.id)).reduce((s, seg) => s + segTotal(seg), 0)
   const total      = groups.reduce((s, g) => s + groupTotal(g), 0)
+
+  // 선택 세그 기준 컬럼 합산 헬퍼 (코드 → 값 Map 빌드 후 그룹/세그 합)
+  const sumByCol = (col: keyof PickupRow) => {
+    const map = new Map<string, number>()
+    for (const r of pickupRows) {
+      if (!inMonth(r.business_date, year, month1)) continue
+      map.set(r.segmentation, (map.get(r.segmentation) ?? 0) + ((r[col] as number) ?? 0))
+    }
+    return groups.reduce((s, g) =>
+      s + g.segs.filter(seg => selected.has(seg.id))
+        .reduce((s2, seg) => s2 + seg.codes.reduce((s3, c) => s3 + (map.get(c) ?? 0), 0), 0)
+    , 0)
+  }
+
+  // 총 픽업 REV / OTB·vs R/N·REV (선택 세그 기준)
+  const totalPuRev  = useMemo(() => sumByCol('pu_revenue'),    [pickupRows, groups, selected, year, month1])
+  const totalOtbRn  = useMemo(() => sumByCol('otb_nights'),    [pickupRows, groups, selected, year, month1])
+  const totalVsRn   = useMemo(() => sumByCol('vs_otb_nights'), [pickupRows, groups, selected, year, month1])
+  const totalOtbRev = useMemo(() => sumByCol('otb_revenue'),   [pickupRows, groups, selected, year, month1])
+  const totalVsRev  = useMemo(() => sumByCol('vs_otb_revenue'),[pickupRows, groups, selected, year, month1])
+
+  // OCC 픽업
+  const daysInMonth = new Date(year, month1, 0).getDate()
+  const totalAvail  = roomCount * daysInMonth
+  const otbOcc      = totalAvail > 0 ? (totalOtbRn / totalAvail) * 100 : 0
+  const vsOcc       = totalAvail > 0 ? (totalVsRn  / totalAvail) * 100 : 0
+  const puOcc       = Math.round((otbOcc - vsOcc) * 10) / 10
+
+  // ADR 픽업
+  const otbAdr = totalOtbRn > 0 ? Math.round(totalOtbRev / totalOtbRn) : 0
+  const vsAdr  = totalVsRn  > 0 ? Math.round(totalVsRev  / totalVsRn)  : 0
+  const puAdr  = otbAdr - vsAdr
+
+  // 포맷 헬퍼
+  const fmtK = (v: number) => `${Math.round(v / 1000)}k`
+  const fmtM = (v: number) => `${(v / 1_000_000).toFixed(1)}M`
 
   // 선택 세그 → 일별 합산
   const dailyTotals = useMemo(() => {
@@ -161,7 +208,7 @@ export default function MarketPickupMonthBlock({
           return (
             <div key={g.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
               {gi > 0 && <span style={{ color: 'var(--color-border-tertiary)' }}>|</span>}
-              <div style={{ position: 'relative' }}>
+              <div style={{ position: 'relative' }} data-group-drop>
                 <span
                   onClick={() => setOpenGroup(openGroup === g.id ? null : g.id)}
                   style={{ fontSize: 11, fontWeight: 500, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}
@@ -205,7 +252,25 @@ export default function MarketPickupMonthBlock({
           )
         })}
         <span style={{ color: 'var(--color-border-tertiary)' }}>|</span>
-        <span style={{ fontSize: 12, fontWeight: 600, color: '#00E5A0' }}>총 {total >= 0 ? '+' : ''}{total}실</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, fontWeight: 600 }}>
+          {/* OCC 픽업 */}
+          <span style={{ color: puOcc >= 0 ? '#00E5A0' : '#E24B4A' }}>
+            {puOcc >= 0 ? '+' : ''}{puOcc.toFixed(1)}%
+            <span style={{ fontWeight: 400, color: 'var(--color-text-tertiary)', marginLeft: 2 }}>
+              ({total >= 0 ? '+' : ''}{total} R/N)
+            </span>
+          </span>
+          <span style={{ color: 'var(--color-border-tertiary)' }}>·</span>
+          {/* ADR 픽업 */}
+          <span style={{ color: puAdr >= 0 ? '#00E5A0' : '#E24B4A' }}>
+            {puAdr >= 0 ? '+' : ''}{fmtK(puAdr)}
+          </span>
+          <span style={{ color: 'var(--color-border-tertiary)' }}>·</span>
+          {/* REV 픽업 */}
+          <span style={{ color: totalPuRev >= 0 ? '#00E5A0' : '#E24B4A' }}>
+            {totalPuRev >= 0 ? '+' : ''}{fmtM(totalPuRev)}
+          </span>
+        </span>
         <button
           onClick={() => setAllDaysOpen(true)}
           style={{

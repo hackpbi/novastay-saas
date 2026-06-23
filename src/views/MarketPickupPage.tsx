@@ -149,6 +149,7 @@ export default function MarketPickupPage() {
                 selected={resolveSelected(monthKey)}
                 onToggleSeg={(segId) => onToggleSeg(monthKey, segId)}
                 onBarClick={(day) => setDayModal({ year: t.year, month: t.month, day })}
+                roomCount={roomCount}
               />
             )
           })}
