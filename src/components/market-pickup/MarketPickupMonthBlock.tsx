@@ -223,7 +223,7 @@ export default function MarketPickupMonthBlock({
                     </span>
                   </div>
                 `).join('')
-              : '<div style="font-size:10px;color:rgba(255,255,255,0.3);padding:2px 0;">No pickup</div>'
+              : ''
 
             tip.innerHTML = `
               <div style="font-size:12px;font-weight:500;color:#fff;margin-bottom:8px;border-bottom:0.5px solid rgba(255,255,255,0.08);padding-bottom:6px;">
