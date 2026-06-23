@@ -156,9 +156,12 @@ export default function CountryPickupPage() {
   }
   const handleSelectAll = () => { setSelectedSegs(new Set()); setSelectedAccounts(new Set()) }
 
+  // vs LY 모드 (date=동일자 / match=동기간)
+  const [lyMode, setLyMode] = useState<'date' | 'match'>('date')
+
   // 국가별 픽업 — 전체 1회 호출 (p_segmentation=NULL), 클라이언트에서 필터/합산
   const { data: rpcRows = [], isLoading } = useQuery<CountryPickupRpcRow[]>({
-    queryKey: ['country-pickup', hotelId, otbDate, vsDate, selectedYear, selectedMonth],
+    queryKey: ['country-pickup', hotelId, otbDate, vsDate, selectedYear, selectedMonth, lyMode],
     enabled: !!hotelId && !!otbDate && !!vsDate,
     queryFn: async () => {
       if (!otbDate || !vsDate) return []
@@ -170,6 +173,7 @@ export default function CountryPickupPage() {
         p_month:        selectedMonth + 1,
         p_segmentation: null,
         p_account_name: null,
+        p_ly_mode:      lyMode,
       })
       if (error) throw error
       return (data ?? []) as CountryPickupRpcRow[]
@@ -322,7 +326,7 @@ export default function CountryPickupPage() {
           해당 조건의 국가별 픽업 데이터가 없습니다.
         </div>
       ) : (
-        <CountryPickupTable data={filtered} />
+        <CountryPickupTable data={filtered} lyMode={lyMode} onToggleLyMode={() => setLyMode(m => (m === 'date' ? 'match' : 'date'))} />
       )}
     </div>
   )

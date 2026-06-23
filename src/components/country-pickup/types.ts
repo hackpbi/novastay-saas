@@ -13,6 +13,8 @@ export type CountryPickupRpcRow = {
   vs_nights:       number
   otb_revenue:     number
   vs_revenue:      number
+  ly_nights:       number
+  ly_revenue:      number
 }
 
 // alpha2 소문자 → flag-icons 클래스명 (예: 'KR' → 'fi fi-kr')
