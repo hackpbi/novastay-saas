@@ -335,13 +335,8 @@ export default function CountryPickupPage() {
 
   const cardStyle: React.CSSProperties = {
     background: 'var(--color-bg-secondary)', border: '0.5px solid var(--color-border-subtle)', borderRadius: 10,
-    padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6, position: 'relative',
+    padding: 0, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden',
   }
-  const cardLabel = (en: string) => (
-    <div style={{ fontSize: 10, color: 'var(--color-text-tertiary)', lineHeight: 1.4 }}>
-      <span style={{ fontWeight: 500, color: 'var(--color-text-secondary)' }}>{en}</span>
-    </div>
-  )
   const cardBig: React.CSSProperties = { fontSize: 24, fontWeight: 500, color: 'var(--color-text-primary)', lineHeight: 1 }
   const cardUnit: React.CSSProperties = { fontSize: 13, color: 'var(--color-text-secondary)', fontWeight: 400, marginLeft: 3 }
   const dash = isLoading ? '—' : null
@@ -423,7 +418,7 @@ export default function CountryPickupPage() {
           <canvas ref={canvasRef} style={{ position: 'absolute', top: 0, left: 0, zIndex: 0, opacity: 0.9 }} />
           <div ref={pulseLayerRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 2 }} />
           <div style={{ fontSize: 10, lineHeight: 1.4, color: 'rgba(255,255,255,0.9)', position: 'relative', zIndex: 1, textShadow: '0 0 8px rgba(0,0,0,1), 0 0 16px rgba(0,0,0,1)' }}>Active Countries</div>
-          <div style={{ fontSize: 24, fontWeight: 500, color: '#fff', lineHeight: 1, position: 'relative', zIndex: 1, textShadow: '0 0 8px rgba(0,0,0,1), 0 0 16px rgba(0,0,0,1)' }}>
+          <div style={{ fontSize: 28.8, fontWeight: 500, color: '#fff', lineHeight: 1, position: 'relative', zIndex: 1, textShadow: '0 0 8px rgba(0,0,0,1), 0 0 16px rgba(0,0,0,1)' }}>
             {dash ?? kpi.countryCount}
             <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: 400, marginLeft: 3 }}>countries</span>
           </div>
@@ -431,38 +426,53 @@ export default function CountryPickupPage() {
         </div>
         {/* 2 — OTB R/N */}
         <div style={cardStyle}>
-          <BarChart2 size={28} style={{ position: 'absolute', top: 12, right: 14, opacity: 0.35, color: 'var(--color-text-secondary)' }} />
-          {cardLabel('Room Nights')}
-          <div style={cardBig}>{dash ?? kpi.totalOtbRn.toLocaleString('ko-KR')}</div>
-          <div style={{ marginTop: 'auto' }}>
-            <span style={{ fontSize: 11, fontWeight: 500, color: kpi.puRn >= 0 ? '#00B883' : '#E24B4A' }}>Pickup {kpi.puRn >= 0 ? '+' : ''}{kpi.puRn}</span>
+          <div style={{ padding: '12px 14px', flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)' }}>Room Nights</span>
+              <BarChart2 size={20} style={{ opacity: 0.3, color: 'var(--color-text-secondary)', flexShrink: 0 }} />
+            </div>
+            <div style={cardBig}>{dash ?? kpi.totalOtbRn.toLocaleString('ko-KR')}</div>
+          </div>
+          <div style={{ height: '0.5px', background: 'var(--color-border-subtle)' }} />
+          <div style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>Pickup</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: kpi.puRn > 0 ? '#00B883' : kpi.puRn < 0 ? '#E24B4A' : 'var(--color-text-tertiary)' }}>
+              {kpi.puRn > 0 ? `+${kpi.puRn.toLocaleString()} R/N` : kpi.puRn < 0 ? `${kpi.puRn.toLocaleString()} R/N` : '—'}
+            </span>
           </div>
         </div>
         {/* 3 — OTB ADR */}
         <div style={cardStyle}>
-          <Coins size={28} style={{ position: 'absolute', top: 12, right: 14, opacity: 0.35, color: 'var(--color-text-secondary)' }} />
-          {cardLabel('Average Daily Rate')}
-          <div style={cardBig}>{dash ?? fmtK(kpi.totalOtbAdr)}<span style={cardUnit}>KRW</span></div>
-          <div style={{ marginTop: 'auto' }}>
-            <span style={{
-              fontSize: 11, fontWeight: 500,
-              color: puAdr > 0 ? '#00B883' : puAdr < 0 ? '#E24B4A' : 'var(--color-text-tertiary)',
-            }}>
-              {puAdr === 0
-                ? 'Change —'
-                : puAdr > 0
-                  ? `Change +${fmtK(puAdr)}`
-                  : `Change ${fmtK(puAdr)}`}
+          <div style={{ padding: '12px 14px', flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)' }}>Average Daily Rate</span>
+              <Coins size={20} style={{ opacity: 0.3, color: 'var(--color-text-secondary)', flexShrink: 0 }} />
+            </div>
+            <div style={cardBig}>{dash ?? fmtK(kpi.totalOtbAdr)}<span style={cardUnit}>KRW</span></div>
+          </div>
+          <div style={{ height: '0.5px', background: 'var(--color-border-subtle)' }} />
+          <div style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>Change</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: puAdr > 0 ? '#00B883' : puAdr < 0 ? '#E24B4A' : 'var(--color-text-tertiary)' }}>
+              {puAdr === 0 ? '—' : puAdr > 0 ? `+${fmtK(puAdr)}` : fmtK(puAdr)}
             </span>
           </div>
         </div>
         {/* 4 — OTB REV */}
         <div style={cardStyle}>
-          <TrendingUp size={28} style={{ position: 'absolute', top: 12, right: 14, opacity: 0.35, color: 'var(--color-text-secondary)' }} />
-          {cardLabel('Revenue')}
-          <div style={cardBig}>{dash ?? fmtM(kpi.totalOtbRev)}<span style={cardUnit}>KRW</span></div>
-          <div style={{ marginTop: 'auto' }}>
-            <span style={{ fontSize: 11, fontWeight: 500, color: kpi.puRev >= 0 ? '#00B883' : '#E24B4A' }}>Pickup {kpi.puRev >= 0 ? '+' : ''}{fmtM(kpi.puRev)}</span>
+          <div style={{ padding: '12px 14px', flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)' }}>Revenue</span>
+              <TrendingUp size={20} style={{ opacity: 0.3, color: 'var(--color-text-secondary)', flexShrink: 0 }} />
+            </div>
+            <div style={cardBig}>{dash ?? fmtM(kpi.totalOtbRev)}<span style={cardUnit}>KRW</span></div>
+          </div>
+          <div style={{ height: '0.5px', background: 'var(--color-border-subtle)' }} />
+          <div style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>Pickup</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: kpi.puRev > 0 ? '#00B883' : kpi.puRev < 0 ? '#E24B4A' : 'var(--color-text-tertiary)' }}>
+              {kpi.puRev > 0 ? `+${fmtM(kpi.puRev)}` : kpi.puRev < 0 ? fmtM(kpi.puRev) : '—'}
+            </span>
           </div>
         </div>
       </div>
