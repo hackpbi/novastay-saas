@@ -279,6 +279,23 @@ export default function CountryPickupPage() {
     },
   })
 
+  // ─── 객실 수 (m03_hotel_details) — Occupancy 계산용 ──────────────────────────────
+  const { data: hotelDetail } = useQuery({
+    queryKey: ['m03_hotel_details', hotelId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('m03_hotel_details')
+        .select('room_count')
+        .eq('hotel_id', hotelId)
+        .single()
+      if (error) throw error
+      return data
+    },
+    enabled: !!hotelId,
+    staleTime: 10 * 60 * 1000,
+  })
+  const roomCount = hotelDetail?.room_count ?? 0
+
   // ─── 세그먼트 전체 목록 (c05_market_table_schema) ────────────────────────────────
   const [segmentOptions, setSegmentOptions] = useState<SegmentOption[]>([])
   useEffect(() => {
@@ -468,6 +485,14 @@ export default function CountryPickupPage() {
   const dash = isLoading ? '—' : null
   const puAdr = kpi.puAdr
 
+  // ─── Occupancy 계산 (선택 월 기준) ───────────────────────────────────────────────
+  const daysInMonth    = new Date(selectedYear, selectedMonth + 1, 0).getDate()   // 해당 월 일수
+  const totalAvailable = roomCount * daysInMonth                                  // 총 가용 객실
+  const totalVsRn      = kpi.totalOtbRn - kpi.puRn                                // 픽업 전 R/N (이전월=otb)
+  const otbOcc = totalAvailable > 0 ? Math.round((kpi.totalOtbRn / totalAvailable) * 1000) / 10 : 0
+  const vsOcc  = totalAvailable > 0 ? Math.round((totalVsRn      / totalAvailable) * 1000) / 10 : 0
+  const puOcc  = Math.round((otbOcc - vsOcc) * 10) / 10
+
   return (
     <div>
       {/* 헤더 */}
@@ -562,20 +587,29 @@ export default function CountryPickupPage() {
           </div>
           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', position: 'relative', zIndex: 1, marginTop: 'auto', textShadow: '0 0 8px rgba(0,0,0,1), 0 0 16px rgba(0,0,0,1)' }}>Based on filters</div>
         </div>
-        {/* 2 — OTB R/N */}
+        {/* 2 — OTB OCC (Occupancy) */}
         <div style={cardStyle}>
           <div style={{ padding: '12px 14px', flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)' }}>Room Nights</span>
+              <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)' }}>Occupancy</span>
               <BarChart2 size={20} style={{ opacity: 0.3, color: 'var(--color-text-secondary)', flexShrink: 0 }} />
             </div>
-            <div style={cardBig}>{dash ?? kpi.totalOtbRn.toLocaleString('ko-KR')}</div>
+            {/* OCC % + R/N 나란히 */}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, lineHeight: 1 }}>
+              <span style={{ fontSize: 24, fontWeight: 500, color: 'var(--color-text-primary)' }}>{dash ?? `${otbOcc.toFixed(1)}%`}</span>
+              <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', fontWeight: 400 }}>{kpi.totalOtbRn.toLocaleString('ko-KR')} R/N</span>
+            </div>
           </div>
           <div style={{ height: '0.5px', background: 'var(--color-border-subtle)' }} />
           <div style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>Pickup</span>
-            <span style={{ fontSize: 11, fontWeight: 500, color: kpi.puRn > 0 ? '#00B883' : kpi.puRn < 0 ? '#E24B4A' : 'var(--color-text-tertiary)' }}>
-              {kpi.puRn > 0 ? `+${kpi.puRn.toLocaleString()} R/N` : kpi.puRn < 0 ? `${kpi.puRn.toLocaleString()} R/N` : '—'}
+            <span style={{ fontSize: 11, fontWeight: 500, color: puOcc > 0 ? '#00B883' : puOcc < 0 ? '#E24B4A' : 'var(--color-text-tertiary)' }}>
+              {puOcc === 0 ? '—' : puOcc > 0 ? `+${puOcc.toFixed(1)}%` : `${puOcc.toFixed(1)}%`}
+              {kpi.puRn !== 0 && (
+                <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)', marginLeft: 4 }}>
+                  ({kpi.puRn > 0 ? '+' : ''}{kpi.puRn} R/N)
+                </span>
+              )}
             </span>
           </div>
         </div>
