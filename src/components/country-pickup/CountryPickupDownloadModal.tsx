@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { FileSpreadsheet, X, Download } from 'lucide-react'
+import { FileSpreadsheet, X, Download, ChevronDown } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import type { CountryPickupRpcRow } from './types'
 
@@ -22,7 +22,9 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
   const [selectedMonths, setSelectedMonths] = useState<number[]>([currentMonth])
   const [selectedGroup, setSelectedGroup] = useState<'전체' | 'fit' | 'group'>('전체')
   const [selectedSegs, setSelectedSegs] = useState<string[]>([])
-  const [selectedAccount, setSelectedAccount] = useState<string>('전체')   // 단일 선택
+  const [selectedAccounts, setSelectedAccounts] = useState<string[]>([])   // 다중 선택
+  const [segExpanded, setSegExpanded] = useState(false)
+  const [accExpanded, setAccExpanded] = useState(false)
 
   // sorting2 그룹 → 하위 세그먼트 목록
   const segList = useMemo(() => {
@@ -31,30 +33,34 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
     return Array.from(new Set(filtered.map(r => r.segmentation).filter(Boolean))).sort()
   }, [data, selectedGroup])
 
-  // 선택 그룹/세그 기준 어카운트 드롭다운 목록 (맨 앞 '전체')
+  // 선택 그룹/세그 기준 어카운트 목록
   const accountList = useMemo(() => {
     let filtered = data
     if (selectedGroup !== '전체') filtered = filtered.filter(r => r.sorting2 === selectedGroup)
     if (selectedSegs.length > 0) filtered = filtered.filter(r => selectedSegs.includes(r.segmentation))
-    return ['전체', ...Array.from(new Set(filtered.map(r => r.account_name).filter(Boolean))).sort()]
+    return Array.from(new Set(filtered.map(r => r.account_name).filter(Boolean))).sort()
   }, [data, selectedGroup, selectedSegs])
 
   const toggleMonth = (m: number) => {
     setSelectedMonths(prev => (prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]))
   }
   const handleGroupChange = (g: '전체' | 'fit' | 'group') => {
-    setSelectedGroup(g); setSelectedSegs([]); setSelectedAccount('전체')
+    setSelectedGroup(g); setSelectedSegs([]); setSelectedAccounts([])
+    setSegExpanded(g !== '전체'); setAccExpanded(false)
   }
   const toggleSeg = (seg: string) => {
     setSelectedSegs(prev => (prev.includes(seg) ? prev.filter(x => x !== seg) : [...prev, seg]))
-    setSelectedAccount('전체')
+    setSelectedAccounts([])
+  }
+  const toggleAccount = (acc: string) => {
+    setSelectedAccounts(prev => (prev.includes(acc) ? prev.filter(x => x !== acc) : [...prev, acc]))
   }
 
   const handleDownload = () => {
     const filtered = data.filter(row => {
       const groupOk = selectedGroup === '전체' || row.sorting2 === selectedGroup
       const segOk   = selectedSegs.length === 0 || selectedSegs.includes(row.segmentation)
-      const accOk   = selectedAccount === '전체' || row.account_name === selectedAccount
+      const accOk   = selectedAccounts.length === 0 || selectedAccounts.includes(row.account_name)
       return groupOk && segOk && accOk
     })
 
@@ -116,6 +122,22 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
     background: on ? 'rgba(0,229,160,0.07)' : 'transparent',
     color: on ? '#00E5A0' : 'rgba(255,255,255,0.4)',
   })
+  // 초기화 / 전체선택 / 완료 액션바
+  const actionRow: React.CSSProperties = { display: 'flex', justifyContent: 'flex-end', gap: 6, padding: '8px 6px 4px', borderTop: '0.5px solid rgba(255,255,255,0.06)' }
+  const actBtn: React.CSSProperties = { padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer', border: '0.5px solid rgba(255,255,255,0.1)', background: 'transparent', color: 'rgba(255,255,255,0.5)' }
+  const doneBtn: React.CSSProperties = { padding: '4px 14px', borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: 'pointer', border: 'none', background: '#00E5A0', color: '#0a0a0a' }
+  const collapsedBar: React.CSSProperties = { marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 12px', borderRadius: 6, border: '0.5px solid rgba(255,255,255,0.1)', background: '#0a0a0a', cursor: 'pointer', fontSize: 11, color: '#fff' }
+
+  // 체크박스 행 (세그/어카운트 공용)
+  const checkRow = (label: string, checked: boolean, onChange: () => void) => (
+    <label key={label}
+      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 4px', cursor: 'pointer', borderRadius: 4 }}
+      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+      <input type="checkbox" checked={checked} onChange={onChange} style={{ accentColor: '#00E5A0', width: 14, height: 14, cursor: 'pointer', flexShrink: 0 }} />
+      <span style={{ fontSize: 11, color: checked ? '#fff' : 'rgba(255,255,255,0.5)' }}>{label}</span>
+    </label>
+  )
 
   return (
     <div
@@ -153,41 +175,62 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
           {/* 세그먼트 — 그룹(전체/FIT/GROUP) + 하위 세그 다중선택 */}
           <div style={{ marginBottom: 14 }}>
             <div style={sectionLbl}>SEGMENT</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: segList.length > 0 ? 8 : 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               {(['전체', 'fit', 'group'] as const).map(g => (
                 <button key={g} onClick={() => handleGroupChange(g)} style={groupBtn(selectedGroup === g)}>
                   {g === '전체' ? '전체' : g === 'fit' ? 'FIT' : 'GROUP'}
                 </button>
               ))}
             </div>
-            {segList.length > 0 && (
-              <div style={{ marginTop: 6, maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 0', borderTop: '0.5px solid rgba(255,255,255,0.1)' }}>
-                {segList.map(seg => {
-                  const checked = selectedSegs.includes(seg)
-                  return (
-                    <label key={seg}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 4px', cursor: 'pointer', borderRadius: 4 }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                      <input type="checkbox" checked={checked} onChange={() => toggleSeg(seg)} style={{ accentColor: '#00E5A0', width: 14, height: 14, cursor: 'pointer', flexShrink: 0 }} />
-                      <span style={{ fontSize: 11, color: checked ? '#fff' : 'rgba(255,255,255,0.5)' }}>{seg}</span>
-                    </label>
-                  )
-                })}
-              </div>
+            {selectedGroup !== '전체' && (
+              segExpanded ? (
+                <div style={{ marginTop: 8, borderTop: '0.5px solid rgba(255,255,255,0.1)' }}>
+                  <div style={{ maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 0' }}>
+                    {segList.length === 0
+                      ? <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', padding: '5px 4px' }}>세그먼트 없음</div>
+                      : segList.map(seg => checkRow(seg, selectedSegs.includes(seg), () => toggleSeg(seg)))}
+                  </div>
+                  <div style={actionRow}>
+                    <button onClick={() => setSelectedSegs([])} style={actBtn}>초기화</button>
+                    <button onClick={() => setSelectedSegs([...segList])} style={actBtn}>전체선택</button>
+                    <button onClick={() => setSegExpanded(false)} style={doneBtn}>완료</button>
+                  </div>
+                </div>
+              ) : (
+                <div onClick={() => setSegExpanded(true)} style={collapsedBar}>
+                  <span style={{ color: selectedSegs.length === 0 ? 'rgba(255,255,255,0.4)' : '#fff' }}>
+                    {selectedSegs.length === 0 ? '전체 세그먼트' : `${selectedSegs.length}개 선택`}
+                  </span>
+                  <ChevronDown size={13} style={{ color: 'rgba(255,255,255,0.3)' }} />
+                </div>
+              )
             )}
           </div>
 
-          {/* 어카운트 — 단일선택 드롭다운 */}
+          {/* 어카운트 — 다중선택 */}
           <div>
             <div style={sectionLbl}>ACCOUNT</div>
-            <select
-              value={selectedAccount}
-              onChange={e => setSelectedAccount(e.target.value)}
-              style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '0.5px solid rgba(255,255,255,0.1)', background: '#0a0a0a', color: '#fff', fontSize: 11, cursor: 'pointer', appearance: 'auto' }}
-            >
-              {accountList.map(acc => <option key={acc} value={acc}>{acc}</option>)}
-            </select>
+            {accExpanded ? (
+              <div style={{ border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 6 }}>
+                <div style={{ maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 8px' }}>
+                  {accountList.length === 0
+                    ? <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', padding: '5px 4px' }}>어카운트 없음</div>
+                    : accountList.map(acc => checkRow(acc, selectedAccounts.includes(acc), () => toggleAccount(acc)))}
+                </div>
+                <div style={actionRow}>
+                  <button onClick={() => setSelectedAccounts([])} style={actBtn}>초기화</button>
+                  <button onClick={() => setSelectedAccounts([...accountList])} style={actBtn}>전체선택</button>
+                  <button onClick={() => setAccExpanded(false)} style={doneBtn}>완료</button>
+                </div>
+              </div>
+            ) : (
+              <div onClick={() => setAccExpanded(true)} style={{ ...collapsedBar, marginTop: 0 }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: selectedAccounts.length === 0 ? 'rgba(255,255,255,0.4)' : '#fff' }}>
+                  {selectedAccounts.length === 0 ? '전체' : selectedAccounts.length === 1 ? selectedAccounts[0] : `${selectedAccounts.length}개 선택`}
+                </span>
+                <ChevronDown size={13} style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }} />
+              </div>
+            )}
           </div>
         </div>
 
