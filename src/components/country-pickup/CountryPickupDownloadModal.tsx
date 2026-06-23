@@ -20,14 +20,23 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
   }, [onClose])
 
   const segOptions = useMemo(() => ['All', ...Array.from(new Set(data.map(r => r.sorting2).filter(Boolean)))], [data])
-  const accountOptions = useMemo(() => ['All', ...Array.from(new Set(data.map(r => r.account_name).filter(Boolean))).sort()], [data])
 
   const [selectedMonths, setSelectedMonths] = useState<number[]>([currentMonth])
   const [selectedSeg, setSelectedSeg] = useState<string>('All')
   const [selectedAcc, setSelectedAcc] = useState<string>('All')
 
+  // 어카운트 목록 — 선택 세그먼트 기준 필터
+  const accountOptions = useMemo(() => {
+    const filtered = selectedSeg === 'All' ? data : data.filter(r => r.sorting2 === selectedSeg)
+    return ['All', ...Array.from(new Set(filtered.map(r => r.account_name).filter(Boolean))).sort()]
+  }, [data, selectedSeg])
+
   const toggleMonth = (m: number) => {
     setSelectedMonths(prev => (prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]))
+  }
+  const handleSegChange = (seg: string) => {
+    setSelectedSeg(seg)
+    setSelectedAcc('All')   // 세그먼트 변경 시 어카운트 초기화
   }
 
   const handleDownload = () => {
@@ -127,7 +136,7 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
             <div style={sectionLbl}>SEGMENT</div>
             <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
               {segOptions.map(seg => (
-                <div key={seg} onClick={() => setSelectedSeg(seg)} style={chip(selectedSeg === seg)}>{seg === 'All' ? 'All' : seg.toUpperCase()}</div>
+                <div key={seg} onClick={() => handleSegChange(seg)} style={chip(selectedSeg === seg)}>{seg === 'All' ? 'All' : seg.toUpperCase()}</div>
               ))}
             </div>
           </div>
