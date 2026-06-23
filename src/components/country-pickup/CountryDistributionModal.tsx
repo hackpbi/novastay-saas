@@ -3,7 +3,7 @@
 import { useEffect, useRef, useMemo, useState } from 'react'
 import { X, ChevronDown } from 'lucide-react'
 import Chart from 'chart.js/auto'
-import type { CountryPickupRpcRow } from './types'
+import type { CountryPickupRpcRow, SegmentOption } from './types'
 
 const CHART_COLORS = [
   '#00E5A0', '#378ADD', '#EF9F27', '#E24B4A', '#7F77DD',
@@ -14,9 +14,10 @@ const SEL_COLORS = ['#00E5A0', '#378ADD', '#EF9F27', '#E24B4A', '#7F77DD']
 // 이전월(Actual) 행은 nights, 현재월(OTB) 행은 otb_nights
 const rowNights = (r: CountryPickupRpcRow) => r.otb_nights ?? r.nights ?? 0
 
-export default function CountryDistributionModal({ data, onClose }: {
-  data:    CountryPickupRpcRow[]
-  onClose: () => void
+export default function CountryDistributionModal({ data, segmentOptions, onClose }: {
+  data:           CountryPickupRpcRow[]
+  segmentOptions: SegmentOption[]
+  onClose:        () => void
 }) {
   const [selectedSegs,    setSelectedSegs]    = useState<string[]>([])  // segmentation 다중선택
   const [selectedAccIdxs, setSelectedAccIdxs] = useState<number[]>([])  // 어카운트 최대 3개
@@ -39,15 +40,12 @@ export default function CountryDistributionModal({ data, onClose }: {
     return () => document.removeEventListener('mousedown', h)
   }, [openDropdown])
 
-  // sorting2 그룹별 하위 segmentation unique 목록
-  const fitSegs = useMemo(
-    () => Array.from(new Set(data.filter(r => String(r.sorting2).toLowerCase() === 'fit').map(r => r.segmentation).filter(Boolean))).sort(),
-    [data],
-  )
-  const grpSegs = useMemo(
-    () => Array.from(new Set(data.filter(r => String(r.sorting2).toLowerCase() === 'group').map(r => r.segmentation).filter(Boolean))).sort(),
-    [data],
-  )
+  // 현재 data에 존재하는 세그먼트 (활성 여부 판단)
+  const activeSegs = useMemo(() => new Set(data.map(r => r.segmentation).filter(Boolean)), [data])
+
+  // c05 스키마 기반 세그먼트 목록 (sorting2 기준 — 데이터 없는 세그도 포함)
+  const fitSegs = useMemo(() => segmentOptions.filter(s => s.sorting2 === 'fit'), [segmentOptions])
+  const grpSegs = useMemo(() => segmentOptions.filter(s => s.sorting2 === 'group'), [segmentOptions])
 
   // 선택된 세그 기준으로 어카운트 + 국가별 R/N 집계
   const accountList = useMemo(() => {
@@ -176,7 +174,7 @@ export default function CountryDistributionModal({ data, onClose }: {
           <span style={{ fontSize: 10, fontWeight: 500, letterSpacing: '0.04em', color: 'var(--color-text-tertiary)' }}>SEGMENT</span>
           <div style={{ display: 'flex', gap: 5 }}>
             {([{ key: 'fit', label: 'FIT', segs: fitSegs }, { key: 'group', label: 'GROUP', segs: grpSegs }] as const).map(g => {
-              const selCount = g.segs.filter(s => selectedSegs.includes(s)).length
+              const selCount = g.segs.filter(s => selectedSegs.includes(s.code)).length
               const open = openDropdown === g.key
               const active = selCount > 0 || open
               return (
@@ -197,7 +195,7 @@ export default function CountryDistributionModal({ data, onClose }: {
                   {open && (
                     <div style={{
                       position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 100,
-                      minWidth: 180, overflow: 'hidden',
+                      width: 'max-content', minWidth: 200, maxWidth: 360, whiteSpace: 'nowrap', overflow: 'hidden',
                       background: 'var(--color-bg-secondary)', border: '0.5px solid var(--color-border-subtle)',
                       borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.5)',
                     }}>
@@ -205,16 +203,20 @@ export default function CountryDistributionModal({ data, onClose }: {
                       <div style={{ maxHeight: 200, overflowY: 'auto', padding: 6 }}>
                         {g.segs.length === 0 ? (
                           <div style={{ padding: '6px 8px', fontSize: 11, color: 'var(--color-text-tertiary)' }}>없음</div>
-                        ) : g.segs.map(s => {
-                          const on = selectedSegs.includes(s)
+                        ) : g.segs.map(seg => {
+                          const isActive = activeSegs.has(seg.code)
+                          const isChecked = selectedSegs.includes(seg.code)
                           return (
-                            <div key={s} onClick={() => toggleSeg(s)}
-                              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 5, cursor: 'pointer', fontSize: 11, color: on ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}
-                              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
-                              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                              <span style={{ width: 13, height: 13, borderRadius: 3, flexShrink: 0, border: on ? 'none' : '1.5px solid var(--color-border-subtle)', background: on ? '#00E5A0' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#000' }}>{on ? '✓' : ''}</span>
-                              {s}
-                            </div>
+                            <label key={seg.code}
+                              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 5, cursor: isActive ? 'pointer' : 'not-allowed', opacity: isActive ? 1 : 0.4 }}
+                              onMouseEnter={e => { if (isActive) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)' }}
+                              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
+                              <input type="checkbox" checked={isChecked} disabled={!isActive} onChange={() => isActive && toggleSeg(seg.code)} style={{ accentColor: '#00E5A0', width: 14, height: 14, cursor: isActive ? 'pointer' : 'not-allowed', flexShrink: 0 }} />
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, width: '100%' }}>
+                                <span style={{ fontSize: 11, fontWeight: 500, color: isActive ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)' }}>{seg.name}{!isActive ? ' · no data' : ''}</span>
+                                <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)', marginLeft: 'auto' }}>{seg.code}</span>
+                              </div>
+                            </label>
                           )
                         })}
                       </div>
@@ -224,7 +226,7 @@ export default function CountryDistributionModal({ data, onClose }: {
                           style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: '0.5px solid var(--color-border-subtle)', background: 'transparent', color: 'var(--color-text-secondary)', fontSize: 11, cursor: 'pointer' }}>
                           Reset
                         </button>
-                        <button onClick={() => { setSelectedSegs([...g.segs]); setSelectedAccIdxs([]) }}
+                        <button onClick={() => { setSelectedSegs(g.segs.filter(s => activeSegs.has(s.code)).map(s => s.code)); setSelectedAccIdxs([]) }}
                           style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: '0.5px solid var(--color-border-subtle)', background: 'transparent', color: 'var(--color-text-secondary)', fontSize: 11, cursor: 'pointer' }}>
                           All
                         </button>

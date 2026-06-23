@@ -13,19 +13,26 @@ import { fmtK, fmtM } from '@/utils/pickupPageUtils'
 import CountryPickupTable from '@/components/country-pickup/CountryPickupTable'
 import CountryPickupDownloadModal from '@/components/country-pickup/CountryPickupDownloadModal'
 import CountryDistributionModal from '@/components/country-pickup/CountryDistributionModal'
-import { type CountryPickupRpcRow } from '@/components/country-pickup/types'
+import { type CountryPickupRpcRow, type SegmentOption } from '@/components/country-pickup/types'
 
 // ─── 세그먼트 드롭다운 (FIT/GRP) — 다중선택 ────────────────────────────────────────
-function SegDropdown({ label, segs, selected, onToggle }: {
-  label: string; segs: { code: string; name: string }[]; selected: Set<string>; onToggle: (code: string) => void
+function SegDropdown({ label, segs, selected, activeSegs, onApply }: {
+  label: string; segs: { code: string; name: string }[]; selected: Set<string>; activeSegs: Set<string>
+  onApply: (segs: string[]) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [tempSelected, setTempSelected] = useState<Set<string>>(new Set())
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false) }
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
   }, [])
+  // 드롭다운 열릴 때 현재 선택값(해당 그룹분)으로 temp 초기화
+  useEffect(() => {
+    if (open) setTempSelected(new Set(segs.filter(s => selected.has(s.code)).map(s => s.code)))
+  }, [open])   // eslint-disable-line react-hooks/exhaustive-deps
+  const toggleTemp = (code: string) => setTempSelected(prev => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n })
   const hasSel = segs.some(s => selected.has(s.code))
   const allSel = segs.length > 0 && segs.every(s => selected.has(s.code))
 
@@ -44,21 +51,33 @@ function SegDropdown({ label, segs, selected, onToggle }: {
         {label} <ChevronDown size={11} />
       </button>
       {open && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 200, background: '#0a0a0a', border: '0.5px solid #333', borderRadius: 8, padding: 6, minWidth: 160, boxShadow: '0 6px 20px rgba(0,0,0,0.5)', maxHeight: 300, overflowY: 'auto' }}>
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 200, background: '#0a0a0a', border: '0.5px solid #333', borderRadius: 8, width: 'max-content', minWidth: 200, maxWidth: 360, whiteSpace: 'nowrap', boxShadow: '0 6px 20px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
+          <div style={{ maxHeight: 260, overflowY: 'auto', padding: 6 }}>
           {segs.length === 0 ? (
             <div style={{ padding: '6px 8px', fontSize: 11, color: 'var(--color-text-secondary)' }}>없음</div>
           ) : segs.map(s => {
-            const on = selected.has(s.code)
+            const on = tempSelected.has(s.code)
+            const isActive = activeSegs.has(s.code)
             return (
-              <div key={s.code} onClick={() => onToggle(s.code)}
-                style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 8px', borderRadius: 5, cursor: 'pointer', fontSize: 11, color: on ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+              <div key={s.code} onClick={() => isActive && toggleTemp(s.code)}
+                style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 8px', borderRadius: 5, cursor: isActive ? 'pointer' : 'not-allowed', opacity: isActive ? 1 : 0.4, fontSize: 11, color: on ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}
+                onMouseEnter={e => { if (isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                 <span style={{ width: 13, height: 13, borderRadius: 3, flexShrink: 0, border: on ? 'none' : '1.5px solid #444', background: on ? '#00E5A0' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#000' }}>{on ? '✓' : ''}</span>
-                {s.name}
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, width: '100%' }}>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: isActive ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)' }}>{s.name}{!isActive ? ' · no data' : ''}</span>
+                  <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)', marginLeft: 'auto' }}>{s.code}</span>
+                </div>
               </div>
             )
           })}
+          </div>
+          {/* Reset / All / Done */}
+          <div style={{ display: 'flex', gap: 6, padding: '8px 10px', borderTop: '0.5px solid #333', background: '#0a0a0a' }}>
+            <button onClick={() => setTempSelected(new Set())} style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: '0.5px solid #333', background: 'transparent', color: 'var(--color-text-secondary)', fontSize: 11, cursor: 'pointer' }}>Reset</button>
+            <button onClick={() => setTempSelected(new Set(segs.filter(s => activeSegs.has(s.code)).map(s => s.code)))} style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: '0.5px solid #333', background: 'transparent', color: 'var(--color-text-secondary)', fontSize: 11, cursor: 'pointer' }}>All</button>
+            <button onClick={() => { onApply([...tempSelected]); setOpen(false) }} style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: 'none', background: '#00E5A0', color: '#0a0a0a', fontSize: 11, fontWeight: 500, cursor: 'pointer' }}>Done</button>
+          </div>
         </div>
       )}
     </div>
@@ -66,16 +85,22 @@ function SegDropdown({ label, segs, selected, onToggle }: {
 }
 
 // ─── 어카운트 드롭다운 — 다중선택 ──────────────────────────────────────────────────
-function AccDropdown({ accounts, selected, onToggle, onSelectAll }: {
-  accounts: string[]; selected: Set<string>; onToggle: (a: string) => void; onSelectAll: () => void
+function AccDropdown({ accounts, selected, onApply }: {
+  accounts: string[]; selected: Set<string>; onApply: (accs: string[]) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [tempSelected, setTempSelected] = useState<Set<string>>(new Set())
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false) }
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
   }, [])
+  // 드롭다운 열릴 때 현재 선택값으로 temp 초기화
+  useEffect(() => {
+    if (open) setTempSelected(new Set(selected))
+  }, [open])   // eslint-disable-line react-hooks/exhaustive-deps
+  const toggleTemp = (a: string) => setTempSelected(prev => { const n = new Set(prev); n.has(a) ? n.delete(a) : n.add(a); return n })
   const hasSel = selected.size > 0
   const accLabel = selected.size === 0 ? '전체' : selected.size === 1 ? [...selected][0] : `${selected.size}개 선택`
 
@@ -94,14 +119,15 @@ function AccDropdown({ accounts, selected, onToggle, onSelectAll }: {
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{accLabel}</span> <ChevronDown size={11} />
       </button>
       {open && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 200, background: '#0a0a0a', border: '0.5px solid #333', borderRadius: 8, padding: 6, minWidth: 180, boxShadow: '0 6px 20px rgba(0,0,0,0.5)', maxHeight: 320, overflowY: 'auto' }}>
-          <div onClick={onSelectAll} style={{ padding: '5px 8px', borderRadius: 5, cursor: 'pointer', fontSize: 11, color: selected.size === 0 ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)', background: selected.size === 0 ? 'var(--accent-badge-bg)' : 'transparent' }}>전체</div>
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 200, background: '#0a0a0a', border: '0.5px solid #333', borderRadius: 8, minWidth: 180, boxShadow: '0 6px 20px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
+          <div style={{ maxHeight: 280, overflowY: 'auto', padding: 6 }}>
+          <div onClick={() => setTempSelected(new Set())} style={{ padding: '5px 8px', borderRadius: 5, cursor: 'pointer', fontSize: 11, color: tempSelected.size === 0 ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)', background: tempSelected.size === 0 ? 'var(--accent-badge-bg)' : 'transparent' }}>전체</div>
           {accounts.length === 0 ? (
             <div style={{ padding: '5px 8px', fontSize: 11, color: 'var(--color-text-secondary)' }}>없음</div>
           ) : accounts.map(a => {
-            const on = selected.has(a)
+            const on = tempSelected.has(a)
             return (
-              <div key={a} onClick={() => onToggle(a)}
+              <div key={a} onClick={() => toggleTemp(a)}
                 style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 8px', borderRadius: 5, cursor: 'pointer', fontSize: 11, color: on ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}
                 onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
@@ -110,6 +136,13 @@ function AccDropdown({ accounts, selected, onToggle, onSelectAll }: {
               </div>
             )
           })}
+          </div>
+          {/* Reset / All / Done */}
+          <div style={{ display: 'flex', gap: 6, padding: '8px 10px', borderTop: '0.5px solid #333', background: '#0a0a0a' }}>
+            <button onClick={() => setTempSelected(new Set())} style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: '0.5px solid #333', background: 'transparent', color: 'var(--color-text-secondary)', fontSize: 11, cursor: 'pointer' }}>Reset</button>
+            <button onClick={() => setTempSelected(new Set(accounts))} style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: '0.5px solid #333', background: 'transparent', color: 'var(--color-text-secondary)', fontSize: 11, cursor: 'pointer' }}>All</button>
+            <button onClick={() => { onApply([...tempSelected]); setOpen(false) }} style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: 'none', background: '#00E5A0', color: '#0a0a0a', fontSize: 11, fontWeight: 500, cursor: 'pointer' }}>Done</button>
+          </div>
         </div>
       )}
     </div>
@@ -177,12 +210,15 @@ export default function CountryPickupPage() {
   // 세그먼트 / 어카운트 선택 (빈 Set = 전체)
   const [selectedSegs, setSelectedSegs] = useState<Set<string>>(new Set())
   const [selectedAccounts, setSelectedAccounts] = useState<Set<string>>(new Set())
-  const handleToggleSeg = (seg: string) => {
-    setSelectedSegs(prev => { const next = new Set(prev); next.has(seg) ? next.delete(seg) : next.add(seg); return next })
+  // SegDropdown Done(onApply) — 해당 그룹(picked)만 selectedSegs에 반영 (다른 그룹 보존)
+  const applySegGroup = (groupCodes: string[], picked: string[]) => {
+    setSelectedSegs(prev => {
+      const next = new Set(prev)
+      groupCodes.forEach(c => next.delete(c))
+      picked.forEach(c => next.add(c))
+      return next
+    })
     setSelectedAccounts(new Set())   // 세그 변경 시 어카운트 초기화
-  }
-  const handleToggleAccount = (acc: string) => {
-    setSelectedAccounts(prev => { const next = new Set(prev); next.has(acc) ? next.delete(acc) : next.add(acc); return next })
   }
   const handleSelectAll = () => { setSelectedSegs(new Set()); setSelectedAccounts(new Set()) }
 
@@ -242,6 +278,37 @@ export default function CountryPickupPage() {
       return (data ?? []) as CountryPickupRpcRow[]
     },
   })
+
+  // ─── 세그먼트 전체 목록 (c05_market_table_schema) ────────────────────────────────
+  const [segmentOptions, setSegmentOptions] = useState<SegmentOption[]>([])
+  useEffect(() => {
+    if (!hotelId) return
+    ;(supabase as any)
+      .from('c05_market_table_schema')
+      .select('segmentation, name, sorting2')
+      .eq('hotel_id', hotelId)
+      .not('segmentation', 'eq', '{}')   // 빈 배열(상위 그룹 row) 제외
+      .then(({ data: schemaData }: any) => {
+        if (!schemaData) return
+        const options: SegmentOption[] = []
+        schemaData.forEach((row: any) => {
+          let segs: string[] = []
+          try {
+            segs = Array.isArray(row.segmentation) ? row.segmentation : JSON.parse(row.segmentation ?? '[]')
+          } catch { segs = [] }
+          const s2 = String(row.sorting2 ?? '').toLowerCase()
+          const norm = s2.includes('fit')
+            ? 'fit'
+            : (s2.includes('grp') || s2.includes('group'))
+            ? 'group'
+            : s2
+          segs.forEach(seg => {
+            if (seg) options.push({ code: seg, name: row.name ?? seg, sorting2: norm })
+          })
+        })
+        setSegmentOptions(options)
+      })
+  }, [hotelId])
 
   // ─── Active Countries 세계지도 (D3 + topojson) ──────────────────────────────────
   const mapCardRef    = useRef<HTMLDivElement>(null)
@@ -338,11 +405,10 @@ export default function CountryPickupPage() {
       .catch(console.error)
   }, [activeNums, rpcRows])
 
-  // FIT/GRP 세그먼트 목록 (RPC 결과의 sorting2 기준)
-  const isFit = (v: any) => String(v ?? '').toLowerCase().includes('fit')
-  const isGrp = (v: any) => { const s = String(v ?? '').toLowerCase(); return s.includes('grp') || s.includes('group') }
-  const fitSegs = useMemo(() => [...new Set(rpcRows.filter(r => isFit(r.sorting2)).map(r => r.segmentation))].filter(Boolean).sort(), [rpcRows])
-  const grpSegs = useMemo(() => [...new Set(rpcRows.filter(r => isGrp(r.sorting2)).map(r => r.segmentation))].filter(Boolean).sort(), [rpcRows])
+  // FIT/GRP 세그먼트 목록 — c05 스키마(segmentOptions) 기준, 활성 여부는 rpcRows 기준
+  const activeSegs = useMemo(() => new Set(rpcRows.map(r => r.segmentation).filter(Boolean)), [rpcRows])
+  const fitSegs = useMemo(() => segmentOptions.filter(s => s.sorting2 === 'fit'), [segmentOptions])
+  const grpSegs = useMemo(() => segmentOptions.filter(s => s.sorting2 === 'group'), [segmentOptions])
 
   // 어카운트 목록 (선택 세그 기준 distinct account_name)
   const accountList = useMemo(() => {
@@ -437,10 +503,22 @@ export default function CountryPickupPage() {
             background: selectedSegs.size === 0 ? 'rgba(0,229,160,0.08)' : 'transparent',
             color: selectedSegs.size === 0 ? '#00B883' : 'var(--color-text-secondary)',
           }}>전체</button>
-          <SegDropdown label="FIT" segs={fitSegs.map(s => ({ code: s, name: s }))} selected={selectedSegs} onToggle={handleToggleSeg} />
-          <SegDropdown label="GRP" segs={grpSegs.map(s => ({ code: s, name: s }))} selected={selectedSegs} onToggle={handleToggleSeg} />
+          <SegDropdown
+            label="FIT"
+            segs={fitSegs.map(s => ({ code: s.code, name: s.name }))}
+            selected={selectedSegs}
+            activeSegs={activeSegs}
+            onApply={picked => applySegGroup(fitSegs.map(f => f.code), picked)}
+          />
+          <SegDropdown
+            label="GRP"
+            segs={grpSegs.map(s => ({ code: s.code, name: s.name }))}
+            selected={selectedSegs}
+            activeSegs={activeSegs}
+            onApply={picked => applySegGroup(grpSegs.map(g => g.code), picked)}
+          />
           <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 4 }}>어카운트</span>
-          <AccDropdown accounts={accountList} selected={selectedAccounts} onToggle={handleToggleAccount} onSelectAll={() => setSelectedAccounts(new Set())} />
+          <AccDropdown accounts={accountList} selected={selectedAccounts} onApply={accs => setSelectedAccounts(new Set(accs))} />
           <div style={{ width: 1, height: 13, background: 'var(--color-border-subtle)' }} />
           <button
             onClick={() => setShowDownloadModal(true)}
@@ -549,6 +627,7 @@ export default function CountryPickupPage() {
       {showDownloadModal && (
         <CountryPickupDownloadModal
           data={rpcRows}
+          segmentOptions={segmentOptions}
           currentMonth={selectedMonth + 1}
           currentYear={selectedYear}
           otbDate={otbDate}
@@ -560,6 +639,7 @@ export default function CountryPickupPage() {
       {showDistModal && (
         <CountryDistributionModal
           data={rpcRows}
+          segmentOptions={segmentOptions}
           onClose={() => setShowDistModal(false)}
         />
       )}

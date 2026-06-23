@@ -4,17 +4,18 @@ import { useEffect, useMemo, useState } from 'react'
 import { FileSpreadsheet, X, Download, ChevronDown } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
-import type { CountryPickupRpcRow } from './types'
+import type { CountryPickupRpcRow, SegmentOption } from './types'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-export default function CountryPickupDownloadModal({ data, currentMonth, currentYear, otbDate, hotelId, onClose }: {
-  data:         CountryPickupRpcRow[]
-  currentMonth: number   // 1-based
-  currentYear:  number
-  otbDate:      string   // OTB date picker 기준일 (예: '2026-06-23')
-  hotelId?:     string
-  onClose:      () => void
+export default function CountryPickupDownloadModal({ data, segmentOptions, currentMonth, currentYear, otbDate, hotelId, onClose }: {
+  data:           CountryPickupRpcRow[]
+  segmentOptions: SegmentOption[]
+  currentMonth:   number   // 1-based
+  currentYear:    number
+  otbDate:        string   // OTB date picker 기준일 (예: '2026-06-23')
+  hotelId?:       string
+  onClose:        () => void
 }) {
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -26,15 +27,10 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
   const [selectedGroup, setSelectedGroup] = useState<'All' | 'fit' | 'group'>('All')
   const [selectedSegs, setSelectedSegs] = useState<string[]>([])
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([])   // 다중 선택
-  const [segExpanded, setSegExpanded] = useState(false)
   const [accExpanded, setAccExpanded] = useState(false)
 
-  // sorting2 그룹 → 하위 세그먼트 목록
-  const segList = useMemo(() => {
-    if (selectedGroup === 'All') return []
-    const filtered = data.filter(r => r.sorting2 === selectedGroup)
-    return Array.from(new Set(filtered.map(r => r.segmentation).filter(Boolean))).sort()
-  }, [data, selectedGroup])
+  // 현재 data에 존재하는 세그먼트 (활성 여부 판단)
+  const activeSegs = useMemo(() => new Set(data.map(r => r.segmentation).filter(Boolean)), [data])
 
   // 선택 그룹/세그 기준 어카운트 목록
   const accountList = useMemo(() => {
@@ -48,12 +44,7 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
     setSelectedMonths(prev => (prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]))
   }
   const handleGroupChange = (g: 'All' | 'fit' | 'group') => {
-    setSelectedGroup(g); setSelectedSegs([]); setSelectedAccounts([])
-    setSegExpanded(g !== 'All'); setAccExpanded(false)
-  }
-  const toggleSeg = (seg: string) => {
-    setSelectedSegs(prev => (prev.includes(seg) ? prev.filter(x => x !== seg) : [...prev, seg]))
-    setSelectedAccounts([])
+    setSelectedGroup(g); setSelectedSegs([]); setSelectedAccounts([]); setAccExpanded(false)
   }
   const toggleAccount = (acc: string) => {
     setSelectedAccounts(prev => (prev.includes(acc) ? prev.filter(x => x !== acc) : [...prev, acc]))
@@ -214,38 +205,66 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
 
           <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.06)', margin: '14px 0' }} />
 
-          {/* 세그먼트 — 그룹(전체/FIT/GROUP) + 하위 세그 다중선택 */}
+          {/* 세그먼트 — c05 스키마 기반 (All / FIT / GROUP + 하위 세그 체크박스) */}
           <div style={{ marginBottom: 14 }}>
             <div style={sectionLbl}>SEGMENT</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {(['All', 'fit', 'group'] as const).map(g => (
-                <button key={g} onClick={() => handleGroupChange(g)} style={groupBtn(selectedGroup === g)}>
-                  {g === 'All' ? 'All' : g === 'fit' ? 'FIT' : 'GROUP'}
-                </button>
-              ))}
+              <button onClick={() => handleGroupChange('All')} style={groupBtn(selectedGroup === 'All')}>All</button>
+              {(['fit', 'group'] as const).map(g => {
+                const on = selectedGroup === g
+                const hasData = segmentOptions.filter(s => s.sorting2 === g).some(s => activeSegs.has(s.code))
+                return (
+                  <button
+                    key={g}
+                    onClick={() => handleGroupChange(g)}
+                    style={{ ...groupBtn(on), cursor: hasData ? 'pointer' : 'not-allowed', opacity: hasData ? 1 : 0.4 }}
+                  >{g === 'fit' ? 'FIT' : 'GROUP'}</button>
+                )
+              })}
             </div>
             {selectedGroup !== 'All' && (
-              segExpanded ? (
-                <div style={{ marginTop: 8, borderTop: '0.5px solid rgba(255,255,255,0.1)' }}>
-                  <div style={{ maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 0' }}>
-                    {segList.length === 0
-                      ? <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', padding: '5px 4px' }}>Select a segment first</div>
-                      : segList.map(seg => checkRow(seg, selectedSegs.includes(seg), () => toggleSeg(seg)))}
+              <div style={{ marginTop: 8, width: 'max-content', minWidth: 200, maxWidth: 360, whiteSpace: 'nowrap', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 8, overflow: 'hidden' }}>
+                {/* 컨트롤 (Reset / All / count) */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderBottom: '0.5px solid rgba(255,255,255,0.1)', background: '#0a0a0a' }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <button onClick={() => setSelectedSegs([])} style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Reset</button>
+                    <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 10 }}>|</span>
+                    <button
+                      onClick={() => setSelectedSegs(segmentOptions.filter(s => s.sorting2 === selectedGroup && activeSegs.has(s.code)).map(s => s.code))}
+                      style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                    >All</button>
                   </div>
-                  <div style={actionRow}>
-                    <button onClick={() => setSelectedSegs([])} style={actBtn}>Reset</button>
-                    <button onClick={() => setSelectedSegs([...segList])} style={actBtn}>Select All</button>
-                    <button onClick={() => setSegExpanded(false)} style={doneBtn}>Done</button>
-                  </div>
-                </div>
-              ) : (
-                <div onClick={() => setSegExpanded(true)} style={collapsedBar}>
-                  <span style={{ color: selectedSegs.length === 0 ? 'rgba(255,255,255,0.4)' : '#fff' }}>
-                    {selectedSegs.length === 0 ? 'All' : `${selectedSegs.length} selected`}
+                  <span style={{ fontSize: 10, color: selectedSegs.length > 0 ? '#00E5A0' : 'rgba(255,255,255,0.4)' }}>
+                    {selectedSegs.length > 0 ? `${selectedSegs.length} selected` : 'All'}
                   </span>
-                  <ChevronDown size={13} style={{ color: 'rgba(255,255,255,0.3)' }} />
                 </div>
-              )
+                {/* 체크박스 리스트 */}
+                <div style={{ maxHeight: 160, overflowY: 'auto', padding: '4px 0' }}>
+                  {segmentOptions.filter(s => s.sorting2 === selectedGroup).map(seg => {
+                    const isActive = activeSegs.has(seg.code)
+                    const isChecked = selectedSegs.includes(seg.code)
+                    return (
+                      <label key={seg.code} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', cursor: isActive ? 'pointer' : 'not-allowed', opacity: isActive ? 1 : 0.4 }}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          disabled={!isActive}
+                          onChange={() => {
+                            if (!isActive) return
+                            setSelectedSegs(prev => (prev.includes(seg.code) ? prev.filter(x => x !== seg.code) : [...prev, seg.code]))
+                            setSelectedAccounts([])
+                          }}
+                          style={{ accentColor: '#00E5A0', width: 14, height: 14, flexShrink: 0 }}
+                        />
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, width: '100%' }}>
+                          <span style={{ fontSize: 11, fontWeight: 500, color: isActive ? '#fff' : 'rgba(255,255,255,0.4)' }}>{seg.name}{!isActive ? ' · no data' : ''}</span>
+                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginLeft: 'auto' }}>{seg.code}</span>
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
             )}
           </div>
 
