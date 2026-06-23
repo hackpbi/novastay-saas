@@ -37,18 +37,19 @@ const barLabelPlugin = {
 }
 
 export default function MarketPickupMonthBlock({
-  year, month, monthKey, pickupRows, groups, selected, onToggleSeg, onBarClick, roomCount, allSegIds,
+  year, month, monthKey, pickupRows, groups, selected, onToggleSeg, onBarClick, roomCount, allSegIds, isDayModalOpen,
 }: {
-  year:        number
-  month:       number   // 0-based
-  monthKey:    string
-  pickupRows:  PickupRow[]
-  groups:      SegGroup[]
-  selected:    Set<string>
-  onToggleSeg: (segId: string) => void
-  onBarClick:  (day: number, defaultTab: 'pickup' | 'otb') => void
-  roomCount:   number
-  allSegIds:   Set<string>
+  year:           number
+  month:          number   // 0-based
+  monthKey:       string
+  pickupRows:     PickupRow[]
+  groups:         SegGroup[]
+  selected:       Set<string>
+  onToggleSeg:    (segId: string) => void
+  onBarClick:     (day: number, defaultTab: 'pickup' | 'otb') => void
+  roomCount:      number
+  allSegIds:      Set<string>
+  isDayModalOpen?: boolean
 }) {
   const month1 = month + 1
   const days   = lastDayOfMonth(year, month1)
@@ -67,6 +68,11 @@ export default function MarketPickupMonthBlock({
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  // Day 모달 열리면 차트 툴팁 숨김 (모달 위로 겹쳐 보이는 문제 방지)
+  useEffect(() => {
+    if (isDayModalOpen && tooltipRef.current) tooltipRef.current.style.display = 'none'
+  }, [isDayModalOpen])
 
   const activeSegs = useMemo(
     () => groups.flatMap(g => g.segs).filter(s => selected.has(s.id)),

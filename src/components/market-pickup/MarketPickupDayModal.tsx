@@ -113,8 +113,7 @@ export default function MarketPickupDayModal({
   const { rows, summary } = buildSegTable({ schema, pickup: pickupRows, year, month: month + 1, roomCount, day: localDay })
   const selRow = rows.find(r => r.id === selMain)
 
-  const dow     = new Date(year, month, localDay).getDay()
-  const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(localDay).padStart(2, '0')}`
+  const localDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(localDay).padStart(2, '0')}`
 
   // ── 포맷 헬퍼 ───────────────────────────────────────────────────────────────
   const fmtPuRn  = (v: number) => v === 0 ? '—' : `${v > 0 ? '+' : ''}${Math.round(v)}`
@@ -161,49 +160,47 @@ export default function MarketPickupDayModal({
 
         {/* 헤더 */}
         <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexShrink: 0 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {/* 제목 */}
-            <h2 style={{ fontSize: 13, fontWeight: 500, color: getDayColor(dateStr) }}>
-              {month + 1}/{localDay} ({WEEKDAY_KR[dow]}) · Pickup by Segment
-            </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-            {/* 날짜 피커 행 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              {/* OTB Date */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 10, color: '#00E5A0', fontWeight: 500 }}>OTB</span>
+            {/* 일자 + 좌우 버튼 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                onClick={() => setLocalDay(d => Math.max(1, d - 1))}
+                style={{ width: 22, height: 22, borderRadius: 4, border: '0.5px solid rgba(255,255,255,0.2)', background: 'transparent', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >‹</button>
+
+              <h2 style={{ fontSize: 13, fontWeight: 600, color: getDayColor(localDateStr) }}>
+                {month + 1}/{localDay} ({WEEKDAY_KR[new Date(year, month, localDay).getDay()]})
+              </h2>
+
+              <button
+                onClick={() => setLocalDay(d => Math.min(new Date(year, month + 1, 0).getDate(), d + 1))}
+                style={{ width: 22, height: 22, borderRadius: 4, border: '0.5px solid rgba(255,255,255,0.2)', background: 'transparent', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >›</button>
+            </div>
+
+            {/* OTB / vs date picker */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ fontSize: 10, fontWeight: 500, color: '#00E5A0' }}>OTB</span>
                 <input
                   type="date"
                   value={localOtbDate}
                   onChange={e => setLocalOtbDate(e.target.value)}
-                  style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, border: '0.5px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'var(--color-text-primary)', cursor: 'pointer' }}
+                  style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, border: '0.5px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: 'var(--color-text-primary)', cursor: 'pointer', colorScheme: 'dark' }}
                 />
               </div>
-
-              {/* vs Date */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>vs</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>vs</span>
                 <input
                   type="date"
                   value={localVsDate}
                   onChange={e => setLocalVsDate(e.target.value)}
-                  style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, border: '0.5px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'var(--color-text-primary)', cursor: 'pointer' }}
+                  style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, border: '0.5px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: 'var(--color-text-primary)', cursor: 'pointer', colorScheme: 'dark' }}
                 />
               </div>
-
-              {/* 일자 변경 */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <button
-                  onClick={() => setLocalDay(d => Math.max(1, d - 1))}
-                  style={{ width: 22, height: 22, borderRadius: 4, border: '0.5px solid rgba(255,255,255,0.2)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 12 }}
-                >‹</button>
-                <span style={{ fontSize: 11, color: 'var(--color-text-primary)', minWidth: 20, textAlign: 'center' }}>{localDay}</span>
-                <button
-                  onClick={() => setLocalDay(d => Math.min(new Date(year, month + 1, 0).getDate(), d + 1))}
-                  style={{ width: 22, height: 22, borderRadius: 4, border: '0.5px solid rgba(255,255,255,0.2)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 12 }}
-                >›</button>
-              </div>
             </div>
+
           </div>
 
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', marginTop: 2 }} aria-label="닫기">

@@ -151,6 +151,7 @@ export default function MarketPickupPage() {
                 onBarClick={(day, defaultTab) => setDayModal({ year: t.year, month: t.month, day, defaultTab })}
                 roomCount={roomCount}
                 allSegIds={allSegIds}
+                isDayModalOpen={!!dayModal}
               />
             )
           })}
