@@ -64,43 +64,22 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
       return groupOk && segOk && accOk
     })
 
-    const aggregated = Object.values(
-      filtered.reduce((acc, row) => {
-        const key = row.country
-        if (!acc[key]) acc[key] = {
-          Country: row.country_name_en || row.country_name_ko,
-          _otbRn: 0, _vsRn: 0, _otbRev: 0, _vsRev: 0, _lyRn: 0, _lyRev: 0,
-        }
-        acc[key]._otbRn  += row.otb_nights ?? 0
-        acc[key]._vsRn   += row.vs_nights ?? 0
-        acc[key]._otbRev += row.otb_revenue ?? 0
-        acc[key]._vsRev  += row.vs_revenue ?? 0
-        acc[key]._lyRn   += row.ly_nights ?? 0
-        acc[key]._lyRev  += row.ly_revenue ?? 0
-        return acc
-      }, {} as Record<string, any>),
-    ).map((row: any) => {
-      const otbAdr = row._otbRn > 0 ? Math.round(row._otbRev / row._otbRn) : 0
-      const vsAdr  = row._vsRn  > 0 ? Math.round(row._vsRev  / row._vsRn)  : 0
-      const lyAdr  = row._lyRn  > 0 ? Math.round(row._lyRev  / row._lyRn)  : 0
+    const rows = filtered.map(row => {
+      const adr = (row.otb_nights ?? 0) > 0
+        ? Math.round((row.otb_revenue ?? 0) / (row.otb_nights ?? 0))
+        : 0
       return {
-        Country: row.Country,
-        'OTB R/N': row._otbRn,
-        'OTB ADR': otbAdr,
-        'OTB REV': row._otbRev,
-        'Pickup R/N': row._otbRn - row._vsRn,
-        'Pickup ADR': otbAdr - vsAdr,
-        'Pickup REV': row._otbRev - row._vsRev,
-        'vs LY R/N': row._otbRn - row._lyRn,
-        'vs LY ADR': otbAdr - lyAdr,
-        'vs LY REV': row._otbRev - row._lyRev,
-        'LY R/N': row._lyRn,
-        'LY ADR': lyAdr,
-        'LY REV': row._lyRev,
+        'Year'        : currentYear,
+        'Month'       : currentMonth,
+        'Account'     : row.account_name  || '(미지정)',
+        'Segmentation': row.segmentation  || '(미지정)',
+        'R/N'         : row.otb_nights,
+        'ADR'         : adr,
+        'REV'         : row.otb_revenue,
       }
-    }).sort((a: any, b: any) => b['OTB R/N'] - a['OTB R/N'])
+    }).sort((a, b) => a.Account.localeCompare(b.Account))
 
-    const ws = XLSX.utils.json_to_sheet(aggregated)
+    const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Country Pickup')
     const monthStr = [...selectedMonths].sort((a, b) => a - b).map(m => String(m).padStart(2, '0')).join('-')
