@@ -83,7 +83,7 @@ export default function MarketPickupPage() {
     })
   }
 
-  const [dayModal, setDayModal] = useState<{ year: number; month: number; day: number } | null>(null)
+  const [dayModal, setDayModal] = useState<{ year: number; month: number; day: number; defaultTab: 'pickup' | 'otb' } | null>(null)
 
   return (
     <div>
@@ -148,7 +148,7 @@ export default function MarketPickupPage() {
                 groups={groups}
                 selected={resolveSelected(monthKey)}
                 onToggleSeg={(segId) => onToggleSeg(monthKey, segId)}
-                onBarClick={(day) => setDayModal({ year: t.year, month: t.month, day })}
+                onBarClick={(day, defaultTab) => setDayModal({ year: t.year, month: t.month, day, defaultTab })}
                 roomCount={roomCount}
                 allSegIds={allSegIds}
               />
@@ -166,6 +166,7 @@ export default function MarketPickupPage() {
         schema={schema}
         pickupRows={pickupRows}
         roomCount={roomCount}
+        defaultTab={dayModal?.defaultTab ?? 'pickup'}
       />
     </div>
   )

@@ -21,18 +21,19 @@ type AccStat = {
 }
 
 export default function MarketPickupDayModal({
-  open, onClose, year, month, day, schema, pickupRows, roomCount,
+  open, onClose, year, month, day, schema, pickupRows, roomCount, defaultTab,
 }: {
-  open:       boolean
-  onClose:    () => void
-  year:       number
-  month:      number   // 0-based
-  day:        number   // 1-based
-  schema:     MarketSchemaRow[]
-  pickupRows: PickupRow[]
-  roomCount:  number
+  open:        boolean
+  onClose:     () => void
+  year:        number
+  month:       number   // 0-based
+  day:         number   // 1-based
+  schema:      MarketSchemaRow[]
+  pickupRows:  PickupRow[]
+  roomCount:   number
+  defaultTab?: 'pickup' | 'otb'
 }) {
-  const [tab,     setTab]     = useState<'pickup' | 'otb'>('pickup')
+  const [tab,     setTab]     = useState<'pickup' | 'otb'>(defaultTab ?? 'pickup')
   const [selMain, setSelMain] = useState<string | null>(null)
 
   useEffect(() => {
@@ -42,6 +43,14 @@ export default function MarketPickupDayModal({
     document.body.style.overflow = 'hidden'
     return () => { window.removeEventListener('keydown', h); document.body.style.overflow = '' }
   }, [open, onClose])
+
+  // open / defaultTab 변경 시 탭·선택 동기화
+  useEffect(() => {
+    if (open) {
+      setTab(defaultTab ?? 'pickup')
+      setSelMain(null)
+    }
+  }, [open, defaultTab])
 
   // 선택된 세그(main/sub)의 어카운트별 집계 — 훅은 early-return 위에서 호출
   const accountRows = useMemo(() => {

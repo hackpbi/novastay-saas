@@ -46,7 +46,7 @@ export default function MarketPickupMonthBlock({
   groups:      SegGroup[]
   selected:    Set<string>
   onToggleSeg: (segId: string) => void
-  onBarClick:  (day: number) => void
+  onBarClick:  (day: number, defaultTab: 'pickup' | 'otb') => void
   roomCount:   number
   allSegIds:   Set<string>
 }) {
@@ -191,7 +191,11 @@ export default function MarketPickupMonthBlock({
         options: {
           responsive: true, maintainAspectRatio: false, animation: false,
           interaction: { mode: 'index', intersect: false },
-          onClick: (_e: any, els: any[]) => { if (els.length) onBarClick(els[0].index + 1) },
+          onClick: (_event: any, elements: any[]) => {
+            if (!elements.length) return
+            const idx = elements[0].index
+            onBarClick(idx + 1, (dailyTotals[idx] ?? 0) === 0 ? 'otb' : 'pickup')
+          },
           onHover: (_event: any, elements: any[]) => {
             const tip = tooltipRef.current
             if (!tip) return
@@ -200,6 +204,7 @@ export default function MarketPickupMonthBlock({
             const idx = elements[0].index
             const day = idx + 1            // 1-based
             const dayTotal = dailyTotals[idx] ?? 0
+            if (dayTotal === 0) { tip.style.display = 'none'; return }   // 픽업 0이면 툴팁 숨김
 
             // 요일 (month는 0-based)
             const DOW = ['일', '월', '화', '수', '목', '금', '토']
