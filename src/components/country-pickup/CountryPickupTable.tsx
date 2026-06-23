@@ -48,7 +48,7 @@ export default function CountryPickupTable({ data, lyMode, onToggleLyMode }: {
     padding: '6px 8px', fontSize: 11, textAlign: 'right', fontVariantNumeric: 'tabular-nums',
     borderBottom: '0.5px solid var(--color-border-subtle)', color: 'var(--color-text-primary)', whiteSpace: 'nowrap',
   }
-  const sepStyle: React.CSSProperties = { width: 1, padding: 0, background: 'var(--color-border-subtle)' }
+  const sepStyle: React.CSSProperties = { width: 1, padding: 0, background: 'rgba(0,229,160,0.25)' }
   const grpTh = (color: string): React.CSSProperties => ({ textAlign: 'center', padding: '5px 8px 2px', fontSize: 9, fontWeight: 500, letterSpacing: '0.05em', color })
   const colTh = (color: string): React.CSSProperties => ({ textAlign: 'right', padding: '2px 8px 6px', fontSize: 9, fontWeight: 500, color, borderBottom: '0.5px solid var(--color-border-subtle)' })
 
@@ -61,7 +61,7 @@ export default function CountryPickupTable({ data, lyMode, onToggleLyMode }: {
       </div>
 
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 780 }}>
+        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed', minWidth: 780 }}>
           <thead>
             {/* 컬럼 그룹 헤더 */}
             <tr>
@@ -134,24 +134,24 @@ export default function CountryPickupTable({ data, lyMode, onToggleLyMode }: {
               )
             })}
             {/* 합계 행 */}
-            <tr style={{ borderTop: '0.5px solid rgba(0,229,160,0.2)' }}>
-              <td style={{ ...tdBase, textAlign: 'left', fontWeight: 500, borderBottom: 'none' }}>Total</td>
-              <td style={{ ...tdBase, fontWeight: 500, borderBottom: 'none' }}>{totalOtbRn.toLocaleString('ko-KR')}</td>
-              <td style={{ ...tdBase, fontWeight: 500, borderBottom: 'none' }}>{fmtK(totalOtbAdr)}</td>
-              <td style={{ ...tdBase, fontWeight: 500, borderBottom: 'none' }}>{fmtM(totalOtbRev)}</td>
-              <td style={{ ...sepStyle, borderBottom: 'none' }} />
-              <td style={{ ...tdBase, fontWeight: 500, color: puColor(totalPuRn), borderBottom: 'none' }}>{fmtPu(totalPuRn)}</td>
-              <td style={{ ...tdBase, borderBottom: 'none', color: 'var(--color-text-tertiary)' }}>—</td>
-              <td style={{ ...tdBase, fontWeight: 500, color: puColor(totalPuRev), borderBottom: 'none' }}>{fmtPuM(totalPuRev)}</td>
-              <td style={{ ...sepStyle, borderBottom: 'none' }} />
-              <td style={{ ...tdBase, fontWeight: 500, color: puColor(totalOtbRn - totalLyRn), borderBottom: 'none' }}>{fmtPu(totalOtbRn - totalLyRn)}</td>
-              <td style={{ ...tdBase, borderBottom: 'none', color: 'var(--color-text-tertiary)' }}>—</td>
-              <td style={{ ...tdBase, fontWeight: 500, color: puColor(totalOtbRev - totalLyRev), borderBottom: 'none' }}>{fmtPuM(totalOtbRev - totalLyRev)}</td>
-              <td style={{ ...sepStyle, borderBottom: 'none' }} />
+            <tr>
+              <td style={{ ...tdBase, textAlign: 'left', fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>Total</td>
+              <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{totalOtbRn.toLocaleString('ko-KR')}</td>
+              <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtK(totalOtbAdr)}</td>
+              <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtM(totalOtbRev)}</td>
+              <td style={{ ...sepStyle, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }} />
+              <td style={{ ...tdBase, fontWeight: 500, color: puColor(totalPuRn), borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtPu(totalPuRn)}</td>
+              <td style={{ ...tdBase, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none', color: 'var(--color-text-tertiary)' }}>—</td>
+              <td style={{ ...tdBase, fontWeight: 500, color: puColor(totalPuRev), borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtPuM(totalPuRev)}</td>
+              <td style={{ ...sepStyle, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }} />
+              <td style={{ ...tdBase, fontWeight: 500, color: puColor(totalOtbRn - totalLyRn), borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtPu(totalOtbRn - totalLyRn)}</td>
+              <td style={{ ...tdBase, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none', color: 'var(--color-text-tertiary)' }}>—</td>
+              <td style={{ ...tdBase, fontWeight: 500, color: puColor(totalOtbRev - totalLyRev), borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtPuM(totalOtbRev - totalLyRev)}</td>
+              <td style={{ ...sepStyle, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }} />
               {/* LY Actual */}
-              <td style={{ ...tdBase, fontWeight: 500, borderBottom: 'none', color: 'var(--color-text-secondary)' }}>{totalLyRn > 0 ? totalLyRn.toLocaleString('ko-KR') : '—'}</td>
-              <td style={{ ...tdBase, fontWeight: 500, borderBottom: 'none', color: 'var(--color-text-secondary)' }}>{totalLyRn > 0 ? fmtK(totalLyAdr) : '—'}</td>
-              <td style={{ ...tdBase, fontWeight: 500, borderBottom: 'none', color: 'var(--color-text-secondary)' }}>{totalLyRev > 0 ? fmtM(totalLyRev) : '—'}</td>
+              <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none', color: 'var(--color-text-secondary)' }}>{totalLyRn > 0 ? totalLyRn.toLocaleString('ko-KR') : '—'}</td>
+              <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none', color: 'var(--color-text-secondary)' }}>{totalLyRn > 0 ? fmtK(totalLyAdr) : '—'}</td>
+              <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none', color: 'var(--color-text-secondary)' }}>{totalLyRev > 0 ? fmtM(totalLyRev) : '—'}</td>
             </tr>
           </tbody>
         </table>
