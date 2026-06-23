@@ -42,6 +42,7 @@ export default function CountryPickupTable({ data, lyMode, onToggleLyMode }: {
   const totalLyRn   = aggregated.reduce((s, r) => s + r.ly_nights, 0)
   const totalLyRev  = aggregated.reduce((s, r) => s + r.ly_revenue, 0)
   const totalOtbAdr = totalOtbRn > 0 ? Math.round(totalOtbRev / totalOtbRn) : 0
+  const totalLyAdr  = totalLyRn  > 0 ? Math.round(totalLyRev  / totalLyRn)  : 0
 
   const tdBase: React.CSSProperties = {
     padding: '6px 8px', fontSize: 11, textAlign: 'right', fontVariantNumeric: 'tabular-nums',
@@ -60,7 +61,7 @@ export default function CountryPickupTable({ data, lyMode, onToggleLyMode }: {
       </div>
 
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 600 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 780 }}>
           <thead>
             {/* 컬럼 그룹 헤더 */}
             <tr>
@@ -72,6 +73,8 @@ export default function CountryPickupTable({ data, lyMode, onToggleLyMode }: {
               <th colSpan={3} onClick={onToggleLyMode} style={{ ...grpTh('rgba(255,180,50,0.9)'), cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
                 {lyMode === 'date' ? 'Same date vs LY ⇅' : 'Same period vs LY ⇅'}
               </th>
+              <th style={sepStyle} />
+              <th colSpan={3} style={{ ...grpTh('rgba(255,255,255,0.35)'), whiteSpace: 'nowrap' }}>LY Actual</th>
             </tr>
             {/* 컬럼 헤더 */}
             <tr>
@@ -81,6 +84,8 @@ export default function CountryPickupTable({ data, lyMode, onToggleLyMode }: {
               {['R/N', 'ADR', 'REV'].map(h => <th key={'pu-' + h} style={colTh('rgba(0,229,160,0.6)')}>{h}</th>)}
               <th style={{ ...sepStyle, borderBottom: '0.5px solid var(--color-border-subtle)' }} />
               {['R/N', 'ADR', 'REV'].map(h => <th key={'ly-' + h} style={colTh('rgba(255,180,50,0.6)')}>{h}</th>)}
+              <th style={{ ...sepStyle, borderBottom: '0.5px solid var(--color-border-subtle)' }} />
+              {['R/N', 'ADR', 'REV'].map(h => <th key={'lya-' + h} style={colTh('rgba(255,255,255,0.3)')}>{h}</th>)}
             </tr>
           </thead>
           <tbody>
@@ -120,6 +125,11 @@ export default function CountryPickupTable({ data, lyMode, onToggleLyMode }: {
                   <td style={{ ...tdBase, color: puColor(lyRn) }}>{fmtPu(lyRn)}</td>
                   <td style={{ ...tdBase, color: puColor(lyAdrDiff) }}>{fmtPuK(lyAdrDiff)}</td>
                   <td style={{ ...tdBase, color: puColor(lyRevDiff) }}>{fmtPuM(lyRevDiff)}</td>
+                  <td style={sepStyle} />
+                  {/* LY Actual */}
+                  <td style={{ ...tdBase, color: 'var(--color-text-secondary)' }}>{row.ly_nights > 0 ? row.ly_nights.toLocaleString('ko-KR') : '—'}</td>
+                  <td style={{ ...tdBase, color: 'var(--color-text-secondary)' }}>{row.ly_nights > 0 ? fmtK(lyAdr) : '—'}</td>
+                  <td style={{ ...tdBase, color: 'var(--color-text-secondary)' }}>{row.ly_revenue > 0 ? fmtM(row.ly_revenue) : '—'}</td>
                 </tr>
               )
             })}
@@ -137,6 +147,11 @@ export default function CountryPickupTable({ data, lyMode, onToggleLyMode }: {
               <td style={{ ...tdBase, fontWeight: 500, color: puColor(totalOtbRn - totalLyRn), borderBottom: 'none' }}>{fmtPu(totalOtbRn - totalLyRn)}</td>
               <td style={{ ...tdBase, borderBottom: 'none', color: 'var(--color-text-tertiary)' }}>—</td>
               <td style={{ ...tdBase, fontWeight: 500, color: puColor(totalOtbRev - totalLyRev), borderBottom: 'none' }}>{fmtPuM(totalOtbRev - totalLyRev)}</td>
+              <td style={{ ...sepStyle, borderBottom: 'none' }} />
+              {/* LY Actual */}
+              <td style={{ ...tdBase, fontWeight: 500, borderBottom: 'none', color: 'var(--color-text-secondary)' }}>{totalLyRn > 0 ? totalLyRn.toLocaleString('ko-KR') : '—'}</td>
+              <td style={{ ...tdBase, fontWeight: 500, borderBottom: 'none', color: 'var(--color-text-secondary)' }}>{totalLyRn > 0 ? fmtK(totalLyAdr) : '—'}</td>
+              <td style={{ ...tdBase, fontWeight: 500, borderBottom: 'none', color: 'var(--color-text-secondary)' }}>{totalLyRev > 0 ? fmtM(totalLyRev) : '—'}</td>
             </tr>
           </tbody>
         </table>
