@@ -127,28 +127,23 @@ export default function CountryPickupPage() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   }, [vsOtbDate, otbDate])
 
-  // 월 네비게이션 — OTB 월 기준 6개월 + 이전/다음
+  // 월 네비게이션 — 화살표(이전/다음 달). selectedYear/selectedMonth(0-based)는 RPC에서 사용
   const now = new Date()
-  const [monthOffset, setMonthOffset] = useState(0)
-  const [selectedTabIdx, setSelectedTabIdx] = useState(0)
-  const otbBase  = otbDate ? new Date(otbDate + 'T00:00:00') : now
-  const otbYear  = otbBase.getFullYear()
-  const otbMonth = otbBase.getMonth()
-  const monthList = useMemo(
-    () => Array.from({ length: 6 }, (_, i) => {
-      const d = new Date(otbYear, otbMonth + monthOffset + i, 1)
-      return { year: d.getFullYear(), month: d.getMonth() }
-    }),
-    [otbYear, otbMonth, monthOffset],
-  )
-  const displayYear   = monthList[0].year
-  const selectedYear  = monthList[selectedTabIdx]?.year  ?? monthList[0].year
-  const selectedMonth = monthList[selectedTabIdx]?.month ?? monthList[0].month
-  const isPrevDisabled = monthOffset <= 0
-  const handlePrev = () => { if (!isPrevDisabled) setMonthOffset(o => o - 1) }
-  const handleNext = () => setMonthOffset(o => o + 1)
-  useEffect(() => { setSelectedTabIdx(0) }, [monthOffset])
-  useEffect(() => { setMonthOffset(0); setSelectedTabIdx(0) }, [otbDate])
+  const otbBase = otbDate ? new Date(otbDate + 'T00:00:00') : now
+  const [selectedYear, setSelectedYear]   = useState(otbBase.getFullYear())
+  const [selectedMonth, setSelectedMonth] = useState(otbBase.getMonth())   // 0-based
+  useEffect(() => {
+    const b = otbDate ? new Date(otbDate + 'T00:00:00') : new Date()
+    setSelectedYear(b.getFullYear()); setSelectedMonth(b.getMonth())
+  }, [otbDate])
+  const handlePrevMonth = () => {
+    if (selectedMonth === 0) { setSelectedYear(y => y - 1); setSelectedMonth(11) }
+    else setSelectedMonth(m => m - 1)
+  }
+  const handleNextMonth = () => {
+    if (selectedMonth === 11) { setSelectedYear(y => y + 1); setSelectedMonth(0) }
+    else setSelectedMonth(m => m + 1)
+  }
 
   // 세그먼트 / 어카운트 선택 (빈 Set = 전체)
   const [selectedSegs, setSelectedSegs] = useState<Set<string>>(new Set())
@@ -220,12 +215,6 @@ export default function CountryPickupPage() {
   }, [data])
 
   const puColor = (v: number) => (v < 0 ? '#E24B4A' : 'var(--color-text-primary)')
-  const tabBtn = (active: boolean): React.CSSProperties => ({
-    fontSize: 12, padding: '5px 14px', borderRadius: 20, cursor: 'pointer',
-    border: active ? 'none' : '0.5px solid var(--color-border-default)',
-    background: active ? '#00E5A0' : 'transparent',
-    color: active ? '#0a0a0a' : 'var(--color-text-secondary)', fontWeight: active ? 500 : 400,
-  })
 
   return (
     <div>
@@ -241,23 +230,21 @@ export default function CountryPickupPage() {
 
       {/* 월 네비 + 세그먼트 필터 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 8, flexWrap: 'wrap' }}>
-        {/* 좌: 이전/연도/6개월 탭/다음 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <button onClick={handlePrev} disabled={isPrevDisabled} style={{
-            background: 'none', border: '0.5px solid var(--color-border-default)', borderRadius: 6, padding: '4px 12px', fontSize: 13,
-            color: isPrevDisabled ? 'var(--color-text-secondary)' : 'var(--color-text-primary)',
-            cursor: isPrevDisabled ? 'not-allowed' : 'pointer', opacity: isPrevDisabled ? 0.4 : 1,
-          }}>〈 이전</button>
-          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)' }}>{displayYear}년</span>
-          <div style={{ display: 'flex', gap: 4 }}>
-            {monthList.map((m, i) => (
-              <button key={`${m.year}-${m.month}`} onClick={() => setSelectedTabIdx(i)} style={tabBtn(selectedTabIdx === i)}>{m.month + 1}월</button>
-            ))}
-          </div>
-          <button onClick={handleNext} style={{
-            background: 'none', border: '0.5px solid var(--color-border-default)', borderRadius: 6, padding: '4px 12px', fontSize: 13,
-            color: 'var(--color-text-primary)', cursor: 'pointer',
-          }}>다음 〉</button>
+        {/* 좌: 화살표 + 년월 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={handlePrevMonth} aria-label="이전 달" style={{
+            width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            borderRadius: '50%', border: '0.5px solid var(--color-border-tertiary)', background: 'transparent',
+            color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 14,
+          }}>‹</button>
+          <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', minWidth: 80, textAlign: 'center' }}>
+            {selectedYear}년 {selectedMonth + 1}월
+          </span>
+          <button onClick={handleNextMonth} aria-label="다음 달" style={{
+            width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            borderRadius: '50%', border: '0.5px solid var(--color-border-tertiary)', background: 'transparent',
+            color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 14,
+          }}>›</button>
         </div>
 
         {/* 우: 세그먼트 (전체 / FIT / GRP) */}
