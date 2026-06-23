@@ -2,7 +2,7 @@
 
 import { getFlagEmoji, type CountryPickupRpcRow } from './types'
 
-type Agg = { country: string; country_name_ko: string; alpha2: string; otb_nights: number; vs_nights: number }
+type Agg = { country: string; country_name_ko: string; country_name_en: string; alpha2: string; otb_nights: number; vs_nights: number }
 
 const GRID = '80px 1fr 36px 28px'
 
@@ -11,7 +11,7 @@ export default function CountryPickupChart({ data }: { data: CountryPickupRpcRow
   const aggregated = Object.values(
     data.reduce((acc, row) => {
       const key = row.country
-      if (!acc[key]) acc[key] = { country: row.country, country_name_ko: row.country_name_ko, alpha2: row.alpha2, otb_nights: 0, vs_nights: 0 }
+      if (!acc[key]) acc[key] = { country: row.country, country_name_ko: row.country_name_ko, country_name_en: row.country_name_en, alpha2: row.alpha2, otb_nights: 0, vs_nights: 0 }
       acc[key].otb_nights += row.otb_nights ?? 0
       acc[key].vs_nights  += row.vs_nights ?? 0
       return acc
@@ -27,8 +27,8 @@ export default function CountryPickupChart({ data }: { data: CountryPickupRpcRow
       {/* 헤더 */}
       <div style={{ padding: '10px 14px', borderBottom: '0.5px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-          국가별 실적 현황{' '}
-          <span style={{ fontWeight: 400, color: 'var(--color-text-tertiary)' }}>Country Performance · Room Nights</span>
+          Country Performance{' '}
+          <span style={{ fontWeight: 400, color: 'var(--color-text-tertiary)' }}>· Room Nights</span>
         </span>
         <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>Pickup R/N</span>
       </div>
@@ -53,7 +53,7 @@ export default function CountryPickupChart({ data }: { data: CountryPickupRpcRow
             <div key={row.country} style={{ display: 'grid', gridTemplateColumns: GRID, alignItems: 'center', gap: 6, padding: '2px 0' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden' }}>
                 <span style={{ fontSize: 13, flexShrink: 0 }}>{getFlagEmoji(row.alpha2)}</span>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.country_name_ko}</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.country_name_en || row.country_name_ko}</span>
               </div>
               <div style={{ height: 8, background: 'var(--color-bg-primary)', borderRadius: 3, overflow: 'hidden' }}>
                 <div style={{ width: `${barPct}%`, height: '100%', background: '#00E5A0', borderRadius: 3, minWidth: 1, opacity: 0.9 }} />
@@ -67,7 +67,7 @@ export default function CountryPickupChart({ data }: { data: CountryPickupRpcRow
         {/* 구분선 + 합계 */}
         <div style={{ height: '0.5px', background: 'var(--color-border-subtle)', margin: '4px 0' }} />
         <div style={{ display: 'grid', gridTemplateColumns: GRID, alignItems: 'center', gap: 6 }}>
-          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)' }}>합계</div>
+          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)' }}>Total</div>
           <div />
           <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{totalOtbRn.toLocaleString('ko-KR')}</div>
           <div style={{ fontSize: 10, fontWeight: 500, textAlign: 'right', color: totalPuRn >= 0 ? '#00B883' : '#E24B4A', fontVariantNumeric: 'tabular-nums' }}>{totalPuRn > 0 ? `+${totalPuRn}` : totalPuRn}</div>

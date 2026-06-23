@@ -6,6 +6,7 @@ import { ChevronDown, BarChart2, Coins, TrendingUp } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
+import DatePicker from '@/components/DatePicker'
 import { fmtK, fmtM } from '@/utils/pickupPageUtils'
 import CountryPickupChart from '@/components/country-pickup/CountryPickupChart'
 import CountryPickupTable from '@/components/country-pickup/CountryPickupTable'
@@ -115,7 +116,7 @@ function AccDropdown({ accounts, selected, onToggle, onSelectAll }: {
 export default function CountryPickupPage() {
   const { currentHotel } = useHotel()
   const hotelId = currentHotel?.id
-  const { otbDate, vsOtbDate } = useDateContext()
+  const { otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate } = useDateContext()
 
   // vs 날짜 — 없으면 OTB 전일 (KST-safe)
   const vsDate = useMemo(() => {
@@ -228,9 +229,13 @@ export default function CountryPickupPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           <div style={{ fontSize: 17, fontWeight: 500, color: 'var(--color-text-primary)' }}>Country Pick-up</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 4, background: 'rgba(0,229,160,0.12)', color: '#00C98A' }}>OTB {otbDate || '—'}</span>
+            <span style={{ display: 'inline-flex' }}>
+              <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} availableDates={otbDates ?? []} accent bare fontPx={11} plain />
+            </span>
             <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>vs</span>
-            <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 4, background: 'rgba(245,158,11,0.12)', color: '#D97706' }}>{vsDate || '—'}</span>
+            <span style={{ display: 'inline-flex' }}>
+              <DatePicker label="vs" value={vsOtbDate} onChange={setVsOtbDate} availableDates={(otbDates ?? []).filter(d => d < otbDate)} accent bare fontPx={11} plain />
+            </span>
             <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>· 기준 국가별 OTB 픽업</span>
           </div>
         </div>

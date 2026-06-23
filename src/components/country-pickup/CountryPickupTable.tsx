@@ -3,7 +3,7 @@
 import { fmtK, fmtM } from '@/utils/pickupPageUtils'
 import { getFlagEmoji, type CountryPickupRpcRow } from './types'
 
-type Agg = { country: string; country_name_ko: string; alpha2: string; otb_nights: number; vs_nights: number; otb_revenue: number; vs_revenue: number }
+type Agg = { country: string; country_name_ko: string; country_name_en: string; alpha2: string; otb_nights: number; vs_nights: number; otb_revenue: number; vs_revenue: number }
 
 const puColor = (v: number) => (v > 0 ? '#00B883' : v < 0 ? '#E24B4A' : 'var(--color-text-tertiary)')
 const fmtPu  = (v: number) => (v === 0 ? '—' : v > 0 ? `+${v}` : `${v}`)
@@ -14,7 +14,7 @@ export default function CountryPickupTable({ data }: { data: CountryPickupRpcRow
   const aggregated = Object.values(
     data.reduce((acc, row) => {
       const key = row.country
-      if (!acc[key]) acc[key] = { country: row.country, country_name_ko: row.country_name_ko, alpha2: row.alpha2, otb_nights: 0, vs_nights: 0, otb_revenue: 0, vs_revenue: 0 }
+      if (!acc[key]) acc[key] = { country: row.country, country_name_ko: row.country_name_ko, country_name_en: row.country_name_en, alpha2: row.alpha2, otb_nights: 0, vs_nights: 0, otb_revenue: 0, vs_revenue: 0 }
       acc[key].otb_nights  += row.otb_nights ?? 0
       acc[key].vs_nights   += row.vs_nights ?? 0
       acc[key].otb_revenue += row.otb_revenue ?? 0
@@ -38,8 +38,7 @@ export default function CountryPickupTable({ data }: { data: CountryPickupRpcRow
       {/* 헤더 */}
       <div style={{ padding: '10px 14px', borderBottom: '0.5px solid var(--color-border-subtle)' }}>
         <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-          세부 데이터 분석 테이블{' '}
-          <span style={{ fontWeight: 400, color: 'var(--color-text-tertiary)' }}>Detailed Data Analysis Table</span>
+          Detailed Data Analysis
         </span>
       </div>
 
@@ -48,8 +47,8 @@ export default function CountryPickupTable({ data }: { data: CountryPickupRpcRow
           <thead>
             <tr>
               <th rowSpan={2} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 10, fontWeight: 500, color: 'var(--color-text-tertiary)', borderBottom: '0.5px solid var(--color-border-subtle)', width: 80 }}>국가</th>
-              <th colSpan={3} style={{ textAlign: 'center', padding: '6px 10px 2px', fontSize: 9, fontWeight: 500, color: 'var(--color-text-tertiary)', letterSpacing: '0.05em' }}>현재 OTB</th>
-              <th colSpan={3} style={{ textAlign: 'center', padding: '6px 10px 2px', fontSize: 9, fontWeight: 500, color: 'rgba(0,229,160,0.7)', letterSpacing: '0.05em' }}>픽업 (Pickup)</th>
+              <th colSpan={3} style={{ textAlign: 'center', padding: '6px 10px 2px', fontSize: 9, fontWeight: 500, color: 'var(--color-text-tertiary)', letterSpacing: '0.05em' }}>Current OTB</th>
+              <th colSpan={3} style={{ textAlign: 'center', padding: '6px 10px 2px', fontSize: 9, fontWeight: 500, color: 'rgba(0,229,160,0.7)', letterSpacing: '0.05em' }}>Pickup</th>
             </tr>
             <tr>
               {['R/N', 'ADR', 'REV'].map(h => <th key={h} style={thOtb}>{h}</th>)}
@@ -70,7 +69,7 @@ export default function CountryPickupTable({ data }: { data: CountryPickupRpcRow
                   <td style={{ ...tdBase, textAlign: 'left', fontWeight: 500, color: 'var(--color-text-primary)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                       <span style={{ fontSize: 13 }}>{getFlagEmoji(row.alpha2)}</span>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.country_name_ko}</span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.country_name_en || row.country_name_ko}</span>
                     </div>
                   </td>
                   <td style={{ ...tdBase, color: 'var(--color-text-primary)' }}>{row.otb_nights.toLocaleString('ko-KR')}</td>
@@ -84,7 +83,7 @@ export default function CountryPickupTable({ data }: { data: CountryPickupRpcRow
             })}
             {/* 합계 행 */}
             <tr style={{ borderTop: '0.5px solid rgba(0,229,160,0.25)' }}>
-              <td style={{ ...tdBase, textAlign: 'left', fontWeight: 500, borderBottom: 'none', color: 'var(--color-text-primary)' }}>합계</td>
+              <td style={{ ...tdBase, textAlign: 'left', fontWeight: 500, borderBottom: 'none', color: 'var(--color-text-primary)' }}>Total</td>
               <td style={{ ...tdBase, fontWeight: 500, borderBottom: 'none', color: 'var(--color-text-primary)' }}>{totalOtbRn.toLocaleString('ko-KR')}</td>
               <td style={{ ...tdBase, fontWeight: 500, borderBottom: 'none', color: 'var(--color-text-primary)' }}>{fmtK(totalOtbAdr)}</td>
               <td style={{ ...tdBase, fontWeight: 500, borderBottom: 'none', color: 'var(--color-text-primary)' }}>{fmtM(totalOtbRev)}</td>
