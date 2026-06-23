@@ -7,9 +7,6 @@ import type { MarketSchemaRow } from '@/hooks/useMarketSchema'
 import { buildSegTable } from '@/utils/segmentationTable'
 import { WEEKDAY_KR } from '@/utils/pickupPageUtils'
 import { getDayColor } from '@/utils/dateUtils'
-import MarketPickupSegDetailModal from './MarketPickupSegDetailModal'
-
-const valColor = (v: number) => (v < 0 ? '#E24B4A' : v > 0 ? 'var(--color-text-primary)' : '#555')
 
 export default function MarketPickupDayModal({
   open, onClose, year, month, day, schema, pickupRows, roomCount,
@@ -23,7 +20,8 @@ export default function MarketPickupDayModal({
   pickupRows: PickupRow[]
   roomCount:  number
 }) {
-  const [detail, setDetail] = useState<{ id: string; name: string } | null>(null)
+  const [tab,     setTab]     = useState<'pickup' | 'otb'>('pickup')
+  const [selMain, setSelMain] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -36,93 +34,207 @@ export default function MarketPickupDayModal({
   if (!open) return null
 
   const { rows, summary } = buildSegTable({ schema, pickup: pickupRows, year, month: month + 1, roomCount, day })
+
+  // main 행 — OTB>0 또는 픽업≠0
   const mainRows = rows.filter(r => r.level === 'main' && (r.otbNights > 0 || r.puNights !== 0))
-  const dow = new Date(year, month, day).getDay()
+
+  // 선택된 main의 sub 행 — rows 순서상 selMain 다음 ~ 다음 main 직전까지
+  const mainIdx = selMain ? rows.findIndex(x => x.id === selMain) : -1
+  const subRows: typeof rows = []
+  if (mainIdx >= 0) {
+    for (let i = mainIdx + 1; i < rows.length; i++) {
+      if (rows[i].level === 'main') break
+      subRows.push(rows[i])
+    }
+  }
+  const selMainRow = rows.find(r => r.id === selMain)
+
+  const dow     = new Date(year, month, day).getDay()
   const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 
-  const th: React.CSSProperties = { color: 'var(--color-text-secondary)', fontWeight: 500, padding: '5px 8px' }
+  // ── 포맷 헬퍼 ───────────────────────────────────────────────────────────────
+  const fmtRn  = (v: number) => v === 0 ? '—' : `${v > 0 ? '+' : ''}${Math.round(v)}`
+  const fmtAdr = (v: number, valid: boolean) => !valid || v === 0 ? '—' : `${v > 0 ? '+' : ''}${Math.round(v / 1000)}k`
+  const fmtRev = (v: number) => v === 0 ? '—' : `${v > 0 ? '+' : ''}${(v / 1e6).toFixed(1)}M`
+  const fmtOtbRn  = (v: number) => v === 0 ? '—' : v.toLocaleString()
+  const fmtOtbAdr = (v: number) => v === 0 ? '—' : `${Math.round(v / 1000)}k`
+  const fmtOtbRev = (v: number) => v === 0 ? '—' : `${(v / 1e6).toFixed(1)}M`
+
+  const puColor  = (v: number) => v > 0 ? '#00B883' : v < 0 ? '#E24B4A' : 'rgba(255,255,255,0.25)'
+  const otbColor = 'var(--color-text-primary)'
+
+  const subTh: React.CSSProperties = { textAlign: 'right', padding: '7px 12px', fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }
+  const headTh: React.CSSProperties = { textAlign: 'right', padding: '7px 12px', fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.35)' }
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose} />
       <div
-        className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-xl"
-        style={{ background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
+        className="relative rounded-2xl overflow-hidden"
+        style={{
+          background: '#0a0a0a',
+          border: '1px solid var(--color-border-default)',
+          boxShadow: 'var(--shadow-card)',
+          width: 'min(92vw, 780px)',
+          maxHeight: '80vh',
+          display: 'flex', flexDirection: 'column',
+        }}
       >
-        <div className="flex items-center justify-between px-5 py-3.5 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-            <span style={{ color: getDayColor(dateStr) }}>{month + 1}월 {day}일 ({WEEKDAY_KR[dow]})</span> 세그먼트별 픽업
-          </h2>
-          <button onClick={onClose} className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1" aria-label="닫기">
-            <X size={20} />
+        {/* 헤더 */}
+        <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <div>
+            <h2 style={{ fontSize: 13, fontWeight: 500, color: getDayColor(dateStr) }}>
+              {month + 1}/{day} ({WEEKDAY_KR[dow]}) · Pickup by Segment
+            </h2>
+            <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
+              Click a segment to see breakdown
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)' }} aria-label="닫기">
+            <X size={18} />
           </button>
         </div>
 
-        <div className="px-5 py-3" style={{ maxHeight: '64vh', overflowY: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <thead>
-              <tr style={{ borderBottom: '0.5px solid #333' }}>
-                <th style={{ ...th, textAlign: 'left' }}>세그먼트</th>
-                <th style={{ ...th, textAlign: 'right' }}>픽업 R/N</th>
-                <th style={{ ...th, textAlign: 'right' }}>픽업 ADR</th>
-                <th style={{ ...th, textAlign: 'right' }}>픽업 REV</th>
-                <th style={{ width: 1 }} />
-              </tr>
-            </thead>
-            <tbody className="font-mono">
-              {mainRows.length === 0 ? (
-                <tr><td colSpan={5} style={{ padding: '12px 0', textAlign: 'center', color: 'var(--color-text-secondary)' }}>픽업 데이터 없음</td></tr>
-              ) : mainRows.map(r => {
-                const vsN = r.otbNights - r.puNights
-                const adrK = Math.round(r.puAdr / 1000)
-                const adrValid = r.otbNights > 0 && vsN > 0 && adrK !== 0
-                const revM = r.puRevenue / 1e6
-                return (
-                  <tr key={r.id} style={{ borderTop: '0.5px solid #1f1f1f' }}>
-                    <td style={{ padding: '5px 8px', color: '#e5e5e5' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: 2, background: r.bgDarkColor || '#888', flexShrink: 0 }} />
-                        {r.name}
-                      </span>
-                    </td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', color: valColor(r.puNights) }}>{r.puNights !== 0 ? `${r.puNights > 0 ? '+' : ''}${Math.round(r.puNights)}` : '—'}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', color: adrValid ? valColor(adrK) : '#555' }}>{adrValid ? `${adrK > 0 ? '+' : ''}${adrK}k` : '—'}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', color: valColor(r.puRevenue) }}>{r.puRevenue !== 0 ? `${revM > 0 ? '+' : ''}${revM.toFixed(1)}M` : '—'}</td>
-                    <td style={{ padding: '5px 0 5px 8px', textAlign: 'right' }}>
-                      <button
-                        onClick={() => setDetail({ id: r.id, name: r.name })}
-                        style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, border: '0.5px solid var(--color-border-default)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                      >
-                        상세
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-            <tfoot>
-              <tr style={{ borderTop: '0.5px solid #333' }}>
-                <td style={{ padding: '6px 8px', fontWeight: 600, color: 'var(--color-text-primary)' }}>합계</td>
-                <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: summary.puNights >= 0 ? '#00E5A0' : '#E24B4A' }}>{summary.puNights >= 0 ? '+' : ''}{Math.round(summary.puNights)}</td>
-                <td style={{ padding: '6px 8px', textAlign: 'right', color: '#555' }}>—</td>
-                <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: summary.puRevenue >= 0 ? '#00E5A0' : '#E24B4A' }}>{summary.puRevenue >= 0 ? '+' : ''}{(summary.puRevenue / 1e6).toFixed(1)}M</td>
-                <td />
-              </tr>
-            </tfoot>
-          </table>
+        {/* 탭 */}
+        <div style={{ display: 'flex', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+          {(['pickup', 'otb'] as const).map(t => (
+            <button key={t} onClick={() => { setTab(t); setSelMain(null) }} style={{
+              padding: '8px 16px', fontSize: 11, fontWeight: 500, cursor: 'pointer',
+              background: 'transparent', border: 'none',
+              borderBottom: tab === t ? '1.5px solid #00E5A0' : '1.5px solid transparent',
+              color: tab === t ? '#00E5A0' : 'rgba(255,255,255,0.35)',
+            }}>
+              {t === 'pickup' ? 'Pickup' : 'OTB'}
+            </button>
+          ))}
+        </div>
+
+        {/* 본문 2컬럼 */}
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+
+          {/* 좌측 세그 테이블 */}
+          <div style={{ width: 360, flexShrink: 0, borderRight: '0.5px solid rgba(255,255,255,0.08)', overflowY: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+              <thead>
+                <tr style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
+                  <th style={{ textAlign: 'left', padding: '7px 12px', fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.35)' }}>Segment</th>
+                  <th style={headTh}>{tab === 'pickup' ? 'Pickup R/N' : 'OTB R/N'}</th>
+                  <th style={headTh}>{tab === 'pickup' ? 'ADR' : 'OTB ADR'}</th>
+                  <th style={headTh}>{tab === 'pickup' ? 'REV' : 'OTB REV'}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mainRows.length === 0 ? (
+                  <tr><td colSpan={4} style={{ padding: '16px', textAlign: 'center', color: 'rgba(255,255,255,0.3)' }}>No data</td></tr>
+                ) : mainRows.map(r => {
+                  const isActive = selMain === r.id
+                  const adrValid = r.otbNights > 0 && (r.otbNights - r.puNights) > 0
+                  return (
+                    <tr
+                      key={r.id}
+                      onClick={() => setSelMain(isActive ? null : r.id)}
+                      style={{
+                        cursor: 'pointer',
+                        borderBottom: '0.5px solid rgba(255,255,255,0.05)',
+                        background: isActive ? 'rgba(0,229,160,0.06)' : 'transparent',
+                        borderLeft: isActive ? '2px solid #00E5A0' : '2px solid transparent',
+                      }}
+                      onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)' }}
+                      onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+                    >
+                      <td style={{ padding: '7px 12px', color: 'rgba(255,255,255,0.85)' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ width: 7, height: 7, borderRadius: 2, background: r.bgDarkColor || '#888', flexShrink: 0 }} />
+                          {r.name}
+                        </span>
+                      </td>
+                      {tab === 'pickup' ? (<>
+                        <td style={{ padding: '7px 12px', textAlign: 'right', color: puColor(r.puNights) }}>{fmtRn(r.puNights)}</td>
+                        <td style={{ padding: '7px 12px', textAlign: 'right', color: puColor(r.puAdr) }}>{fmtAdr(r.puAdr, adrValid)}</td>
+                        <td style={{ padding: '7px 12px', textAlign: 'right', color: puColor(r.puRevenue) }}>{fmtRev(r.puRevenue)}</td>
+                      </>) : (<>
+                        <td style={{ padding: '7px 12px', textAlign: 'right', color: otbColor }}>{fmtOtbRn(r.otbNights)}</td>
+                        <td style={{ padding: '7px 12px', textAlign: 'right', color: otbColor }}>{fmtOtbAdr(r.otbAdr)}</td>
+                        <td style={{ padding: '7px 12px', textAlign: 'right', color: otbColor }}>{fmtOtbRev(r.otbRevenue)}</td>
+                      </>)}
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{ borderTop: '0.5px solid rgba(0,229,160,0.2)' }}>
+                  <td style={{ padding: '7px 12px', fontWeight: 600, color: '#fff' }}>Total</td>
+                  {tab === 'pickup' ? (<>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: puColor(summary.puNights) }}>{fmtRn(summary.puNights)}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.25)' }}>—</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: puColor(summary.puRevenue) }}>{fmtRev(summary.puRevenue)}</td>
+                  </>) : (<>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff' }}>{fmtOtbRn(summary.totalNights)}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff' }}>{fmtOtbAdr(summary.totalAdr)}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff' }}>{fmtOtbRev(summary.totalRevenue)}</td>
+                  </>)}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          {/* 우측 sub 패널 */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {!selMain ? (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <span style={{ fontSize: 24, opacity: 0.2 }}>👆</span>
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>Select a segment</span>
+              </div>
+            ) : (
+              <>
+                <div style={{ padding: '10px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: selMainRow?.bgDarkColor || '#888', flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, fontWeight: 500, color: '#fff' }}>{selMainRow?.name}</span>
+                </div>
+                <div style={{ overflowY: 'auto', flex: 1 }}>
+                  {subRows.length === 0 ? (
+                    <div style={{ padding: 16, textAlign: 'center', fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>No sub-segments</div>
+                  ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                      <thead>
+                        <tr style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
+                          <th style={{ textAlign: 'left', padding: '7px 12px', fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>Sub-segment</th>
+                          <th style={subTh}>{tab === 'pickup' ? 'Pickup R/N' : 'OTB R/N'}</th>
+                          <th style={subTh}>{tab === 'pickup' ? 'ADR' : 'OTB ADR'}</th>
+                          <th style={subTh}>{tab === 'pickup' ? 'REV' : 'OTB REV'}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {subRows.map(r => {
+                          const adrValid = r.otbNights > 0 && (r.otbNights - r.puNights) > 0
+                          return (
+                            <tr key={r.id} style={{ borderBottom: '0.5px solid rgba(255,255,255,0.05)' }}
+                              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)'}
+                              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+                            >
+                              <td style={{ padding: '7px 12px', color: 'rgba(255,255,255,0.75)' }}>{r.name}</td>
+                              {tab === 'pickup' ? (<>
+                                <td style={{ padding: '7px 12px', textAlign: 'right', color: puColor(r.puNights) }}>{fmtRn(r.puNights)}</td>
+                                <td style={{ padding: '7px 12px', textAlign: 'right', color: puColor(r.puAdr) }}>{fmtAdr(r.puAdr, adrValid)}</td>
+                                <td style={{ padding: '7px 12px', textAlign: 'right', color: puColor(r.puRevenue) }}>{fmtRev(r.puRevenue)}</td>
+                              </>) : (<>
+                                <td style={{ padding: '7px 12px', textAlign: 'right', color: otbColor }}>{fmtOtbRn(r.otbNights)}</td>
+                                <td style={{ padding: '7px 12px', textAlign: 'right', color: otbColor }}>{fmtOtbAdr(r.otbAdr)}</td>
+                                <td style={{ padding: '7px 12px', textAlign: 'right', color: otbColor }}>{fmtOtbRev(r.otbRevenue)}</td>
+                              </>)}
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
         </div>
       </div>
-
-      <MarketPickupSegDetailModal
-        open={!!detail}
-        onClose={() => setDetail(null)}
-        date={dateStr}
-        mainId={detail?.id ?? ''}
-        mainName={detail?.name ?? ''}
-        schema={schema}
-        pickupRows={pickupRows}
-        roomCount={roomCount}
-      />
     </div>
   )
 }
