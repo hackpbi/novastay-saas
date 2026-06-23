@@ -239,8 +239,18 @@ export default function CountryPickupPage() {
             <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>· 기준 국가별 OTB 픽업</span>
           </div>
         </div>
+      </div>
 
-        {/* 필터 */}
+      {/* 월 네비 + 필터 (한 행) */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+        {/* 좌: 월 네비 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={handlePrevMonth} aria-label="이전 달" style={{ width: 24, height: 24, borderRadius: '50%', border: '0.5px solid var(--color-border-subtle)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
+          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', minWidth: 68, textAlign: 'center' }}>{selectedYear}년 {selectedMonth + 1}월</span>
+          <button onClick={handleNextMonth} aria-label="다음 달" style={{ width: 24, height: 24, borderRadius: '50%', border: '0.5px solid var(--color-border-subtle)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
+        </div>
+
+        {/* 우: 필터 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>세그먼트</span>
           <button onClick={handleSelectAll} style={{
@@ -254,13 +264,6 @@ export default function CountryPickupPage() {
           <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 4 }}>어카운트</span>
           <AccDropdown accounts={accountList} selected={selectedAccounts} onToggle={handleToggleAccount} onSelectAll={() => setSelectedAccounts(new Set())} />
         </div>
-      </div>
-
-      {/* 월 네비 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <button onClick={handlePrevMonth} aria-label="이전 달" style={{ width: 24, height: 24, borderRadius: '50%', border: '0.5px solid var(--color-border-subtle)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
-        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', minWidth: 68, textAlign: 'center' }}>{selectedYear}년 {selectedMonth + 1}월</span>
-        <button onClick={handleNextMonth} aria-label="다음 달" style={{ width: 24, height: 24, borderRadius: '50%', border: '0.5px solid var(--color-border-subtle)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
       </div>
 
       {/* KPI 카드 4개 */}

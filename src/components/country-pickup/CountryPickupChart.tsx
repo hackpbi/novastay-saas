@@ -4,7 +4,7 @@ import { getFlagClass, type CountryPickupRpcRow } from './types'
 
 type Agg = { country: string; country_name_ko: string; country_name_en: string; alpha2: string; otb_nights: number; vs_nights: number }
 
-const GRID = '80px 1fr 36px 28px'
+const GRID = '110px 1fr 36px 28px'
 
 export default function CountryPickupChart({ data }: { data: CountryPickupRpcRow[] }) {
   // country 기준 집계 (segmentation/account_name 합산)
@@ -53,9 +53,9 @@ export default function CountryPickupChart({ data }: { data: CountryPickupRpcRow
             <div key={row.country} style={{ display: 'grid', gridTemplateColumns: GRID, alignItems: 'center', gap: 6, padding: '2px 0' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden' }}>
                 {row.alpha2
-                  ? <span className={getFlagClass(row.alpha2)} style={{ fontSize: 16, width: 20, flexShrink: 0 }} />
-                  : <span style={{ fontSize: 14, flexShrink: 0 }}>🌐</span>}
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.country_name_en || row.country_name_ko}</span>
+                  ? <span className={getFlagClass(row.alpha2)} style={{ fontSize: 13, width: 16, flexShrink: 0 }} />
+                  : <span style={{ fontSize: 13, flexShrink: 0 }}>🌐</span>}
+                <span style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{row.country_name_en || row.country_name_ko}</span>
               </div>
               <div style={{ height: 8, background: 'var(--color-bg-primary)', borderRadius: 3, overflow: 'hidden' }}>
                 <div style={{ width: `${barPct}%`, height: '100%', background: '#00E5A0', borderRadius: 3, minWidth: 1, opacity: 0.9 }} />

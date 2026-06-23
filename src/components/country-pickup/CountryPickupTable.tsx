@@ -46,7 +46,7 @@ export default function CountryPickupTable({ data }: { data: CountryPickupRpcRow
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
           <thead>
             <tr>
-              <th rowSpan={2} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 10, fontWeight: 500, color: 'var(--color-text-tertiary)', borderBottom: '0.5px solid var(--color-border-subtle)', width: 80 }}>국가</th>
+              <th rowSpan={2} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 10, fontWeight: 500, color: 'var(--color-text-tertiary)', borderBottom: '0.5px solid var(--color-border-subtle)', width: 110 }}>국가</th>
               <th colSpan={3} style={{ textAlign: 'center', padding: '6px 10px 2px', fontSize: 9, fontWeight: 500, color: 'var(--color-text-tertiary)', letterSpacing: '0.05em' }}>Current OTB</th>
               <th colSpan={3} style={{ textAlign: 'center', padding: '6px 10px 2px', fontSize: 9, fontWeight: 500, color: 'rgba(0,229,160,0.7)', letterSpacing: '0.05em' }}>Pickup</th>
             </tr>
@@ -67,11 +67,11 @@ export default function CountryPickupTable({ data }: { data: CountryPickupRpcRow
                   onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-primary)')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                   <td style={{ ...tdBase, textAlign: 'left', fontWeight: 500, color: 'var(--color-text-primary)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
                       {row.alpha2
-                        ? <span className={getFlagClass(row.alpha2)} style={{ fontSize: 16, width: 20, flexShrink: 0 }} />
-                        : <span style={{ fontSize: 14, flexShrink: 0 }}>🌐</span>}
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11, fontWeight: 500 }}>{row.country_name_en || row.country_name_ko}</span>
+                        ? <span className={getFlagClass(row.alpha2)} style={{ fontSize: 13, width: 16, flexShrink: 0 }} />
+                        : <span style={{ fontSize: 13, flexShrink: 0 }}>🌐</span>}
+                      <span style={{ fontSize: 11, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{row.country_name_en || row.country_name_ko}</span>
                     </div>
                   </td>
                   <td style={{ ...tdBase, color: 'var(--color-text-primary)' }}>{row.otb_nights.toLocaleString('ko-KR')}</td>
