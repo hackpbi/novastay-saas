@@ -345,6 +345,8 @@ export default function CountryPickupPage() {
           data={rpcRows}
           currentMonth={selectedMonth + 1}
           currentYear={selectedYear}
+          otbDate={otbDate}
+          hotelId={hotelId}
           onClose={() => setShowDownloadModal(false)}
         />
       )}

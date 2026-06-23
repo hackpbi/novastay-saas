@@ -3,14 +3,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FileSpreadsheet, X, Download, ChevronDown } from 'lucide-react'
 import * as XLSX from 'xlsx'
+import { supabase } from '@/lib/supabase'
 import type { CountryPickupRpcRow } from './types'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-export default function CountryPickupDownloadModal({ data, currentMonth, currentYear, onClose }: {
+export default function CountryPickupDownloadModal({ data, currentMonth, currentYear, otbDate, hotelId, onClose }: {
   data:         CountryPickupRpcRow[]
   currentMonth: number   // 1-based
   currentYear:  number
+  otbDate:      string   // OTB date picker 기준일 (예: '2026-06-23')
+  hotelId?:     string
   onClose:      () => void
 }) {
   useEffect(() => {
@@ -20,7 +23,7 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
   }, [onClose])
 
   const [selectedMonths, setSelectedMonths] = useState<number[]>([currentMonth])
-  const [selectedGroup, setSelectedGroup] = useState<'전체' | 'fit' | 'group'>('전체')
+  const [selectedGroup, setSelectedGroup] = useState<'All' | 'fit' | 'group'>('All')
   const [selectedSegs, setSelectedSegs] = useState<string[]>([])
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([])   // 다중 선택
   const [segExpanded, setSegExpanded] = useState(false)
@@ -28,7 +31,7 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
 
   // sorting2 그룹 → 하위 세그먼트 목록
   const segList = useMemo(() => {
-    if (selectedGroup === '전체') return []
+    if (selectedGroup === 'All') return []
     const filtered = data.filter(r => r.sorting2 === selectedGroup)
     return Array.from(new Set(filtered.map(r => r.segmentation).filter(Boolean))).sort()
   }, [data, selectedGroup])
@@ -36,7 +39,7 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
   // 선택 그룹/세그 기준 어카운트 목록
   const accountList = useMemo(() => {
     let filtered = data
-    if (selectedGroup !== '전체') filtered = filtered.filter(r => r.sorting2 === selectedGroup)
+    if (selectedGroup !== 'All') filtered = filtered.filter(r => r.sorting2 === selectedGroup)
     if (selectedSegs.length > 0) filtered = filtered.filter(r => selectedSegs.includes(r.segmentation))
     return Array.from(new Set(filtered.map(r => r.account_name).filter(Boolean))).sort()
   }, [data, selectedGroup, selectedSegs])
@@ -44,9 +47,9 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
   const toggleMonth = (m: number) => {
     setSelectedMonths(prev => (prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]))
   }
-  const handleGroupChange = (g: '전체' | 'fit' | 'group') => {
+  const handleGroupChange = (g: 'All' | 'fit' | 'group') => {
     setSelectedGroup(g); setSelectedSegs([]); setSelectedAccounts([])
-    setSegExpanded(g !== '전체'); setAccExpanded(false)
+    setSegExpanded(g !== 'All'); setAccExpanded(false)
   }
   const toggleSeg = (seg: string) => {
     setSelectedSegs(prev => (prev.includes(seg) ? prev.filter(x => x !== seg) : [...prev, seg]))
@@ -56,31 +59,79 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
     setSelectedAccounts(prev => (prev.includes(acc) ? prev.filter(x => x !== acc) : [...prev, acc]))
   }
 
-  const handleDownload = () => {
-    const filtered = data.filter(row => {
-      const groupOk = selectedGroup === '전체' || row.sorting2 === selectedGroup
-      const segOk   = selectedSegs.length === 0 || selectedSegs.includes(row.segmentation)
-      const accOk   = selectedAccounts.length === 0 || selectedAccounts.includes(row.account_name)
-      return groupOk && segOk && accOk
-    })
+  const matchesFilter = (row: any) => {
+    const groupOk = selectedGroup === 'All' || row.sorting2 === selectedGroup
+    const segOk   = selectedSegs.length === 0 || selectedSegs.includes(row.segmentation)
+    const accOk   = selectedAccounts.length === 0 || selectedAccounts.includes(row.account_name)
+    return groupOk && segOk && accOk
+  }
 
-    const rows = filtered.map(row => {
-      const adr = (row.otb_nights ?? 0) > 0
-        ? Math.round((row.otb_revenue ?? 0) / (row.otb_nights ?? 0))
-        : 0
-      return {
-        'Year'        : currentYear,
-        'Month'       : currentMonth,
-        'Country'     : row.country_name_en || row.country_name_ko || row.country,
-        'Account'     : row.account_name  || '(미지정)',
-        'Segmentation': row.segmentation  || '(미지정)',
-        'R/N'         : row.otb_nights,
-        'ADR'         : adr,
-        'REV'         : row.otb_revenue,
+  const handleDownload = async () => {
+    // otbDate 기준 월 파싱 (KST — getMonth()/getFullYear() 사용)
+    const otbBase  = new Date(otbDate)
+    const otbMonth = otbBase.getMonth() + 1
+    const otbYear  = otbBase.getFullYear()
+
+    const allRows: any[] = []
+
+    for (const month of [...selectedMonths].sort((a, b) => a - b)) {
+      // 선택 월이 otbDate 월보다 이전인지 판단
+      const isPast =
+        currentYear < otbYear ||
+        (currentYear === otbYear && month < otbMonth)
+
+      let rows: any[] = []
+
+      if (isPast) {
+        // 이전월 → a01_actual_daily (get_country_actual_data)
+        const { data: actualData, error } = await (supabase as any)
+          .rpc('get_country_actual_data', {
+            p_hotel_id     : hotelId,
+            p_year         : currentYear,
+            p_month        : month,
+            p_segmentation : null,
+            p_account_name : null,
+          })
+        if (error) { console.error(error); continue }
+
+        rows = (actualData ?? [])
+          .filter(matchesFilter)
+          .map((row: any) => {
+            const adr = (row.nights ?? 0) > 0 ? Math.round((row.room_revenue ?? 0) / row.nights) : 0
+            return {
+              'Year'        : currentYear,
+              'Month'       : month,
+              'Country'     : row.country_name_en || row.country_name_ko || row.country,
+              'Account'     : row.account_name  || '(미지정)',
+              'Segmentation': row.segmentation  || '(미지정)',
+              'R/N'         : row.nights,
+              'ADR'         : adr,
+              'REV'         : row.room_revenue,
+            }
+          })
+      } else {
+        // 현재월 이후 → a02_otb_daily (기존 data 사용)
+        rows = data
+          .filter(matchesFilter)
+          .map(row => {
+            const adr = (row.otb_nights ?? 0) > 0 ? Math.round((row.otb_revenue ?? 0) / (row.otb_nights ?? 0)) : 0
+            return {
+              'Year'        : currentYear,
+              'Month'       : month,
+              'Country'     : row.country_name_en || row.country_name_ko || row.country,
+              'Account'     : row.account_name  || '(미지정)',
+              'Segmentation': row.segmentation  || '(미지정)',
+              'R/N'         : row.otb_nights,
+              'ADR'         : adr,
+              'REV'         : row.otb_revenue,
+            }
+          })
       }
-    }).sort((a, b) => a.Account.localeCompare(b.Account))
 
-    const ws = XLSX.utils.json_to_sheet(rows)
+      allRows.push(...rows.sort((a, b) => a.Account.localeCompare(b.Account)))
+    }
+
+    const ws = XLSX.utils.json_to_sheet(allRows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Country Pickup')
     const monthStr = [...selectedMonths].sort((a, b) => a - b).map(m => String(m).padStart(2, '0')).join('-')
@@ -156,30 +207,30 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
           <div style={{ marginBottom: 14 }}>
             <div style={sectionLbl}>SEGMENT</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {(['전체', 'fit', 'group'] as const).map(g => (
+              {(['All', 'fit', 'group'] as const).map(g => (
                 <button key={g} onClick={() => handleGroupChange(g)} style={groupBtn(selectedGroup === g)}>
-                  {g === '전체' ? '전체' : g === 'fit' ? 'FIT' : 'GROUP'}
+                  {g === 'All' ? 'All' : g === 'fit' ? 'FIT' : 'GROUP'}
                 </button>
               ))}
             </div>
-            {selectedGroup !== '전체' && (
+            {selectedGroup !== 'All' && (
               segExpanded ? (
                 <div style={{ marginTop: 8, borderTop: '0.5px solid rgba(255,255,255,0.1)' }}>
                   <div style={{ maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 0' }}>
                     {segList.length === 0
-                      ? <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', padding: '5px 4px' }}>세그먼트 없음</div>
+                      ? <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', padding: '5px 4px' }}>Select a segment first</div>
                       : segList.map(seg => checkRow(seg, selectedSegs.includes(seg), () => toggleSeg(seg)))}
                   </div>
                   <div style={actionRow}>
-                    <button onClick={() => setSelectedSegs([])} style={actBtn}>초기화</button>
-                    <button onClick={() => setSelectedSegs([...segList])} style={actBtn}>전체선택</button>
-                    <button onClick={() => setSegExpanded(false)} style={doneBtn}>완료</button>
+                    <button onClick={() => setSelectedSegs([])} style={actBtn}>Reset</button>
+                    <button onClick={() => setSelectedSegs([...segList])} style={actBtn}>Select All</button>
+                    <button onClick={() => setSegExpanded(false)} style={doneBtn}>Done</button>
                   </div>
                 </div>
               ) : (
                 <div onClick={() => setSegExpanded(true)} style={collapsedBar}>
                   <span style={{ color: selectedSegs.length === 0 ? 'rgba(255,255,255,0.4)' : '#fff' }}>
-                    {selectedSegs.length === 0 ? '전체 세그먼트' : `${selectedSegs.length}개 선택`}
+                    {selectedSegs.length === 0 ? 'All' : `${selectedSegs.length} selected`}
                   </span>
                   <ChevronDown size={13} style={{ color: 'rgba(255,255,255,0.3)' }} />
                 </div>
@@ -194,19 +245,19 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
               <div style={{ border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 6 }}>
                 <div style={{ maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 8px' }}>
                   {accountList.length === 0
-                    ? <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', padding: '5px 4px' }}>어카운트 없음</div>
+                    ? <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', padding: '5px 4px' }}>No accounts</div>
                     : accountList.map(acc => checkRow(acc, selectedAccounts.includes(acc), () => toggleAccount(acc)))}
                 </div>
                 <div style={actionRow}>
-                  <button onClick={() => setSelectedAccounts([])} style={actBtn}>초기화</button>
-                  <button onClick={() => setSelectedAccounts([...accountList])} style={actBtn}>전체선택</button>
-                  <button onClick={() => setAccExpanded(false)} style={doneBtn}>완료</button>
+                  <button onClick={() => setSelectedAccounts([])} style={actBtn}>Reset</button>
+                  <button onClick={() => setSelectedAccounts([...accountList])} style={actBtn}>Select All</button>
+                  <button onClick={() => setAccExpanded(false)} style={doneBtn}>Done</button>
                 </div>
               </div>
             ) : (
               <div onClick={() => setAccExpanded(true)} style={{ ...collapsedBar, marginTop: 0 }}>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: selectedAccounts.length === 0 ? 'rgba(255,255,255,0.4)' : '#fff' }}>
-                  {selectedAccounts.length === 0 ? '전체' : selectedAccounts.length === 1 ? selectedAccounts[0] : `${selectedAccounts.length}개 선택`}
+                  {selectedAccounts.length === 0 ? 'All' : selectedAccounts.length === 1 ? selectedAccounts[0] : `${selectedAccounts.length} selected`}
                 </span>
                 <ChevronDown size={13} style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }} />
               </div>
