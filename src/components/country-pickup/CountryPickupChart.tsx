@@ -34,7 +34,7 @@ export default function CountryPickupChart({ data }: { data: CountryRow[] }) {
             {/* OTB R/N (민트) */}
             <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: pct(r.otbRn), borderRadius: 3, background: 'rgba(0,229,160,0.45)' }} />
             {/* 픽업 R/N 오버레이 (파랑 / 음수 빨강) */}
-            <div style={{ position: 'absolute', left: 0, bottom: 0, height: 5, width: pct(r.puRn), borderRadius: 2, background: r.puRn >= 0 ? '#60A5FA' : '#E24B4A' }} />
+            <div style={{ position: 'absolute', left: 0, bottom: 0, height: 5, width: pct(r.puRn), borderRadius: 2, background: r.puRn >= 0 ? 'rgba(96,165,250,0.7)' : 'rgba(226,75,74,0.7)' }} />
           </div>
           <span style={{ width: 96, flexShrink: 0, fontSize: 11, textAlign: 'right', color: 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
             {r.otbRn.toLocaleString('ko-KR')}

@@ -13,13 +13,20 @@ export type CountryRow = {
   otbAdr:  number          // k 단위
 }
 
-// get_country_pickup_data RPC 원본 반환행
-export type CountryPickupRpcRow = {
+// country별 집계 단위 (enrich 입력)
+export type CountryAgg = {
   country:     string   // ISO 3자리 (KOR, USA, CHN ...)
   otb_nights:  number
   vs_nights:   number
   otb_revenue: number
   vs_revenue:  number
+}
+
+// get_country_pickup_data RPC 원본 반환행 (세그먼트 단위, segmentation/sorting2/account_name 포함)
+export type CountryPickupRpcRow = CountryAgg & {
+  segmentation: string
+  sorting2:     string
+  account_name: string
 }
 
 export const COUNTRY_NAMES: Record<string, string> = {
@@ -31,8 +38,8 @@ export const COUNTRY_NAMES: Record<string, string> = {
   ISR: '이스라엘', CAN: '캐나다',
 }
 
-// RPC 행 → 표시용 행 변환
-export function enrichCountryRow(r: CountryPickupRpcRow): CountryRow {
+// 집계행 → 표시용 행 변환
+export function enrichCountryRow(r: CountryAgg): CountryRow {
   const otbAdr = r.otb_nights > 0 ? Math.round(r.otb_revenue / r.otb_nights / 1000) : 0
   return {
     code: r.country,
