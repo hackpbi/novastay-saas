@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, BarChart2, Coins, TrendingUp } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
@@ -214,42 +214,40 @@ export default function CountryPickupPage() {
     return { countries: data.length, otbRn: t.otbRn, puRn: t.otbRn - t.vsRn, otbAdr, puAdr, otbRev: t.otbRev, puRev: t.otbRev - t.vsRev }
   }, [data])
 
-  const puColor = (v: number) => (v < 0 ? '#E24B4A' : 'var(--color-text-primary)')
+  const cardStyle: React.CSSProperties = {
+    background: 'var(--color-bg-secondary)', border: '0.5px solid var(--color-border-subtle)', borderRadius: 10,
+    padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6,
+  }
+  const cardLabel = (kr: string, en: string) => (
+    <div style={{ fontSize: 10, color: 'var(--color-text-tertiary)', lineHeight: 1.4 }}>
+      {kr}<br /><span style={{ fontWeight: 500, color: 'var(--color-text-secondary)' }}>{en}</span>
+    </div>
+  )
+  const cardBig: React.CSSProperties = { fontSize: 24, fontWeight: 500, color: 'var(--color-text-primary)', lineHeight: 1 }
+  const cardUnit: React.CSSProperties = { fontSize: 13, color: 'var(--color-text-secondary)', fontWeight: 400, marginLeft: 3 }
+  const dash = isLoading ? '—' : null
 
   return (
     <div>
-      <h1 className="text-xl font-bold mb-1" style={{ color: 'var(--color-text-primary)' }}>Country Pick-up</h1>
-      <p className="text-[13px] mb-4" style={{ color: 'var(--color-text-secondary)', lineHeight: 1.8 }}>
-        <span style={{ display: 'inline-flex', verticalAlign: 'middle' }}>
-          <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} availableDates={otbDates ?? []} accent bare fontPx={13} plain />
-        </span>{' '}
-        <span style={{ display: 'inline-flex', verticalAlign: 'middle' }}>
-          <DatePicker label="vs" value={vsOtbDate} onChange={setVsOtbDate} availableDates={(otbDates ?? []).filter(d => d < otbDate)} accent bare fontPx={13} plain />
-        </span>{' '}기준 국가별 OTB·픽업
-      </p>
-
-      {/* 월 네비 + 세그먼트 필터 */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 8, flexWrap: 'wrap' }}>
-        {/* 좌: 화살표 + 년월 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={handlePrevMonth} aria-label="이전 달" style={{
-            width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            borderRadius: '50%', border: '0.5px solid var(--color-border-tertiary)', background: 'transparent',
-            color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 14,
-          }}>‹</button>
-          <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', minWidth: 80, textAlign: 'center' }}>
-            {selectedYear}년 {selectedMonth + 1}월
-          </span>
-          <button onClick={handleNextMonth} aria-label="다음 달" style={{
-            width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            borderRadius: '50%', border: '0.5px solid var(--color-border-tertiary)', background: 'transparent',
-            color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 14,
-          }}>›</button>
+      {/* 헤더 */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <div style={{ fontSize: 17, fontWeight: 500, color: 'var(--color-text-primary)' }}>Country Pick-up</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ display: 'inline-flex' }}>
+              <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} availableDates={otbDates ?? []} accent bare fontPx={11} plain />
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>vs</span>
+            <span style={{ display: 'inline-flex' }}>
+              <DatePicker label="vs" value={vsOtbDate} onChange={setVsOtbDate} availableDates={(otbDates ?? []).filter(d => d < otbDate)} accent bare fontPx={11} plain />
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>· 기준 국가별 OTB 픽업</span>
+          </div>
         </div>
 
-        {/* 우: 세그먼트 (전체 / FIT / GRP) */}
+        {/* 필터 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>세그먼트</span>
+          <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>세그먼트</span>
           <button onClick={handleSelectAll} style={{
             fontSize: 11, fontWeight: 500, padding: '4px 12px', borderRadius: 20, cursor: 'pointer',
             border: selectedSegs.size === 0 ? '0.5px solid #00E5A0' : '0.5px solid var(--color-border-default)',
@@ -258,51 +256,81 @@ export default function CountryPickupPage() {
           }}>전체</button>
           <SegDropdown label="FIT" segs={fitSegs.map(s => ({ code: s, name: s }))} selected={selectedSegs} onToggle={handleToggleSeg} />
           <SegDropdown label="GRP" segs={grpSegs.map(s => ({ code: s, name: s }))} selected={selectedSegs} onToggle={handleToggleSeg} />
-          <span style={{ color: 'var(--color-border-default)', padding: '0 2px' }}>|</span>
-          <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>어카운트</span>
+          <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 4 }}>어카운트</span>
           <AccDropdown accounts={accountList} selected={selectedAccounts} onToggle={handleToggleAccount} onSelectAll={() => setSelectedAccounts(new Set())} />
         </div>
       </div>
 
-      {/* KPI 카드 4개 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-        {[
-          { label: '국가 수', main: `${kpi.countries}개국`, sub: null as string | null, subV: 0, subT: '' },
-          { label: 'OTB R/N', main: kpi.otbRn.toLocaleString('ko-KR'), sub: '픽업', subV: kpi.puRn, subT: `${kpi.puRn > 0 ? '+' : ''}${kpi.puRn}` },
-          { label: 'OTB ADR', main: `${kpi.otbAdr}k`, sub: '픽업', subV: kpi.puAdr, subT: `${kpi.puAdr > 0 ? '+' : ''}${kpi.puAdr}k` },
-          { label: 'OTB REV', main: fmtM(kpi.otbRev), sub: '픽업', subV: kpi.puRev, subT: `${kpi.puRev > 0 ? '+' : ''}${fmtM(kpi.puRev)}` },
-        ].map((c, i) => (
-          <div key={i} className="rounded-xl p-3.5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
-            <div style={{ fontSize: 10, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{c.label}</div>
-            <div style={{ fontSize: 22, fontWeight: 600, color: 'var(--color-text-primary)', lineHeight: 1 }}>{isLoading ? '—' : c.main}</div>
-            {c.sub && (
-              <div style={{ fontSize: 11, marginTop: 6, color: 'var(--color-text-secondary)' }}>
-                {c.sub} <span style={{ fontWeight: 500, color: puColor(c.subV) }}>{isLoading ? '—' : c.subT}</span>
-              </div>
-            )}
-          </div>
-        ))}
+      {/* 월 네비 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <button onClick={handlePrevMonth} aria-label="이전 달" style={{ width: 24, height: 24, borderRadius: '50%', border: '0.5px solid var(--color-border-subtle)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
+        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', minWidth: 68, textAlign: 'center' }}>{selectedYear}년 {selectedMonth + 1}월</span>
+        <button onClick={handleNextMonth} aria-label="다음 달" style={{ width: 24, height: 24, borderRadius: '50%', border: '0.5px solid var(--color-border-subtle)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
       </div>
 
-      {/* 메인: 좌 차트 / 우 테이블 */}
+      {/* KPI 카드 4개 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-3">
+        {/* 1 — 국가 수 */}
+        <div style={cardStyle}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+            {cardLabel('현재 국가 수', 'Active Countries')}
+            <span style={{ fontSize: 22, opacity: 0.55 }}>🌏</span>
+          </div>
+          <div style={cardBig}>{dash ?? kpi.countries}<span style={cardUnit}>개국</span></div>
+          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)' }}>선택 조건 기준</div>
+        </div>
+        {/* 2 — OTB R/N */}
+        <div style={cardStyle}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+            {cardLabel('현재 OTB R/N', 'Room Nights')}
+            <BarChart2 size={22} style={{ opacity: 0.55, color: 'var(--color-text-secondary)', flexShrink: 0 }} />
+          </div>
+          <div style={cardBig}>{dash ?? kpi.otbRn.toLocaleString('ko-KR')}</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 11, fontWeight: 500, color: kpi.puRn >= 0 ? '#00B883' : '#E24B4A' }}>Pickup {kpi.puRn >= 0 ? '+' : ''}{kpi.puRn}</span>
+            <span style={{ fontSize: 10, color: 'rgba(0,184,131,0.7)' }}>전일 대비 {kpi.puRn >= 0 ? '+' : ''}{kpi.puRn}</span>
+          </div>
+        </div>
+        {/* 3 — OTB ADR */}
+        <div style={cardStyle}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+            {cardLabel('현재 OTB ADR', 'Average Daily Rate')}
+            <Coins size={22} style={{ opacity: 0.55, color: 'var(--color-text-secondary)', flexShrink: 0 }} />
+          </div>
+          <div style={cardBig}>{dash ?? kpi.otbAdr}<span style={cardUnit}>k KRW</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 11, fontWeight: 500, color: kpi.puAdr > 0 ? '#00B883' : kpi.puAdr < 0 ? '#E24B4A' : 'var(--color-text-tertiary)' }}>Pickup {kpi.puAdr === 0 ? '0' : `${kpi.puAdr > 0 ? '+' : ''}${kpi.puAdr}k`}</span>
+            <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>가중평균</span>
+          </div>
+        </div>
+        {/* 4 — OTB REV */}
+        <div style={cardStyle}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+            {cardLabel('현재 OTB REV', 'Revenue')}
+            <TrendingUp size={22} style={{ opacity: 0.55, color: 'var(--color-text-secondary)', flexShrink: 0 }} />
+          </div>
+          <div style={cardBig}>{dash ?? fmtM(kpi.otbRev)}<span style={cardUnit}>KRW</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 11, fontWeight: 500, color: kpi.puRev >= 0 ? '#00B883' : '#E24B4A' }}>Pickup {kpi.puRev >= 0 ? '+' : ''}{fmtM(kpi.puRev)}</span>
+            <span style={{ fontSize: 10, color: 'rgba(0,184,131,0.7)' }}>전일 대비 {kpi.puRev >= 0 ? '+' : ''}{fmtM(kpi.puRev)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 본문: 좌 차트 / 우 테이블 */}
       {isLoading ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="animate-pulse rounded-xl" style={{ height: 360, background: 'var(--color-bg-tertiary)' }} />
-          <div className="animate-pulse rounded-xl" style={{ height: 360, background: 'var(--color-bg-tertiary)' }} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.45fr', gap: 10, alignItems: 'start' }}>
+          <div className="animate-pulse" style={{ height: 360, background: 'var(--color-bg-tertiary)', borderRadius: 10 }} />
+          <div className="animate-pulse" style={{ height: 360, background: 'var(--color-bg-tertiary)', borderRadius: 10 }} />
         </div>
       ) : data.length === 0 ? (
-        <div className="rounded-xl p-10 text-center" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)', fontSize: 13 }}>
+        <div style={{ background: 'var(--color-bg-secondary)', border: '0.5px solid var(--color-border-subtle)', borderRadius: 10, padding: 40, textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 13 }}>
           해당 조건의 국가별 픽업 데이터가 없습니다.
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="rounded-xl p-4" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
-            <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 12 }}>국가별 OTB R/N · 픽업</div>
-            <CountryPickupChart data={data} />
-          </div>
-          <div className="rounded-xl p-2" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
-            <CountryPickupTable data={data} />
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.45fr', gap: 10, alignItems: 'start' }}>
+          <CountryPickupChart data={data} />
+          <CountryPickupTable data={data} />
         </div>
       )}
     </div>
