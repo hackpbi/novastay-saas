@@ -8,6 +8,13 @@ import type { CountryPickupRpcRow, SegmentOption } from './types'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
+interface YearMonth {
+  key:   string   // '2026-06'
+  year:  number
+  month: number
+  label: string   // 'Jun 2026'
+}
+
 export default function CountryPickupDownloadModal({ data, segmentOptions, currentMonth, currentYear, otbDate, hotelId, onClose }: {
   data:           CountryPickupRpcRow[]
   segmentOptions: SegmentOption[]
@@ -23,7 +30,10 @@ export default function CountryPickupDownloadModal({ data, segmentOptions, curre
     return () => window.removeEventListener('keydown', h)
   }, [onClose])
 
-  const [selectedMonths, setSelectedMonths] = useState<number[]>([currentMonth])
+  const YEAR_OPTIONS = [currentYear - 1, currentYear, currentYear + 1]
+  const [pickerYear,  setPickerYear]  = useState<number>(currentYear)
+  const [pickerMonths, setPickerMonths] = useState<number[]>([currentMonth])   // 체크박스 임시선택
+  const [selectedYMs, setSelectedYMs] = useState<YearMonth[]>([])               // 확정된 년월 태그
   const [selectedGroup, setSelectedGroup] = useState<'All' | 'fit' | 'group'>('All')
   const [selectedSegs, setSelectedSegs] = useState<string[]>([])
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([])   // 다중 선택
@@ -40,8 +50,22 @@ export default function CountryPickupDownloadModal({ data, segmentOptions, curre
     return Array.from(new Set(filtered.map(r => r.account_name).filter(Boolean))).sort()
   }, [data, selectedGroup, selectedSegs])
 
-  const toggleMonth = (m: number) => {
-    setSelectedMonths(prev => (prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]))
+  const togglePickerMonth = (m: number) => {
+    setPickerMonths(prev => (prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]))
+  }
+  const handleAddYM = () => {
+    pickerMonths.forEach(m => {
+      const key = `${pickerYear}-${String(m).padStart(2, '0')}`
+      setSelectedYMs(prev => {
+        if (prev.find(s => s.key === key)) return prev   // 중복 방지
+        return [...prev, { key, year: pickerYear, month: m, label: `${MONTHS[m - 1]} ${pickerYear}` }]
+          .sort((a, b) => a.key.localeCompare(b.key))
+      })
+    })
+    setPickerMonths([])   // 체크박스 초기화
+  }
+  const removeYM = (key: string) => {
+    setSelectedYMs(prev => prev.filter(s => s.key !== key))
   }
   const handleGroupChange = (g: 'All' | 'fit' | 'group') => {
     setSelectedGroup(g); setSelectedSegs([]); setSelectedAccounts([]); setAccExpanded(false)
@@ -87,29 +111,29 @@ export default function CountryPickupDownloadModal({ data, segmentOptions, curre
   }
 
   const handleDownload = async () => {
-    // otbDate 기준 월 파싱 (KST — getMonth()/getFullYear() 사용)
+    if (selectedYMs.length === 0) return
+
+    // otbDate 기준 (KST — getMonth()/getFullYear() 사용)
     const otbBase  = new Date(otbDate)
     const otbMonth = otbBase.getMonth() + 1
     const otbYear  = otbBase.getFullYear()
 
     const allRows: any[] = []
 
-    for (const month of [...selectedMonths].sort((a, b) => a - b)) {
-      // 선택 월이 otbDate 월보다 이전인지 판단
-      const isPast =
-        currentYear < otbYear ||
-        (currentYear === otbYear && month < otbMonth)
+    for (const ym of selectedYMs) {
+      const { year, month } = ym
+      const isPast = year < otbYear || (year === otbYear && month < otbMonth)
 
       // ── 당해년도 데이터 ──────────────────────────────
       if (isPast) {
         // 이전월 → a01_actual_daily
-        allRows.push(...await fetchActualRows(currentYear, month))
+        allRows.push(...await fetchActualRows(year, month))
       } else {
         // 현재월 이후 → 기존 data (OTB)
         data.filter(matchesFilter).forEach(row => {
           const adr = row.otb_nights > 0 ? Math.round(row.otb_revenue / row.otb_nights) : 0
           allRows.push({
-            'Year'        : currentYear,
+            'Year'        : year,
             'Month'       : month,
             'Country'     : row.country_name_en || row.country_name_ko || row.country,
             'Account'     : row.account_name  || '(미지정)',
@@ -122,7 +146,7 @@ export default function CountryPickupDownloadModal({ data, segmentOptions, curre
       }
 
       // ── 전년도 데이터 (항상 a01_actual_daily) ────────
-      allRows.push(...await fetchActualRows(currentYear - 1, month))
+      allRows.push(...await fetchActualRows(year - 1, month))
     }
 
     // Year → Month → Country → Account 순 정렬
@@ -136,17 +160,11 @@ export default function CountryPickupDownloadModal({ data, segmentOptions, curre
     const ws = XLSX.utils.json_to_sheet(allRows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Country Pickup')
-    const monthStr = [...selectedMonths].sort((a, b) => a - b).map(m => String(m).padStart(2, '0')).join('-')
-    XLSX.writeFile(wb, `Country_Pickup_${currentYear}_${monthStr}.xlsx`)
+    const ymStr = selectedYMs.map(ym => ym.key).join('_')
+    XLSX.writeFile(wb, `Country_Pickup_${ymStr}.xlsx`)
     onClose()
   }
 
-  const chip = (on: boolean): React.CSSProperties => ({
-    padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
-    border: `0.5px solid ${on ? '#00E5A0' : 'rgba(255,255,255,0.1)'}`,
-    background: on ? 'rgba(0,229,160,0.07)' : 'transparent',
-    color: on ? '#00E5A0' : 'rgba(255,255,255,0.4)',
-  })
   const sectionLbl: React.CSSProperties = { fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.05em', marginBottom: 8 }
   // 그룹 pill (전체/FIT/GROUP)
   const groupBtn = (on: boolean): React.CSSProperties => ({
@@ -193,13 +211,68 @@ export default function CountryPickupDownloadModal({ data, segmentOptions, curre
         <div style={{ padding: 18 }}>
           {/* 월 선택 */}
           <div style={{ marginBottom: 16 }}>
-            <div style={sectionLbl}>MONTH <span style={{ color: 'rgba(255,255,255,0.2)', fontWeight: 400 }}>· multiple</span></div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 4 }}>
-              {MONTHS.map((label, i) => {
-                const m = i + 1
-                const on = selectedMonths.includes(m)
-                return <div key={m} onClick={() => toggleMonth(m)} style={{ ...chip(on), textAlign: 'center', padding: '4px 0' }}>{label}</div>
-              })}
+            <div style={sectionLbl}>MONTH</div>
+
+            {/* Year 드롭다운 + Month 체크박스 + Add */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <select
+                value={pickerYear}
+                onChange={e => setPickerYear(Number(e.target.value))}
+                style={{ padding: '6px 10px', borderRadius: 6, border: '0.5px solid rgba(255,255,255,0.1)', background: '#0a0a0a', color: '#fff', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}
+              >
+                {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+
+              <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 4 }}>
+                {MONTHS.map((lbl, i) => {
+                  const m = i + 1
+                  const checked = pickerMonths.includes(m)
+                  return (
+                    <label key={m} style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      padding: '4px 0', borderRadius: 6, fontSize: 11, cursor: 'pointer',
+                      border: `0.5px solid ${checked ? '#00E5A0' : 'rgba(255,255,255,0.1)'}`,
+                      background: checked ? 'rgba(0,229,160,0.07)' : 'transparent',
+                      color: checked ? '#00E5A0' : 'rgba(255,255,255,0.5)',
+                      userSelect: 'none',
+                    }}>
+                      <input type="checkbox" checked={checked} onChange={() => togglePickerMonth(m)} style={{ display: 'none' }} />
+                      {lbl}
+                    </label>
+                  )
+                })}
+              </div>
+
+              <button
+                onClick={handleAddYM}
+                disabled={pickerMonths.length === 0}
+                style={{
+                  padding: '6px 12px', borderRadius: 6, flexShrink: 0, border: '0.5px solid #00E5A0',
+                  background: pickerMonths.length === 0 ? 'transparent' : 'rgba(0,229,160,0.08)',
+                  color: pickerMonths.length === 0 ? 'rgba(255,255,255,0.4)' : '#00E5A0',
+                  fontSize: 11, fontWeight: 500, cursor: pickerMonths.length === 0 ? 'not-allowed' : 'pointer',
+                  opacity: pickerMonths.length === 0 ? 0.5 : 1,
+                }}
+              >Add ✓</button>
+            </div>
+
+            {/* 선택된 년월 태그 */}
+            {selectedYMs.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                {selectedYMs.map(ym => (
+                  <div key={ym.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 99, background: 'rgba(0,229,160,0.1)', border: '0.5px solid rgba(0,229,160,0.3)', fontSize: 11, color: '#00E5A0' }}>
+                    {ym.label}
+                    <span onClick={() => removeYM(ym.key)} style={{ cursor: 'pointer', fontSize: 12, opacity: 0.7, lineHeight: 1 }}>×</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 안내 텍스트 */}
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 6 }}>
+              {selectedYMs.length > 0
+                ? `${selectedYMs.length} month${selectedYMs.length > 1 ? 's' : ''} selected`
+                : 'Select year and month(s), then click Add ✓'}
             </div>
           </div>
 
@@ -300,11 +373,11 @@ export default function CountryPickupDownloadModal({ data, segmentOptions, curre
           <button onClick={onClose} style={{ padding: '6px 16px', borderRadius: 6, border: '0.5px solid rgba(255,255,255,0.1)', background: 'transparent', color: 'rgba(255,255,255,0.4)', fontSize: 12, cursor: 'pointer' }}>Cancel</button>
           <button
             onClick={handleDownload}
-            disabled={selectedMonths.length === 0}
+            disabled={selectedYMs.length === 0}
             style={{
               padding: '6px 16px', borderRadius: 6, border: 'none',
-              background: selectedMonths.length === 0 ? 'rgba(0,229,160,0.3)' : '#00E5A0',
-              color: '#0a0a0a', fontSize: 12, fontWeight: 500, cursor: selectedMonths.length === 0 ? 'not-allowed' : 'pointer',
+              background: selectedYMs.length === 0 ? 'rgba(0,229,160,0.3)' : '#00E5A0',
+              color: '#0a0a0a', fontSize: 12, fontWeight: 500, cursor: selectedYMs.length === 0 ? 'not-allowed' : 'pointer',
               display: 'flex', alignItems: 'center', gap: 5,
             }}
           >
