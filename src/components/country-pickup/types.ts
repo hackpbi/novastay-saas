@@ -15,6 +15,9 @@ export type CountryPickupRpcRow = {
   vs_revenue:      number
   ly_nights:       number
   ly_revenue:      number
+  // get_country_actual_data (이전월 Actual) — otb_ 접두사 없음
+  nights?:         number
+  room_revenue?:   number
 }
 
 // alpha2 소문자 → flag-icons 클래스명 (예: 'KR' → 'fi fi-kr')

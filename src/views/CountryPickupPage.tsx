@@ -168,6 +168,11 @@ export default function CountryPickupPage() {
     else setSelectedMonth(m => m + 1)
   }
 
+  // OTB 기준월보다 이전 월이면 Actual 데이터(get_country_actual_data) 사용 (KST)
+  const otbYear  = otbBase.getFullYear()
+  const otbMonth = otbBase.getMonth() + 1   // 1-based
+  const isPastMonth = selectedYear < otbYear || (selectedYear === otbYear && (selectedMonth + 1) < otbMonth)
+
   // 세그먼트 / 어카운트 선택 (빈 Set = 전체)
   const [selectedSegs, setSelectedSegs] = useState<Set<string>>(new Set())
   const [selectedAccounts, setSelectedAccounts] = useState<Set<string>>(new Set())
@@ -186,10 +191,23 @@ export default function CountryPickupPage() {
 
   // 국가별 픽업 — 전체 1회 호출 (p_segmentation=NULL), 클라이언트에서 필터/합산
   const { data: rpcRows = [], isLoading } = useQuery<CountryPickupRpcRow[]>({
-    queryKey: ['country-pickup', hotelId, otbDate, vsDate, selectedYear, selectedMonth, lyMode],
+    queryKey: ['country-pickup', hotelId, otbDate, vsDate, selectedYear, selectedMonth, lyMode, isPastMonth],
     enabled: !!hotelId && !!otbDate && !!vsDate,
     queryFn: async () => {
       if (!otbDate || !vsDate) return []
+      if (isPastMonth) {
+        // 이전월 → a01_actual_daily
+        const { data, error } = await (supabase as any).rpc('get_country_actual_data', {
+          p_hotel_id:     hotelId,
+          p_year:         selectedYear,
+          p_month:        selectedMonth + 1,
+          p_segmentation: null,
+          p_account_name: null,
+        })
+        if (error) throw error
+        return (data ?? []) as CountryPickupRpcRow[]
+      }
+      // 현재월 이후 → a02_otb_daily
       const { data, error } = await (supabase as any).rpc('get_country_pickup_data', {
         p_hotel_id:     hotelId,
         p_otb_date:     otbDate,
@@ -199,6 +217,24 @@ export default function CountryPickupPage() {
         p_segmentation: null,
         p_account_name: null,
         p_ly_mode:      lyMode,
+      })
+      if (error) throw error
+      return (data ?? []) as CountryPickupRpcRow[]
+    },
+  })
+
+  // 이전월일 때만 전년도 Actual 별도 조회 (vs LY / LY Actual 컬럼용)
+  const { data: lyData } = useQuery<CountryPickupRpcRow[] | null>({
+    queryKey: ['country_ly', hotelId, selectedYear, selectedMonth, isPastMonth],
+    enabled: !!hotelId && isPastMonth,
+    queryFn: async () => {
+      if (!isPastMonth) return null
+      const { data, error } = await (supabase as any).rpc('get_country_actual_data', {
+        p_hotel_id:     hotelId,
+        p_year:         selectedYear - 1,   // 전년도
+        p_month:        selectedMonth + 1,
+        p_segmentation: null,
+        p_account_name: null,
       })
       if (error) throw error
       return (data ?? []) as CountryPickupRpcRow[]
@@ -319,19 +355,39 @@ export default function CountryPickupPage() {
     return f
   }, [rpcRows, selectedSegs, selectedAccounts])
 
+  // 전년도 Actual — 현재 뷰와 동일한 세그/어카운트 필터 적용 (이전월에만)
+  const lyFiltered = useMemo(() => {
+    if (!isPastMonth || !lyData) return null
+    let f = selectedSegs.size === 0 ? lyData : lyData.filter(r => selectedSegs.has(r.segmentation))
+    if (selectedAccounts.size > 0) f = f.filter(r => selectedAccounts.has(r.account_name))
+    return f
+  }, [lyData, isPastMonth, selectedSegs, selectedAccounts])
+
   // KPI — filtered 전체 합산 (ADR은 WON, 표시 시 fmtK)
   const kpi = useMemo(() => {
     let otbRn = 0, vsRn = 0, otbRev = 0, vsRev = 0
     const countries = new Set<string>()
     for (const r of filtered) {
-      otbRn += r.otb_nights ?? 0; vsRn += r.vs_nights ?? 0
-      otbRev += r.otb_revenue ?? 0; vsRev += r.vs_revenue ?? 0
+      if (isPastMonth) {
+        otbRn += r.nights ?? 0; otbRev += r.room_revenue ?? 0   // 이전월: nights/room_revenue
+      } else {
+        otbRn += r.otb_nights ?? 0; vsRn += r.vs_nights ?? 0
+        otbRev += r.otb_revenue ?? 0; vsRev += r.vs_revenue ?? 0
+      }
       countries.add(r.country)
     }
     const totalOtbAdr = otbRn > 0 ? Math.round(otbRev / otbRn) : 0
     const totalVsAdr  = vsRn  > 0 ? Math.round(vsRev / vsRn)  : 0
-    return { countryCount: countries.size, totalOtbRn: otbRn, puRn: otbRn - vsRn, totalOtbAdr, puAdr: totalOtbAdr - totalVsAdr, totalOtbRev: otbRev, puRev: otbRev - vsRev }
-  }, [filtered])
+    return {
+      countryCount: countries.size,
+      totalOtbRn: otbRn,
+      puRn: isPastMonth ? 0 : otbRn - vsRn,
+      totalOtbAdr,
+      puAdr: isPastMonth ? 0 : totalOtbAdr - totalVsAdr,
+      totalOtbRev: otbRev,
+      puRev: isPastMonth ? 0 : otbRev - vsRev,
+    }
+  }, [filtered, isPastMonth])
 
   const cardStyle: React.CSSProperties = {
     background: 'var(--color-bg-secondary)', border: '0.5px solid var(--color-border-subtle)', borderRadius: 10,
@@ -485,7 +541,7 @@ export default function CountryPickupPage() {
           해당 조건의 국가별 픽업 데이터가 없습니다.
         </div>
       ) : (
-        <CountryPickupTable data={filtered} lyMode={lyMode} onToggleLyMode={() => setLyMode(m => (m === 'date' ? 'match' : 'date'))} />
+        <CountryPickupTable data={filtered} isPastMonth={isPastMonth} lyData={lyFiltered} lyMode={lyMode} onToggleLyMode={() => setLyMode(m => (m === 'date' ? 'match' : 'date'))} />
       )}
 
       {showDownloadModal && (

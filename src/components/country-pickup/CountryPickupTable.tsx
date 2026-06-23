@@ -13,8 +13,10 @@ const fmtPu   = (v: number) => (v === 0 ? '—' : v > 0 ? `+${v}` : `${v}`)
 const fmtPuK  = (v: number) => (v === 0 ? '—' : `${v > 0 ? '+' : ''}${fmtK(v)}`)
 const fmtPuM  = (v: number) => (v === 0 ? '—' : `${v > 0 ? '+' : ''}${fmtM(v)}`)
 
-export default function CountryPickupTable({ data, lyMode, onToggleLyMode }: {
+export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, onToggleLyMode }: {
   data: CountryPickupRpcRow[]
+  isPastMonth: boolean
+  lyData?: CountryPickupRpcRow[] | null
   lyMode: 'date' | 'match'
   onToggleLyMode: () => void
 }) {
@@ -25,15 +27,36 @@ export default function CountryPickupTable({ data, lyMode, onToggleLyMode }: {
         country: row.country, country_name_ko: row.country_name_ko, country_name_en: row.country_name_en, alpha2: row.alpha2,
         otb_nights: 0, vs_nights: 0, otb_revenue: 0, vs_revenue: 0, ly_nights: 0, ly_revenue: 0,
       }
-      acc[key].otb_nights  += row.otb_nights ?? 0
-      acc[key].vs_nights   += row.vs_nights ?? 0
-      acc[key].otb_revenue += row.otb_revenue ?? 0
-      acc[key].vs_revenue  += row.vs_revenue ?? 0
-      acc[key].ly_nights   += row.ly_nights ?? 0
-      acc[key].ly_revenue  += row.ly_revenue ?? 0
+      if (isPastMonth) {
+        // 이전월 Actual — nights/room_revenue 컬럼 (LY는 lyData에서 별도 병합)
+        acc[key].otb_nights  += row.nights       ?? 0
+        acc[key].otb_revenue += row.room_revenue ?? 0
+      } else {
+        acc[key].otb_nights  += row.otb_nights ?? 0
+        acc[key].vs_nights   += row.vs_nights ?? 0
+        acc[key].otb_revenue += row.otb_revenue ?? 0
+        acc[key].vs_revenue  += row.vs_revenue ?? 0
+        acc[key].ly_nights   += row.ly_nights ?? 0
+        acc[key].ly_revenue  += row.ly_revenue ?? 0
+      }
       return acc
     }, {} as Record<string, Agg>),
   ).sort((a, b) => b.otb_nights - a.otb_nights)
+
+  // 이전월: 전년도 Actual(lyData)을 country 기준으로 병합 → vs LY / LY Actual 컬럼
+  if (isPastMonth && lyData) {
+    const lyMap = lyData.reduce((m, r) => {
+      const k = r.country
+      if (!m[k]) m[k] = { nights: 0, revenue: 0 }
+      m[k].nights  += r.nights       ?? 0
+      m[k].revenue += r.room_revenue ?? 0
+      return m
+    }, {} as Record<string, { nights: number; revenue: number }>)
+    for (const a of aggregated) {
+      const ly = lyMap[a.country]
+      if (ly) { a.ly_nights = ly.nights; a.ly_revenue = ly.revenue }
+    }
+  }
 
   const totalOtbRn  = aggregated.reduce((s, r) => s + r.otb_nights, 0)
   const totalPuRn   = aggregated.reduce((s, r) => s + (r.otb_nights - r.vs_nights), 0)
@@ -66,9 +89,13 @@ export default function CountryPickupTable({ data, lyMode, onToggleLyMode }: {
             {/* 컬럼 그룹 헤더 */}
             <tr>
               <th style={{ width: 130, textAlign: 'left', padding: '5px 8px 2px', fontSize: 9, fontWeight: 500, color: 'var(--color-text-tertiary)' }} />
-              <th colSpan={3} style={grpTh('var(--color-text-tertiary)')}>Current OTB</th>
-              <th style={sepStyle} />
-              <th colSpan={3} style={grpTh('rgba(0,229,160,0.7)')}>Pickup</th>
+              <th colSpan={3} style={grpTh('var(--color-text-tertiary)')}>{isPastMonth ? 'Actual' : 'Current OTB'}</th>
+              {!isPastMonth && (
+                <>
+                  <th style={sepStyle} />
+                  <th colSpan={3} style={grpTh('rgba(0,229,160,0.7)')}>Pickup</th>
+                </>
+              )}
               <th style={sepStyle} />
               <th colSpan={3} onClick={onToggleLyMode} style={{ ...grpTh('rgba(255,180,50,0.9)'), cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
                 {lyMode === 'date' ? 'Same date vs LY ⇅' : 'Same period vs LY ⇅'}
@@ -80,8 +107,12 @@ export default function CountryPickupTable({ data, lyMode, onToggleLyMode }: {
             <tr>
               <th style={{ textAlign: 'left', padding: '2px 8px 6px', fontSize: 9, fontWeight: 500, color: 'var(--color-text-tertiary)', borderBottom: '0.5px solid var(--color-border-subtle)' }}>Country</th>
               {['R/N', 'ADR', 'REV'].map(h => <th key={h} style={colTh('var(--color-text-tertiary)')}>{h}</th>)}
-              <th style={{ ...sepStyle, borderBottom: '0.5px solid var(--color-border-subtle)' }} />
-              {['R/N', 'ADR', 'REV'].map(h => <th key={'pu-' + h} style={colTh('rgba(0,229,160,0.6)')}>{h}</th>)}
+              {!isPastMonth && (
+                <>
+                  <th style={{ ...sepStyle, borderBottom: '0.5px solid var(--color-border-subtle)' }} />
+                  {['R/N', 'ADR', 'REV'].map(h => <th key={'pu-' + h} style={colTh('rgba(0,229,160,0.6)')}>{h}</th>)}
+                </>
+              )}
               <th style={{ ...sepStyle, borderBottom: '0.5px solid var(--color-border-subtle)' }} />
               {['R/N', 'ADR', 'REV'].map(h => <th key={'ly-' + h} style={colTh('rgba(255,180,50,0.6)')}>{h}</th>)}
               <th style={{ ...sepStyle, borderBottom: '0.5px solid var(--color-border-subtle)' }} />
@@ -111,15 +142,19 @@ export default function CountryPickupTable({ data, lyMode, onToggleLyMode }: {
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{row.country_name_en || row.country_name_ko}</span>
                     </div>
                   </td>
-                  {/* OTB */}
+                  {/* OTB (이전월이면 Actual) */}
                   <td style={tdBase}>{row.otb_nights.toLocaleString('ko-KR')}</td>
                   <td style={tdBase}>{fmtK(otbAdr)}</td>
                   <td style={tdBase}>{fmtM(row.otb_revenue)}</td>
-                  <td style={sepStyle} />
-                  {/* Pickup */}
-                  <td style={{ ...tdBase, color: puColor(puRn) }}>{fmtPu(puRn)}</td>
-                  <td style={{ ...tdBase, color: puColor(puAdr) }}>{fmtPuK(puAdr)}</td>
-                  <td style={{ ...tdBase, color: puColor(puRev) }}>{fmtPuM(puRev)}</td>
+                  {!isPastMonth && (
+                    <>
+                      <td style={sepStyle} />
+                      {/* Pickup */}
+                      <td style={{ ...tdBase, color: puColor(puRn) }}>{fmtPu(puRn)}</td>
+                      <td style={{ ...tdBase, color: puColor(puAdr) }}>{fmtPuK(puAdr)}</td>
+                      <td style={{ ...tdBase, color: puColor(puRev) }}>{fmtPuM(puRev)}</td>
+                    </>
+                  )}
                   <td style={sepStyle} />
                   {/* vs LY */}
                   <td style={{ ...tdBase, color: puColor(lyRn) }}>{fmtPu(lyRn)}</td>
@@ -139,10 +174,14 @@ export default function CountryPickupTable({ data, lyMode, onToggleLyMode }: {
               <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{totalOtbRn.toLocaleString('ko-KR')}</td>
               <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtK(totalOtbAdr)}</td>
               <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtM(totalOtbRev)}</td>
-              <td style={{ ...sepStyle, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }} />
-              <td style={{ ...tdBase, fontWeight: 500, color: puColor(totalPuRn), borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtPu(totalPuRn)}</td>
-              <td style={{ ...tdBase, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none', color: 'var(--color-text-tertiary)' }}>—</td>
-              <td style={{ ...tdBase, fontWeight: 500, color: puColor(totalPuRev), borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtPuM(totalPuRev)}</td>
+              {!isPastMonth && (
+                <>
+                  <td style={{ ...sepStyle, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }} />
+                  <td style={{ ...tdBase, fontWeight: 500, color: puColor(totalPuRn), borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtPu(totalPuRn)}</td>
+                  <td style={{ ...tdBase, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none', color: 'var(--color-text-tertiary)' }}>—</td>
+                  <td style={{ ...tdBase, fontWeight: 500, color: puColor(totalPuRev), borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtPuM(totalPuRev)}</td>
+                </>
+              )}
               <td style={{ ...sepStyle, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }} />
               <td style={{ ...tdBase, fontWeight: 500, color: puColor(totalOtbRn - totalLyRn), borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtPu(totalOtbRn - totalLyRn)}</td>
               <td style={{ ...tdBase, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none', color: 'var(--color-text-tertiary)' }}>—</td>
