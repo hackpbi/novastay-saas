@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { FileSpreadsheet, X, Download, ChevronDown } from 'lucide-react'
+import { FileSpreadsheet, X, Download } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import type { CountryPickupRpcRow } from './types'
 
@@ -19,32 +19,46 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
     return () => window.removeEventListener('keydown', h)
   }, [onClose])
 
-  const segOptions = useMemo(() => ['All', ...Array.from(new Set(data.map(r => r.sorting2).filter(Boolean)))], [data])
-
   const [selectedMonths, setSelectedMonths] = useState<number[]>([currentMonth])
-  const [selectedSeg, setSelectedSeg] = useState<string>('All')
-  const [selectedAcc, setSelectedAcc] = useState<string>('All')
-  const [accOpen, setAccOpen] = useState(false)
+  const [selectedGroup, setSelectedGroup] = useState<'전체' | 'fit' | 'group'>('전체')
+  const [selectedSegs, setSelectedSegs] = useState<string[]>([])
+  const [selectedAccounts, setSelectedAccounts] = useState<string[]>([])
 
-  // 어카운트 목록 — 선택 세그먼트 기준 필터
-  const accountOptions = useMemo(() => {
-    const filtered = selectedSeg === 'All' ? data : data.filter(r => r.sorting2 === selectedSeg)
-    return ['All', ...Array.from(new Set(filtered.map(r => r.account_name).filter(Boolean))).sort()]
-  }, [data, selectedSeg])
+  // sorting2 그룹 → 하위 세그먼트 목록
+  const segList = useMemo(() => {
+    if (selectedGroup === '전체') return []
+    const filtered = data.filter(r => r.sorting2 === selectedGroup)
+    return Array.from(new Set(filtered.map(r => r.segmentation).filter(Boolean))).sort()
+  }, [data, selectedGroup])
+
+  // 선택 그룹/세그 기준 어카운트 목록
+  const accountList = useMemo(() => {
+    let filtered = data
+    if (selectedGroup !== '전체') filtered = filtered.filter(r => r.sorting2 === selectedGroup)
+    if (selectedSegs.length > 0) filtered = filtered.filter(r => selectedSegs.includes(r.segmentation))
+    return Array.from(new Set(filtered.map(r => r.account_name).filter(Boolean))).sort()
+  }, [data, selectedGroup, selectedSegs])
 
   const toggleMonth = (m: number) => {
     setSelectedMonths(prev => (prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]))
   }
-  const handleSegChange = (seg: string) => {
-    setSelectedSeg(seg)
-    setSelectedAcc('All')   // 세그먼트 변경 시 어카운트 초기화
+  const handleGroupChange = (g: '전체' | 'fit' | 'group') => {
+    setSelectedGroup(g); setSelectedSegs([]); setSelectedAccounts([])
+  }
+  const toggleSeg = (seg: string) => {
+    setSelectedSegs(prev => (prev.includes(seg) ? prev.filter(x => x !== seg) : [...prev, seg]))
+    setSelectedAccounts([])
+  }
+  const toggleAccount = (acc: string) => {
+    setSelectedAccounts(prev => (prev.includes(acc) ? prev.filter(x => x !== acc) : [...prev, acc]))
   }
 
   const handleDownload = () => {
     const filtered = data.filter(row => {
-      const segOk = selectedSeg === 'All' || row.sorting2 === selectedSeg
-      const accOk = selectedAcc === 'All' || row.account_name === selectedAcc
-      return segOk && accOk
+      const groupOk = selectedGroup === '전체' || row.sorting2 === selectedGroup
+      const segOk   = selectedSegs.length === 0 || selectedSegs.includes(row.segmentation)
+      const accOk   = selectedAccounts.length === 0 || selectedAccounts.includes(row.account_name)
+      return groupOk && segOk && accOk
     })
 
     const aggregated = Object.values(
@@ -97,11 +111,18 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
     background: on ? 'rgba(0,229,160,0.07)' : 'transparent',
     color: on ? '#00E5A0' : 'rgba(255,255,255,0.4)',
   })
-  const sectionLbl: React.CSSProperties = { fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.05em', marginBottom: 6 }
-  // 페이지 상단 필터와 동일한 pill 스타일
-  const pill = (on: boolean): React.CSSProperties => ({
+  const sectionLbl: React.CSSProperties = { fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.05em', marginBottom: 8 }
+  // 그룹 pill (전체/FIT/GROUP)
+  const groupBtn = (on: boolean): React.CSSProperties => ({
     padding: '4px 12px', borderRadius: 99, fontSize: 11, fontWeight: 500, cursor: 'pointer',
     border: on ? '1px solid #00E5A0' : '0.5px solid rgba(255,255,255,0.1)',
+    background: on ? 'rgba(0,229,160,0.07)' : 'transparent',
+    color: on ? '#00E5A0' : 'rgba(255,255,255,0.4)',
+  })
+  // 세그/어카운트 토글 칩
+  const tagBtn = (on: boolean): React.CSSProperties => ({
+    padding: '3px 9px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
+    border: on ? '0.5px solid #00E5A0' : '0.5px solid rgba(255,255,255,0.1)',
     background: on ? 'rgba(0,229,160,0.07)' : 'transparent',
     color: on ? '#00E5A0' : 'rgba(255,255,255,0.4)',
   })
@@ -111,7 +132,7 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div style={{ background: '#111418', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 12, width: 420, maxWidth: '92vw', overflow: 'hidden' }}>
+      <div style={{ background: '#0a0a0a', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 12, width: 420, maxWidth: '92vw', overflow: 'hidden' }}>
         {/* 헤더 */}
         <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 500, color: '#fff' }}>
@@ -139,48 +160,39 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
 
           <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.06)', margin: '14px 0' }} />
 
-          {/* 세그먼트 — 페이지 필터와 동일한 pill */}
+          {/* 세그먼트 — 그룹(전체/FIT/GROUP) + 하위 세그 다중선택 */}
           <div style={{ marginBottom: 14 }}>
             <div style={sectionLbl}>SEGMENT</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <button onClick={() => handleSegChange('All')} style={pill(selectedSeg === 'All')}>전체</button>
-              {segOptions.filter(s => s !== 'All').map(seg => (
-                <button key={seg} onClick={() => handleSegChange(seg)} style={pill(selectedSeg === seg)}>{seg.toUpperCase()}</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: segList.length > 0 ? 8 : 0 }}>
+              {(['전체', 'fit', 'group'] as const).map(g => (
+                <button key={g} onClick={() => handleGroupChange(g)} style={groupBtn(selectedGroup === g)}>
+                  {g === '전체' ? '전체' : g === 'fit' ? 'FIT' : 'GROUP'}
+                </button>
               ))}
             </div>
-          </div>
-
-          {/* 어카운트 — 페이지 필터와 동일한 드롭다운 */}
-          <div>
-            <div style={sectionLbl}>ACCOUNT</div>
-            <button
-              onClick={() => setAccOpen(o => !o)}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, width: '100%',
-                padding: '6px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 11,
-                border: `0.5px solid ${selectedAcc !== 'All' ? '#00E5A0' : 'rgba(255,255,255,0.1)'}`,
-                background: selectedAcc !== 'All' ? 'rgba(0,229,160,0.07)' : 'transparent',
-                color: selectedAcc !== 'All' ? '#00E5A0' : 'rgba(255,255,255,0.4)',
-              }}
-            >
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedAcc === 'All' ? '전체' : selectedAcc}</span>
-              <ChevronDown size={13} style={{ flexShrink: 0, opacity: 0.6 }} />
-            </button>
-            {accOpen && (
-              <div style={{ marginTop: 6, border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 8, maxHeight: 150, overflowY: 'auto', background: '#0d1014' }}>
-                {accountOptions.map(acc => {
-                  const on = selectedAcc === acc
-                  return (
-                    <div key={acc} onClick={() => { setSelectedAcc(acc); setAccOpen(false) }}
-                      style={{ padding: '6px 10px', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap', color: on ? '#00E5A0' : 'rgba(255,255,255,0.55)', background: on ? 'rgba(0,229,160,0.07)' : 'transparent' }}
-                      onMouseEnter={e => { if (!on) e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
-                      onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent' }}>
-                      {acc === 'All' ? '전체' : acc}
-                    </div>
-                  )
-                })}
+            {segList.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                {segList.map(seg => (
+                  <button key={seg} onClick={() => toggleSeg(seg)} style={tagBtn(selectedSegs.includes(seg))}>{seg}</button>
+                ))}
               </div>
             )}
+          </div>
+
+          {/* 어카운트 — 다중선택 */}
+          <div>
+            <div style={sectionLbl}>
+              ACCOUNT
+              {selectedAccounts.length > 0 && <span style={{ marginLeft: 6, color: '#00E5A0', fontWeight: 400 }}>· {selectedAccounts.length} selected</span>}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxHeight: 120, overflowY: 'auto' }}>
+              {accountList.map(acc => (
+                <button key={acc} onClick={() => toggleAccount(acc)} style={tagBtn(selectedAccounts.includes(acc))}>{acc}</button>
+              ))}
+              {accountList.length === 0 && (
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>{selectedGroup === '전체' ? '세그먼트를 선택하세요' : '어카운트 없음'}</span>
+              )}
+            </div>
           </div>
         </div>
 
