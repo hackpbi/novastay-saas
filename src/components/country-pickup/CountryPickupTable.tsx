@@ -1,7 +1,7 @@
 'use client'
 
 import { fmtK, fmtM } from '@/utils/pickupPageUtils'
-import { getFlagEmoji, type CountryPickupRpcRow } from './types'
+import { getFlagClass, type CountryPickupRpcRow } from './types'
 
 type Agg = { country: string; country_name_ko: string; country_name_en: string; alpha2: string; otb_nights: number; vs_nights: number; otb_revenue: number; vs_revenue: number }
 
@@ -67,9 +67,11 @@ export default function CountryPickupTable({ data }: { data: CountryPickupRpcRow
                   onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-primary)')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                   <td style={{ ...tdBase, textAlign: 'left', fontWeight: 500, color: 'var(--color-text-primary)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <span style={{ fontSize: 13 }}>{getFlagEmoji(row.alpha2)}</span>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.country_name_en || row.country_name_ko}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {row.alpha2
+                        ? <span className={getFlagClass(row.alpha2)} style={{ fontSize: 16, width: 20, flexShrink: 0 }} />
+                        : <span style={{ fontSize: 14, flexShrink: 0 }}>🌐</span>}
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11, fontWeight: 500 }}>{row.country_name_en || row.country_name_ko}</span>
                     </div>
                   </td>
                   <td style={{ ...tdBase, color: 'var(--color-text-primary)' }}>{row.otb_nights.toLocaleString('ko-KR')}</td>

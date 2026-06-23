@@ -1,6 +1,6 @@
 'use client'
 
-import { getFlagEmoji, type CountryPickupRpcRow } from './types'
+import { getFlagClass, type CountryPickupRpcRow } from './types'
 
 type Agg = { country: string; country_name_ko: string; country_name_en: string; alpha2: string; otb_nights: number; vs_nights: number }
 
@@ -52,7 +52,9 @@ export default function CountryPickupChart({ data }: { data: CountryPickupRpcRow
           return (
             <div key={row.country} style={{ display: 'grid', gridTemplateColumns: GRID, alignItems: 'center', gap: 6, padding: '2px 0' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden' }}>
-                <span style={{ fontSize: 13, flexShrink: 0 }}>{getFlagEmoji(row.alpha2)}</span>
+                {row.alpha2
+                  ? <span className={getFlagClass(row.alpha2)} style={{ fontSize: 16, width: 20, flexShrink: 0 }} />
+                  : <span style={{ fontSize: 14, flexShrink: 0 }}>🌐</span>}
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.country_name_en || row.country_name_ko}</span>
               </div>
               <div style={{ height: 8, background: 'var(--color-bg-primary)', borderRadius: 3, overflow: 'hidden' }}>

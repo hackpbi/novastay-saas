@@ -15,8 +15,8 @@ export type CountryPickupRpcRow = {
   vs_revenue:      number
 }
 
-// 국기 이모지 — alpha2 코드 → regional indicator (KST/날짜 무관, 순수 변환)
-export const getFlagEmoji = (alpha2: string): string => {
-  if (!alpha2) return '🌐'
-  return alpha2.toUpperCase().replace(/./g, c => String.fromCodePoint(c.charCodeAt(0) + 127397))
+// alpha2 소문자 → flag-icons 클래스명 (예: 'KR' → 'fi fi-kr')
+export const getFlagClass = (alpha2: string): string => {
+  if (!alpha2) return ''
+  return `fi fi-${alpha2.toLowerCase()}`
 }
