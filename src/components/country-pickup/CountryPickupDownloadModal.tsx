@@ -71,6 +71,7 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
       return {
         'Year'        : currentYear,
         'Month'       : currentMonth,
+        'Country'     : row.country_name_en || row.country_name_ko || row.country,
         'Account'     : row.account_name  || '(미지정)',
         'Segmentation': row.segmentation  || '(미지정)',
         'R/N'         : row.otb_nights,
