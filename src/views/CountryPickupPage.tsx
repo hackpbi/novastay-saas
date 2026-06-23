@@ -216,9 +216,9 @@ export default function CountryPickupPage() {
     background: 'var(--color-bg-secondary)', border: '0.5px solid var(--color-border-subtle)', borderRadius: 10,
     padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6,
   }
-  const cardLabel = (kr: string, en: string) => (
+  const cardLabel = (en: string) => (
     <div style={{ fontSize: 10, color: 'var(--color-text-tertiary)', lineHeight: 1.4 }}>
-      {kr}<br /><span style={{ fontWeight: 500, color: 'var(--color-text-secondary)' }}>{en}</span>
+      <span style={{ fontWeight: 500, color: 'var(--color-text-secondary)' }}>{en}</span>
     </div>
   )
   const cardBig: React.CSSProperties = { fontSize: 24, fontWeight: 500, color: 'var(--color-text-primary)', lineHeight: 1 }
@@ -274,7 +274,7 @@ export default function CountryPickupPage() {
         {/* 1 — 국가 수 */}
         <div style={cardStyle}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-            {cardLabel('현재 국가 수', 'Active Countries')}
+            {cardLabel('Active Countries')}
             <span style={{ fontSize: 22, opacity: 0.55 }}>🌏</span>
           </div>
           <div style={cardBig}>{dash ?? kpi.countryCount}<span style={cardUnit}>개국</span></div>
@@ -283,37 +283,34 @@ export default function CountryPickupPage() {
         {/* 2 — OTB R/N */}
         <div style={cardStyle}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-            {cardLabel('현재 OTB R/N', 'Room Nights')}
+            {cardLabel('Room Nights')}
             <BarChart2 size={22} style={{ opacity: 0.55, color: 'var(--color-text-secondary)', flexShrink: 0 }} />
           </div>
           <div style={cardBig}>{dash ?? kpi.totalOtbRn.toLocaleString('ko-KR')}</div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
             <span style={{ fontSize: 11, fontWeight: 500, color: kpi.puRn >= 0 ? '#00B883' : '#E24B4A' }}>Pickup {kpi.puRn >= 0 ? '+' : ''}{kpi.puRn}</span>
-            <span style={{ fontSize: 10, color: 'rgba(0,184,131,0.7)' }}>전일 대비 {kpi.puRn >= 0 ? '+' : ''}{kpi.puRn}</span>
           </div>
         </div>
         {/* 3 — OTB ADR */}
         <div style={cardStyle}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-            {cardLabel('현재 OTB ADR', 'Average Daily Rate')}
+            {cardLabel('Average Daily Rate')}
             <Coins size={22} style={{ opacity: 0.55, color: 'var(--color-text-secondary)', flexShrink: 0 }} />
           </div>
           <div style={cardBig}>{dash ?? fmtK(kpi.totalOtbAdr)}<span style={cardUnit}>KRW</span></div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
             <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)' }}>Pickup OK</span>
-            <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>변동 없음</span>
           </div>
         </div>
         {/* 4 — OTB REV */}
         <div style={cardStyle}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-            {cardLabel('현재 OTB REV', 'Revenue')}
+            {cardLabel('Revenue')}
             <TrendingUp size={22} style={{ opacity: 0.55, color: 'var(--color-text-secondary)', flexShrink: 0 }} />
           </div>
           <div style={cardBig}>{dash ?? fmtM(kpi.totalOtbRev)}<span style={cardUnit}>KRW</span></div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
             <span style={{ fontSize: 11, fontWeight: 500, color: kpi.puRev >= 0 ? '#00B883' : '#E24B4A' }}>Pickup {kpi.puRev >= 0 ? '+' : ''}{fmtM(kpi.puRev)}</span>
-            <span style={{ fontSize: 10, color: 'rgba(0,184,131,0.7)' }}>전일 대비 {kpi.puRev >= 0 ? '+' : ''}{fmtM(kpi.puRev)}</span>
           </div>
         </div>
       </div>
