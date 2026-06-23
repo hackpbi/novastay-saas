@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown, BarChart2, Coins, TrendingUp } from 'lucide-react'
+import { ChevronDown, BarChart2, Coins, TrendingUp, FileSpreadsheet } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import DatePicker from '@/components/DatePicker'
 import { fmtK, fmtM } from '@/utils/pickupPageUtils'
 import CountryPickupTable from '@/components/country-pickup/CountryPickupTable'
+import CountryPickupDownloadModal from '@/components/country-pickup/CountryPickupDownloadModal'
 import { type CountryPickupRpcRow } from '@/components/country-pickup/types'
 
 // ─── 세그먼트 드롭다운 (FIT/GRP) — 다중선택 ────────────────────────────────────────
@@ -158,6 +159,7 @@ export default function CountryPickupPage() {
 
   // vs LY 모드 (date=동일자 / match=동기간)
   const [lyMode, setLyMode] = useState<'date' | 'match'>('date')
+  const [showDownloadModal, setShowDownloadModal] = useState(false)
 
   // 국가별 픽업 — 전체 1회 호출 (p_segmentation=NULL), 클라이언트에서 필터/합산
   const { data: rpcRows = [], isLoading } = useQuery<CountryPickupRpcRow[]>({
@@ -266,6 +268,18 @@ export default function CountryPickupPage() {
           <SegDropdown label="GRP" segs={grpSegs.map(s => ({ code: s, name: s }))} selected={selectedSegs} onToggle={handleToggleSeg} />
           <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 4 }}>어카운트</span>
           <AccDropdown accounts={accountList} selected={selectedAccounts} onToggle={handleToggleAccount} onSelectAll={() => setSelectedAccounts(new Set())} />
+          <div style={{ width: 1, height: 13, background: 'var(--color-border-subtle)' }} />
+          <button
+            onClick={() => setShowDownloadModal(true)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 6,
+              border: '0.5px solid rgba(0,229,160,0.4)', background: 'rgba(0,229,160,0.06)',
+              color: '#00E5A0', fontSize: 11, fontWeight: 500, cursor: 'pointer',
+            }}
+          >
+            <FileSpreadsheet size={14} />
+            Download
+          </button>
         </div>
       </div>
 
@@ -324,6 +338,15 @@ export default function CountryPickupPage() {
         </div>
       ) : (
         <CountryPickupTable data={filtered} lyMode={lyMode} onToggleLyMode={() => setLyMode(m => (m === 'date' ? 'match' : 'date'))} />
+      )}
+
+      {showDownloadModal && (
+        <CountryPickupDownloadModal
+          data={rpcRows}
+          currentMonth={selectedMonth + 1}
+          currentYear={selectedYear}
+          onClose={() => setShowDownloadModal(false)}
+        />
       )}
     </div>
   )
