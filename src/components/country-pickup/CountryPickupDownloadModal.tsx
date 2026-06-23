@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { FileSpreadsheet, X, Download } from 'lucide-react'
+import { FileSpreadsheet, X, Download, ChevronDown } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import type { CountryPickupRpcRow } from './types'
 
@@ -24,6 +24,7 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
   const [selectedMonths, setSelectedMonths] = useState<number[]>([currentMonth])
   const [selectedSeg, setSelectedSeg] = useState<string>('All')
   const [selectedAcc, setSelectedAcc] = useState<string>('All')
+  const [accOpen, setAccOpen] = useState(false)
 
   // 어카운트 목록 — 선택 세그먼트 기준 필터
   const accountOptions = useMemo(() => {
@@ -97,6 +98,13 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
     color: on ? '#00E5A0' : 'rgba(255,255,255,0.4)',
   })
   const sectionLbl: React.CSSProperties = { fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.05em', marginBottom: 6 }
+  // 페이지 상단 필터와 동일한 pill 스타일
+  const pill = (on: boolean): React.CSSProperties => ({
+    padding: '4px 12px', borderRadius: 99, fontSize: 11, fontWeight: 500, cursor: 'pointer',
+    border: on ? '1px solid #00E5A0' : '0.5px solid rgba(255,255,255,0.1)',
+    background: on ? 'rgba(0,229,160,0.07)' : 'transparent',
+    color: on ? '#00E5A0' : 'rgba(255,255,255,0.4)',
+  })
 
   return (
     <div
@@ -131,24 +139,48 @@ export default function CountryPickupDownloadModal({ data, currentMonth, current
 
           <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.06)', margin: '14px 0' }} />
 
-          {/* 세그먼트 */}
+          {/* 세그먼트 — 페이지 필터와 동일한 pill */}
           <div style={{ marginBottom: 14 }}>
             <div style={sectionLbl}>SEGMENT</div>
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-              {segOptions.map(seg => (
-                <div key={seg} onClick={() => handleSegChange(seg)} style={chip(selectedSeg === seg)}>{seg === 'All' ? 'All' : seg.toUpperCase()}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <button onClick={() => handleSegChange('All')} style={pill(selectedSeg === 'All')}>전체</button>
+              {segOptions.filter(s => s !== 'All').map(seg => (
+                <button key={seg} onClick={() => handleSegChange(seg)} style={pill(selectedSeg === seg)}>{seg.toUpperCase()}</button>
               ))}
             </div>
           </div>
 
-          {/* 어카운트 */}
+          {/* 어카운트 — 페이지 필터와 동일한 드롭다운 */}
           <div>
             <div style={sectionLbl}>ACCOUNT</div>
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', maxHeight: 100, overflowY: 'auto' }}>
-              {accountOptions.map(acc => (
-                <div key={acc} onClick={() => setSelectedAcc(acc)} style={chip(selectedAcc === acc)}>{acc}</div>
-              ))}
-            </div>
+            <button
+              onClick={() => setAccOpen(o => !o)}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, width: '100%',
+                padding: '6px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 11,
+                border: `0.5px solid ${selectedAcc !== 'All' ? '#00E5A0' : 'rgba(255,255,255,0.1)'}`,
+                background: selectedAcc !== 'All' ? 'rgba(0,229,160,0.07)' : 'transparent',
+                color: selectedAcc !== 'All' ? '#00E5A0' : 'rgba(255,255,255,0.4)',
+              }}
+            >
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedAcc === 'All' ? '전체' : selectedAcc}</span>
+              <ChevronDown size={13} style={{ flexShrink: 0, opacity: 0.6 }} />
+            </button>
+            {accOpen && (
+              <div style={{ marginTop: 6, border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 8, maxHeight: 150, overflowY: 'auto', background: '#0d1014' }}>
+                {accountOptions.map(acc => {
+                  const on = selectedAcc === acc
+                  return (
+                    <div key={acc} onClick={() => { setSelectedAcc(acc); setAccOpen(false) }}
+                      style={{ padding: '6px 10px', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap', color: on ? '#00E5A0' : 'rgba(255,255,255,0.55)', background: on ? 'rgba(0,229,160,0.07)' : 'transparent' }}
+                      onMouseEnter={e => { if (!on) e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
+                      onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent' }}>
+                      {acc === 'All' ? '전체' : acc}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
 
