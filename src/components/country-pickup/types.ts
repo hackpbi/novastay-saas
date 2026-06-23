@@ -22,9 +22,10 @@ export type CountryPickupRpcRow = {
 
 // c05_market_table_schema 기반 세그먼트 옵션 (전체 목록 — 데이터 유무와 무관)
 export type SegmentOption = {
-  code:     string   // segmentation 코드 (예: 'WHO')
-  name:     string   // 표시명 (예: 'IOTA')
-  sorting2: string   // 'fit' | 'group'
+  code:       string   // segmentation 코드 (예: 'WHO')
+  name:       string   // 표시명 (예: 'IOTA')
+  sorting2:   string   // 'fit' | 'group'
+  orderIndex: number   // c05 order_index (정렬용)
 }
 
 // alpha2 소문자 → flag-icons 클래스명 (예: 'KR' → 'fi fi-kr')

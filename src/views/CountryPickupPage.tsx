@@ -285,9 +285,10 @@ export default function CountryPickupPage() {
     if (!hotelId) return
     ;(supabase as any)
       .from('c05_market_table_schema')
-      .select('segmentation, name, sorting2')
+      .select('segmentation, name, sorting2, order_index')
       .eq('hotel_id', hotelId)
       .not('segmentation', 'eq', '{}')   // 빈 배열(상위 그룹 row) 제외
+      .order('order_index', { ascending: true })
       .then(({ data: schemaData }: any) => {
         if (!schemaData) return
         const options: SegmentOption[] = []
@@ -303,9 +304,10 @@ export default function CountryPickupPage() {
             ? 'group'
             : s2
           segs.forEach(seg => {
-            if (seg) options.push({ code: seg, name: row.name ?? seg, sorting2: norm })
+            if (seg) options.push({ code: seg, name: row.name ?? seg, sorting2: norm, orderIndex: row.order_index ?? 999 })
           })
         })
+        options.sort((a, b) => a.orderIndex - b.orderIndex)
         setSegmentOptions(options)
       })
   }, [hotelId])

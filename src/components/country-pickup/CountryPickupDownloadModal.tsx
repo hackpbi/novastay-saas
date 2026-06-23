@@ -30,9 +30,20 @@ export default function CountryPickupDownloadModal({ data, segmentOptions, curre
     return () => window.removeEventListener('keydown', h)
   }, [onClose])
 
+  // 월 드롭다운 외부 클릭 시 닫힘
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('[data-month-drop]')) setMonthDropOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   const YEAR_OPTIONS = [currentYear - 1, currentYear, currentYear + 1]
   const [pickerYear,  setPickerYear]  = useState<number>(currentYear)
   const [pickerMonths, setPickerMonths] = useState<number[]>([currentMonth])   // 체크박스 임시선택
+  const [monthDropOpen, setMonthDropOpen] = useState(false)                     // 월 드롭다운 열림
   const [selectedYMs, setSelectedYMs] = useState<YearMonth[]>([])               // 확정된 년월 태그
   const [selectedGroup, setSelectedGroup] = useState<'All' | 'fit' | 'group'>('All')
   const [selectedSegs, setSelectedSegs] = useState<string[]>([])
@@ -62,7 +73,8 @@ export default function CountryPickupDownloadModal({ data, segmentOptions, curre
           .sort((a, b) => a.key.localeCompare(b.key))
       })
     })
-    setPickerMonths([])   // 체크박스 초기화
+    setPickerMonths([])      // 체크박스 초기화
+    setMonthDropOpen(false)  // 드롭다운 닫기
   }
   const removeYM = (key: string) => {
     setSelectedYMs(prev => prev.filter(s => s.key !== key))
@@ -217,30 +229,73 @@ export default function CountryPickupDownloadModal({ data, segmentOptions, curre
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
               <select
                 value={pickerYear}
-                onChange={e => setPickerYear(Number(e.target.value))}
-                style={{ padding: '6px 10px', borderRadius: 6, border: '0.5px solid rgba(255,255,255,0.1)', background: '#0a0a0a', color: '#fff', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}
+                onChange={e => { setPickerYear(Number(e.target.value)); setPickerMonths([]) }}
+                style={{ width: 100, padding: '6px 10px', borderRadius: 6, border: '0.5px solid rgba(255,255,255,0.1)', background: '#0a0a0a', color: '#fff', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}
               >
                 {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
 
-              <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 4 }}>
-                {MONTHS.map((lbl, i) => {
-                  const m = i + 1
-                  const checked = pickerMonths.includes(m)
-                  return (
-                    <label key={m} style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      padding: '4px 0', borderRadius: 6, fontSize: 11, cursor: 'pointer',
-                      border: `0.5px solid ${checked ? '#00E5A0' : 'rgba(255,255,255,0.1)'}`,
-                      background: checked ? 'rgba(0,229,160,0.07)' : 'transparent',
-                      color: checked ? '#00E5A0' : 'rgba(255,255,255,0.5)',
-                      userSelect: 'none',
-                    }}>
-                      <input type="checkbox" checked={checked} onChange={() => togglePickerMonth(m)} style={{ display: 'none' }} />
-                      {lbl}
-                    </label>
-                  )
-                })}
+              <div style={{ position: 'relative', flex: 1 }} data-month-drop>
+                <button
+                  onClick={() => setMonthDropOpen(o => !o)}
+                  style={{
+                    width: '100%', padding: '6px 10px', borderRadius: 6, textAlign: 'left',
+                    border: `0.5px solid ${monthDropOpen ? '#00E5A0' : 'rgba(255,255,255,0.1)'}`,
+                    background: '#0a0a0a',
+                    color: pickerMonths.length > 0 ? '#00E5A0' : 'rgba(255,255,255,0.4)',
+                    fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  }}
+                >
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {pickerMonths.length === 0
+                      ? 'Select months'
+                      : [...pickerMonths].sort((a, b) => a - b).map(m => MONTHS[m - 1]).join(', ')}
+                  </span>
+                  <span style={{ fontSize: 10, opacity: 0.6, flexShrink: 0, marginLeft: 6 }}>▾</span>
+                </button>
+
+                {monthDropOpen && (
+                  <div style={{
+                    position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 20,
+                    background: '#0a0a0a', border: '0.5px solid rgba(255,255,255,0.1)',
+                    borderRadius: 8, overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+                  }}>
+                    {/* 컨트롤 (Reset / All / count) */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderBottom: '0.5px solid rgba(255,255,255,0.1)', background: '#141414' }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <button onClick={() => setPickerMonths([])} style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Reset</button>
+                        <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 10 }}>|</span>
+                        <button onClick={() => setPickerMonths([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])} style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>All</button>
+                      </div>
+                      <span style={{ fontSize: 10, color: pickerMonths.length > 0 ? '#00E5A0' : 'rgba(255,255,255,0.4)' }}>
+                        {pickerMonths.length > 0 ? `${pickerMonths.length} selected` : 'None'}
+                      </span>
+                    </div>
+
+                    {/* 체크박스 리스트 */}
+                    <div style={{ maxHeight: 160, overflowY: 'auto' }}>
+                      {MONTHS.map((lbl, i) => {
+                        const m = i + 1
+                        const checked = pickerMonths.includes(m)
+                        return (
+                          <label key={m}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', cursor: 'pointer' }}
+                            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                            <input type="checkbox" checked={checked} onChange={() => togglePickerMonth(m)} style={{ accentColor: '#00E5A0', width: 14, height: 14, flexShrink: 0 }} />
+                            <span style={{ fontSize: 11, color: checked ? '#fff' : 'rgba(255,255,255,0.5)', flex: 1 }}>{lbl}</span>
+                            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>{pickerYear}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+
+                    {/* Done */}
+                    <div style={{ padding: '8px 10px', borderTop: '0.5px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'flex-end', background: '#141414' }}>
+                      <button onClick={() => setMonthDropOpen(false)} style={{ padding: '5px 16px', borderRadius: 6, border: 'none', background: '#00E5A0', color: '#0a0a0a', fontSize: 11, fontWeight: 500, cursor: 'pointer' }}>Done</button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <button
