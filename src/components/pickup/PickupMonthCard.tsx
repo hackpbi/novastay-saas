@@ -9,6 +9,9 @@ import type { PickupRow } from '@/hooks/usePickupData'
 import type { LyPacingRow } from '@/hooks/useLyPacing'
 import LyComparisonSegModal from '@/components/dashboard/LyComparisonSegModal'
 import LyComparisonAccountModal from '@/components/dashboard/LyComparisonAccountModal'
+import { PickupMonthSummaryModal } from '@/components/market-pickup/PickupMonthSummaryModal'
+import { useMarketSchema } from '@/hooks/useMarketSchema'
+import { useDateContext } from '@/contexts/DateContext'
 import { lastDayOfMonth, inMonth, fmtK, fmtM, type PickupDaily } from '@/utils/pickupPageUtils'
 
 const SPARK_MINT    = 'rgba(0,229,160,0.28)'
@@ -340,6 +343,12 @@ export default function PickupMonthCard({
   onExpand:   (daily: PickupDaily[]) => void
 }) {
   const month1 = month + 1
+
+  // Pick-up 박스 클릭 → 월별 픽업 요약 모달
+  const { data: schema = [] } = useMarketSchema()
+  const { otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate } = useDateContext()
+  const [summaryModalOpen, setSummaryModalOpen] = useState(false)
+
   const { data: forecastRows = [] } = useForecastMonthly({ hotelId, year, updateDate: fcstDate })
   const { data: budgetRows = [] }   = useBudgetMonthly({ hotelId, year, updateDate: budgetDate })
 
@@ -539,15 +548,18 @@ export default function PickupMonthCard({
         </div>
       </div>
 
-      {/* ── Pick-up 요약 (강조: 민트 배경 + 좌측 3px 라인) ── */}
-      <div style={{ padding: '12px 14px', borderBottom: COL_BT, background: 'rgba(0,40,25,0.9)', borderLeft: '3px solid #00E5A0' }}>
+      {/* ── Pick-up 요약 (강조: 민트 배경 + 좌측 3px 라인) — 클릭 시 일자별 상세 모달 ── */}
+      <div
+        onClick={() => setSummaryModalOpen(true)}
+        style={{ padding: '12px 14px', borderBottom: COL_BT, background: 'rgba(0,40,25,0.9)', borderLeft: '3px solid #00E5A0', cursor: 'pointer' }}
+      >
         <div style={{ fontSize: 10, fontWeight: 500, color: '#00B883', marginBottom: 6, textAlign: 'center' }}>Pick-up</div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <span style={{ fontSize: 26, fontWeight: 600, color: '#ffffff', lineHeight: 1 }}>
+            <span style={{ fontSize: 26, fontWeight: 600, color: '#ffffff', lineHeight: 1, borderBottom: '1px dashed #00E5A0', paddingBottom: 1, cursor: 'pointer' }}>
               {m.puOccPp >= 0 ? '+' : ''}{m.puOccPp.toFixed(1)}%{m.puOccPp >= 0 ? '↑' : '↓'}
             </span>
-            <span style={{ fontSize: 12, color: '#00B883', marginTop: 3 }}>
+            <span style={{ fontSize: 12, color: '#00B883', marginTop: 3, cursor: 'default' }}>
               {m.puN >= 0 ? '+' : ''}{m.puN.toLocaleString('ko-KR')} R/N
             </span>
           </div>
@@ -674,6 +686,21 @@ export default function PickupMonthCard({
         initialFilterSegCodes={lyAcc.filterSegCodes}
         initialFilterLabel={lyAcc.filterLabel}
         onBackToSeg={lyAcc.filterSegCodes ? () => { setLyAcc({ open: false }); setLySegOpen(true) } : undefined}
+      />
+
+      {/* ── 월별 픽업 요약 (Pick-up 박스 클릭) ── */}
+      <PickupMonthSummaryModal
+        open={summaryModalOpen}
+        onClose={() => setSummaryModalOpen(false)}
+        year={year}
+        month={month}
+        schema={schema}
+        pickupRows={pickupRows}
+        roomCount={roomCount}
+        otbDate={otbDate}
+        vsDate={vsOtbDate}
+        otbDates={otbDates ?? []}
+        onDateChange={(o, v) => { setOtbDate(o); setVsOtbDate(v) }}
       />
     </div>
   )

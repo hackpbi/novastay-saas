@@ -1,11 +1,15 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { SlidersHorizontal, ChevronDown, Check, History, BarChart3 } from 'lucide-react'
 import type { PickupRow } from '@/hooks/usePickupData'
 import { lastDayOfMonth, inMonth } from '@/utils/pickupPageUtils'
 import MarketPickupAllDaysModal from './MarketPickupAllDaysModal'
 
-export type SegLeaf  = { id: string; name: string; color: string; lightColor: string | null; codes: string[] }
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+export type SegLeaf  = { id: string; name: string; color: string; lightColor: string | null; fontDarkColor: string | null; isBold: boolean; codes: string[] }
 export type SegGroup = { id: string; name: string; segs: SegLeaf[] }
 
 // 막대 위/안 R/N 숫자 라벨 (per-instance 인라인 플러그인 → 전역 중복 등록 없음)
@@ -56,14 +60,14 @@ export default function MarketPickupMonthBlock({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const chartRef  = useRef<any>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
-  const [openGroup, setOpenGroup] = useState<string | null>(null)
+  const [panelOpen, setPanelOpen] = useState(false)
   const [allDaysOpen, setAllDaysOpen] = useState(false)
 
-  // 세그 그룹 드롭다운 외부 클릭 시 닫힘
+  // 세그먼트 패널 외부 클릭 시 닫힘
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement
-      if (!target.closest('[data-group-drop]')) setOpenGroup(null)
+      if (!target.closest('[data-seg-panel]')) setPanelOpen(false)
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -98,6 +102,12 @@ export default function MarketPickupMonthBlock({
   const segTotal   = (seg: SegLeaf) => seg.codes.reduce((s, c) => s + (codeMonthTotal.get(c) ?? 0), 0)
   const groupTotal = (g: SegGroup) => g.segs.filter(s => selected.has(s.id)).reduce((s, seg) => s + segTotal(seg), 0)
   const total      = groups.reduce((s, g) => s + groupTotal(g), 0)
+
+  // Picked up 칩: 선택된 세그 중 픽업이 0이 아닌 소분류
+  const pickedSegs = groups.flatMap(g => g.segs).filter(s => selected.has(s.id) && segTotal(s) !== 0)
+  // Detail 버튼 기준일: 이번 달이면 오늘, 아니면 1일
+  const _today = new Date()
+  const detailDay = _today.getFullYear() === year && _today.getMonth() === month ? _today.getDate() : 1
 
   // 선택 세그 기준 컬럼 합산 헬퍼 (코드 → 값 Map 빌드 후 그룹/세그 합)
   const sumByCol = (col: keyof PickupRow) => {
@@ -275,7 +285,23 @@ export default function MarketPickupMonthBlock({
             tooltip: { enabled: false },
           },
           scales: {
-            x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: tc, font: { size: 9 } } },
+            x: {
+              grid: { color: 'rgba(255,255,255,0.04)' },
+              ticks: {
+                font: { size: 9 },
+                color: (ctx: any) => {
+                  const dd = new Date(year, month, ctx.index + 1)
+                  const tdy = new Date()
+                  if (tdy.getFullYear() === year && tdy.getMonth() === month && tdy.getDate() === ctx.index + 1) return '#5B8DEF'
+                  const dow = dd.getDay()
+                  return dow === 5 || dow === 6 ? '#E24B4A' : tc
+                },
+                callback: (_v: any, index: number) => {
+                  const dow = new Date(year, month, index + 1).getDay()
+                  return [String(index + 1), DAY_NAMES[dow]]
+                },
+              },
+            },
             y: {
               position: 'left', grid: { color: gc },
               ticks: {
@@ -291,72 +317,94 @@ export default function MarketPickupMonthBlock({
   }, [dailyTotals, days, month1, onBarClick])
 
   return (
-    <div className="rounded-2xl overflow-visible" style={{ background: 'var(--color-bg-surface, var(--card-header-bg))', border: '1px solid var(--color-border-default)' }}>
-      {/* 월 헤더 + 세그 드롭다운 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '12px 16px 8px', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)' }}>{month1}월 {year}</span>
-        {/* 전체 선택 */}
-        <button
-          onClick={() => { allSegIds.forEach(id => { if (!selected.has(id)) onToggleSeg(id) }) }}
-          style={{ padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 500, cursor: 'pointer', border: '0.5px solid var(--color-border-tertiary)', background: 'transparent', color: 'var(--color-text-secondary)' }}
-        >All</button>
-        {/* 전체 해제 */}
-        <button
-          onClick={() => { selected.forEach(id => onToggleSeg(id)) }}
-          style={{ padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 500, cursor: 'pointer', border: '0.5px solid var(--color-border-tertiary)', background: 'transparent', color: 'var(--color-text-secondary)' }}
-        >Reset</button>
-        <span style={{ color: 'var(--color-border-tertiary)' }}>|</span>
-        {groups.map((g, gi) => {
-          const gt = groupTotal(g)
-          return (
-            <div key={g.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
-              {gi > 0 && <span style={{ color: 'var(--color-border-tertiary)' }}>|</span>}
-              <div style={{ position: 'relative' }} data-group-drop>
-                <span
-                  onClick={() => setOpenGroup(openGroup === g.id ? null : g.id)}
-                  style={{ fontSize: 11, fontWeight: 500, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}
-                >
-                  <span style={{ color: 'var(--color-text-secondary)' }}>{g.name}</span>
-                  <span style={{ color: gt >= 0 ? '#00B883' : '#E24B4A' }}>{gt >= 0 ? '+' : ''}{gt}</span>
-                  <span style={{ color: 'var(--color-text-secondary)' }}>실</span>
-                  <span style={{ fontSize: 8, color: 'var(--color-text-secondary)', opacity: 0.7 }}>{openGroup === g.id ? '▲' : '▼'}</span>
-                </span>
-                {openGroup === g.id && (
-                  <div style={{
-                    position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 200,
-                    background: '#0a0a0a', border: '0.5px solid #333', borderRadius: 8, padding: 6,
-                    minWidth: 180, boxShadow: '0 6px 20px rgba(0,0,0,0.5)',
-                  }}>
-                    {g.segs.map(seg => {
-                      const on = selected.has(seg.id)
-                      const st = segTotal(seg)
-                      return (
-                        <div key={seg.id}
-                          onClick={() => onToggleSeg(seg.id)}
-                          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 5, cursor: 'pointer', fontSize: 11, color: 'var(--color-text-primary)' }}
-                          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
-                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                        >
-                          <span style={{
-                            width: 12, height: 12, borderRadius: 3, flexShrink: 0,
-                            border: on ? 'none' : '1.5px solid #444', background: on ? '#00E5A0' : 'transparent',
-                            color: '#000', fontSize: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          }}>{on ? '✓' : ''}</span>
-                          <span style={{ width: 8, height: 8, borderRadius: 2, background: seg.color, flexShrink: 0 }} />
-                          <span style={{ flex: 1, whiteSpace: 'nowrap' }}>{seg.name}</span>
-                          <span style={{ color: st >= 0 ? '#00B883' : '#E24B4A', fontVariantNumeric: 'tabular-nums' }}>{st >= 0 ? '+' : ''}{st}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
+    <div className="rounded-2xl overflow-visible" style={{ background: 'var(--color-bg-surface, var(--card-header-bg))', border: '1px solid var(--color-border-default)', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* 월 헤더 — 월 라벨 + Segment 패널 + Picked up + KPI + History/Detail */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px 8px', flexWrap: 'wrap', flexShrink: 0 }}>
+        {/* 월 라벨 */}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)' }}>{MONTH_NAMES[month]}</span>
+          <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>{year}</span>
+        </div>
+
+        {/* Segment 패널 */}
+        <div style={{ position: 'relative' }} data-seg-panel>
+          <button
+            onClick={() => setPanelOpen(p => !p)}
+            style={{ background: 'transparent', border: '1px solid var(--color-border-default)', borderRadius: 8, color: 'var(--color-text-secondary)', fontSize: 11, padding: '4px 10px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            <SlidersHorizontal size={13} />
+            Segment
+            {selected.size > 0 && (
+              <span style={{ background: 'rgba(0,229,160,0.18)', color: '#00E5A0', borderRadius: 10, padding: '0 6px', fontSize: 10, fontWeight: 600 }}>{selected.size} selected</span>
+            )}
+            <ChevronDown size={11} style={{ transform: panelOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+          </button>
+          {panelOpen && (
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 200,
+              background: '#0a0a0a', border: '0.5px solid #333', borderRadius: 10, padding: 10,
+              minWidth: 240, maxHeight: 340, overflowY: 'auto', boxShadow: '0 6px 20px rgba(0,0,0,0.5)',
+            }}>
+              {groups.map(g => (
+                <div key={g.id} style={{ marginBottom: 6 }}>
+                  <div style={{ fontSize: 10, color: 'var(--color-text-tertiary)', padding: '2px 8px', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.4 }}>{g.name}</div>
+                  {g.segs.map(seg => {
+                    const on = selected.has(seg.id)
+                    const st = segTotal(seg)
+                    return (
+                      <div key={seg.id}
+                        onClick={() => onToggleSeg(seg.id)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 5, cursor: 'pointer' }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        <span style={{
+                          width: 14, height: 14, borderRadius: 3, flexShrink: 0,
+                          border: on ? 'none' : '1.5px solid #444', background: on ? '#00E5A0' : 'transparent',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>{on && <Check size={10} color="#0a0a0a" strokeWidth={3} />}</span>
+                        <span style={{ width: 8, height: 8, borderRadius: 2, background: seg.color, flexShrink: 0 }} />
+                        <span style={{ flex: 1, whiteSpace: 'nowrap', fontSize: 12, color: on ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>{seg.name}</span>
+                        <span style={{ fontSize: 12, color: st > 0 ? '#00E5A0' : st < 0 ? '#E24B4A' : '#444', minWidth: 28, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                          {st !== 0 ? `${st > 0 ? '+' : ''}${st}` : '—'}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
+              <div style={{ borderTop: '0.5px solid #333', marginTop: 8, paddingTop: 8, display: 'flex', gap: 6 }}>
+                <button onClick={() => { allSegIds.forEach(id => { if (!selected.has(id)) onToggleSeg(id) }) }}
+                  style={{ flex: 1, background: 'rgba(0,229,160,0.1)', border: '1px solid rgba(0,229,160,0.3)', borderRadius: 6, color: '#00E5A0', fontSize: 11, padding: '4px 0', cursor: 'pointer' }}>All</button>
+                <button onClick={() => { selected.forEach(id => onToggleSeg(id)) }}
+                  style={{ flex: 1, background: 'transparent', border: '0.5px solid #333', borderRadius: 6, color: 'var(--color-text-secondary)', fontSize: 11, padding: '4px 0', cursor: 'pointer' }}>Reset</button>
               </div>
             </div>
-          )
-        })}
-        <span style={{ color: 'var(--color-border-tertiary)' }}>|</span>
+          )}
+        </div>
+
+        {/* Picked up 칩 */}
+        {pickedSegs.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>Picked up</span>
+            {pickedSegs.map(seg => {
+              const st = segTotal(seg)
+              const pos = st > 0
+              return (
+                <span key={seg.id} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, padding: '2px 8px', borderRadius: 6, whiteSpace: 'nowrap',
+                  border: `1px solid ${pos ? 'rgba(0,229,160,0.3)' : 'rgba(226,75,74,0.3)'}`, color: pos ? '#00E5A0' : '#E24B4A',
+                }}>
+                  <span style={{ width: 7, height: 7, borderRadius: 2, background: seg.color }} />
+                  {seg.name} {pos ? `+${st}` : st}
+                </span>
+              )
+            })}
+          </div>
+        )}
+
+        {/* KPI — OCC · ADR · REV 픽업 */}
         <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, fontWeight: 600 }}>
-          {/* OCC 픽업 */}
           <span style={{ color: puOcc >= 0 ? '#00E5A0' : '#E24B4A' }}>
             {puOcc >= 0 ? '+' : ''}{puOcc.toFixed(1)}%
             <span style={{ fontWeight: 400, color: 'var(--color-text-tertiary)', marginLeft: 2 }}>
@@ -364,31 +412,31 @@ export default function MarketPickupMonthBlock({
             </span>
           </span>
           <span style={{ color: 'var(--color-border-tertiary)' }}>·</span>
-          {/* ADR 픽업 */}
-          <span style={{ color: puAdr >= 0 ? '#00E5A0' : '#E24B4A' }}>
-            {puAdr >= 0 ? '+' : ''}{fmtK(puAdr)}
-          </span>
+          <span style={{ color: puAdr >= 0 ? '#00E5A0' : '#E24B4A' }}>{puAdr >= 0 ? '+' : ''}{fmtK(puAdr)}</span>
           <span style={{ color: 'var(--color-border-tertiary)' }}>·</span>
-          {/* REV 픽업 */}
-          <span style={{ color: totalPuRev >= 0 ? '#00E5A0' : '#E24B4A' }}>
-            {totalPuRev >= 0 ? '+' : ''}{fmtM(totalPuRev)}
-          </span>
+          <span style={{ color: totalPuRev >= 0 ? '#00E5A0' : '#E24B4A' }}>{totalPuRev >= 0 ? '+' : ''}{fmtM(totalPuRev)}</span>
         </span>
-        <button
-          onClick={() => setAllDaysOpen(true)}
-          style={{
-            marginLeft: 'auto', fontSize: 11, padding: '3px 10px', borderRadius: 6,
-            border: '0.5px solid var(--color-border-default)', background: 'transparent',
-            color: 'var(--color-text-secondary)', cursor: 'pointer',
-          }}
-        >
-          전일자 보기
-        </button>
+
+        {/* History / Detail */}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          <button
+            onClick={() => setAllDaysOpen(true)}
+            style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '0.5px solid var(--color-border-default)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          >
+            <History size={12} /> History
+          </button>
+          <button
+            onClick={() => onBarClick(detailDay, 'pickup')}
+            style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '0.5px solid var(--color-border-default)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          >
+            <BarChart3 size={12} /> Detail
+          </button>
+        </div>
       </div>
 
       {/* 차트 */}
       <div
-        style={{ position: 'relative', width: '100%', height: 180, padding: '0 12px 12px' }}
+        style={{ position: 'relative', width: '100%', flex: 1, minHeight: 0, padding: '0 12px 12px' }}
         onMouseLeave={() => { if (tooltipRef.current) tooltipRef.current.style.display = 'none' }}
       >
         {/* 커스텀 HTML 툴팁 */}
@@ -411,6 +459,7 @@ export default function MarketPickupMonthBlock({
         month={month}
         pickupRows={pickupRows}
         activeSegs={activeSegs}
+        roomCount={roomCount}
       />
     </div>
   )

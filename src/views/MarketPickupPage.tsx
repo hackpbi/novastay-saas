@@ -12,6 +12,8 @@ import DatePicker from '@/components/DatePicker'
 import MarketPickupMonthBlock, { type SegGroup } from '@/components/market-pickup/MarketPickupMonthBlock'
 import MarketPickupDayModal from '@/components/market-pickup/MarketPickupDayModal'
 
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
 export default function MarketPickupPage() {
   const { currentHotel } = useHotel()
   const hotelId = currentHotel?.id
@@ -36,18 +38,18 @@ export default function MarketPickupPage() {
   const now = new Date()
   const [monthOffset, setMonthOffset] = useState(0)
   const months = useMemo(
-    () => [0, 1, 2].map(i => {
+    () => [0, 1].map(i => {
       const d = new Date(now.getFullYear(), now.getMonth() + monthOffset + i, 1)
       return { year: d.getFullYear(), month: d.getMonth() }
     }),
     [now.getFullYear(), now.getMonth(), monthOffset],
   )
 
-  // ── 월 네비게이션 제한 (OTB 날짜 월이 최소값) ────────────────────────────────
+  // ── 월 네비게이션 제한 (2개월 단위, OTB 날짜 월이 최소값) ───────────────────────
   const otbYear  = otbDate ? parseInt(otbDate.slice(0, 4)) : now.getFullYear()
   const otbMonth = otbDate ? parseInt(otbDate.slice(5, 7)) - 1 : now.getMonth()
-  const startDate = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
-  const isPrevDisabled = startDate.getFullYear() < otbYear || (startDate.getFullYear() === otbYear && startDate.getMonth() <= otbMonth)
+  const prevStart = new Date(now.getFullYear(), now.getMonth() + monthOffset - 2, 1)
+  const isPrevDisabled = prevStart.getFullYear() < otbYear || (prevStart.getFullYear() === otbYear && prevStart.getMonth() < otbMonth)
   useEffect(() => {
     const sd = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
     if (sd.getFullYear() < otbYear || (sd.getFullYear() === otbYear && sd.getMonth() < otbMonth)) setMonthOffset(0)
@@ -64,7 +66,7 @@ export default function MarketPickupPage() {
         segs: schema
           .filter(c => c.parent_id === main.id)
           .sort((a, b) => a.order_index - b.order_index)
-          .map(c => ({ id: c.id, name: c.name, color: c.bg_dark_color ?? '#888888', lightColor: c.bg_light_color, codes: c.segmentation ?? [] })),
+          .map(c => ({ id: c.id, name: c.name, color: c.bg_dark_color ?? '#888888', lightColor: c.bg_light_color, fontDarkColor: c.font_dark_color, isBold: c.is_bold, codes: c.segmentation ?? [] })),
       }))
       .filter(g => g.segs.length > 0)
   }, [schema])
@@ -86,73 +88,71 @@ export default function MarketPickupPage() {
   const [dayModal, setDayModal] = useState<{ year: number; month: number; day: number; defaultTab: 'pickup' | 'otb' } | null>(null)
 
   return (
-    <div>
-      {/* 헤더 — 제목 + OTB/vs DatePicker */}
-      <h1 className="text-xl font-bold mb-1" style={{ color: 'var(--color-text-primary)' }}>Market Pick-up</h1>
-      <p className="text-[13px] mb-5" style={{ color: 'var(--color-text-secondary)', lineHeight: 1.8 }}>
-        <span style={{ display: 'inline-flex', verticalAlign: 'middle' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', padding: '16px 24px', boxSizing: 'border-box', overflow: 'hidden' }}>
+      {/* 헤더 — 제목 오른쪽에 OTB/vs DatePicker */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0, flexWrap: 'wrap' }}>
+        <h1 className="text-xl font-bold" style={{ color: 'var(--color-text-primary)', margin: 0 }}>Market Pick-up</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} availableDates={otbDates ?? []} accent bare fontPx={13} plain />
-        </span>
-        {' '}
-        <span style={{ display: 'inline-flex', verticalAlign: 'middle' }}>
+          <span style={{ color: '#555', fontSize: 13 }}>vs</span>
           <DatePicker label="vs" value={vsOtbDate} onChange={setVsOtbDate} availableDates={(otbDates ?? []).filter(d => d < otbDate)} accent bare fontPx={13} plain />
-        </span>
-        {' '}기준 세그먼트별 픽업 R/N
-      </p>
+        </div>
+      </div>
 
-      {/* 월 범위 네비게이션 */}
-      <div className="flex items-center justify-between mb-4">
+      {/* 월 범위 네비게이션 (2개월 단위) */}
+      <div className="flex items-center justify-between" style={{ flexShrink: 0, margin: '12px 0' }}>
         <div className="flex items-center gap-2.5">
           <span className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-            {months[0].month + 1}월 &mdash; {months[2].month + 1}월
+            {MONTH_NAMES[months[0].month]} &mdash; {MONTH_NAMES[months[1].month]}
           </span>
-          <span className="text-xs text-brand-dimmed font-mono">{months[0].year}년</span>
+          <span className="text-xs text-brand-dimmed font-mono">{months[0].year}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <button
-            onClick={() => { if (!isPrevDisabled) setMonthOffset(p => p - 1) }}
+            onClick={() => { if (!isPrevDisabled) setMonthOffset(p => p - 2) }}
             disabled={isPrevDisabled}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-brand-muted hover:text-brand-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150"
             style={{ border: '1px solid var(--control-border)' }}
           >
-            <ChevronLeft size={13} /> 이전
+            <ChevronLeft size={13} /> Prev
           </button>
           <button
-            onClick={() => setMonthOffset(p => p + 1)}
+            onClick={() => setMonthOffset(p => p + 2)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-brand-muted hover:text-brand-text transition-all duration-150"
             style={{ border: '1px solid var(--control-border)' }}
           >
-            다음 <ChevronRight size={13} />
+            Next <ChevronRight size={13} />
           </button>
         </div>
       </div>
 
-      {/* 월 블록 스택 */}
+      {/* 월 블록 — 2개 카드가 남은 공간 채움 */}
       {pickupLoading ? (
-        <div className="flex flex-col gap-4">
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0 }}>
           {months.map(t => (
-            <div key={`${t.year}-${t.month}`} className="animate-pulse rounded-2xl" style={{ height: 240, background: 'var(--color-bg-tertiary)' }} />
+            <div key={`${t.year}-${t.month}`} className="animate-pulse rounded-2xl" style={{ flex: 1, minHeight: 0, background: 'var(--color-bg-tertiary)' }} />
           ))}
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0, overflow: 'hidden' }}>
           {months.map(t => {
             const monthKey = `${t.year}-${t.month}`
             return (
-              <MarketPickupMonthBlock
-                key={monthKey}
-                year={t.year}
-                month={t.month}
-                monthKey={monthKey}
-                pickupRows={pickupRows}
-                groups={groups}
-                selected={resolveSelected(monthKey)}
-                onToggleSeg={(segId) => onToggleSeg(monthKey, segId)}
-                onBarClick={(day, defaultTab) => setDayModal({ year: t.year, month: t.month, day, defaultTab })}
-                roomCount={roomCount}
-                allSegIds={allSegIds}
-                isDayModalOpen={!!dayModal}
-              />
+              <div key={monthKey} style={{ flex: 1, minHeight: 0 }}>
+                <MarketPickupMonthBlock
+                  year={t.year}
+                  month={t.month}
+                  monthKey={monthKey}
+                  pickupRows={pickupRows}
+                  groups={groups}
+                  selected={resolveSelected(monthKey)}
+                  onToggleSeg={(segId) => onToggleSeg(monthKey, segId)}
+                  onBarClick={(day, defaultTab) => setDayModal({ year: t.year, month: t.month, day, defaultTab })}
+                  roomCount={roomCount}
+                  allSegIds={allSegIds}
+                  isDayModalOpen={!!dayModal}
+                />
+              </div>
             )
           })}
         </div>

@@ -54,12 +54,11 @@ export default function PickupPage() {
   // ── 월 네비게이션 제한 (OTB 날짜 월이 최소값, 대시보드 disabled 패턴) ─────────────
   const otbYear  = otbDate ? parseInt(otbDate.slice(0, 4)) : now.getFullYear()
   const otbMonth = otbDate ? parseInt(otbDate.slice(5, 7)) - 1 : now.getMonth()  // 0-based
-  const startDate  = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
-  const startYear  = startDate.getFullYear()
-  const startMonth = startDate.getMonth()
-  const isPrevDisabled = startYear < otbYear || (startYear === otbYear && startMonth <= otbMonth)
-  const handlePrev = () => { if (!isPrevDisabled) setMonthOffset(p => p - 1) }
-  const handleNext = () => setMonthOffset(p => p + 1)
+  // 3개월 단위 이동: 이전 클릭 시 시작월이 OTB 월보다 앞서면 비활성
+  const prevStart  = new Date(now.getFullYear(), now.getMonth() + monthOffset - 3, 1)
+  const isPrevDisabled = prevStart.getFullYear() < otbYear || (prevStart.getFullYear() === otbYear && prevStart.getMonth() < otbMonth)
+  const handlePrev = () => { if (!isPrevDisabled) setMonthOffset(p => p - 3) }
+  const handleNext = () => setMonthOffset(p => p + 3)
 
   // otbDate 변경 시 시작월이 OTB 월보다 이전이면 monthOffset 리셋
   useEffect(() => {
@@ -92,7 +91,10 @@ export default function PickupPage() {
   const totalPuNights  = pickupRows.reduce((s, r) => s + (r.pu_nights ?? 0), 0)
   const totalPuRevenue = pickupRows.reduce((s, r) => s + (r.pu_revenue ?? 0), 0)
   const totalPuAdr     = totalPuNights > 0 ? Math.round(totalPuRevenue / totalPuNights) : 0
-  const valStyle = (v: number): React.CSSProperties => ({ color: v >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 500, cursor: 'pointer' })
+  const valStyle = (v: number): React.CSSProperties => {
+    const c = v >= 0 ? '#00E5A0' : '#E24B4A'
+    return { color: c, fontWeight: 500, cursor: 'pointer', borderBottom: `1px dashed ${c}`, paddingBottom: 1 }
+  }
 
   return (
     <div>
@@ -186,6 +188,7 @@ export default function PickupPage() {
         year={chartModal?.year ?? now.getFullYear()}
         month={chartModal?.month ?? now.getMonth()}
         pickupRows={pickupRows}
+        roomCount={roomCount}
         otbDate={otbDate}
         vsOtbDate={vsOtbDate}
         otbDates={otbDates ?? []}

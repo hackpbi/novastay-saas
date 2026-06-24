@@ -164,7 +164,7 @@ export default function DatePicker({ label, value, onChange, accent = false, ava
         {!plain && <span style={{ width: 1, height: 12, background: 'var(--color-border-default)', display: 'inline-block' }} />}
         <span
           className={`font-medium${fontPx ? '' : ' text-[11px]'}${plain ? '' : ' font-mono'}`}
-          style={{ color: open || accent ? 'var(--color-accent-primary)' : 'var(--color-text-primary)', ...(fontPx ? { fontSize: fontPx } : {}) }}
+          style={{ color: open || accent ? 'var(--color-accent-primary)' : 'var(--color-text-primary)', borderBottom: '1px dashed currentColor', paddingBottom: 1, ...(fontPx ? { fontSize: fontPx } : {}) }}
         >
           {display}
         </span>

@@ -5,15 +5,8 @@ import { X } from 'lucide-react'
 import type { PickupRow } from '@/hooks/usePickupData'
 import type { MarketSchemaRow } from '@/hooks/useMarketSchema'
 import { buildSegTable, type SegTableRow } from '@/utils/segmentationTable'
-import { WEEKDAY_KR } from '@/utils/pickupPageUtils'
-import { getDayColor } from '@/utils/dateUtils'
+import { inMonth } from '@/utils/pickupPageUtils'
 import DatePicker from '@/components/DatePicker'
-
-// 날짜 문자열 직접 파싱 (KST 이슈 없음)
-const inDay = (dateStr: string, year: number, month: number, day: number) => {
-  const d = new Date(dateStr)
-  return d.getFullYear() === year && d.getMonth() + 1 === month && d.getDate() === day
-}
 
 type AccStat = {
   otbNights: number; otbRevenue: number
@@ -21,14 +14,15 @@ type AccStat = {
   puNights:  number; puRevenue:  number
 }
 
-export default function MarketPickupDayModal({
-  open, onClose, year, month, day, schema, pickupRows, roomCount, defaultTab, otbDate, vsDate, otbDates = [], onDateChange,
+// MarketPickupDayModal과 동일한 UI/로직이되, 1일치가 아닌 "해당 월 전체 합산"을 보여주고
+// 일자 네비 대신 월 네비를 제공한다. 데이터는 카드가 이미 보유한 month-spanning pickupRows 재사용.
+export function PickupMonthSummaryModal({
+  open, onClose, year, month, schema, pickupRows, roomCount, defaultTab, otbDate, vsDate, otbDates = [], onDateChange,
 }: {
   open:          boolean
   onClose:       () => void
-  year:          number
-  month:         number   // 0-based
-  day:           number   // 1-based
+  year:          number   // 초기 연도
+  month:         number   // 초기 월 (0-based)
   schema:        MarketSchemaRow[]
   pickupRows:    PickupRow[]
   roomCount:     number
@@ -40,9 +34,10 @@ export default function MarketPickupDayModal({
 }) {
   const [tab,     setTab]     = useState<'pickup' | 'otb'>(defaultTab ?? 'pickup')
   const [selMain, setSelMain] = useState<string | null>(null)
+  const [selYear,  setSelYear]  = useState(year)
+  const [selMonth, setSelMonth] = useState(month)   // 0-based
   const [localOtbDate, setLocalOtbDate] = useState(otbDate)
   const [localVsDate,  setLocalVsDate]  = useState(vsDate)
-  const [localDay,     setLocalDay]     = useState(day)
 
   useEffect(() => {
     if (!open) return
@@ -52,16 +47,17 @@ export default function MarketPickupDayModal({
     return () => { window.removeEventListener('keydown', h); document.body.style.overflow = '' }
   }, [open, onClose])
 
-  // open 시 로컬 상태(날짜·일자·탭·선택) 초기화
+  // open 시 로컬 상태 초기화
   useEffect(() => {
     if (open) {
       setLocalOtbDate(otbDate)
       setLocalVsDate(vsDate)
-      setLocalDay(day)
+      setSelYear(year)
+      setSelMonth(month)
       setTab(defaultTab ?? 'pickup')
       setSelMain(null)
     }
-  }, [open, otbDate, vsDate, day, defaultTab])
+  }, [open, otbDate, vsDate, year, month, defaultTab])
 
   // 날짜 변경 시 페이지에 반영 (onDateChange 있을 때만)
   useEffect(() => {
@@ -71,12 +67,11 @@ export default function MarketPickupDayModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localOtbDate, localVsDate])
 
-  // 선택된 세그(main/sub)의 어카운트별 집계 — 훅은 early-return 위에서 호출
+  // 선택된 세그(main/sub)의 어카운트별 "월 전체" 집계
   const accountRows = useMemo(() => {
     if (!open || !selMain) return []
     const selSchema = schema.find(s => s.id === selMain)
     if (!selSchema) return []
-    // main 클릭 → 자식 sub들의 segmentation 코드 / sub 클릭 → 자신의 코드
     const codes = selSchema.level === 'main'
       ? schema.filter(s => s.parent_id === selMain).flatMap(s => s.segmentation ?? [])
       : (selSchema.segmentation ?? [])
@@ -84,7 +79,7 @@ export default function MarketPickupDayModal({
 
     const map = new Map<string, AccStat>()
     for (const r of pickupRows) {
-      if (!inDay(r.business_date, year, month + 1, localDay)) continue
+      if (!inMonth(r.business_date, selYear, selMonth + 1)) continue
       if (!codeSet.has(r.segmentation)) continue
       const acc = r.account_name || '(미지정)'
       if (!map.has(acc)) map.set(acc, { otbNights: 0, otbRevenue: 0, vsNights: 0, vsRevenue: 0, puNights: 0, puRevenue: 0 })
@@ -108,22 +103,28 @@ export default function MarketPickupDayModal({
       }))
       .filter(a => a.otbNights > 0 || a.puNights !== 0)
       .sort((a, b) => Math.abs(b.puNights) - Math.abs(a.puNights))
-  }, [open, selMain, schema, pickupRows, year, month, localDay])
+  }, [open, selMain, schema, pickupRows, selYear, selMonth])
 
   if (!open) return null
 
-  const { rows, summary } = buildSegTable({ schema, pickup: pickupRows, year, month: month + 1, roomCount, day: localDay })
+  const month1 = selMonth + 1
+  // day 미지정 → buildSegTable이 해당 월 전체를 합산
+  const { rows, summary } = buildSegTable({ schema, pickup: pickupRows, year: selYear, month: month1, roomCount })
   const selRow = rows.find(r => r.id === selMain)
 
-  const localDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(localDay).padStart(2, '0')}`
-  // OTB ~ vs 일수 차 (픽업 요약 문구용)
-  const diffDays = (() => {
-    if (!localOtbDate || !localVsDate) return 1
-    const o = new Date(localOtbDate).getTime(), v = new Date(localVsDate).getTime()
-    if (Number.isNaN(o) || Number.isNaN(v)) return 1
-    const d = Math.round((o - v) / 86400000)
-    return d > 0 ? d : 1
-  })()
+  // 월 네비 범위: OTB 날짜의 월을 최소값으로 (그 이전은 데이터 없음)
+  const otbY  = Number(localOtbDate.slice(0, 4))
+  const otbM0 = Number(localOtbDate.slice(5, 7)) - 1
+  const atMin = !localOtbDate || selYear < otbY || (selYear === otbY && selMonth <= otbM0)
+  const prevMonth = () => {
+    if (atMin) return
+    setSelMain(null)
+    if (selMonth === 0) { setSelYear(y => y - 1); setSelMonth(11) } else setSelMonth(m => m - 1)
+  }
+  const nextMonth = () => {
+    setSelMain(null)
+    if (selMonth === 11) { setSelYear(y => y + 1); setSelMonth(0) } else setSelMonth(m => m + 1)
+  }
 
   // ── 포맷 헬퍼 ───────────────────────────────────────────────────────────────
   const fmtPuRn  = (v: number) => v === 0 ? '—' : `${v > 0 ? '+' : ''}${Math.round(v)}`
@@ -134,22 +135,19 @@ export default function MarketPickupDayModal({
   const fmtOtbRev = (v: number) => v === 0 ? '—' : `${(v / 1e6).toFixed(1)}M`
   const puColor   = (v: number) => v > 0 ? '#00B883' : v < 0 ? '#E24B4A' : 'rgba(255,255,255,0.25)'
 
-  // ── c05 스키마 기반 세그 색상 (이 모달은 항상 다크모드) ──────────────────────────
+  // ── c05 스키마 기반 세그 색상 (항상 다크모드) ──────────────────────────────────
   const segTextColor = (r: SegTableRow) => r.fontDarkColor ?? 'var(--color-text-primary)'
   const segBgColor   = (r: SegTableRow) =>
     r.bgDarkColor ?? (r.level === 'main' ? '#1A1F2E' : r.level === 'mid' ? '#15192A' : 'transparent')
-  // 세그 숫자: 양수 → 세그 폰트색 / 음수 → 빨강 / 0 → 흐림
   const numColor    = (v: number, r: SegTableRow) =>
     v > 0 ? (r.fontDarkColor ?? 'var(--color-text-primary)') : v < 0 ? '#E24B4A' : 'rgba(255,255,255,0.25)'
   const otbNumColor = (r: SegTableRow) =>
     r.otbNights > 0 ? (r.fontDarkColor ?? 'var(--color-text-primary)') : 'rgba(255,255,255,0.25)'
-  // 어카운트 숫자: 선택 세그(selRow)의 폰트색 기준
   const accNumColor = (v: number) =>
     v > 0 ? (selRow?.fontDarkColor ?? 'var(--color-text-primary)') : v < 0 ? '#E24B4A' : 'rgba(255,255,255,0.25)'
   const accOtbColor = (otbN: number) =>
     otbN > 0 ? (selRow?.fontDarkColor ?? 'var(--color-text-primary)') : 'rgba(255,255,255,0.25)'
 
-  // OCC / Rev.PAR 픽업 색상 (양수=흰색 / 음수=빨강 / 0=흐림)
   const occPuVal      = summary.puNights / (roomCount || 1) * 100
   const occPuColor    = occPuVal > 0 ? 'var(--color-text-primary)' : occPuVal < 0 ? '#E24B4A' : 'rgba(255,255,255,0.25)'
   const revparPuColor = summary.puRevenue > 0 ? 'var(--color-text-primary)' : summary.puRevenue < 0 ? '#E24B4A' : 'rgba(255,255,255,0.25)'
@@ -180,7 +178,7 @@ export default function MarketPickupDayModal({
         boxShadow: 'var(--shadow-card)', overflow: 'hidden',
       }}>
 
-        {/* 헤더 — 날짜 피커 + 픽업 요약 */}
+        {/* 헤더 — 날짜 피커 + 월 픽업 요약 */}
         <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <DatePicker
@@ -197,12 +195,12 @@ export default function MarketPickupDayModal({
               availableDates={otbDates.filter(d => d < localOtbDate)}
               accent bare plain fontPx={11}
             />
-            {/* 픽업 요약 문구 */}
+            {/* 월 픽업 요약 문구 */}
             <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap' }}>
-              {diffDays}일 간{' '}
+              {month1}월{' '}
               <span style={{ fontWeight: 600, color: puColor(summary.puNights) }}>
                 {summary.puNights >= 0 ? '+' : ''}{summary.puNights}
-              </span>{' '}객실 픽업 하였습니다
+              </span>{' '}R/N 픽업 하였습니다
             </span>
           </div>
 
@@ -211,7 +209,7 @@ export default function MarketPickupDayModal({
           </button>
         </div>
 
-        {/* 탭 + 일자 네비(가운데) */}
+        {/* 탭 + 월 네비(가운데) */}
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
           <div style={{ display: 'flex' }}>
             {(['pickup', 'otb'] as const).map(t => (
@@ -225,17 +223,18 @@ export default function MarketPickupDayModal({
               </button>
             ))}
           </div>
-          {/* 일자 ‹ {날짜} › — 가운데 정렬 */}
+          {/* 월 ‹ {n월} › — 가운데 정렬 */}
           <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', display: 'flex', alignItems: 'center', gap: 8 }}>
             <button
-              onClick={() => setLocalDay(d => Math.max(1, d - 1))}
-              style={{ width: 22, height: 22, borderRadius: 4, border: 'none', background: 'transparent', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              onClick={prevMonth}
+              disabled={atMin}
+              style={{ width: 22, height: 22, borderRadius: 4, border: 'none', background: 'transparent', color: 'rgba(255,255,255,0.6)', cursor: atMin ? 'default' : 'pointer', opacity: atMin ? 0.3 : 1, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >‹</button>
-            <h2 style={{ fontSize: 13, fontWeight: 600, color: getDayColor(localDateStr) }}>
-              {month + 1}/{localDay} ({WEEKDAY_KR[new Date(year, month, localDay).getDay()]})
+            <h2 style={{ fontSize: 13, fontWeight: 600, color: '#fff', minWidth: 48, textAlign: 'center' }}>
+              {selYear !== year ? `${selYear}.` : ''}{month1}월
             </h2>
             <button
-              onClick={() => setLocalDay(d => Math.min(new Date(year, month + 1, 0).getDate(), d + 1))}
+              onClick={nextMonth}
               style={{ width: 22, height: 22, borderRadius: 4, border: 'none', background: 'transparent', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >›</button>
           </div>
@@ -257,7 +256,7 @@ export default function MarketPickupDayModal({
               </thead>
               <tbody>
                 {rows.map(r => {
-                  const isSub    = r.level === 'sub'   // mid는 main과 동일 처리(들여쓰기 X)
+                  const isSub    = r.level === 'sub'
                   const isActive = selMain === r.id
                   const adrValid = r.otbNights > 0 && (r.otbNights - r.puNights) > 0
                   return (
@@ -402,3 +401,5 @@ export default function MarketPickupDayModal({
     </div>
   )
 }
+
+export default PickupMonthSummaryModal
