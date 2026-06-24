@@ -88,7 +88,8 @@ export default function MarketPickupPage() {
   const [dayModal, setDayModal] = useState<{ year: number; month: number; day: number; defaultTab: 'pickup' | 'otb' } | null>(null)
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', padding: '16px 24px', boxSizing: 'border-box', overflow: 'hidden' }}>
+    // height = 100vh − 56px(상단 헤더 h-14) − 48px(main p-6 상하) ; 좌우 패딩은 셸 main의 p-6 사용
+    <div style={{ height: 'calc(100vh - 104px)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', overflow: 'hidden' }}>
       {/* 헤더 — 제목 오른쪽에 OTB/vs DatePicker */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0, flexWrap: 'wrap' }}>
         <h1 className="text-xl font-bold" style={{ color: 'var(--color-text-primary)', margin: 0 }}>Market Pick-up</h1>
@@ -128,17 +129,17 @@ export default function MarketPickupPage() {
 
       {/* 월 블록 — 2개 카드가 남은 공간 채움 */}
       {pickupLoading ? (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0 }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 }}>
           {months.map(t => (
             <div key={`${t.year}-${t.month}`} className="animate-pulse rounded-2xl" style={{ flex: 1, minHeight: 0, background: 'var(--color-bg-tertiary)' }} />
           ))}
         </div>
       ) : (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0, overflow: 'hidden' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0, overflow: 'hidden' }}>
           {months.map(t => {
             const monthKey = `${t.year}-${t.month}`
             return (
-              <div key={monthKey} style={{ flex: 1, minHeight: 0 }}>
+              <div key={monthKey} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 <MarketPickupMonthBlock
                   year={t.year}
                   month={t.month}
