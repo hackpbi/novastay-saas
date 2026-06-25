@@ -182,10 +182,20 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount: _
   const card2026 = monthData.filter(d => d.year === baseYear)
   const card2027 = monthData.filter(d => d.year === baseYear + 1)
 
-  const MonthCell = (d: typeof monthData[number]) => (
-    <div key={d.ym} style={{ background: '#0f0f0f', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '12px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-      <div style={{ fontSize: 11, color: '#888', fontWeight: 500 }}>
-        {MONTH_NAMES[d.month - 1]} <span style={{ color: '#555' }}>'{String(d.year).slice(2)}</span>
+  const MonthCell = (d: typeof monthData[number]) => {
+    const isCurrent = !!curYM && d.ym === curYM
+    const isPast    = !!curYM && d.ym < curYM
+    const badge = isPast
+      ? <span style={{ fontSize: 8, padding: '2px 6px', borderRadius: 8, background: 'rgba(0,229,160,0.12)', color: '#00E5A0', fontWeight: 600 }}>Actual</span>
+      : <span style={{ fontSize: 8, padding: '2px 6px', borderRadius: 8, background: 'rgba(100,160,255,0.12)', color: '#7EA8FF', fontWeight: 600 }}>OTB</span>
+    return (
+    <div key={d.ym} style={{ background: '#0f0f0f', border: isCurrent ? '1px solid rgba(100,160,255,0.5)' : '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '12px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+      <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
+          <span style={{ fontSize: 11, color: '#888', fontWeight: 500 }}>{MONTH_NAMES[d.month - 1]}</span>
+          <span style={{ fontSize: 10, color: '#555' }}>'{String(d.year).slice(2)}</span>
+        </div>
+        {badge}
       </div>
       <Gauge pct={d.ach} color={gaugeColor(d)} size={56} />
       <div style={{ width: '100%', height: 0.5, background: 'rgba(255,255,255,0.08)' }} />
@@ -200,7 +210,8 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount: _
         </div>
       </div>
     </div>
-  )
+    )
+  }
 
   return (
     <div
@@ -227,17 +238,23 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount: _
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
                 <div style={{ background: '#0f0f0f', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
                   <Gauge pct={ytd.ach} color={ytd.ach != null && ytd.ach >= 100 ? '#00E5A0' : '#FF6B6B'} size={76} stroke={6} big />
-                  <div>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', textAlign: 'right' }}>
                     <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>YTD Budget Achievement</div>
-                    <div style={{ fontSize: 13, color: ytd.excess >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 600 }}>{fmtSignedM(ytd.excess)} <span style={{ color: '#555', fontWeight: 400 }}>vs budget</span></div>
+                    <div style={{ color: ytd.excess >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 600 }}>
+                      <span style={{ fontSize: 34 }}>{fmtSignedM(ytd.excess)}</span>
+                      <span style={{ fontSize: 11, color: '#555', fontWeight: 400, marginLeft: 5 }}>vs budget</span>
+                    </div>
                     <div style={{ fontSize: 10, color: '#555', marginTop: 3 }}>Actual {fmtM(ytd.value)} / Budget {fmtM(ytd.budget)}</div>
                   </div>
                 </div>
                 <div style={{ background: '#0f0f0f', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
                   <Gauge pct={ytd.growth != null ? 100 + ytd.growth : null} color={ytd.growth != null && ytd.growth >= 0 ? '#00E5A0' : '#E24B4A'} size={76} stroke={6} big />
-                  <div>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', textAlign: 'right' }}>
                     <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>YTD Growth vs LY</div>
-                    <div style={{ fontSize: 13, color: (ytd.value - ytd.ly) >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 600 }}>{fmtSignedM(ytd.value - ytd.ly)} <span style={{ color: '#555', fontWeight: 400 }}>vs LY</span></div>
+                    <div style={{ color: (ytd.value - ytd.ly) >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 600 }}>
+                      <span style={{ fontSize: 34 }}>{fmtSignedM(ytd.value - ytd.ly)}</span>
+                      <span style={{ fontSize: 11, color: '#555', fontWeight: 400, marginLeft: 5 }}>vs LY</span>
+                    </div>
                     <div style={{ fontSize: 10, color: '#555', marginTop: 3 }}>Actual {fmtM(ytd.value)} / LY {fmtM(ytd.ly)}</div>
                   </div>
                 </div>
