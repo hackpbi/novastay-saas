@@ -186,7 +186,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
           diffRn:  r.otb_nights  - r.ly_nights,
           diffRev: r.otb_revenue - r.ly_revenue,
         }))
-        .sort((a, b) => Math.abs(b.diffRn) - Math.abs(a.diffRn))
+        .sort((a, b) => b.diffRn - a.diffRn)
     }
 
     const currMap: Record<string, { rn: number; rev: number }> = {}
@@ -212,7 +212,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
       name,
       diffRn:  (currMap[name]?.rn  ?? 0) - (lyMap[name]?.rn  ?? 0),
       diffRev: (currMap[name]?.rev ?? 0) - (lyMap[name]?.rev ?? 0),
-    })).sort((a, b) => Math.abs(b.diffRn) - Math.abs(a.diffRn))
+    })).sort((a, b) => b.diffRn - a.diffRn)
   }, [selectedSeg, isOtb, accountPickupRows, actualMonthly, year, month, isYtd, ytdMonth])
 
   // ── schema 행 순서 정렬 (main 뒤에 sub) ──────────────────────────────────────
@@ -439,7 +439,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
             <div style={{ width: 280, flexShrink: 0, maxHeight: 'calc(90vh - 60px)', borderLeft: '1px solid rgba(0,229,160,0.2)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               <div style={{ padding: '10px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: '#FFC850' }}>
-                  {selectedSeg ? `${selectedSeg.label} — Account 증감` : 'Account 증감'}
+                  {selectedSeg ? `${selectedSeg.label} — Account Variance` : 'Account Variance'}
                 </div>
                 <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
                   vs Last Year · {monthLabel}
