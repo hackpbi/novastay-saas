@@ -361,8 +361,8 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
 
         {/* 본문: 메인 테이블 + (vs LY) 어카운트 패널 */}
         <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
-          {/* 메인 테이블 */}
-          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'auto', padding: 16 }}>
+          {/* 메인 테이블 (콘텐츠 높이만큼만 차지, 넘치면 스크롤) */}
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'auto', padding: 16, alignSelf: 'flex-start', maxHeight: '100%' }}>
           {loading ? (
             <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: 13 }}>불러오는 중…</div>
           ) : (
