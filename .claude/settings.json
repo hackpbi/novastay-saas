@@ -8,7 +8,9 @@
       "Bash(grep -rn \"occData\\\\|\\\\\\\\\\\\${val}%\\\\|occ}%\\\\|+ '%'\\\\|occ + \" src/components/pickup/PickupChartModal.tsx)",
       "Bash(grep -v \"^\\\\s*//\")",
       "PowerShell($env:NEXT_DIST_DIR='.next-verify'; npm run build 2>&1 | Select-Object -Last 8; Remove-Item Env:\\\\NEXT_DIST_DIR)",
-      "Bash(grep -iv \"//\")"
+      "Bash(grep -iv \"//\")",
+      "Bash(sed -n '/^interface Props/,/^}/p' src/components/dashboard/ActualBudgetModal.tsx)",
+      "Bash(sed -n '/<ActualBudgetModal/,/\\\\/>/p' src/views/DashboardPage.tsx)"
     ]
   }
 }
