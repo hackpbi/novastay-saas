@@ -19,6 +19,7 @@ import { useDateContext } from '@/contexts/DateContext'
 import { useFcstDateContext } from '@/contexts/FcstDateContext'
 import { useLatestConfirmedBudgetDate } from '@/hooks/useLatestConfirmedBudgetDate'
 import ForecastBudgetModal from '@/components/dashboard/ForecastBudgetModal'
+import ActualBudgetModal from '@/components/dashboard/ActualBudgetModal'
 import { useForecastMonthly, type ForecastMonthlyRow } from '@/hooks/useForecastMonthly'
 import { useBudgetMonthly, type BudgetMonthlyRow } from '@/hooks/useBudgetMonthly'
 import { supabase } from '@/lib/supabase'
@@ -529,6 +530,7 @@ export default function DashboardPage() {
   const [page, setPage]     = useState(0)
   const [lyMode, setLyMode] = useState<LyPacingMode>('v1')
   const [segModal,     setSegModal]     = useState<{ open: boolean; year?: number; month?: number }>({ open: false })
+  const [actualBudgetModal, setActualBudgetModal] = useState(false)
   const [monthlyPickupSegOpen,       setMonthlyPickupSegOpen]       = useState(false)
   const [pickupViewMode,             setPickupViewMode]             = useState<'monthly' | 'total'>('total')
   const [forecastBudgetModal,        setForecastBudgetModal]        = useState<{
@@ -723,9 +725,19 @@ export default function DashboardPage() {
 
       {/* ── Header ── */}
       <div className="mb-6">
-        <h1 className="text-xl font-semibold mb-1" style={{ color: 'var(--color-text-primary)' }}>
-          대시보드
-        </h1>
+        <div className="flex items-center justify-between mb-1" style={{ gap: 12 }}>
+          <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text-primary)', margin: 0 }}>
+            대시보드
+          </h1>
+          <button
+            onClick={() => setActualBudgetModal(true)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: '0.5px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '4px 12px', fontSize: 11, color: 'rgba(255,255,255,0.5)', cursor: 'pointer', transition: 'border-color 0.15s' }}
+            onMouseEnter={e => (e.currentTarget.style.borderColor = '#00E5A0')}
+            onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)')}
+          >
+            Actual vs Budget vs LY
+          </button>
+        </div>
         {pickupLoading ? (
           <div className="h-5 w-80 rounded animate-pulse" style={{ background: 'var(--color-bg-tertiary)' }} />
         ) : (
@@ -851,6 +863,13 @@ export default function DashboardPage() {
         roomCount={roomCount}
         year={cardYear}
         initialMonthKey={forecastBudgetModal.monthKey}
+      />
+
+      <ActualBudgetModal
+        open={actualBudgetModal}
+        onClose={() => setActualBudgetModal(false)}
+        hotelId={hotelId}
+        roomCount={roomCount}
       />
 
       <LyComparisonSegModal
