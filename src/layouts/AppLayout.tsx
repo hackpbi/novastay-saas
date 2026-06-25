@@ -152,10 +152,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 <span className="text-xs font-semibold text-accent-primary tracking-wide">Date</span>
               </div>
               <div className="w-px h-4" style={{ background: 'var(--color-border-default)' }} />
-              <DatePicker label="OTB"    value={otbDate}   onChange={setOtbDate}   accent availableDates={otbDates} />
-              <DatePicker label="vs OTB" value={vsOtbDate} onChange={setVsOtbDate} availableDates={otbDates.filter(d => d < otbDate)} />
-              <DatePicker label="FCST"   value={fcstDate}  onChange={setFcstDate}  availableDates={fcstDates} />
-              <DatePicker label="HK"     value={hkDate}    onChange={setHkDate}    />
+              <DatePicker label="OTB"    value={otbDate}   onChange={setOtbDate}   availableDates={otbDates} bare plain hideIcon labelColor="#555" dateColor="#00E5A0" />
+              <span style={{ fontSize: 12, color: '#333' }}>|</span>
+              <DatePicker label="VS OTB" value={vsOtbDate} onChange={setVsOtbDate} availableDates={otbDates.filter(d => d < otbDate)} bare plain hideIcon labelColor="#555" dateColor="#aaa" underlineColor="#444" />
+              <span style={{ fontSize: 12, color: '#333' }}>|</span>
+              <DatePicker label="FCST"   value={fcstDate}  onChange={setFcstDate}  availableDates={fcstDates} bare plain hideIcon labelColor="#555" dateColor="#aaa" underlineColor="#444" />
+              <span style={{ fontSize: 12, color: '#333' }}>|</span>
+              <DatePicker label="HK"     value={hkDate}    onChange={setHkDate} bare plain hideIcon labelColor="#555" dateColor="#aaa" underlineColor="#444" />
             </div>
 
             <div className="flex-1" />

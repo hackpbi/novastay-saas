@@ -12,12 +12,11 @@ import LyComparisonAccountModal from '@/components/dashboard/LyComparisonAccount
 import { PickupMonthSummaryModal } from '@/components/market-pickup/PickupMonthSummaryModal'
 import { useMarketSchema } from '@/hooks/useMarketSchema'
 import { useDateContext } from '@/contexts/DateContext'
-import { lastDayOfMonth, inMonth, fmtK, fmtM, type PickupDaily } from '@/utils/pickupPageUtils'
+import { lastDayOfMonth, inMonth, type PickupDaily } from '@/utils/pickupPageUtils'
 
 const SPARK_MINT    = 'rgba(0,229,160,0.28)'
 const SPARK_MINT_WK = 'rgba(0,229,160,0.65)'
 const BLUE          = '#60A5FA'
-const COL_BT        = '0.5px solid var(--color-border-tertiary)'
 
 // ─── Forecasting 헬퍼 (MonthCard 동일 스타일 복제) ──────────────────────────────
 function fmtFcOcc(n: number | null): string { return n == null ? '-' : `${n.toFixed(1)}%` }
@@ -77,15 +76,28 @@ function LyCell({ modeNode, varValue, unit, fitPct, grpPct, tooltip, onOpen }: {
   )
 }
 
-const rowStyle: React.CSSProperties = { padding: '12px 16px', borderBottom: COL_BT }
-const rowFlex: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }
-const bigLabel: React.CSSProperties = { fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)', lineHeight: 1, marginBottom: 4 }
-const rnMuted: React.CSSProperties = { fontSize: 11, color: 'var(--color-text-secondary)' }
-const rnStrike: React.CSSProperties = { fontSize: 11, color: 'var(--color-text-secondary)' }
-const vsGroup: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 6 }
-const vsStrike: React.CSSProperties = { fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)' }
-const arrowStyle: React.CSSProperties = { fontSize: 11, color: 'var(--color-text-secondary)' }
-const otbVal: React.CSSProperties = { fontSize: 24, fontWeight: 600, color: '#00E5A0' }
+// ─── KPI 섹션(OCC/ADR/REV) 스타일 + 전년대비/FIT·GRP 헬퍼 ───────────────────────
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const kpiSection: React.CSSProperties = { padding: '10px 16px', borderTop: '1px solid #1a1a1a', cursor: 'pointer' }
+const kpiLabel: React.CSSProperties = { fontSize: 11, color: '#555', marginBottom: 4 }
+const kpiRow: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center' }
+const kpiValRow: React.CSSProperties = { display: 'flex', alignItems: 'baseline', gap: 8 }
+const kpiVs: React.CSSProperties = { fontSize: 12, color: '#444' }
+const kpiBig = (color: string): React.CSSProperties => ({ fontSize: 28, fontWeight: 500, color, lineHeight: 1 })
+
+function YoyBig({ v, unit }: { v: number | null; unit: string }) {
+  if (v == null) return <span style={{ fontSize: 18, fontWeight: 500, color: '#555' }}>—</span>
+  const pos = v >= 0
+  return <span style={{ fontSize: 18, fontWeight: 500, color: pos ? '#00E5A0' : '#E24B4A' }}>{pos ? '▲' : '▼'} {Math.abs(v)}{unit}</span>
+}
+function FitGrpLine({ fitPct, grpPct }: { fitPct?: number | null; grpPct?: number | null }) {
+  if (fitPct == null && grpPct == null) return null
+  const seg = (label: string, v: number | null | undefined) =>
+    v == null
+      ? <>{label} <span style={{ color: '#555' }}>—</span></>
+      : <>{label} <span style={{ color: v >= 0 ? '#00E5A0' : '#E24B4A' }}>{v >= 0 ? '▲' : '▼'}{Math.abs(Math.round(v))}%</span></>
+  return <div style={{ fontSize: 10, color: '#555' }}>{seg('FIT', fitPct)}<span style={{ margin: '0 4px' }}>·</span>{seg('GRP', grpPct)}</div>
+}
 
 // ─── 이벤트 (c06_calendar) ──────────────────────────────────────────────────────
 type CalendarRow = { date: string; event: string; is_holiday: boolean }
@@ -244,7 +256,7 @@ function EventBadge({ group, dayAgg, totalRooms }: { group: EventGroup; dayAgg: 
         🎌 {group.parenText}
         <span style={{ fontSize: 9, opacity: 0.8 }}>{dateLabel}</span>
         {totalPuRn !== 0 && (
-          <span style={{ fontSize: 9, fontWeight: 500, color: '#00B883', background: 'rgba(0,180,130,0.15)', padding: '1px 5px', borderRadius: 10, marginLeft: 2 }}>
+          <span style={{ fontSize: 9, fontWeight: 500, color: totalPuRn > 0 ? '#00B883' : '#E24B4A', background: 'rgba(0,180,130,0.15)', padding: '1px 5px', borderRadius: 10, marginLeft: 2 }}>
             {totalPuRn > 0 ? '+' : ''}{totalPuRn}
           </span>
         )}
@@ -498,27 +510,14 @@ export default function PickupMonthCard({
   const [lyAcc, setLyAcc] = useState<{ open: boolean; filterSegCodes?: string[]; filterLabel?: string }>({ open: false })
   const monthKey = `${year}-${String(month1).padStart(2, '0')}`
   const ly = lyMode === 'v1' ? m.lyV1 : m.lyV2
-  const modeToggle = (
-    <span
-      onClick={e => { e.stopPropagation(); setLyMode(p => (p === 'v1' ? 'v2' : 'v1')) }}
-      className="text-[9px] cursor-pointer"
-      style={{ color: 'rgba(255,255,255,0.4)', borderBottom: '1px dashed rgba(255,255,255,0.3)' }}
-    >
-      {lyMode === 'v1' ? '전년 동일자 ⇅' : '전년 동기간 ⇅'}
-    </span>
-  )
-  const modeStatic = (
-    <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
-      {lyMode === 'v1' ? '전년 동일자' : '전년 동기간'}
-    </span>
-  )
 
   // ── 파생값 ───────────────────────────────────────────────────────────────────
   const adrDelta = m.otbAdr - m.vsAdr
 
-  const achOcc = m.fcst.occ > 0 ? (m.otbOcc / m.fcst.occ) * 100 : null
-  const achAdr = m.fcst.adr > 0 ? (m.otbAdr / m.fcst.adr) * 100 : null
-  const achRev = m.fcst.rev > 0 ? (m.otbRev / m.fcst.rev) * 100 : null
+  // 달성률 = FCST ÷ BUDGET × 100 (BUDGET 0이면 null → '-')
+  const achOcc = m.bud.occ > 0 ? Math.round((m.fcst.occ / m.bud.occ) * 1000) / 10 : null
+  const achAdr = m.bud.adr > 0 ? Math.round((m.fcst.adr / m.bud.adr) * 1000) / 10 : null
+  const achRev = m.bud.rev > 0 ? Math.round((m.fcst.rev / m.bud.rev) * 1000) / 10 : null
 
   const fcCell = (color: string): React.CSSProperties => ({ fontSize: 14, fontWeight: 600, color, textAlign: 'right' })
   const borderTop = '1px solid var(--color-border-default)'
@@ -533,9 +532,8 @@ export default function PickupMonthCard({
         </div>
         <div className="relative flex items-end justify-between gap-2">
           <div className="flex items-end gap-1.5 shrink-0">
-            <span className="font-bold leading-none" style={{ fontSize: 54, color: 'var(--color-text-primary)' }}>{month1}</span>
-            <span className="text-lg font-medium text-brand-muted mb-1.5">월</span>
-            <span className="text-xs font-medium text-brand-dimmed mb-2 ml-0.5">{year}</span>
+            <span className="font-bold leading-none" style={{ fontSize: 40, color: 'var(--color-text-primary)' }}>{MONTH_NAMES[month1 - 1]}</span>
+            <span className="text-xs font-medium text-brand-dimmed mb-2 ml-1">{year}</span>
           </div>
           {/* 우: 공휴일 이벤트 뱃지 */}
           <div style={{ display: 'flex', flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', flex: 1, paddingLeft: 8, paddingBottom: 2 }}>
@@ -548,92 +546,99 @@ export default function PickupMonthCard({
         </div>
       </div>
 
-      {/* ── Pick-up 요약 (강조: 민트 배경 + 좌측 3px 라인) — 클릭 시 일자별 상세 모달 ── */}
+      {/* ── Pick-up 요약 (이미지2: 민트 박스) — 클릭 시 일자별 상세 모달 ── */}
       <div
         onClick={() => setSummaryModalOpen(true)}
-        style={{ padding: '12px 14px', borderBottom: COL_BT, background: 'rgba(0,40,25,0.9)', borderLeft: '3px solid #00E5A0', cursor: 'pointer' }}
+        style={{ background: '#0a1f14', border: '1px solid rgba(0,229,160,0.15)', borderRadius: 10, padding: '14px 16px', margin: '8px 14px 10px', cursor: 'pointer' }}
       >
-        <div style={{ fontSize: 10, fontWeight: 500, color: '#00B883', marginBottom: 6, textAlign: 'center' }}>Pick-up</div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <span style={{ fontSize: 26, fontWeight: 600, color: '#ffffff', lineHeight: 1, borderBottom: '1px dashed #00E5A0', paddingBottom: 1, cursor: 'pointer' }}>
-              {m.puOccPp >= 0 ? '+' : ''}{m.puOccPp.toFixed(1)}%{m.puOccPp >= 0 ? '↑' : '↓'}
-            </span>
-            <span style={{ fontSize: 12, color: '#00B883', marginTop: 3, cursor: 'default' }}>
-              {m.puN >= 0 ? '+' : ''}{m.puN.toLocaleString('ko-KR')} R/N
-            </span>
+        <div style={{ fontSize: 11, color: '#00E5A0', textAlign: 'center', marginBottom: 8 }}>Pick-up</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr auto 1fr auto 1fr', alignItems: 'center' }}>
+          {/* 픽업 % + R/N — 양수 흰색 / 음수 빨강 */}
+          <div style={{ textAlign: 'center', padding: '0 8px' }}>
+            <div style={{ fontSize: 32, fontWeight: 500, lineHeight: 1, color: m.puOccPp < 0 ? '#E24B4A' : '#fff' }}>
+              {m.puOccPp > 0 ? '+' : ''}{m.puOccPp.toFixed(1)}%{m.puOccPp >= 0 ? '↑' : '↓'}
+            </div>
+            <div style={{ fontSize: 11, color: '#555', marginTop: 4 }}>
+              {m.puN > 0 ? '+' : ''}{m.puN.toLocaleString('ko-KR')} R/N
+            </div>
           </div>
-          <span style={{ fontSize: 11, color: 'var(--color-border-default)' }}>|</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-            <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)' }}>ADR</span>
-            <span style={{ fontSize: 16, fontWeight: 500, color: adrDelta === 0 ? '#aaa' : adrDelta > 0 ? '#ffffff' : '#E24B4A' }}>
-              {adrDelta >= 0 ? '+' : ''}{Math.round(adrDelta / 1000)}k
-            </span>
+          <div style={{ width: 1, height: 44, background: 'rgba(0,229,160,0.2)' }} />
+          {/* ADR — 양수 민트 / 음수 빨강 */}
+          <div style={{ textAlign: 'center', padding: '0 16px' }}>
+            <div style={{ fontSize: 11, color: '#555', marginBottom: 4 }}>ADR</div>
+            <div style={{ fontSize: 22, fontWeight: 500, color: adrDelta < 0 ? '#E24B4A' : '#00E5A0' }}>
+              {adrDelta > 0 ? '+' : ''}{Math.round(adrDelta / 1000)}k
+            </div>
           </div>
-          <span style={{ fontSize: 11, color: 'var(--color-border-default)' }}>|</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-            <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)' }}>REV</span>
-            <span style={{ fontSize: 16, fontWeight: 500, color: m.puR === 0 ? '#aaa' : m.puR > 0 ? '#ffffff' : '#E24B4A' }}>
-              {m.puR >= 0 ? '+' : ''}{fmtM(m.puR)}
-            </span>
+          <div style={{ width: 1, height: 44, background: 'rgba(0,229,160,0.2)' }} />
+          {/* REV — 양수 민트 / 음수 빨강 */}
+          <div style={{ textAlign: 'center', padding: '0 16px' }}>
+            <div style={{ fontSize: 11, color: '#555', marginBottom: 4 }}>REV</div>
+            <div style={{ fontSize: 22, fontWeight: 500, color: m.puR < 0 ? '#E24B4A' : '#00E5A0' }}>
+              {m.puR > 0 ? '+' : ''}{(m.puR / 1_000_000).toFixed(1)}M
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ── OCC 행 ── */}
-      <div style={rowStyle}>
-        <div style={rowFlex}>
+      {/* ── OCC (레이블 + LY 토글 한 줄) ── */}
+      <div style={kpiSection} onClick={() => setLySegOpen(true)}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+          <span style={{ fontSize: 11, color: '#555' }}>OCC</span>
+          <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 4, background: '#0d0d0d', borderRadius: 8, padding: 3 }}>
+            {([['Same Period LY', 'v2'], ['Same Day LY', 'v1']] as const).map(([labelTxt, mode]) => (
+              <button key={mode} onClick={() => setLyMode(mode)}
+                style={{
+                  padding: '3px 8px', borderRadius: 6, fontSize: 10, border: 'none', cursor: 'pointer',
+                  background: lyMode === mode ? '#00E5A0' : 'transparent',
+                  color: lyMode === mode ? '#0a0a0a' : '#555',
+                  fontWeight: lyMode === mode ? 500 : 400, transition: 'all 0.15s',
+                }}>
+                {labelTxt}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={kpiRow}>
           <div>
-            <div style={bigLabel}>OCC</div>
-            <div style={vsGroup}>
-              {m.vsN > 0 && <span style={vsStrike}>{m.vsOcc.toFixed(1)}%</span>}
-              {m.vsN > 0 && <span style={arrowStyle}>→</span>}
-              <span style={otbVal}>{m.otbOcc.toFixed(1)}%</span>
+            <div style={kpiValRow}>
+              <span style={kpiBig('#00E5A0')}>{m.otbOcc.toFixed(1)}%</span>
+              <span style={kpiVs}>vs {m.vsOcc.toFixed(1)}%</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
-              {m.vsN > 0 && <span style={rnStrike}>{m.vsN.toLocaleString('ko-KR')} R/N</span>}
-              {m.vsN > 0 && <span style={rnMuted}>→</span>}
-              <span style={rnMuted}>{m.otbN.toLocaleString('ko-KR')} R/N</span>
-            </div>
+            <div style={{ marginTop: 4 }}><FitGrpLine fitPct={ly.fitPct} grpPct={ly.grpPct} /></div>
           </div>
-          <LyCell modeNode={modeToggle} varValue={ly.varNightsPct != null ? Math.round(ly.varNightsPct * 10) / 10 : null} unit="%" tooltip fitPct={ly.fitPct} grpPct={ly.grpPct}
-            onOpen={() => setLySegOpen(true)} />
+          <YoyBig v={ly.varNightsPct != null ? Math.round(ly.varNightsPct * 10) / 10 : null} unit="%" />
         </div>
       </div>
 
-      {/* ── ADR 행 ── */}
-      <div style={rowStyle}>
-        <div style={rowFlex}>
+      {/* ── ADR ── */}
+      <div style={kpiSection} onClick={() => setLySegOpen(true)}>
+        <div style={kpiLabel}>ADR</div>
+        <div style={kpiRow}>
+          <div style={kpiValRow}>
+            <span style={kpiBig('#ffffff')}>{Math.round(m.otbAdr / 1000)}k</span>
+            <span style={kpiVs}>vs {Math.round(m.vsAdr / 1000)}k</span>
+          </div>
+          <YoyBig v={ly.varAdr != null ? Math.round(ly.varAdr / 1000) : null} unit="k" />
+        </div>
+      </div>
+
+      {/* ── REV ── */}
+      <div style={kpiSection} onClick={() => setLySegOpen(true)}>
+        <div style={kpiLabel}>REV</div>
+        <div style={kpiRow}>
           <div>
-            <div style={bigLabel}>ADR</div>
-            <div style={vsGroup}>
-              {m.vsAdr > 0 && <span style={vsStrike}>{fmtK(m.vsAdr)}</span>}
-              {m.vsAdr > 0 && <span style={arrowStyle}>→</span>}
-              <span style={otbVal}>{fmtK(m.otbAdr)}</span>
+            <div style={kpiValRow}>
+              <span style={kpiBig('#ffffff')}>{(m.otbRev / 1_000_000).toFixed(1)}M</span>
+              <span style={kpiVs}>vs {(m.vsRev / 1_000_000).toFixed(1)}M</span>
             </div>
+            <div style={{ marginTop: 4 }}><FitGrpLine fitPct={ly.fitPct} grpPct={ly.grpPct} /></div>
           </div>
-          <LyCell modeNode={modeStatic} varValue={ly.varAdr != null ? Math.round(ly.varAdr / 1000) : null} unit="k" tooltip={false}
-            onOpen={() => setLySegOpen(true)} />
+          <YoyBig v={ly.varRevenuePct != null ? Math.round(ly.varRevenuePct * 10) / 10 : null} unit="%" />
         </div>
       </div>
 
-      {/* ── REV 행 ── */}
-      <div style={rowStyle}>
-        <div style={rowFlex}>
-          <div>
-            <div style={bigLabel}>REV</div>
-            <div style={vsGroup}>
-              {m.vsRev > 0 && <span style={vsStrike}>{fmtM(m.vsRev)}</span>}
-              {m.vsRev > 0 && <span style={arrowStyle}>→</span>}
-              <span style={otbVal}>{fmtM(m.otbRev)}</span>
-            </div>
-          </div>
-          <LyCell modeNode={modeStatic} varValue={ly.varRevenuePct != null ? Math.round(ly.varRevenuePct * 10) / 10 : null} unit="%" tooltip fitPct={ly.fitPct} grpPct={ly.grpPct}
-            onOpen={() => setLySegOpen(true)} />
-        </div>
-      </div>
-
-      {/* ── Forecasting (FCST / BUDGET / 달성=OTB÷FCST) ── */}
+      {/* ── Forecasting (FCST / BUDGET / Achieved = FCST÷BUDGET) ── */}
       <div className="mx-4 mt-2 rounded-xl p-3.5" style={{ background: 'var(--forecast-bg)', border: '1px solid var(--forecast-border)' }}>
         <div style={{ fontSize: 10, letterSpacing: '1.5px', fontWeight: 500, color: 'var(--color-accent-primary)', marginBottom: 10, textTransform: 'uppercase' }}>Forecasting</div>
         <div style={{ display: 'grid', gridTemplateColumns: '58px 1fr 1fr 1fr', gap: '8px 10px', alignItems: 'center' }}>
@@ -649,7 +654,7 @@ export default function PickupMonthCard({
           <div className="font-mono" style={fcCell('var(--color-text-secondary)')}>{fmtFcOcc(m.bud.has ? m.bud.occ : null)}</div>
           <div className="font-mono" style={fcCell('var(--color-text-secondary)')}>{fmtFcAdr(m.bud.has ? m.bud.adr : null)}</div>
           <div className="font-mono" style={fcCell('var(--color-text-secondary)')}>{fmtFcRevenue(m.bud.has ? m.bud.rev : null)}</div>
-          <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)', borderTop, paddingTop: 7 }}>달성</div>
+          <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)', borderTop, paddingTop: 7 }}>Achieved</div>
           <div className="font-mono" style={{ ...fcCell(getAchievementColor(achOcc)), fontSize: 12, borderTop, paddingTop: 7 }}>{fmtFcPct(achOcc)}</div>
           <div className="font-mono" style={{ ...fcCell(getAchievementColor(achAdr)), fontSize: 12, borderTop, paddingTop: 7 }}>{fmtFcPct(achAdr)}</div>
           <div className="font-mono" style={{ ...fcCell(getAchievementColor(achRev)), fontSize: 12, borderTop, paddingTop: 7 }}>{fmtFcPct(achRev)}</div>
@@ -659,8 +664,8 @@ export default function PickupMonthCard({
       {/* ── 픽업 추이 (Pick-up 전용) ── */}
       <div style={{ padding: '8px 16px 10px', borderTop: '0.5px solid var(--color-border-tertiary)', cursor: 'pointer' }} onClick={() => onExpand(m.daily)}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-          <span style={{ fontSize: 10, color: 'var(--color-text-secondary)' }}>픽업 추이</span>
-          <span style={{ fontSize: 9, color: 'var(--color-text-secondary)', opacity: 0.7 }}>클릭해서 확대</span>
+          <span style={{ fontSize: 10, color: 'var(--color-text-secondary)' }}>Pick-up Trend</span>
+          <span style={{ fontSize: 9, color: 'var(--color-text-secondary)', opacity: 0.7 }}>Expand</span>
         </div>
         <div style={{ position: 'relative', width: '100%', height: 68 }}>
           <canvas ref={canvasRef} role="img" aria-label={`${month1}월 픽업 추이`} />

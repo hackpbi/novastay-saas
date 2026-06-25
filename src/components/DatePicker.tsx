@@ -15,6 +15,10 @@ export interface DatePickerProps {
   bare?:           boolean   // 테두리/배경 제거 (텍스트만)
   fontPx?:         number    // 트리거 라벨·날짜 폰트 통일용 (지정 시 text-[9px]/text-[11px] 대체)
   plain?:          boolean    // 칩 평문화: mono 제거 + 라벨 대문자/볼드/세로구분선 제거 (문장 인라인용)
+  hideIcon?:       boolean   // 캘린더 아이콘 숨김 (글로벌 바 등)
+  labelColor?:     string    // 라벨 색 오버라이드
+  dateColor?:      string    // 날짜 텍스트 색 오버라이드 (밑줄은 currentColor → 이 색 따라감)
+  underlineColor?: string    // 점선 밑줄 색만 별도 오버라이드
 }
 
 export interface FormDatePickerProps {
@@ -44,7 +48,7 @@ function buildGrid(year: number, month: number): (number | null)[] {
 
 // ─── DatePicker ────────────────────────────────────────────────────────────────
 
-export default function DatePicker({ label, value, onChange, accent = false, availableDates, confirmMode = false, onConfirm, confirmLabel = '불러오기', bare = false, fontPx, plain = false }: DatePickerProps) {
+export default function DatePicker({ label, value, onChange, accent = false, availableDates, confirmMode = false, onConfirm, confirmLabel = '불러오기', bare = false, fontPx, plain = false, hideIcon = false, labelColor, dateColor, underlineColor }: DatePickerProps) {
   const [todayStr,     setTodayStr]     = useState('')
   const [open,         setOpen]         = useState(false)
   const [pendingDate,  setPendingDate]  = useState<string | null>(null)
@@ -157,22 +161,24 @@ export default function DatePicker({ label, value, onChange, accent = false, ava
       >
         <span
           className={`shrink-0${fontPx ? '' : ' text-[9px]'}${plain ? '' : ' font-bold uppercase tracking-wider'}`}
-          style={{ color: open || accent ? 'var(--color-accent-primary)' : 'var(--color-text-muted)', ...(fontPx ? { fontSize: fontPx } : {}) }}
+          style={{ color: labelColor ?? (open || accent ? 'var(--color-accent-primary)' : 'var(--color-text-muted)'), ...(fontPx ? { fontSize: fontPx } : {}) }}
         >
           {label}
         </span>
         {!plain && <span style={{ width: 1, height: 12, background: 'var(--color-border-default)', display: 'inline-block' }} />}
         <span
           className={`font-medium${fontPx ? '' : ' text-[11px]'}${plain ? '' : ' font-mono'}`}
-          style={{ color: open || accent ? 'var(--color-accent-primary)' : 'var(--color-text-primary)', borderBottom: '1px dashed currentColor', paddingBottom: 1, ...(fontPx ? { fontSize: fontPx } : {}) }}
+          style={{ color: dateColor ?? (open || accent ? 'var(--color-accent-primary)' : 'var(--color-text-primary)'), borderBottom: `1px dashed ${underlineColor ?? 'currentColor'}`, paddingBottom: 1, ...(fontPx ? { fontSize: fontPx } : {}) }}
         >
           {display}
         </span>
-        <CalendarDays
-          size={fontPx ?? 10}
-          className="shrink-0"
-          style={{ color: open || accent ? 'var(--color-accent-primary)' : 'var(--color-text-muted)' }}
-        />
+        {!hideIcon && (
+          <CalendarDays
+            size={fontPx ?? 10}
+            className="shrink-0"
+            style={{ color: open || accent ? 'var(--color-accent-primary)' : 'var(--color-text-muted)' }}
+          />
+        )}
       </button>
 
       {/* ── Calendar popup ── */}

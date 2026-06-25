@@ -304,7 +304,7 @@ export default function MarketPickupMonthBlock({
                       <span style="width:7px;height:7px;border-radius:2px;background:${s.color};flex-shrink:0;display:inline-block;"></span>
                       ${s.name}
                     </span>
-                    <span style="font-weight:500;font-variant-numeric:tabular-nums;color:${s.val > 0 ? '#00B883' : '#E24B4A'};">
+                    <span style="font-weight:500;font-variant-numeric:tabular-nums;color:${s.val < 0 ? '#E24B4A' : 'rgba(255,255,255,0.6)'};">
                       ${s.val > 0 ? '+' : ''}${s.val}
                     </span>
                   </div>
@@ -319,7 +319,7 @@ export default function MarketPickupMonthBlock({
               <div style="height:0.5px;background:rgba(255,255,255,0.08);margin:5px 0;"></div>
               <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:600;">
                 <span style="color:rgba(255,255,255,0.5);">Total</span>
-                <span style="color:${dayTotal > 0 ? '#00B883' : dayTotal < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)'};">
+                <span style="color:${dayTotal < 0 ? '#E24B4A' : '#00E5A0'};">
                   ${dayTotal >= 0 ? '+' : ''}${dayTotal}
                 </span>
               </div>

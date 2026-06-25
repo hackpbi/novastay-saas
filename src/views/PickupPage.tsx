@@ -10,9 +10,8 @@ import { useFcstDateContext } from '@/contexts/FcstDateContext'
 import { usePickupData } from '@/hooks/usePickupData'
 import { useLyPacing } from '@/hooks/useLyPacing'
 import { useLatestConfirmedBudgetDate } from '@/hooks/useLatestConfirmedBudgetDate'
-import DatePicker from '@/components/DatePicker'
 import PickupMonthCard from '@/components/pickup/PickupMonthCard'
-import PickupChartModal from '@/components/pickup/PickupChartModal'
+import { PickupTrendModal } from '@/components/pickup/PickupTrendModal'
 import MonthlyPickupSegModal from '@/components/dashboard/MonthlyPickupSegModal'
 import MonthlyPickupSegTotalModal from '@/components/dashboard/MonthlyPickupSegTotalModal'
 import MonthlyPickupAccountModal from '@/components/dashboard/MonthlyPickupAccountModal'
@@ -22,7 +21,7 @@ import { fmtK, fmtM } from '@/utils/pickupPageUtils'
 export default function PickupPage() {
   const { currentHotel } = useHotel()
   const hotelId = currentHotel?.id
-  const { otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate } = useDateContext()
+  const { otbDate, vsOtbDate } = useDateContext()
   const { fcstDate } = useFcstDateContext()
   const { data: budgetDate = null } = useLatestConfirmedBudgetDate(hotelId || undefined)
 
@@ -77,7 +76,7 @@ export default function PickupPage() {
   const { data: lyDjRows = [] } = useLyPacing('v1')
   const { data: lyDgRows = [] } = useLyPacing('v2')
 
-  const [chartModal, setChartModal] = useState<{ year: number; month: number } | null>(null)
+  const [trendModal, setTrendModal] = useState<{ year: number; month: number } | null>(null)
   const [mpOpen, setMpOpen] = useState(false)
   const [pickupViewMode, setPickupViewMode] = useState<'monthly' | 'total'>('total')
   const [pickupAccountModal, setPickupAccountModal] = useState<{
@@ -98,46 +97,41 @@ export default function PickupPage() {
 
   return (
     <div>
-      {/* 헤더 — 제목 + 바로 아래 배너 */}
-      <h1 className="text-xl font-bold mb-1" style={{ color: 'var(--color-text-primary)' }}>Pick-up</h1>
+      {/* 헤더 — 타이틀 */}
+      <h1 className="text-xl font-bold mb-4" style={{ color: 'var(--color-text-primary)' }}>Pick-up</h1>
 
-      {/* 상단 요약 배너 — OTB/vs 날짜를 문구 안 인라인으로 (날짜 폰트 = 문구 14px) */}
-      {pickupLoading ? (
-        <div className="h-5 w-80 rounded animate-pulse mb-5" style={{ background: 'var(--color-bg-tertiary)' }} />
-      ) : (
-        <p className="text-[13px] mb-5" style={{ color: 'var(--color-text-secondary)', lineHeight: 1.8 }}>
-          <span style={{ display: 'inline-flex', verticalAlign: 'middle' }}>
-            <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} availableDates={otbDates ?? []} accent bare fontPx={13} plain />
-          </span>
-          {' '}
-          <span style={{ display: 'inline-flex', verticalAlign: 'middle' }}>
-            <DatePicker label="vs" value={vsOtbDate} onChange={setVsOtbDate} availableDates={(otbDates ?? []).filter(d => d < otbDate)} accent bare fontPx={13} plain />
-          </span>
-          {' '}{pickupDays === 0 ? '당일' : `${pickupDays}일간`} 6개월 픽업은 총{' '}
-          <span onClick={() => setMpOpen(true)} title="월별 픽업 추이 보기" style={valStyle(totalPuNights)}>
-            {totalPuNights >= 0 ? '+' : ''}{totalPuNights.toLocaleString('ko-KR')}실
-          </span>
-          , ADR{' '}
-          <span onClick={() => setMpOpen(true)} title="월별 픽업 추이 보기" style={valStyle(totalPuAdr)}>
-            {totalPuAdr >= 0 ? '+' : ''}{fmtK(totalPuAdr)}
-          </span>
-          , REV{' '}
-          <span onClick={() => setMpOpen(true)} title="월별 픽업 추이 보기" style={valStyle(totalPuRevenue)}>
-            {totalPuRevenue >= 0 ? '+' : ''}{fmtM(totalPuRevenue)}
-          </span>
-          {' '}입니다.
-        </p>
-      )}
-
-      {/* 월 범위 네비게이션 (대시보드 스타일) */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2.5">
+      {/* 월 범위 네비 (좌: 월범위 · 가운데: 요약 영문 · 우: Prev/Next) */}
+      <div className="flex items-center justify-between mb-4" style={{ gap: 16 }}>
+        <div className="flex items-center gap-2.5 shrink-0">
           <span className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
             {targetMonths[0].month + 1}월 &mdash; {targetMonths[2].month + 1}월
           </span>
           <span className="text-xs text-brand-dimmed font-mono">{targetMonths[0].year}년</span>
         </div>
-        <div className="flex items-center gap-1.5">
+
+        {/* 가운데: 요약 문장 (영문) */}
+        {!pickupLoading && (
+          <p className="text-[13px]" style={{ flex: 1, textAlign: 'center', margin: 0, color: 'var(--color-text-secondary)', lineHeight: 1.8 }}>
+            <span style={{ fontSize: 13, color: '#00E5A0', fontWeight: 500 }}>OTB</span>{' '}
+            <span style={{ fontSize: 13, color: '#00E5A0' }}>{otbDate ? otbDate.replace(/-/g, '.').slice(2) : '-'}</span>{' '}
+            <span style={{ fontSize: 12, color: '#555' }}>vs</span>{' '}
+            <span style={{ fontSize: 13, color: '#00E5A0' }}>{vsOtbDate ? vsOtbDate.replace(/-/g, '.').slice(2) : '-'}</span>
+            {' '}{pickupDays === 0 ? 'same-day' : `${pickupDays}-day`} pickup for 6 months:{' '}
+            <span onClick={() => setMpOpen(true)} title="월별 픽업 추이 보기" style={valStyle(totalPuNights)}>
+              {totalPuNights >= 0 ? '+' : ''}{totalPuNights.toLocaleString('ko-KR')} R/N
+            </span>
+            <span style={{ color: '#555' }}>, ADR</span>{' '}
+            <span onClick={() => setMpOpen(true)} title="월별 픽업 추이 보기" style={valStyle(totalPuAdr)}>
+              {totalPuAdr >= 0 ? '+' : ''}{fmtK(totalPuAdr)}
+            </span>
+            <span style={{ color: '#555' }}>, REV</span>{' '}
+            <span onClick={() => setMpOpen(true)} title="월별 픽업 추이 보기" style={valStyle(totalPuRevenue)}>
+              {totalPuRevenue >= 0 ? '+' : ''}{fmtM(totalPuRevenue)}
+            </span>
+          </p>
+        )}
+
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={handlePrev}
             disabled={isPrevDisabled}
@@ -177,23 +171,21 @@ export default function PickupPage() {
                 pickupRows={pickupRows}
                 lyDjRows={lyDjRows}
                 lyDgRows={lyDgRows}
-                onExpand={() => setChartModal({ year: t.year, month: t.month })}
+                onExpand={() => setTrendModal({ year: t.year, month: t.month })}
               />
             ))}
       </div>
 
-      <PickupChartModal
-        open={!!chartModal}
-        onClose={() => setChartModal(null)}
-        year={chartModal?.year ?? now.getFullYear()}
-        month={chartModal?.month ?? now.getMonth()}
+      <PickupTrendModal
+        open={!!trendModal}
+        onClose={() => setTrendModal(null)}
+        year={trendModal?.year ?? now.getFullYear()}
+        month={trendModal?.month ?? now.getMonth()}
+        hotelId={hotelId}
         pickupRows={pickupRows}
-        roomCount={roomCount}
         otbDate={otbDate}
         vsOtbDate={vsOtbDate}
-        otbDates={otbDates ?? []}
-        setOtbDate={setOtbDate}
-        setVsOtbDate={setVsOtbDate}
+        roomCount={roomCount}
       />
 
       {/* 픽업 추이 모달 — pickupViewMode(월별/합계) 토글 + Seg→Account 드릴 (대시보드 동일) */}

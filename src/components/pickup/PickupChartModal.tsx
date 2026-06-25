@@ -133,8 +133,10 @@ export default function PickupChartModal({
   const pickupBySegment = useMemo(() => {
     const mainIds = new Set(schema.filter(s => s.level === 'main' && s.parent_id === null).map(s => s.id))
     const codeToName = new Map<string, string>()
+    const nameToColor = new Map<string, string>()
     for (const s of schema) {
       if (s.parent_id && mainIds.has(s.parent_id)) {
+        nameToColor.set(s.name, (s as any).bg_dark_color ?? '#888888')
         for (const code of (s.segmentation ?? [])) codeToName.set(code, s.name)
       }
     }
@@ -150,9 +152,9 @@ export default function PickupChartModal({
       const m = byDay.get(day)!
       m.set(name, (m.get(name) ?? 0) + (r.pu_nights ?? 0))
     }
-    const map: Record<number, { segName: string; rn: number }[]> = {}
+    const map: Record<number, { segName: string; rn: number; color: string }[]> = {}
     for (const [day, m] of byDay) {
-      map[day - 1] = Array.from(m.entries()).map(([segName, rn]) => ({ segName, rn: Math.round(rn) }))
+      map[day - 1] = Array.from(m.entries()).map(([segName, rn]) => ({ segName, rn: Math.round(rn), color: nameToColor.get(segName) ?? '#888888' }))
     }
     return map
   }, [schema, pickupRows, modalYear, modalMonth])
@@ -235,6 +237,7 @@ export default function PickupChartModal({
           if (!showOccLabelRef.current) return
           const { ctx, scales: { x, yOcc } } = chart
           occData.forEach((val: number, i: number) => {
+            if (val == null || val === 0) return   // 0%는 차트 바닥(x축 위)에 그려져 일자와 겹치므로 제외
             const xPos = x.getPixelForValue(i)
             const yPos = yOcc.getPixelForValue(val)
             ctx.save()
@@ -325,7 +328,7 @@ export default function PickupChartModal({
         },
         options: {
           responsive: true, maintainAspectRatio: false,
-          layout: { padding: { top: 18, bottom: hasEvents ? 60 : 16 } },   // 픽업 라벨 위 / 이벤트 원(라벨 실측 아래) 공간
+          layout: { padding: { top: 18, bottom: hasEvents ? 30 : 8 } },   // 픽업 라벨 위 / 이벤트 원(라벨 실측 아래) 최소 공간
           interaction: { mode: 'index', intersect: false },
           // 막대 클릭 → 해당 일자 Day 모달 / hover 시 포인터
           onClick: (_e: any, els: any[]) => {
@@ -351,7 +354,7 @@ export default function PickupChartModal({
                 if (!el) {
                   el = document.createElement('div')
                   el.id = 'pickup-chart-tooltip'
-                  el.style.cssText = "position:fixed;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;pointer-events:none;font-family:'DM Sans',sans-serif;font-size:13px;min-width:200px;z-index:99999;transition:opacity 0.1s;color:#ddd;box-shadow:0 4px 20px rgba(0,0,0,0.5);"
+                  el.style.cssText = 'position:fixed;background:#0a0a0a;border:0.5px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 14px;pointer-events:none;font-size:12px;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,0.5);z-index:99999;opacity:0;transition:opacity 0.1s;'
                   document.body.appendChild(el)
                 }
                 if (tooltip.opacity === 0) { el.style.opacity = '0'; return }
@@ -363,10 +366,10 @@ export default function PickupChartModal({
                 const d = daily[i]
                 const title = d ? `${modalMonth + 1}월 ${d.day}일 (${DOW_KR[d.dow]})` : ''
                 const rows = segs.map(s =>
-                  `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0 4px 8px;margin:2px 0;"><span style="color:#888;font-size:13px;">${s.segName}</span><span style="color:#fff;font-size:13px;font-weight:500;">${s.rn > 0 ? '+' : ''}${s.rn}</span></div>`
+                  `<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:3px 0;font-size:11px;"><span style="color:rgba(255,255,255,0.6);display:flex;align-items:center;gap:5px;"><span style="width:7px;height:7px;border-radius:2px;background:${s.color};flex-shrink:0;display:inline-block;"></span>${s.segName}</span><span style="font-weight:500;font-variant-numeric:tabular-nums;color:${s.rn < 0 ? '#E24B4A' : 'rgba(255,255,255,0.6)'};">${s.rn > 0 ? '+' : ''}${s.rn}</span></div>`
                 ).join('')
-                const tColor = total > 0 ? '#00E5A0' : total < 0 ? '#E24B4A' : '#888'
-                el.innerHTML = `<div style="color:#fff;font-size:14px;font-weight:600;margin-bottom:12px;">${title}</div>${rows}<div style="border-top:1px solid #2a2a2a;margin-top:10px;padding-top:10px;display:flex;justify-content:space-between;align-items:center;"><span style="color:#fff;font-size:13px;font-weight:700;">Total</span><span style="color:${tColor};font-size:13px;font-weight:700;">${total > 0 ? '+' : ''}${total}</span></div>`
+                const tColor = total < 0 ? '#E24B4A' : '#00E5A0'
+                el.innerHTML = `<div style="font-size:12px;font-weight:500;color:#fff;margin-bottom:8px;border-bottom:0.5px solid rgba(255,255,255,0.08);padding-bottom:6px;">${title}</div>${rows}<div style="height:0.5px;background:rgba(255,255,255,0.08);margin:5px 0;"></div><div style="display:flex;justify-content:space-between;font-size:11px;font-weight:600;"><span style="color:rgba(255,255,255,0.5);">Total</span><span style="color:${tColor};">${total >= 0 ? '+' : ''}${total}</span></div>`
                 const rect = chart.canvas.getBoundingClientRect()
                 const x = rect.left + tooltip.caretX + 12
                 const y = rect.top + tooltip.caretY - 20

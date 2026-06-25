@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import { supabase } from '@/lib/supabase'
@@ -48,6 +48,7 @@ export function usePickupData() {
     },
     enabled: !!hotelId && !!otbDate && !!vsOtbDate && !!minDate,
     staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,   // 날짜 변경 시 이전 데이터 유지 → 로딩 깜빡임/카드 언마운트 방지 (모달 닫힘 버그)
   })
 
   return {
