@@ -247,7 +247,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
   const gapSep  = compareMode === 'budget' ? 'inset 1px 0 0 rgba(255,100,100,0.3)' : 'inset 1px 0 0 rgba(255,200,80,0.3)'
 
   // 헤더 셀 스타일
-  const th: React.CSSProperties = { fontSize: 9.5, fontWeight: 600, color: 'rgba(255,255,255,0.45)', padding: '6px 8px', textAlign: 'right', whiteSpace: 'nowrap', minWidth: 60 }
+  const th: React.CSSProperties = { fontSize: 9.5, fontWeight: 600, color: 'rgba(255,255,255,0.45)', padding: '6px 8px', textAlign: 'right', whiteSpace: 'nowrap', minWidth: 60, background: '#0a0a0a' }
   const thL: React.CSSProperties = { ...th, textAlign: 'left', minWidth: 140 }
   const td: React.CSSProperties = { fontSize: 11, padding: '5px 8px', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', minWidth: 60 }
 
@@ -367,7 +367,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
             <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: 13 }}>불러오는 중…</div>
           ) : (
             <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
-              <thead>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0a0a0a' }}>
                 <tr>
                   <th rowSpan={2} style={{ ...thL, verticalAlign: 'bottom' }}>SEGMENT</th>
                   <th colSpan={3} style={{ ...th, textAlign: 'center', color: '#9fb8ff', borderBottom: '0.5px solid rgba(255,255,255,0.1)' }}>{actualLabel}</th>
