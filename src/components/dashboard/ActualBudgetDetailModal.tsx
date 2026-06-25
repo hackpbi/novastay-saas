@@ -237,7 +237,12 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
     const dash = (cond: boolean, node: React.ReactNode) => (cond ? node : <span style={{ opacity: 0.35 }}>—</span>)
 
     return (
-      <tr key={s.id} style={{ background: rowBg }}>
+      <tr
+        key={s.id}
+        style={{ background: rowBg }}
+        onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${rowBg}` }}
+        onMouseLeave={e => { e.currentTarget.style.background = rowBg }}
+      >
         <td style={{ ...td, textAlign: 'left', minWidth: 140, color: nameColor, fontWeight: s.is_bold ? 700 : 500, paddingLeft: 10 + indent * 14 }}>{s.name}</td>
 
         {/* Actual / OTB — schema fontColor */}
@@ -267,7 +272,11 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
   const rpC  = denom > 0 ? tC.r / denom : 0
 
   const metricRow = (label: string, av: string, cv: string, gv: string, gpos: boolean) => (
-    <tr style={{ background: '#0d0d0d' }}>
+    <tr
+      style={{ background: '#0d0d0d' }}
+      onMouseEnter={e => { e.currentTarget.style.background = 'linear-gradient(var(--overlay-hover), var(--overlay-hover)), #0d0d0d' }}
+      onMouseLeave={e => { e.currentTarget.style.background = '#0d0d0d' }}
+    >
       <td style={{ ...td, textAlign: 'left', color: '#888', fontWeight: 600 }}>{label}</td>
       <td style={{ ...td, textAlign: 'center', color: '#cfcfcf' }} colSpan={3}>{av}</td>
       <td style={{ ...td, textAlign: 'center', color: 'rgba(255,255,255,0.5)', boxShadow: cmpSep }} colSpan={3}>{cv}</td>
@@ -333,7 +342,11 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
                 {orderedSchema.filter(s => !s.segmentation.includes('HOU')).map(renderRow)}
 
                 {/* 합계 (HOU 제외) */}
-                <tr style={{ background: '#111111', borderTop: '1px solid rgba(0,229,160,0.4)' }}>
+                <tr
+                  style={{ background: '#111111', borderTop: '1px solid rgba(0,229,160,0.4)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'linear-gradient(var(--overlay-hover), var(--overlay-hover)), #111111' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = '#111111' }}
+                >
                   <td style={{ ...td, textAlign: 'left', color: '#fff', fontWeight: 700, borderTop: '1px solid rgba(0,229,160,0.4)' }}>TOTAL</td>
                   <td style={{ ...td, color: '#fff', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtInt(tA.n)}</td>
                   <td style={{ ...td, color: '#fff', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtAdrK(tAAdr)}</td>
