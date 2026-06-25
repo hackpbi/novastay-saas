@@ -38,7 +38,7 @@ function Gauge({ pct, color, size = 56, stroke = 5, big = false }: { pct: number
 
 export default function ActualBudgetModal({ open, onClose, hotelId, roomCount }: Props) {
   const { otbDate, vsOtbDate, otbDates } = useDateContext()
-  const [detailMonth, setDetailMonth] = useState<{ key: string; label: string; isOtb: boolean } | null>(null)
+  const [detailMonth, setDetailMonth] = useState<{ key: string; label: string; isOtb: boolean; isYtd?: boolean; ytdToMonth?: number; defaultMode?: 'budget' | 'ly' } | null>(null)
   const baseYear = otbDate ? new Date(otbDate + 'T00:00:00').getFullYear() : new Date().getFullYear()
   const curYM    = otbDate ? otbDate.slice(0, 7) : ''   // 'YYYY-MM' (현재월 경계)
   const minOtbDate = otbDates?.[otbDates.length - 1] ?? ''
@@ -244,7 +244,11 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount }:
             <>
               {/* 상단 요약 카드 2개 */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
-                <div style={{ background: '#0f0f0f', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div
+                  onClick={() => setDetailMonth({ key: '', label: `YTD ${baseYear}`, isOtb: false, isYtd: true, ytdToMonth: curYM ? Number(curYM.slice(5, 7)) - 1 : 12, defaultMode: 'budget' })}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)' }}
+                  style={{ background: '#0f0f0f', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 16, display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer' }}>
                   <Gauge pct={ytd.ach} color={ytd.ach != null && ytd.ach >= 100 ? '#00E5A0' : '#FF6B6B'} size={76} stroke={6} big />
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', textAlign: 'right' }}>
                     <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>YTD Budget Achievement</div>
@@ -255,7 +259,11 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount }:
                     <div style={{ fontSize: 10, color: '#555', marginTop: 3 }}>Actual {fmtM(ytd.value)} / Budget {fmtM(ytd.budget)}</div>
                   </div>
                 </div>
-                <div style={{ background: '#0f0f0f', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div
+                  onClick={() => setDetailMonth({ key: '', label: `YTD ${baseYear}`, isOtb: false, isYtd: true, ytdToMonth: curYM ? Number(curYM.slice(5, 7)) - 1 : 12, defaultMode: 'ly' })}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)' }}
+                  style={{ background: '#0f0f0f', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 16, display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer' }}>
                   <Gauge pct={ytd.growth != null ? 100 + ytd.growth : null} color={ytd.growth != null && ytd.growth >= 0 ? '#00E5A0' : '#E24B4A'} size={76} stroke={6} big />
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', textAlign: 'right' }}>
                     <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>YTD Growth vs LY</div>
@@ -293,6 +301,9 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount }:
       isOtb={detailMonth?.isOtb ?? false}
       hotelId={hotelId}
       roomCount={roomCount}
+      isYtd={detailMonth?.isYtd}
+      ytdToMonth={detailMonth?.ytdToMonth}
+      defaultMode={detailMonth?.defaultMode ?? 'budget'}
     />
     </>
   )

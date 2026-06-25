@@ -10,12 +10,17 @@ import { useTheme } from '@/contexts/ThemeContext'
 interface Props {
   open:       boolean
   onClose:    () => void
-  monthKey:   string        // 'YYYY-MM'
-  monthLabel: string        // 'Jun 2026'
-  isOtb:      boolean       // true=OTB월, false=Actual월
-  hotelId:    string
-  roomCount:  number
+  monthKey:    string                 // 'YYYY-MM' 또는 '' (YTD 모드)
+  monthLabel:  string                 // 'Jun 2026' 또는 'YTD 2026'
+  isOtb:       boolean                // true=OTB월, false=Actual월
+  hotelId:     string
+  roomCount:   number
+  isYtd?:      boolean                // true = YTD 전체 집계 모드
+  ytdToMonth?: number                 // YTD 기준 마지막 월 (curYM 전월)
+  defaultMode?: 'budget' | 'ly'       // 진입 시 비교 모드 기본값
 }
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 // ── 포맷 ───────────────────────────────────────────────────────────────────────
 const fmtInt      = (v: number) => Math.round(v).toLocaleString()
@@ -32,13 +37,15 @@ const adr = (s: Stat) => (s.n > 0 ? s.r / s.n : 0)
 const fmtAdrK     = (adrVal: number) => `${Math.round(adrVal / 1000)}k`
 const fmtSignAdrK = (d: number) => `${d >= 0 ? '+' : '-'}${Math.abs(Math.round(d / 1000))}k`
 
-export default function ActualBudgetDetailModal({ open, onClose, monthKey, monthLabel, isOtb, hotelId, roomCount }: Props) {
+export default function ActualBudgetDetailModal({ open, onClose, monthKey, monthLabel, isOtb, hotelId, roomCount, isYtd = false, ytdToMonth, defaultMode = 'budget' }: Props) {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
-  const [compareMode, setCompareMode] = useState<'budget' | 'ly'>('budget')
+  const [compareMode, setCompareMode] = useState<'budget' | 'ly'>(defaultMode)
 
-  const year  = Number(monthKey.slice(0, 4))
-  const month = Number(monthKey.slice(5, 7))
+  // YTD 모드: monthKey 없이 monthLabel('YTD 2026')에서 연도 파싱, 1~ytdMonth 집계
+  const ytdMonth = ytdToMonth ?? 12
+  const year  = isYtd ? Number(monthLabel.replace(/[^0-9]/g, '')) : Number(monthKey.slice(0, 4))
+  const month = isYtd ? ytdMonth : Number(monthKey.slice(5, 7))
 
   // ── ESC + scroll lock ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -49,14 +56,17 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
     return () => { window.removeEventListener('keydown', h); document.body.style.overflow = '' }
   }, [open, onClose])
 
+  // 진입(open)·기본모드 변경 시 비교 모드 동기화
+  useEffect(() => { if (open) setCompareMode(defaultMode) }, [open, defaultMode])
+
   // ── 데이터 소스 ─────────────────────────────────────────────────────────────
   const { data: schema = [], loading: sLoad } = useMarketSchema()
   // Actual(당해) + LY(전년) 동시 조회
   const { data: actualMonthly = [], isLoading: amLoad } = useActualMonthly({ hotelId, fromYear: year - 1, toYear: year })
 
   const { data: budgetRows = [], isLoading: bLoad } = useQuery({
-    queryKey: ['ab_detail_budget', hotelId, monthKey],
-    enabled: open && !!hotelId && !!monthKey,
+    queryKey: ['ab_detail_budget', hotelId, year, isYtd ? `ytd-${ytdMonth}` : month],
+    enabled: open && !!hotelId && (isYtd || !!monthKey),
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const { data: dateRow } = await (supabase as any)
@@ -68,14 +78,15 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
         .limit(1)
         .maybeSingle()
       if (!dateRow) return []
-      const { data, error } = await (supabase as any)
+      let q = (supabase as any)
         .from('a04_budget_mtd')
         .select('segmentation, budget_nights, budget_revenue')
         .eq('hotel_id', hotelId)
         .eq('update_date', dateRow.update_date)
         .eq('confirmed', true)
         .eq('year', year)
-        .eq('month', month)
+      q = isYtd ? q.lte('month', ytdMonth) : q.eq('month', month)   // YTD: 1~ytdMonth 합산
+      const { data, error } = await q
       if (error) throw error
       return (data ?? []) as { segmentation: string; budget_nights: number; budget_revenue: number }[]
     },
@@ -84,18 +95,19 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
   const loading = sLoad || amLoad || bLoad
 
   // ── segmentation 코드별 합산 맵 ──────────────────────────────────────────────
-  // Actual: useActualMonthly에서 당해 year/month 필터
+  // Actual: useActualMonthly에서 당해 year 필터 (YTD=1~ytdMonth, 월별=해당 월)
   const actualSeg = useMemo(() => {
     const m = new Map<string, Stat>()
     for (const r of actualMonthly) {
-      if (r.year !== year || r.month_num !== month) continue
+      if (r.year !== year) continue
+      if (isYtd ? r.month_num > ytdMonth : r.month_num !== month) continue
       const e = m.get(r.segmentation) ?? { n: 0, r: 0 }
       e.n += r.actual_nights  ?? 0
       e.r += r.actual_revenue ?? 0
       m.set(r.segmentation, e)
     }
     return m
-  }, [actualMonthly, year, month])
+  }, [actualMonthly, year, month, isYtd, ytdMonth])
 
   const budgetSeg = useMemo(() => {
     const m = new Map<string, Stat>()
@@ -108,18 +120,19 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
     return m
   }, [budgetRows])
 
-  // LY: useActualMonthly에서 전년(year-1) 동월 필터
+  // LY: useActualMonthly에서 전년(year-1) 필터 (YTD=1~ytdMonth, 월별=동월)
   const lySeg = useMemo(() => {
     const m = new Map<string, Stat>()
     for (const r of actualMonthly) {
-      if (r.year !== year - 1 || r.month_num !== month) continue
+      if (r.year !== year - 1) continue
+      if (isYtd ? r.month_num > ytdMonth : r.month_num !== month) continue
       const e = m.get(r.segmentation) ?? { n: 0, r: 0 }
       e.n += r.actual_nights  ?? 0
       e.r += r.actual_revenue ?? 0
       m.set(r.segmentation, e)
     }
     return m
-  }, [actualMonthly, year, month])
+  }, [actualMonthly, year, month, isYtd, ytdMonth])
 
   const compareSeg = compareMode === 'budget' ? budgetSeg : lySeg
 
@@ -165,8 +178,11 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
     return { actual: sum(actualSeg), compare: sum(compareSeg) }
   }, [actualSeg, compareSeg, houCodes])
 
-  const daysInMonth = new Date(year, month, 0).getDate()
-  const denom = roomCount * daysInMonth
+  // 분모 가용객실: YTD=1~ytdMonth 일수 합, 월별=해당 월 일수
+  const periodDays = isYtd
+    ? Array.from({ length: ytdMonth }, (_, i) => new Date(year, i + 1, 0).getDate()).reduce((a, b) => a + b, 0)
+    : new Date(year, month, 0).getDate()
+  const denom = roomCount * periodDays
 
   if (!open) return null
 
@@ -251,7 +267,13 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
       >
         {/* 헤더 */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid #1a1a1a', flexShrink: 0, gap: 16 }}>
-          <span style={{ fontSize: 15, fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center' }}>{monthLabel}{badge}</span>
+          <span style={{ fontSize: 15, fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            {isYtd ? (
+              <>YTD {year}<span style={{ fontSize: 10, fontWeight: 400, color: 'rgba(255,255,255,0.4)' }}>Jan ~ {MONTH_NAMES[ytdMonth - 1]}</span></>
+            ) : (
+              <span style={{ display: 'flex', alignItems: 'center' }}>{monthLabel}{badge}</span>
+            )}
+          </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ display: 'flex', borderRadius: 8, overflow: 'hidden', border: '0.5px solid rgba(255,255,255,0.12)', background: '#161616' }}>
               <button
