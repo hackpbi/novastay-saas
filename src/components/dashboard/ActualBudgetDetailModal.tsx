@@ -187,7 +187,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
       name,
       diffRn:  (currMap[name]?.rn  ?? 0) - (lyMap[name]?.rn  ?? 0),
       diffRev: (currMap[name]?.rev ?? 0) - (lyMap[name]?.rev ?? 0),
-    })).sort((a, b) => Math.abs(b.diffRev) - Math.abs(a.diffRev))
+    })).sort((a, b) => Math.abs(b.diffRn) - Math.abs(a.diffRn))
   }, [selectedSeg, actualMonthly, year, month, isYtd, ytdMonth])
 
   // ── schema 행 순서 정렬 (main 뒤에 sub) ──────────────────────────────────────
@@ -429,7 +429,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
               ) : accountList.length === 0 ? (
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.2)', fontSize: 11 }}>데이터 없음</div>
               ) : (
-                <div style={{ flex: 1, overflowY: 'auto' }}>
+                <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
                   {accountList.map(acc => (
                     <div key={acc.name} style={{ padding: '8px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                       <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acc.name}</span>
