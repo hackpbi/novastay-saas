@@ -330,7 +330,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
       onClick={onClose}
     >
       <div
-        style={{ background: '#0a0a0a', border: '1px solid #1f1f1f', borderRadius: 14, width: compareMode === 'ly' ? '1380px' : '1080px', maxWidth: '98vw', height: '90vh', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.3s cubic-bezier(0.22,1,0.36,1)' }}
+        style={{ background: '#0a0a0a', border: '1px solid #1f1f1f', borderRadius: 14, width: compareMode === 'ly' ? '1380px' : '1080px', maxWidth: '98vw', height: 'auto', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.3s cubic-bezier(0.22,1,0.36,1)' }}
         onClick={e => e.stopPropagation()}
       >
         {/* 헤더 */}
@@ -360,7 +360,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
         </div>
 
         {/* 본문: 메인 테이블 + (vs LY) 어카운트 패널 */}
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'stretch' }}>
           {/* 메인 테이블 (콘텐츠 높이 기반, 내부 스크롤 없음) */}
           <div style={{ flex: 1, padding: 16 }}>
           {loading ? (
@@ -411,7 +411,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
 
           {/* 어카운트 패널 — vs Last Year 일때만 */}
           {compareMode === 'ly' && (
-            <div style={{ width: 280, flexShrink: 0, height: '100%', borderLeft: '1px solid rgba(0,229,160,0.2)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ width: 280, flexShrink: 0, maxHeight: 'calc(90vh - 60px)', borderLeft: '1px solid rgba(0,229,160,0.2)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               <div style={{ padding: '10px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: '#FFC850' }}>
                   {selectedSeg ? `${selectedSeg.label} — Account 증감` : 'Account 증감'}
