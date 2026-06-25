@@ -8,6 +8,12 @@ import type { CountryPickupRpcRow, SegmentOption } from './types'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
+// sorting2 정규화 (fit / group)
+const norm2 = (s: any): string => {
+  const x = String(s ?? '').toLowerCase()
+  return x.includes('fit') ? 'fit' : (x.includes('grp') || x.includes('group')) ? 'group' : x
+}
+
 interface YearMonth {
   key:   string   // '2026-06'
   year:  number
@@ -40,26 +46,58 @@ export default function CountryPickupDownloadModal({ data, segmentOptions, curre
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // 세그 드롭다운 외부 클릭 시 닫힘
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      const t = e.target as HTMLElement
+      if (!t.closest('[data-seg-drop]')) setOpenDropdown(null)
+    }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+
   const YEAR_OPTIONS = [currentYear - 1, currentYear, currentYear + 1]
   const [pickerYear,  setPickerYear]  = useState<number>(currentYear)
   const [pickerMonths, setPickerMonths] = useState<number[]>([currentMonth])   // 체크박스 임시선택
   const [monthDropOpen, setMonthDropOpen] = useState(false)                     // 월 드롭다운 열림
   const [selectedYMs, setSelectedYMs] = useState<YearMonth[]>([])               // 확정된 년월 태그
-  const [selectedGroup, setSelectedGroup] = useState<'All' | 'fit' | 'group'>('All')
-  const [selectedSegs, setSelectedSegs] = useState<string[]>([])
+  const [fitSelected, setFitSelected] = useState<Set<string>>(new Set())   // 빈 Set = FIT 전체
+  const [grpSelected, setGrpSelected] = useState<Set<string>>(new Set())   // 빈 Set = GRP 전체
+  const [openDropdown, setOpenDropdown] = useState<'fit' | 'group' | null>(null)
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([])   // 다중 선택
   const [accExpanded, setAccExpanded] = useState(false)
 
   // 현재 data에 존재하는 세그먼트 (활성 여부 판단)
   const activeSegs = useMemo(() => new Set(data.map(r => r.segmentation).filter(Boolean)), [data])
 
-  // 선택 그룹/세그 기준 어카운트 목록
+  // FIT/GRP 선택 기준 세그 매칭 (빈 Set = 해당 타입 전체 포함)
+  const segPass = (sorting2: any, segmentation: string) => {
+    const g = norm2(sorting2)
+    const fitOk = g !== 'fit'   || fitSelected.size === 0 || fitSelected.has(segmentation)
+    const grpOk = g !== 'group' || grpSelected.size === 0 || grpSelected.has(segmentation)
+    return fitOk && grpOk
+  }
+
+  // 선택 세그 기준 어카운트 목록
   const accountList = useMemo(() => {
-    let filtered = data
-    if (selectedGroup !== 'All') filtered = filtered.filter(r => r.sorting2 === selectedGroup)
-    if (selectedSegs.length > 0) filtered = filtered.filter(r => selectedSegs.includes(r.segmentation))
+    const filtered = (data as any[]).filter(r => segPass(r.sorting2, r.segmentation))
     return Array.from(new Set(filtered.map(r => r.account_name).filter(Boolean))).sort()
-  }, [data, selectedGroup, selectedSegs])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, fitSelected, grpSelected])
+
+  // 현재 열린 드롭다운의 선택 Set / 핸들러
+  const curSet = openDropdown === 'fit' ? fitSelected : grpSelected
+  const toggleSeg = (g: string, code: string) => {
+    const setter = g === 'fit' ? setFitSelected : setGrpSelected
+    setter(prev => { const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n })
+    setSelectedAccounts([])
+  }
+  const resetGroup = (g: string) => { (g === 'fit' ? setFitSelected : setGrpSelected)(new Set()); setSelectedAccounts([]) }
+  const allGroup = (g: string) => {
+    (g === 'fit' ? setFitSelected : setGrpSelected)(new Set(segmentOptions.filter(s => s.sorting2 === g && activeSegs.has(s.code)).map(s => s.code)))
+    setSelectedAccounts([])
+  }
+  const handleAll = () => { setFitSelected(new Set()); setGrpSelected(new Set()); setSelectedAccounts([]); setOpenDropdown(null) }
 
   const togglePickerMonth = (m: number) => {
     setPickerMonths(prev => (prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]))
@@ -79,18 +117,13 @@ export default function CountryPickupDownloadModal({ data, segmentOptions, curre
   const removeYM = (key: string) => {
     setSelectedYMs(prev => prev.filter(s => s.key !== key))
   }
-  const handleGroupChange = (g: 'All' | 'fit' | 'group') => {
-    setSelectedGroup(g); setSelectedSegs([]); setSelectedAccounts([]); setAccExpanded(false)
-  }
   const toggleAccount = (acc: string) => {
     setSelectedAccounts(prev => (prev.includes(acc) ? prev.filter(x => x !== acc) : [...prev, acc]))
   }
 
   const matchesFilter = (row: any) => {
-    const groupOk = selectedGroup === 'All' || row.sorting2 === selectedGroup
-    const segOk   = selectedSegs.length === 0 || selectedSegs.includes(row.segmentation)
-    const accOk   = selectedAccounts.length === 0 || selectedAccounts.includes(row.account_name)
-    return groupOk && segOk && accOk
+    const accOk = selectedAccounts.length === 0 || selectedAccounts.includes(row.account_name)
+    return segPass(row.sorting2, row.segmentation) && accOk
   }
 
   // actual_daily(a01) 행 → 엑셀 행
@@ -333,55 +366,49 @@ export default function CountryPickupDownloadModal({ data, segmentOptions, curre
 
           <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.06)', margin: '14px 0' }} />
 
-          {/* 세그먼트 — c05 스키마 기반 (All / FIT / GROUP + 하위 세그 체크박스) */}
-          <div style={{ marginBottom: 14 }}>
+          {/* 세그먼트 — FIT / GRP 독립 멀티선택 드롭다운 */}
+          <div style={{ marginBottom: 14 }} data-seg-drop>
             <div style={sectionLbl}>SEGMENT</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <button onClick={() => handleGroupChange('All')} style={groupBtn(selectedGroup === 'All')}>All</button>
+              <button onClick={handleAll} style={groupBtn(fitSelected.size === 0 && grpSelected.size === 0)}>All</button>
               {(['fit', 'group'] as const).map(g => {
-                const on = selectedGroup === g
+                const on = (g === 'fit' ? fitSelected : grpSelected).size > 0
                 const hasData = segmentOptions.filter(s => s.sorting2 === g).some(s => activeSegs.has(s.code))
                 return (
                   <button
                     key={g}
-                    onClick={() => handleGroupChange(g)}
+                    onClick={() => setOpenDropdown(d => (d === g ? null : g))}
                     style={{ ...groupBtn(on), cursor: hasData ? 'pointer' : 'not-allowed', opacity: hasData ? 1 : 0.4 }}
-                  >{g === 'fit' ? 'FIT' : 'GROUP'}</button>
+                  >{g === 'fit' ? 'FIT' : 'GROUP'}{(g === 'fit' ? fitSelected : grpSelected).size > 0 ? ` (${(g === 'fit' ? fitSelected : grpSelected).size})` : ''}</button>
                 )
               })}
             </div>
-            {selectedGroup !== 'All' && (
+            {openDropdown !== null && (
               <div style={{ marginTop: 8, width: 'max-content', minWidth: 200, maxWidth: 360, whiteSpace: 'nowrap', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 8, overflow: 'hidden' }}>
-                {/* 컨트롤 (Reset / All / count) */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderBottom: '0.5px solid rgba(255,255,255,0.1)', background: '#0a0a0a' }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <button onClick={() => setSelectedSegs([])} style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Reset</button>
+                    <button onClick={() => resetGroup(openDropdown)} style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Reset</button>
                     <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 10 }}>|</span>
                     <button
-                      onClick={() => setSelectedSegs(segmentOptions.filter(s => s.sorting2 === selectedGroup && activeSegs.has(s.code)).map(s => s.code))}
+                      onClick={() => allGroup(openDropdown)}
                       style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                     >All</button>
                   </div>
-                  <span style={{ fontSize: 10, color: selectedSegs.length > 0 ? '#00E5A0' : 'rgba(255,255,255,0.4)' }}>
-                    {selectedSegs.length > 0 ? `${selectedSegs.length} selected` : 'All'}
+                  <span style={{ fontSize: 10, color: curSet.size > 0 ? '#00E5A0' : 'rgba(255,255,255,0.4)' }}>
+                    {curSet.size > 0 ? `${curSet.size} selected` : 'All'}
                   </span>
                 </div>
-                {/* 체크박스 리스트 */}
                 <div style={{ maxHeight: 160, overflowY: 'auto', padding: '4px 0' }}>
-                  {segmentOptions.filter(s => s.sorting2 === selectedGroup).map(seg => {
+                  {segmentOptions.filter(s => s.sorting2 === openDropdown).map(seg => {
                     const isActive = activeSegs.has(seg.code)
-                    const isChecked = selectedSegs.includes(seg.code)
+                    const isChecked = curSet.has(seg.code)
                     return (
                       <label key={seg.code} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', cursor: isActive ? 'pointer' : 'not-allowed', opacity: isActive ? 1 : 0.4 }}>
                         <input
                           type="checkbox"
                           checked={isChecked}
                           disabled={!isActive}
-                          onChange={() => {
-                            if (!isActive) return
-                            setSelectedSegs(prev => (prev.includes(seg.code) ? prev.filter(x => x !== seg.code) : [...prev, seg.code]))
-                            setSelectedAccounts([])
-                          }}
+                          onChange={() => { if (isActive) toggleSeg(openDropdown, seg.code) }}
                           style={{ accentColor: '#00E5A0', width: 14, height: 14, flexShrink: 0 }}
                         />
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, width: '100%' }}>
@@ -391,6 +418,12 @@ export default function CountryPickupDownloadModal({ data, segmentOptions, curre
                       </label>
                     )
                   })}
+                </div>
+                {/* 하단 Reset | All | Done */}
+                <div style={{ display: 'flex', gap: 6, padding: '8px 10px', borderTop: '0.5px solid rgba(255,255,255,0.08)' }}>
+                  <button onClick={() => resetGroup(openDropdown)} style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: '0.5px solid rgba(255,255,255,0.1)', background: 'transparent', color: 'rgba(255,255,255,0.5)', fontSize: 11, cursor: 'pointer' }}>Reset</button>
+                  <button onClick={() => allGroup(openDropdown)} style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: '0.5px solid rgba(255,255,255,0.1)', background: 'transparent', color: 'rgba(255,255,255,0.5)', fontSize: 11, cursor: 'pointer' }}>All</button>
+                  <button onClick={() => setOpenDropdown(null)} style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: 'none', background: '#00E5A0', color: '#000', fontSize: 11, fontWeight: 500, cursor: 'pointer' }}>Done</button>
                 </div>
               </div>
             )}
