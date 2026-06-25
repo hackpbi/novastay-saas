@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { SlidersHorizontal, ChevronDown, Check, History, BarChart3 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 import type { PickupRow } from '@/hooks/usePickupData'
 import { lastDayOfMonth, inMonth } from '@/utils/pickupPageUtils'
 import MarketPickupAllDaysModal from './MarketPickupAllDaysModal'
@@ -41,7 +43,7 @@ const barLabelPlugin = {
 }
 
 export default function MarketPickupMonthBlock({
-  year, month, monthKey, pickupRows, groups, selected, onToggleSeg, onBarClick, roomCount, allSegIds, isDayModalOpen,
+  year, month, monthKey, pickupRows, groups, selected, onToggleSeg, onBarClick, onOpenDetail, roomCount, allSegIds, isDayModalOpen,
 }: {
   year:           number
   month:          number   // 0-based
@@ -51,6 +53,7 @@ export default function MarketPickupMonthBlock({
   selected:       Set<string>
   onToggleSeg:    (segId: string) => void
   onBarClick:     (day: number, defaultTab: 'pickup' | 'otb') => void
+  onOpenDetail:   () => void   // Detail 버튼 → Daily Pick-Up 차트 모달
   roomCount:      number
   allSegIds:      Set<string>
   isDayModalOpen?: boolean
@@ -59,7 +62,7 @@ export default function MarketPickupMonthBlock({
   const days   = lastDayOfMonth(year, month1)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const chartRef  = useRef<any>(null)
-  const tooltipRef = useRef<HTMLDivElement>(null)
+  const tooltipId = `market-pickup-tooltip-${monthKey}`   // 카드별 고유 (body append)
   const [panelOpen, setPanelOpen] = useState(false)
   const [allDaysOpen, setAllDaysOpen] = useState(false)
 
@@ -75,8 +78,11 @@ export default function MarketPickupMonthBlock({
 
   // Day 모달 열리면 차트 툴팁 숨김 (모달 위로 겹쳐 보이는 문제 방지)
   useEffect(() => {
-    if (isDayModalOpen && tooltipRef.current) tooltipRef.current.style.display = 'none'
-  }, [isDayModalOpen])
+    if (isDayModalOpen) { const el = document.getElementById(tooltipId); if (el) el.style.opacity = '0' }
+  }, [isDayModalOpen, tooltipId])
+
+  // 언마운트 시 툴팁 DOM 제거 (메모리 누수 방지)
+  useEffect(() => () => { document.getElementById(tooltipId)?.remove() }, [tooltipId])
 
   const activeSegs = useMemo(
     () => groups.flatMap(g => g.segs).filter(s => selected.has(s.id)),
@@ -105,9 +111,6 @@ export default function MarketPickupMonthBlock({
 
   // Picked up 칩: 선택된 세그 중 픽업이 0이 아닌 소분류
   const pickedSegs = groups.flatMap(g => g.segs).filter(s => selected.has(s.id) && segTotal(s) !== 0)
-  // Detail 버튼 기준일: 이번 달이면 오늘, 아니면 1일
-  const _today = new Date()
-  const detailDay = _today.getFullYear() === year && _today.getMonth() === month ? _today.getDate() : 1
 
   // 선택 세그 기준 컬럼 합산 헬퍼 (코드 → 값 Map 빌드 후 그룹/세그 합)
   const sumByCol = (col: keyof PickupRow) => {
@@ -180,6 +183,31 @@ export default function MarketPickupMonthBlock({
     return map
   }, [pickupRows, groups, selected, year, month1])
 
+  // ── 이벤트 (c06_calendar) — x축 아래 도트 표시용 ──────────────────────────────
+  const { data: calEvents = [] } = useQuery<{ date: string; event: string }[]>({
+    queryKey: ['market-pickup-events', year, month1],
+    staleTime: 60 * 60 * 1000,
+    queryFn: async () => {
+      const lastDay = lastDayOfMonth(year, month1)
+      const start = `${year}-${String(month1).padStart(2, '0')}-01`
+      const end   = `${year}-${String(month1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+      const { data, error } = await (supabase as any)
+        .from('c06_calendar').select('date, event')
+        .gte('date', start).lte('date', end)
+        .not('event', 'is', null).neq('event', '')
+      if (error) throw error
+      return (data ?? []) as { date: string; event: string }[]
+    },
+  })
+  const eventMap = useMemo(() => {
+    const m: Record<number, string> = {}
+    for (const r of calEvents) {
+      if (!r.event || r.event.trim() === '' || r.event === 'null') continue
+      m[new Date(r.date).getDate()] = r.event
+    }
+    return m
+  }, [calEvents])
+
   // ── 차트 ───────────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
@@ -190,8 +218,37 @@ export default function MarketPickupMonthBlock({
       chartRef.current?.destroy()
       const labels = Array.from({ length: days }, (_, i) => i + 1)
       const gc = 'rgba(255,255,255,0.05)', tc = '#717171'
+
+      const hasEvents = Object.keys(eventMap).length > 0
+
+      // 이벤트 도트 (요일 아래, 민트 원 + 2글자)
+      const eventDots = {
+        id: 'eventDots',
+        afterDraw(chart: any) {
+          const { ctx } = chart
+          const meta = chart.getDatasetMeta(0)
+          const bottom = chart.scales.x.bottom
+          for (const [day, label] of Object.entries(eventMap)) {
+            const i = Number(day) - 1
+            if (!meta.data[i]) continue
+            const xPos = meta.data[i].x
+            const yc = bottom + 14   // 요일(둘째 줄) 바로 아래
+            ctx.save()
+            ctx.beginPath(); ctx.arc(xPos, yc, 9, 0, Math.PI * 2)
+            ctx.fillStyle = 'rgba(0,229,160,0.12)'; ctx.fill()
+            ctx.strokeStyle = '#00E5A0'; ctx.lineWidth = 1; ctx.stroke()
+            const match = String(label).match(/\(([^)]+)\)/)
+            const text = (match ? match[1] : String(label)).slice(0, 2)
+            ctx.fillStyle = '#00E5A0'; ctx.font = '9px sans-serif'
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+            ctx.fillText(text, xPos, yc)
+            ctx.restore()
+          }
+        },
+      }
+
       chartRef.current = new Chart(canvasRef.current, {
-        plugins: [barLabelPlugin],
+        plugins: [barLabelPlugin, eventDots],
         data: {
           labels,
           datasets: [{
@@ -206,6 +263,7 @@ export default function MarketPickupMonthBlock({
         },
         options: {
           responsive: true, maintainAspectRatio: false, animation: false,
+          layout: { padding: { bottom: hasEvents ? 28 : 0 } },   // 이벤트 도트 공간 (오늘 마커는 라벨 영역 내부)
           interaction: { mode: 'index', intersect: false },
           onClick: (_event: any, elements: any[]) => {
             if (!elements.length) return
@@ -215,14 +273,19 @@ export default function MarketPickupMonthBlock({
           onHover: (event: any, elements: any[]) => {
             const hoverCanvas = event.native?.target as HTMLCanvasElement | undefined
             if (hoverCanvas) hoverCanvas.style.cursor = elements.length ? 'pointer' : 'default'
-            const tip = tooltipRef.current
-            if (!tip) return
-            if (!elements.length) { tip.style.display = 'none'; return }
+            let tip = document.getElementById(tooltipId) as HTMLDivElement | null
+            if (!tip) {
+              tip = document.createElement('div')
+              tip.id = tooltipId
+              tip.style.cssText = 'position:fixed;background:#0a0a0a;border:0.5px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 14px;pointer-events:none;font-size:12px;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,0.5);z-index:99999;opacity:0;transition:opacity 0.1s;'
+              document.body.appendChild(tip)
+            }
+            if (!elements.length) { tip.style.opacity = '0'; return }
 
             const idx = elements[0].index
             const day = idx + 1            // 1-based
             const dayTotal = dailyTotals[idx] ?? 0
-            if (dayTotal === 0) { tip.style.display = 'none'; return }   // 픽업 0이면 툴팁 숨김
+            if (dayTotal === 0) { tip.style.opacity = '0'; return }   // 픽업 0이면 툴팁 숨김
 
             // 요일 (month는 0-based)
             const DOW = ['일', '월', '화', '수', '목', '금', '토']
@@ -262,23 +325,22 @@ export default function MarketPickupMonthBlock({
               </div>
             `
 
-            // 위치 계산
-            tip.style.display = 'block'
-            const canvas = canvasRef.current
-            const chart = chartRef.current
-            if (!canvas || !chart) return
-            const meta = chart.getDatasetMeta(0).data[idx]
-            if (!meta) return
-            const canvasRect = canvas.getBoundingClientRect()
-            const wrapRect = canvas.parentElement!.getBoundingClientRect()
-            let x = meta.x - (wrapRect.left - canvasRect.left)
-            let y = meta.y - (wrapRect.top - canvasRect.top) - 10
-            const tipW = tip.offsetWidth
-            const tipH = tip.offsetHeight
-            if (x + tipW > wrapRect.width - 10) x = x - tipW - 10
-            if (y - tipH < 0) y = y + 20
-            tip.style.left = `${x}px`
-            tip.style.top  = `${y - tipH}px`
+            // 위치 — 마우스 커서 우측, 커서 세로 중앙 (fixed). 화면 밖이면 반전
+            const ev = event.native as MouseEvent | undefined
+            const meta = chartRef.current?.getDatasetMeta(0).data[idx]
+            const rect = canvasRef.current?.getBoundingClientRect()
+            const mouseX = ev ? ev.clientX : (rect && meta ? rect.left + meta.x : 0)
+            const mouseY = ev ? ev.clientY : (rect && meta ? rect.top + meta.y : 0)
+            const tipW = tip.offsetWidth || 180
+            const tipH = tip.offsetHeight || 100
+            let finalX = mouseX + 12                                                    // 커서 우측 12px
+            let finalY = mouseY - tipH / 2                                              // 커서 세로 중앙
+            if (finalX + tipW > window.innerWidth - 16) finalX = mouseX - tipW - 12     // 우측 벗어남 → 좌측
+            if (finalY < 8) finalY = 8                                                  // 상단 클램프
+            if (finalY + tipH > window.innerHeight - 8) finalY = window.innerHeight - tipH - 8  // 하단 클램프
+            tip.style.left = `${finalX}px`
+            tip.style.top  = `${finalY}px`
+            tip.style.opacity = '1'
           },
           plugins: {
             legend: { display: false },
@@ -288,13 +350,13 @@ export default function MarketPickupMonthBlock({
             x: {
               grid: { color: 'rgba(255,255,255,0.04)' },
               ticks: {
-                font: { size: 9 },
+                font: { size: 10 },
                 color: (ctx: any) => {
                   const dd = new Date(year, month, ctx.index + 1)
                   const tdy = new Date()
                   if (tdy.getFullYear() === year && tdy.getMonth() === month && tdy.getDate() === ctx.index + 1) return '#5B8DEF'
                   const dow = dd.getDay()
-                  return dow === 5 || dow === 6 ? '#E24B4A' : tc
+                  return dow === 5 || dow === 6 ? '#E24B4A' : '#888'
                 },
                 callback: (_v: any, index: number) => {
                   const dow = new Date(year, month, index + 1).getDay()
@@ -314,7 +376,7 @@ export default function MarketPickupMonthBlock({
       })
     })()
     return () => { cancelled = true; chartRef.current?.destroy(); chartRef.current = null }
-  }, [dailyTotals, days, month1, onBarClick])
+  }, [dailyTotals, days, month1, onBarClick, eventMap, year, month])
 
   return (
     <div className="rounded-2xl overflow-visible" style={{ background: 'var(--color-bg-surface, var(--card-header-bg))', border: '1px solid var(--color-border-default)', height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -426,7 +488,7 @@ export default function MarketPickupMonthBlock({
             <History size={12} /> History
           </button>
           <button
-            onClick={() => onBarClick(detailDay, 'pickup')}
+            onClick={onOpenDetail}
             style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '0.5px solid var(--color-border-default)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
           >
             <BarChart3 size={12} /> Detail
@@ -437,18 +499,8 @@ export default function MarketPickupMonthBlock({
       {/* 차트 */}
       <div
         style={{ position: 'relative', width: '100%', flex: 1, minHeight: 0, padding: '0 12px 12px' }}
-        onMouseLeave={() => { if (tooltipRef.current) tooltipRef.current.style.display = 'none' }}
+        onMouseLeave={() => { const el = document.getElementById(tooltipId); if (el) el.style.opacity = '0' }}
       >
-        {/* 커스텀 HTML 툴팁 */}
-        <div
-          ref={tooltipRef}
-          style={{
-            position: 'absolute', background: '#0a0a0a',
-            border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 8,
-            padding: '10px 14px', pointerEvents: 'none', display: 'none',
-            minWidth: 180, boxShadow: '0 4px 16px rgba(0,0,0,0.5)', zIndex: 100,
-          }}
-        />
         <canvas ref={canvasRef} role="img" aria-label={`${month1}월 마켓 픽업`} />
       </div>
 

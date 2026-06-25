@@ -7,10 +7,12 @@ import { supabase } from '@/lib/supabase'
 import DatePicker from '@/components/DatePicker'
 import { useMarketSchema } from '@/hooks/useMarketSchema'
 import { PickupMonthSummaryModal } from '@/components/market-pickup/PickupMonthSummaryModal'
+import MarketPickupDayModal from '@/components/market-pickup/MarketPickupDayModal'
 import type { PickupRow } from '@/hooks/usePickupData'
 import { fmtK, fmtM } from '@/utils/pickupPageUtils'
 
 const DOW_KR = ['일', '월', '화', '수', '목', '금', '토']
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 export default function PickupChartModal({
@@ -33,6 +35,14 @@ export default function PickupChartModal({
   const chartRef  = useRef<any>(null)
   const { data: schema = [] } = useMarketSchema()
   const [summaryModalOpen, setSummaryModalOpen] = useState(false)
+  const [showOccLabel, setShowOccLabel] = useState(true)
+  const showOccLabelRef = useRef(showOccLabel)   // 플러그인이 라이브 값 참조 (토글 시 재생성 없이 update)
+  const [occOpacity, setOccOpacity] = useState(0.05)          // OCC 바 투명도 (기본 5%)
+  const occOpacityRef = useRef(0.05)                          // 차트 재생성 시 최신값 참조
+  const [occLabelOpacity, setOccLabelOpacity] = useState(0.40) // OCC 숫자 투명도 (기본 40%)
+  const occLabelOpacityRef = useRef(occLabelOpacity)          // 플러그인 라이브 참조
+  const [selectedDay,  setSelectedDay]  = useState<number | null>(null)   // 막대 클릭 → Day 모달 (1-based)
+  const [dayModalOpen, setDayModalOpen] = useState(false)
 
   // ── 모달 내부 월 상태 (진입 시 클릭한 카드 월로 초기화) ───────────────────────────
   const [modalYear,  setModalYear]  = useState(year)
@@ -118,6 +128,35 @@ export default function PickupChartModal({
     return m
   }, [events])
 
+  // 일자별 세그먼트 픽업 R/N — pickupRows에서 직접 집계 (index 0-based → [{segName, rn}])
+  // MonthBlock과 동일 소스(main 직속 자식 세그의 segmentation 코드)로 묶어 전 일자 커버, 바와 동일하게 HOU 제외
+  const pickupBySegment = useMemo(() => {
+    const mainIds = new Set(schema.filter(s => s.level === 'main' && s.parent_id === null).map(s => s.id))
+    const codeToName = new Map<string, string>()
+    for (const s of schema) {
+      if (s.parent_id && mainIds.has(s.parent_id)) {
+        for (const code of (s.segmentation ?? [])) codeToName.set(code, s.name)
+      }
+    }
+    const byDay = new Map<number, Map<string, number>>()
+    for (const r of (pickupRows ?? [])) {
+      if (r.segmentation === 'HOU') continue
+      const dt = new Date(r.business_date)
+      if (dt.getFullYear() !== modalYear || dt.getMonth() !== modalMonth) continue
+      const name = codeToName.get(r.segmentation)
+      if (!name) continue
+      const day = dt.getDate()
+      if (!byDay.has(day)) byDay.set(day, new Map())
+      const m = byDay.get(day)!
+      m.set(name, (m.get(name) ?? 0) + (r.pu_nights ?? 0))
+    }
+    const map: Record<number, { segName: string; rn: number }[]> = {}
+    for (const [day, m] of byDay) {
+      map[day - 1] = Array.from(m.entries()).map(([segName, rn]) => ({ segName, rn: Math.round(rn) }))
+    }
+    return map
+  }, [schema, pickupRows, modalYear, modalMonth])
+
   // ESC + scroll lock
   useEffect(() => {
     if (!open) return
@@ -140,8 +179,18 @@ export default function PickupChartModal({
       const labels     = daily.map(d => d.day)
       const occData    = daily.map(d => d.occ)
       const pickupData = daily.map(d => d.puNights)
-      const gc = 'rgba(255,255,255,0.05)', tc = '#717171'
       const hasEvents = Object.keys(eventMap).length > 0
+      const rcMax = roomCount > 0 ? roomCount : 100   // yPickup 범위 = ±객실수 (픽업 절대 안 잘림)
+
+      // 오늘 기준 (과거/오늘/미래 분기 + 오늘 마커)
+      const today = new Date()
+      const todayYear = today.getFullYear()
+      const todayMonth = today.getMonth() + 1   // 1-based
+      const todayDate = today.getDate()
+      const curY = modalYear, curM = modalMonth + 1   // 1-based
+      const isTodayMonth = curY === todayYear && curM === todayMonth
+      // 일자(0-based index)별 픽업 R/N 합 — 툴팁/호버/클릭 0 판정
+      const dayTotal = (i: number) => (pickupBySegment[i] ?? []).reduce((s, r) => s + r.rn, 0)
 
       // x축 라벨(일자+요일) 아래에 이벤트 원(연한 민트 배경 + 민트 테두리) + 2글자
       const eventPlugin = {
@@ -149,7 +198,18 @@ export default function PickupChartModal({
         afterDraw(chart: any) {
           const x = chart.scales.x
           const { ctx } = chart
-          const yCenter = x.bottom + 14   // 일자/요일 라벨 아래
+          // 실제 그려진 라벨 최하단을 측정 → 그 아래에 도트 (콘솔 없이 자가 측정)
+          let labelBottom = x.bottom
+          const items: any[] = x._labelItems || []
+          if (items.length) {
+            const it = items[0]
+            const t = it?.options?.translation ?? it?.translation
+            const f = it?.options?.font ?? it?.font
+            const lines = Array.isArray(it?.label) ? it.label.length : 1
+            const lh = f?.lineHeight ?? ((f?.size ?? 10) * 1.2)
+            if (t && typeof t[1] === 'number') labelBottom = t[1] + lines * lh
+          }
+          const yCenter = labelBottom + 6 + 9   // 요일 아래 gap(6) + 반지름(9)
           for (const [day, text] of Object.entries(eventMap)) {
             const idx = Number(day) - 1
             if (idx < 0 || idx >= daily.length) continue
@@ -168,17 +228,18 @@ export default function PickupChartModal({
         },
       }
 
-      // OCC% 숫자 (바 위, 회색)
+      // OCC% 숫자 — 전부 회색 (투명도 슬라이더 연동)
       const occLabels = {
         id: 'occLabels',
         afterDatasetsDraw(chart: any) {
+          if (!showOccLabelRef.current) return
           const { ctx, scales: { x, yOcc } } = chart
           occData.forEach((val: number, i: number) => {
             const xPos = x.getPixelForValue(i)
             const yPos = yOcc.getPixelForValue(val)
             ctx.save()
-            ctx.fillStyle = 'rgba(150,150,150,0.85)'
-            ctx.font = '9px -apple-system, sans-serif'
+            ctx.fillStyle = `rgba(160,160,160,${occLabelOpacityRef.current})`
+            ctx.font = '9px sans-serif'
             ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'
             ctx.fillText(`${val}%`, xPos, yPos - 3)
             ctx.restore()
@@ -186,27 +247,50 @@ export default function PickupChartModal({
         },
       }
 
-      // 픽업 R/N (픽업 있는 날만 민트 굵은 글씨, OCC% 위)
+      // 픽업 R/N — 픽업 바(dataset 1) 세로 중앙에 표시
       const pickupLabels = {
         id: 'pickupLabels',
         afterDatasetsDraw(chart: any) {
-          const { ctx, scales: { x, yOcc } } = chart
+          const { ctx } = chart
+          const pickupMeta = chart.getDatasetMeta(1)
+          if (!pickupMeta?.data) return
           pickupData.forEach((val: number, i: number) => {
-            if (!val || val === 0) return
-            const xPos = x.getPixelForValue(i)
-            const yPos = yOcc.getPixelForValue(occData[i])
+            if (!val || !pickupMeta.data[i]) return
+            const bar = pickupMeta.data[i]
             ctx.save()
-            ctx.fillStyle = '#00E5A0'
-            ctx.font = 'bold 11px -apple-system, sans-serif'
-            ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'
-            ctx.fillText(`${val > 0 ? '+' : ''}${val}`, xPos, yPos - 16)
+            ctx.fillStyle = val > 0 ? '#00E5A0' : '#E24B4A'
+            ctx.font = 'bold 10px sans-serif'
+            ctx.textAlign = 'center'
+            if (val > 0) {
+              ctx.textBaseline = 'bottom'
+              ctx.fillText(`+${val}`, bar.x, bar.y - 3)                         // 양수: 바 상단 위
+            } else {
+              ctx.textBaseline = 'top'
+              const yBottom = Math.max(bar.y, bar.base ?? bar.y)                // 음수 바 하단(기준선 아래 끝)
+              ctx.fillText(`${val}`, bar.x, yBottom + 3)                        // 음수: 바 하단 아래
+            }
             ctx.restore()
           })
         },
       }
 
+      // 픽업 0 기준선 (흰색 점선, yPickup=0)
+      const pickupBaseline = {
+        id: 'pickupBaseline',
+        afterDraw(chart: any) {
+          const { ctx, scales: { x, yPickup } } = chart
+          if (!yPickup) return
+          const y0 = yPickup.getPixelForValue(0)
+          ctx.save()
+          ctx.beginPath(); ctx.moveTo(x.left, y0); ctx.lineTo(x.right, y0)
+          ctx.strokeStyle = 'rgba(0,229,160,0.4)'; ctx.lineWidth = 1
+          ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([])
+          ctx.restore()
+        },
+      }
+
       chartRef.current = new Chart(canvasRef.current, {
-        plugins: [occLabels, pickupLabels, eventPlugin],
+        plugins: [pickupBaseline, occLabels, pickupLabels, eventPlugin],
         data: {
           labels,
           datasets: [
@@ -214,58 +298,136 @@ export default function PickupChartModal({
               type: 'bar',
               label: 'OCC%',
               data: occData,
-              backgroundColor: 'rgba(180,180,180,0.26)',
-              borderColor: 'rgba(180,180,180,0.31)',
+              backgroundColor: () => `rgba(180,180,180,${occOpacityRef.current})`,
+              borderColor: () => `rgba(180,180,180,${Math.min(occOpacityRef.current + 0.05, 1)})`,
               borderWidth: 1,
               borderRadius: 2,
               yAxisID: 'yOcc',
+              order: 2,
+              barPercentage: 0.9,
+              categoryPercentage: 0.9,
+            },
+            {
+              type: 'bar',
+              label: 'Pickup',
+              data: pickupData,
+              backgroundColor: pickupData.map((v: number) => (v > 0 ? 'rgba(0,229,160,0.9)' : v < 0 ? 'rgba(226,75,74,0.9)' : 'transparent')),
+              borderColor: 'transparent',
+              borderWidth: 0,
+              borderRadius: 2,
+              yAxisID: 'yPickup',
+              order: 1,
+              grouped: false,            // OCC 바와 나란히 두지 않고 중앙에 겹치기
+              barPercentage: 0.25,
+              categoryPercentage: 0.9,
             },
           ],
         },
         options: {
           responsive: true, maintainAspectRatio: false,
-          layout: { padding: { top: 18, bottom: hasEvents ? 32 : 0 } },   // 픽업 라벨 위 / 이벤트 원 아래 공간
+          layout: { padding: { top: 18, bottom: hasEvents ? 60 : 16 } },   // 픽업 라벨 위 / 이벤트 원(라벨 실측 아래) 공간
           interaction: { mode: 'index', intersect: false },
+          // 막대 클릭 → 해당 일자 Day 모달 / hover 시 포인터
+          onClick: (_e: any, els: any[]) => {
+            if (!els.length) return
+            const i = els[0].index
+            if (dayTotal(i) === 0) return   // 픽업 0인 날 클릭 무시
+            setSelectedDay(i + 1)
+            setDayModalOpen(true)
+          },
+          onHover: (e: any, els: any[]) => {
+            const cv = e?.native?.target as HTMLCanvasElement | undefined
+            if (!cv) return
+            cv.style.cursor = els.length && dayTotal(els[0].index) !== 0 ? 'pointer' : 'default'
+          },
           plugins: {
             legend: { display: false },
             tooltip: {
-              backgroundColor: '#1E1E1E', borderColor: '#2C2C2C', borderWidth: 1,
-              titleColor: '#fff', bodyColor: '#ddd', padding: 10,
-              callbacks: {
-                title: (items: any) => { const d = daily[items[0]?.dataIndex ?? 0]; return d ? `${modalMonth + 1}/${d.day} (${DOW_KR[d.dow]})` : '' },
-                label: (ctx: any) => {
-                  const i = ctx.dataIndex
-                  return [` OCC: ${occData[i]}%`, ` 픽업 R/N: ${pickupData[i] >= 0 ? '+' : ''}${pickupData[i]}`]
-                },
+              enabled: false,
+              // body append + position:fixed HTML 툴팁 (모달 경계 잘림 방지)
+              external: (context: any) => {
+                const { chart, tooltip } = context
+                let el = document.getElementById('pickup-chart-tooltip')
+                if (!el) {
+                  el = document.createElement('div')
+                  el.id = 'pickup-chart-tooltip'
+                  el.style.cssText = "position:fixed;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;pointer-events:none;font-family:'DM Sans',sans-serif;font-size:13px;min-width:200px;z-index:99999;transition:opacity 0.1s;color:#ddd;box-shadow:0 4px 20px rgba(0,0,0,0.5);"
+                  document.body.appendChild(el)
+                }
+                if (tooltip.opacity === 0) { el.style.opacity = '0'; return }
+                const i = tooltip.dataPoints?.[0]?.dataIndex
+                if (i == null) { el.style.opacity = '0'; return }
+                const total = dayTotal(i)
+                if (total === 0) { el.style.opacity = '0'; return }   // 픽업 0인 날 숨김
+                const segs = (pickupBySegment[i] ?? []).filter(s => s.rn !== 0)
+                const d = daily[i]
+                const title = d ? `${modalMonth + 1}월 ${d.day}일 (${DOW_KR[d.dow]})` : ''
+                const rows = segs.map(s =>
+                  `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0 4px 8px;margin:2px 0;"><span style="color:#888;font-size:13px;">${s.segName}</span><span style="color:#fff;font-size:13px;font-weight:500;">${s.rn > 0 ? '+' : ''}${s.rn}</span></div>`
+                ).join('')
+                const tColor = total > 0 ? '#00E5A0' : total < 0 ? '#E24B4A' : '#888'
+                el.innerHTML = `<div style="color:#fff;font-size:14px;font-weight:600;margin-bottom:12px;">${title}</div>${rows}<div style="border-top:1px solid #2a2a2a;margin-top:10px;padding-top:10px;display:flex;justify-content:space-between;align-items:center;"><span style="color:#fff;font-size:13px;font-weight:700;">Total</span><span style="color:${tColor};font-size:13px;font-weight:700;">${total > 0 ? '+' : ''}${total}</span></div>`
+                const rect = chart.canvas.getBoundingClientRect()
+                const x = rect.left + tooltip.caretX + 12
+                const y = rect.top + tooltip.caretY - 20
+                const tw = el.offsetWidth || 160
+                const finalX = x + tw > window.innerWidth - 16 ? x - tw - 24 : x   // 우측 잘림 → 좌측 반전
+                el.style.left = `${finalX}px`
+                el.style.top = `${y}px`
+                el.style.opacity = '1'
               },
             },
           },
           scales: {
             x: {
-              grid: { color: 'rgba(255,255,255,0.04)' },
+              grid: { display: false },
+              border: { display: false },
               ticks: {
-                // 금(5)/토(6) 빨간색
-                color: (c: any) => { const dow = daily[c.index]?.dow; return dow === 5 || dow === 6 ? '#E24B4A' : tc },
+                // 오늘 파랑 / 금(5)·토(6) 빨강 / 기본 회색
+                color: (c: any) => {
+                  const day = c.index + 1
+                  if (isTodayMonth && day === todayDate) return '#5B8DEF'
+                  const dow = daily[c.index]?.dow
+                  return dow === 5 || dow === 6 ? '#E24B4A' : '#888'
+                },
                 font: { size: 10 },
+                maxRotation: 0,
                 padding: 6,
-                // 숫자 + 요일 2줄 표시
+                // 숫자 + 영문 요일 2줄 표시
                 callback: (_v: any, index: number) => {
                   const d = daily[index]
-                  return d ? [String(d.day), DOW_KR[d.dow]] : ''
+                  return d ? [String(d.day), DAY_NAMES[d.dow]] : ''
                 },
               },
             },
             yOcc: {
-              position: 'left', min: 0, max: 100,
-              grid: { color: gc },
-              ticks: { color: '#444', font: { size: 10 }, callback: (v: any) => `${v}%` },
+              position: 'left', min: 0, max: 110,
+              grid: { display: false },
+              border: { display: false },
+              ticks: { color: '#444', font: { size: 10 }, callback: (v: any) => (v <= 100 ? `${v}%` : '') },
+            },
+            yPickup: {
+              position: 'right', min: -rcMax, max: rcMax,
+              grid: { display: false },
+              border: { display: false },
+              ticks: { display: false },
             },
           },
         },
       })
     })()
-    return () => { cancelled = true; chartRef.current?.destroy(); chartRef.current = null }
-  }, [open, daily, modalMonth, eventMap])
+    return () => {
+      cancelled = true
+      chartRef.current?.destroy(); chartRef.current = null
+      document.getElementById('pickup-chart-tooltip')?.remove()   // 닫기/월이동 시 잔존 툴팁 제거
+    }
+  }, [open, daily, modalMonth, eventMap, pickupBySegment])
+
+  // OCC% 토글 → 차트 라벨만 갱신 (재생성 없이)
+  useEffect(() => { showOccLabelRef.current = showOccLabel; chartRef.current?.update('none') }, [showOccLabel])
+
+  // 언마운트 시 툴팁 DOM 제거
+  useEffect(() => () => { document.getElementById('pickup-chart-tooltip')?.remove() }, [])
 
   if (!open) return null
 
@@ -275,15 +437,55 @@ export default function PickupChartModal({
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose} />
       <div
-        className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-4xl"
-        style={{ background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
+        className="relative rounded-2xl overflow-hidden flex flex-col"
+        style={{ background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)', width: '85vw', maxWidth: '85vw', height: '81vh', maxHeight: '81vh' }}
       >
         {/* 헤더 — 제목 + 닫기 (구분선 없음, 요약문이 바로 아래) */}
         <div className="flex items-center justify-between px-5 pt-3.5 pb-0.5 shrink-0">
           <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>Daily Pick-Up</h2>
-          <button onClick={onClose} className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1" aria-label="닫기">
-            <X size={20} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* OCC 바 / 숫자 투명도 슬라이더 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1a1a1a', borderRadius: 8, padding: '4px 10px', border: '1px solid #2a2a2a' }}>
+              <span style={{ fontSize: 10, color: '#555', whiteSpace: 'nowrap' }}>Bar</span>
+              <input
+                type="range" min={0} max={50} step={1}
+                value={Math.round(occOpacity * 100)}
+                onChange={e => {
+                  const val = Number(e.target.value) / 100
+                  setOccOpacity(val); occOpacityRef.current = val
+                  chartRef.current?.update('none')   // scriptable backgroundColor가 ref를 다시 읽음
+                }}
+                style={{ width: 60, accentColor: '#00E5A0', cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: 10, color: '#00E5A0', minWidth: 24 }}>{Math.round(occOpacity * 100)}%</span>
+              <div style={{ width: 1, height: 14, background: '#2a2a2a' }} />
+              <span style={{ fontSize: 10, color: '#555', whiteSpace: 'nowrap' }}>Label</span>
+              <input
+                type="range" min={0} max={100} step={1}
+                value={Math.round(occLabelOpacity * 100)}
+                onChange={e => {
+                  const val = Number(e.target.value) / 100
+                  setOccLabelOpacity(val); occLabelOpacityRef.current = val
+                  chartRef.current?.update('none')
+                }}
+                style={{ width: 60, accentColor: '#00E5A0', cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: 10, color: '#00E5A0', minWidth: 24 }}>{Math.round(occLabelOpacity * 100)}%</span>
+            </div>
+            {/* OCC% 라벨 토글 */}
+            <span style={{ fontSize: 11, color: '#555' }}>OCC%</span>
+            <div
+              onClick={() => setShowOccLabel(p => !p)}
+              role="switch"
+              aria-checked={showOccLabel}
+              style={{ width: 36, height: 20, borderRadius: 10, background: showOccLabel ? '#00E5A0' : '#333', cursor: 'pointer', position: 'relative', transition: 'background 0.15s', flexShrink: 0 }}
+            >
+              <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#0a0a0a', position: 'absolute', top: 2, left: showOccLabel ? 18 : 2, transition: 'left 0.15s' }} />
+            </div>
+            <button onClick={onClose} className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1" aria-label="닫기">
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* 요약문 — 타이틀 바로 아래, 네비 위 (구분선은 요약문 아래) */}
@@ -328,7 +530,7 @@ export default function PickupChartModal({
         </div>
 
         {/* 차트 */}
-        <div className="px-4 pb-4 pt-1" style={{ height: 360 }}>
+        <div className="px-4 pb-4 pt-1" style={{ flex: 1, minHeight: 0 }}>
           <canvas ref={canvasRef} />
         </div>
       </div>
@@ -342,6 +544,23 @@ export default function PickupChartModal({
         schema={schema}
         pickupRows={pickupRows}
         roomCount={roomCount}
+        otbDate={otbDate}
+        vsDate={vsOtbDate}
+        otbDates={otbDates ?? []}
+        onDateChange={(o, v) => { setOtbDate(o); setVsOtbDate(v) }}
+      />
+
+      {/* 막대 클릭 → 일자별 픽업 상세 모달 */}
+      <MarketPickupDayModal
+        open={dayModalOpen && selectedDay != null}
+        onClose={() => { setDayModalOpen(false); setSelectedDay(null) }}
+        year={modalYear}
+        month={modalMonth}
+        day={selectedDay ?? 1}
+        schema={schema}
+        pickupRows={pickupRows}
+        roomCount={roomCount}
+        defaultTab="pickup"
         otbDate={otbDate}
         vsDate={vsOtbDate}
         otbDates={otbDates ?? []}

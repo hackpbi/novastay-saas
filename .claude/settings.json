@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(\"deleted .next\")",
+      "PowerShell(npm run dev 2>&1 | Tee-Object -FilePath \"$env:TEMP\\\\novastay-dev.log\")"
+    ]
+  }
+}

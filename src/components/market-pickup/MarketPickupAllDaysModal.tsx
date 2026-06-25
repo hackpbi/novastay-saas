@@ -163,7 +163,7 @@ export default function MarketPickupAllDaysModal({
       <div className="absolute inset-0 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose} />
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col"
-        style={{ background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)', width: '95vw', height: '90vh', maxWidth: '95vw', maxHeight: '90vh' }}
+        style={{ background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)', width: '80.75vw', height: '76.5vh', maxWidth: '80.75vw', maxHeight: '76.5vh' }}
       >
         {/* 헤더 — 제목 + 지표 토글 + 닫기 */}
         <div className="flex items-center justify-between px-5 py-3.5 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>

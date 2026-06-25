@@ -11,6 +11,7 @@ import { useMarketSchema } from '@/hooks/useMarketSchema'
 import DatePicker from '@/components/DatePicker'
 import MarketPickupMonthBlock, { type SegGroup } from '@/components/market-pickup/MarketPickupMonthBlock'
 import MarketPickupDayModal from '@/components/market-pickup/MarketPickupDayModal'
+import PickupChartModal from '@/components/pickup/PickupChartModal'
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -86,6 +87,7 @@ export default function MarketPickupPage() {
   }
 
   const [dayModal, setDayModal] = useState<{ year: number; month: number; day: number; defaultTab: 'pickup' | 'otb' } | null>(null)
+  const [detailModal, setDetailModal] = useState<{ year: number; month: number } | null>(null)
 
   return (
     // height = 100vh − 56px(상단 헤더 h-14) − 48px(main p-6 상하) ; 좌우 패딩은 셸 main의 p-6 사용
@@ -149,6 +151,7 @@ export default function MarketPickupPage() {
                   selected={resolveSelected(monthKey)}
                   onToggleSeg={(segId) => onToggleSeg(monthKey, segId)}
                   onBarClick={(day, defaultTab) => setDayModal({ year: t.year, month: t.month, day, defaultTab })}
+                  onOpenDetail={() => setDetailModal({ year: t.year, month: t.month })}
                   roomCount={roomCount}
                   allSegIds={allSegIds}
                   isDayModalOpen={!!dayModal}
@@ -173,6 +176,21 @@ export default function MarketPickupPage() {
         vsDate={vsOtbDate}
         otbDates={otbDates ?? []}
         onDateChange={(newOtb, newVs) => { setOtbDate(newOtb); setVsOtbDate(newVs) }}
+      />
+
+      {/* Detail 버튼 → Daily Pick-Up 차트 모달 */}
+      <PickupChartModal
+        open={!!detailModal}
+        onClose={() => setDetailModal(null)}
+        year={detailModal?.year ?? now.getFullYear()}
+        month={detailModal?.month ?? now.getMonth()}
+        pickupRows={pickupRows}
+        roomCount={roomCount}
+        otbDate={otbDate}
+        vsOtbDate={vsOtbDate}
+        otbDates={otbDates ?? []}
+        setOtbDate={setOtbDate}
+        setVsOtbDate={setVsOtbDate}
       />
     </div>
   )
