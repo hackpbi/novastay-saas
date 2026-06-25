@@ -69,9 +69,9 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
   const totalOtbAdr = totalOtbRn > 0 ? Math.round(totalOtbRev / totalOtbRn) : 0
   const totalLyAdr  = totalLyRn  > 0 ? Math.round(totalLyRev  / totalLyRn)  : 0
 
-  // ── YoY% (현재 OTB R/N vs LY Actual R/N) — 이전월은 표시 안 함 ──────────────────
+  // ── YoY% (현재 OTB/Actual R/N vs LY Actual R/N) — 이전월 포함 ───────────────────
   const rowYoy = (otbN: number, lyN: number): number | null =>
-    (!isPastMonth && lyN > 0) ? ((otbN - lyN) / lyN) * 100 : null
+    lyN > 0 ? ((otbN - lyN) / lyN) * 100 : null
   const MAX_ABS = Math.max(
     ...aggregated.map(r => { const y = rowYoy(r.otb_nights, r.ly_nights); return y === null ? 0 : Math.abs(y) }),
     1,
