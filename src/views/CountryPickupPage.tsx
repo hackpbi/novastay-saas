@@ -243,7 +243,12 @@ export default function CountryPickupPage() {
           p_account_name: null,
         })
         if (error) throw error
-        return (data ?? []) as CountryPickupRpcRow[]
+        // actual 행 정규화 — actual 값이 nights/otb_nights/act_nights 어느 키로 와도 nights/room_revenue로 통일
+        return ((data ?? []) as any[]).map(r => ({
+          ...r,
+          nights:       r.nights       ?? r.otb_nights  ?? r.act_nights  ?? 0,
+          room_revenue: r.room_revenue ?? r.otb_revenue ?? r.act_revenue ?? 0,
+        })) as CountryPickupRpcRow[]
       }
       // 현재월 이후 → a02_otb_daily
       const { data, error } = await (supabase as any).rpc('get_country_pickup_data', {
@@ -275,7 +280,11 @@ export default function CountryPickupPage() {
         p_account_name: null,
       })
       if (error) throw error
-      return (data ?? []) as CountryPickupRpcRow[]
+      return ((data ?? []) as any[]).map(r => ({
+        ...r,
+        nights:       r.nights       ?? r.otb_nights  ?? r.act_nights  ?? 0,
+        room_revenue: r.room_revenue ?? r.otb_revenue ?? r.act_revenue ?? 0,
+      })) as CountryPickupRpcRow[]
     },
   })
 
