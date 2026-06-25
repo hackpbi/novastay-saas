@@ -28,6 +28,10 @@ const NEG = 'var(--color-negative)'
 type Stat = { n: number; r: number }       // nights, revenue
 const adr = (s: Stat) => (s.n > 0 ? s.r / s.n : 0)
 
+// ADR 천원(k) 단위
+const fmtAdrK     = (adrVal: number) => `${Math.round(adrVal / 1000)}k`
+const fmtSignAdrK = (d: number) => `${d >= 0 ? '+' : '-'}${Math.abs(Math.round(d / 1000))}k`
+
 export default function ActualBudgetDetailModal({ open, onClose, monthKey, monthLabel, isOtb, hotelId, roomCount }: Props) {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
@@ -173,9 +177,9 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
   const gapSep  = compareMode === 'budget' ? 'inset 1px 0 0 rgba(255,100,100,0.3)' : 'inset 1px 0 0 rgba(255,200,80,0.3)'
 
   // 헤더 셀 스타일
-  const th: React.CSSProperties = { fontSize: 9.5, fontWeight: 600, color: 'rgba(255,255,255,0.45)', padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap' }
-  const thL: React.CSSProperties = { ...th, textAlign: 'left' }
-  const td: React.CSSProperties = { fontSize: 11, padding: '5px 10px', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
+  const th: React.CSSProperties = { fontSize: 9.5, fontWeight: 600, color: 'rgba(255,255,255,0.45)', padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap', minWidth: 70 }
+  const thL: React.CSSProperties = { ...th, textAlign: 'left', minWidth: 160 }
+  const td: React.CSSProperties = { fontSize: 11, padding: '5px 10px', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', minWidth: 70 }
 
   // GAP 색상
   const gapColor = (v: number, rowColor: string) => (v >= 0 ? rowColor : NEG)
@@ -199,21 +203,21 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
 
     return (
       <tr key={s.id} style={{ background: rowBg }}>
-        <td style={{ ...td, textAlign: 'left', color: nameColor, fontWeight: s.is_bold ? 700 : 500, paddingLeft: 10 + indent * 14 }}>{s.name}</td>
+        <td style={{ ...td, textAlign: 'left', minWidth: 160, color: nameColor, fontWeight: s.is_bold ? 700 : 500, paddingLeft: 10 + indent * 14 }}>{s.name}</td>
 
         {/* Actual / OTB — schema fontColor */}
         <td style={{ ...td, color: rowColor }}>{dash(a.n > 0, fmtInt(a.n))}</td>
-        <td style={{ ...td, color: rowColor }}>{dash(a.n > 0, fmtInt(aAdr))}</td>
+        <td style={{ ...td, color: rowColor }}>{dash(a.n > 0, fmtAdrK(aAdr))}</td>
         <td style={{ ...td, color: rowColor }}>{dash(a.n > 0, fmtRevM(a.r))}</td>
 
         {/* Budget / LY — 0.5 흐림 */}
         <td style={{ ...td, color: 'rgba(255,255,255,0.5)', boxShadow: cmpSep }}>{dash(c.n > 0, fmtInt(c.n))}</td>
-        <td style={{ ...td, color: 'rgba(255,255,255,0.5)' }}>{dash(c.n > 0, fmtInt(cAdr))}</td>
+        <td style={{ ...td, color: 'rgba(255,255,255,0.5)' }}>{dash(c.n > 0, fmtAdrK(cAdr))}</td>
         <td style={{ ...td, color: 'rgba(255,255,255,0.5)' }}>{dash(c.n > 0, fmtRevM(c.r))}</td>
 
         {/* GAP — 양수 schema, 음수 red */}
         <td style={{ ...td, color: gapColor(a.n - c.n, rowColor), boxShadow: gapSep }}>{dash(a.n > 0 || c.n > 0, fmtSignInt(a.n - c.n))}</td>
-        <td style={{ ...td, color: gapColor(aAdr - cAdr, rowColor) }}>{dash(a.n > 0 || c.n > 0, fmtSignInt(aAdr - cAdr))}</td>
+        <td style={{ ...td, color: gapColor(aAdr - cAdr, rowColor) }}>{dash(a.n > 0 && c.n > 0, fmtSignAdrK(aAdr - cAdr))}</td>
         <td style={{ ...td, color: gapColor(a.r - c.r, rowColor) }}>{dash(a.n > 0 || c.n > 0, fmtSignRevM(a.r - c.r))}</td>
       </tr>
     )
@@ -242,7 +246,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
       onClick={onClose}
     >
       <div
-        style={{ background: '#0a0a0a', border: '1px solid #1f1f1f', borderRadius: 14, width: 'auto', maxWidth: '92vw', maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+        style={{ background: '#0a0a0a', border: '1px solid #1f1f1f', borderRadius: 14, width: '1400px', maxWidth: '98vw', maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         onClick={e => e.stopPropagation()}
       >
         {/* 헤더 */}
@@ -291,13 +295,13 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
                 <tr style={{ background: '#111111', borderTop: '1px solid rgba(0,229,160,0.4)' }}>
                   <td style={{ ...td, textAlign: 'left', color: '#fff', fontWeight: 700, borderTop: '1px solid rgba(0,229,160,0.4)' }}>TOTAL</td>
                   <td style={{ ...td, color: '#fff', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtInt(tA.n)}</td>
-                  <td style={{ ...td, color: '#fff', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtInt(tAAdr)}</td>
+                  <td style={{ ...td, color: '#fff', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtAdrK(tAAdr)}</td>
                   <td style={{ ...td, color: '#fff', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtRevM(tA.r)}</td>
                   <td style={{ ...td, color: 'rgba(255,255,255,0.6)', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)', boxShadow: cmpSep }}>{fmtInt(tC.n)}</td>
-                  <td style={{ ...td, color: 'rgba(255,255,255,0.6)', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtInt(tCAdr)}</td>
+                  <td style={{ ...td, color: 'rgba(255,255,255,0.6)', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtAdrK(tCAdr)}</td>
                   <td style={{ ...td, color: 'rgba(255,255,255,0.6)', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtRevM(tC.r)}</td>
                   <td style={{ ...td, color: tA.n - tC.n >= 0 ? '#00E5A0' : NEG, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)', boxShadow: gapSep }}>{fmtSignInt(tA.n - tC.n)}</td>
-                  <td style={{ ...td, color: tAAdr - tCAdr >= 0 ? '#00E5A0' : NEG, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtSignInt(tAAdr - tCAdr)}</td>
+                  <td style={{ ...td, color: tAAdr - tCAdr >= 0 ? '#00E5A0' : NEG, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtSignAdrK(tAAdr - tCAdr)}</td>
                   <td style={{ ...td, color: tA.r - tC.r >= 0 ? '#00E5A0' : NEG, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtSignRevM(tA.r - tC.r)}</td>
                 </tr>
 
