@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { toLocalYMD } from '@/utils/dateLocal'
 import { getKSTDateString } from './BaseCalendar'
 
 const PAGE = 15
@@ -29,8 +30,7 @@ export function RateChartView({ hotelId, otbDate, vsOtbDate, onDayClick }: RateC
     const endMonth = d.getMonth() + 4              // 4개월 후
     const endYear  = d.getFullYear() + Math.floor(endMonth / 12)
     const month    = endMonth % 12
-    return new Date(endYear, month + 1, 0)         // 해당 월 말일
-      .toISOString().slice(0, 10)
+    return toLocalYMD(new Date(endYear, month + 1, 0))   // 해당 월 말일 (로컬)
   })()
 
   const { data: barRates = [] } = useQuery({

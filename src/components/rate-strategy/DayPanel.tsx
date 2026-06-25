@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Pencil, RotateCcw, Save, Copy } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { toLocalYMD } from '@/utils/dateLocal'
 import { FormDatePicker } from '@/components/DatePicker'
 import { BarRateAddModal } from './BarRateAddModal'
 import { CustomRateModal } from './CustomRateModal'
@@ -1943,7 +1944,7 @@ export function DayPanel({
         promotionId={customRatePromoId}
         promotionName={promoForm.name}
         stayStart={stayUnlimited ? `${year}-${String(month).padStart(2, '0')}-01` : promoForm.stay_start}
-        stayEnd={stayUnlimited ? new Date(year, month, 0).toISOString().slice(0, 10) : promoForm.stay_end}
+        stayEnd={stayUnlimited ? toLocalYMD(new Date(year, month, 0)) : promoForm.stay_end}
         selectedRoomTypes={selectedRoomTypes}
         year={year}
         month={month}

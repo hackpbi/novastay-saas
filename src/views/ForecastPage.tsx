@@ -18,6 +18,7 @@ import { useDateContext } from '@/contexts/DateContext'
 import type { ForecastSchema, ForecastDayData, CalendarMap } from '@/lib/forecast/types'
 import DatePicker from '@/components/DatePicker'
 import { supabase } from '@/lib/supabase'
+import { todayLocalYMD } from '@/utils/dateLocal'
 
 // 저장 시 비정상 숫자(NaN/Infinity) 방어용 안전 변환
 function safeNum(v: unknown, fallback = 0): number {
@@ -247,7 +248,7 @@ export default function ForecastPage() {
       try {
         const edits = buildAllSaveEdits()
         if (edits.length === 0) { alert('저장할 데이터가 없습니다.'); return }
-        const updateDate = otbDate || new Date().toISOString().slice(0, 10)
+        const updateDate = otbDate || todayLocalYMD()
         const result     = await saveForecastEdits(hotelId, updateDate, edits)
         alert(`전체 저장 완료\n총 ${result.saved_count}건 (신규 ${result.inserted_count}, 수정 ${result.updated_count})`)
         setEditedValues(new Map())
@@ -267,7 +268,7 @@ export default function ForecastPage() {
     // 재저장 — 편집분만
     setSaving(true)
     try {
-      const updateDate = otbDate || new Date().toISOString().slice(0, 10)
+      const updateDate = otbDate || todayLocalYMD()
       const edits      = buildSaveEdits(editedValues)
       const result     = await saveForecastEdits(hotelId, updateDate, edits)
       alert(`저장 완료: 총 ${result.saved_count}건 (신규 ${result.inserted_count}, 수정 ${result.updated_count})`)
@@ -861,7 +862,7 @@ export default function ForecastPage() {
           editedValues={editedValues}
           year={currentMonth.year}
           month={currentMonth.month}
-          otbDate={otbDate || new Date().toISOString().slice(0, 10)}
+          otbDate={otbDate || todayLocalYMD()}
           hotelId={hotelId}
         />
       )}

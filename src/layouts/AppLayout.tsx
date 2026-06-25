@@ -12,6 +12,7 @@ import { DateContext } from '@/contexts/DateContext'
 import { FcstDateContext } from '@/contexts/FcstDateContext'
 import { useForecastDates } from '@/hooks/useForecastDates'
 import { supabase } from '@/lib/supabase'
+import { todayLocalYMD } from '@/utils/dateLocal'
 import type { ReactNode } from 'react'
 
 
@@ -119,7 +120,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   // FCST / HK 초기값: 오늘
   useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayLocalYMD()
     setFcstDate(today)
     setHkDate(today)
   }, [])

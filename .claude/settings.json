@@ -5,7 +5,8 @@
       "PowerShell(npm run dev 2>&1 | Tee-Object -FilePath \"$env:TEMP\\\\novastay-dev.log\")",
       "Bash(grep -n \"id: 'occLabels'\\\\|yPos\\\\|yOcc.getPixelForValue\\\\|fillText\\(\\\\`\\\\${val}%\" src/components/pickup/PickupChartModal.tsx)",
       "Bash(xargs grep -l \"forecast\\\\|budget\\\\|fcst\\\\|Fcst\\\\|FCST\")",
-      "Bash(grep -rn \"occData\\\\|\\\\\\\\\\\\${val}%\\\\|occ}%\\\\|+ '%'\\\\|occ + \" src/components/pickup/PickupChartModal.tsx)"
+      "Bash(grep -rn \"occData\\\\|\\\\\\\\\\\\${val}%\\\\|occ}%\\\\|+ '%'\\\\|occ + \" src/components/pickup/PickupChartModal.tsx)",
+      "Bash(grep -v \"^\\\\s*//\")"
     ]
   }
 }

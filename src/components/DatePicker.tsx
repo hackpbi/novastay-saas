@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
+import { todayLocalYMD } from '@/utils/dateLocal'
 
 export interface DatePickerProps {
   label:           string
@@ -56,7 +57,7 @@ export default function DatePicker({ label, value, onChange, accent = false, ava
   const [viewMonth, setViewMonth] = useState(() => new Date().getMonth())
 
   useEffect(() => {
-    setTodayStr(new Date().toISOString().slice(0, 10))
+    setTodayStr(todayLocalYMD())
   }, [])
   const [pos,       setPos]       = useState({ top: 0, left: 0 })
 
@@ -361,7 +362,7 @@ export function FormDatePicker({ value, onChange, placeholder = '날짜 선택',
   const btnRef = useRef<HTMLButtonElement>(null)
   const calRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { setTodayStr(new Date().toISOString().slice(0, 10)) }, [])
+  useEffect(() => { setTodayStr(todayLocalYMD()) }, [])
 
   useEffect(() => {
     if (value) {

@@ -9,6 +9,7 @@ import {
 import { DayPanel } from './DayPanel'
 import type { PromoFormData } from './DayPanel'
 import { supabase } from '@/lib/supabase'
+import { toLocalYMD } from '@/utils/dateLocal'
 import { useHotel } from '@/contexts/HotelContext'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -149,15 +150,6 @@ export function RateCalendarView({
   const hotelId    = currentHotel?.id ?? ''
   const queryClient = useQueryClient()
 
-  console.log('[pickupRows] 6월 1~5일 데이터:',
-    pickupRows.filter((r: any) =>
-      r.business_date >= '2026-06-01' && r.business_date <= '2026-06-05'
-    )
-  )
-  console.log('[occMap] 6월 1~5일:',
-    Object.entries(occMap).filter(([k]) => k >= '2026-06-01' && k <= '2026-06-05')
-  )
-
   const [selectedDay,   setSelectedDay]   = useState<string>(() => {
     const today = getKSTDateString()
     const todayYear  = Number(today.slice(0, 4))
@@ -270,7 +262,7 @@ export function RateCalendarView({
     queryKey: ['rate-history', hotelId, year, month],
     queryFn: async () => {
       const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-      const endDate   = new Date(year, month, 0).toISOString().slice(0, 10)
+      const endDate   = toLocalYMD(new Date(year, month, 0))
       const { data, error } = await (supabase as any)
         .from('s01_rate_detail_history')
         .select('stay_date, old_rate, new_rate, created_at')
@@ -289,7 +281,7 @@ export function RateCalendarView({
     queryKey: ['s03_rate_promotion', hotelId, year, month, saleDate],
     queryFn: async () => {
       const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-      const endDate   = new Date(year, month, 0).toISOString().slice(0, 10)
+      const endDate   = toLocalYMD(new Date(year, month, 0))
       let query = (supabase as any)
         .from('s03_rate_promotion')
         .select('id, name, discount_type, discount_value, room_type_codes, stay_start, stay_end, sale_start, sale_end, min_stay, max_stay, status, description')
@@ -328,7 +320,7 @@ export function RateCalendarView({
     queryKey: ['s03_rate_promotion-past', hotelId, year, month],
     queryFn: async () => {
       const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-      const endDate   = new Date(year, month, 0).toISOString().slice(0, 10)
+      const endDate   = toLocalYMD(new Date(year, month, 0))
       const { data, error } = await (supabase as any)
         .from('s03_rate_promotion')
         .select('id, name, discount_type, discount_value, stay_start, stay_end')
@@ -367,7 +359,7 @@ export function RateCalendarView({
     queryKey: ['s06_rate_custom', hotelId, year, month],
     queryFn: async () => {
       const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-      const endDate   = new Date(year, month, 0).toISOString().slice(0, 10)
+      const endDate   = toLocalYMD(new Date(year, month, 0))
       const { data, error } = await (supabase as any)
         .from('s06_rate_custom')
         .select('promotion_id, stay_date, room_type_code, rate')

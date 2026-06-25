@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { toLocalYMD } from '@/utils/dateLocal'
 import { useHotel } from '@/contexts/HotelContext'
 import {
   generateCalendarDays, isFriOrSat, getDow, toDateStr, dayCellStyle, DOW_LABELS,
@@ -99,7 +100,7 @@ export function PromoCalendarView({ year, month, onPrevMonth, onNextMonth, onTod
     queryKey: ['promo-calendar-view', hotelId, year, month],
     queryFn: async () => {
       const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-      const endDate   = new Date(year, month, 0).toISOString().slice(0, 10)
+      const endDate   = toLocalYMD(new Date(year, month, 0))
       const { data, error } = await (supabase as any)
         .from('s03_rate_promotion')
         .select('id, name, discount_type, discount_value, room_type_codes, stay_start, stay_end, sale_start, sale_end, status')
@@ -190,7 +191,7 @@ export function PromoCalendarView({ year, month, onPrevMonth, onNextMonth, onTod
     queryKey: ['promo-calendar-view-past', hotelId, year, month],
     queryFn: async () => {
       const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-      const endDate   = new Date(year, month, 0).toISOString().slice(0, 10)
+      const endDate   = toLocalYMD(new Date(year, month, 0))
       const { data, error } = await (supabase as any)
         .from('s03_rate_promotion')
         .select('id, name, discount_type, discount_value, room_type_codes, stay_start, stay_end, sale_start, sale_end, status')
@@ -210,7 +211,7 @@ export function PromoCalendarView({ year, month, onPrevMonth, onNextMonth, onTod
     queryKey: ['promo-calendar-view-past-custom', hotelId, year, month],
     queryFn: async () => {
       const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-      const endDate   = new Date(year, month, 0).toISOString().slice(0, 10)
+      const endDate   = toLocalYMD(new Date(year, month, 0))
       const { data, error } = await (supabase as any)
         .from('s06_rate_custom')
         .select('promotion_id, stay_date, rate')

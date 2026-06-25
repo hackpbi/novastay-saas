@@ -11,6 +11,7 @@ import {
 import * as XLSX from 'xlsx'
 import { FormDatePicker } from '@/components/DatePicker'
 import { supabase } from '@/lib/supabase'
+import { todayLocalYMD } from '@/utils/dateLocal'
 import { useAuth } from '@/contexts/AuthContext'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
@@ -732,7 +733,8 @@ export default function RateStrategyPage() {
         })
       if (error) throw error
       const monthStart = `${viewYear}-${String(viewMonth).padStart(2, '0')}-01`
-      const monthEnd   = new Date(viewYear, viewMonth, 0).toISOString().slice(0, 10)
+      const lastDay    = new Date(viewYear, viewMonth, 0).getDate()   // 월 말일(로컬)
+      const monthEnd   = `${viewYear}-${String(viewMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`  // toISOString TZ 밀림 방지
       return (data ?? []).filter((r: any) =>
         r.business_date >= monthStart && r.business_date <= monthEnd
       )
@@ -1174,7 +1176,7 @@ export default function RateStrategyPage() {
     ws['!cols'] = [{ wch: 14 }, { wch: 12 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'BAR Rate')
-    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    const today = todayLocalYMD().replace(/-/g, '')
     XLSX.writeFile(wb, `BAR_Rate_템플릿_${today}.xlsx`)
   }, [stayStartEff, stayEndEff])
 
