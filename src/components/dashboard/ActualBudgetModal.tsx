@@ -152,17 +152,17 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount: _
   const monthData = useMemo(() => months.map(({ year, month }) => {
     const ym     = `${year}-${pad2(month)}`
     const lyYm   = `${year - 1}-${pad2(month)}`
-    const isFuture = curYM ? ym > curYM : false             // 현재월 이후 = 미래(OTB)
-    const value  = isFuture ? (otbMap[ym] ?? 0) : (actualMap[ym] ?? 0)
+    const isOtb  = curYM ? ym >= curYM : false              // 현재월 포함 이후 = OTB / 그 전 = Actual
+    const value  = isOtb ? (otbMap[ym] ?? 0) : (actualMap[ym] ?? 0)
     const budget = budgetMap[ym] ?? 0
     const ly     = actualMap[lyYm] ?? 0
     const ach    = budget > 0 ? (value / budget) * 100 : null
-    return { year, month, ym, value, budget, ly, ach, isFuture }
+    return { year, month, ym, value, budget, ly, ach, isOtb }
   }), [months, curYM, otbMap, actualMap, budgetMap])
 
-  // ── YTD 요약 (baseYear 현재월까지 actual) ─────────────────────────────────────
+  // ── YTD 요약 (전월까지, 즉 ym < curYM 의 Actual만) ────────────────────────────
   const ytd = useMemo(() => {
-    const cur = monthData.filter(d => d.year === baseYear && !d.isFuture)
+    const cur = curYM ? monthData.filter(d => d.ym < curYM) : []
     const value  = cur.reduce((s, d) => s + d.value, 0)
     const budget = cur.reduce((s, d) => s + d.budget, 0)
     const ly     = cur.reduce((s, d) => s + d.ly, 0)
@@ -172,12 +172,12 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount: _
       growth: ly > 0 ? ((value - ly) / ly) * 100 : null,
       excess: value - budget,
     }
-  }, [monthData, baseYear])
+  }, [monthData, curYM])
 
   if (!open) return null
 
-  const gaugeColor = (d: { isFuture: boolean; ach: number | null }) =>
-    d.isFuture ? '#7EA8FF' : (d.ach != null && d.ach >= 100 ? '#00E5A0' : '#E24B4A')
+  const gaugeColor = (d: { isOtb: boolean; ach: number | null }) =>
+    d.isOtb ? '#7EA8FF' : (d.ach != null && d.ach >= 100 ? '#00E5A0' : '#FF6B6B')
 
   const card2026 = monthData.filter(d => d.year === baseYear)
   const card2027 = monthData.filter(d => d.year === baseYear + 1)
@@ -226,7 +226,7 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount: _
               {/* 상단 요약 카드 2개 */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
                 <div style={{ background: '#0f0f0f', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <Gauge pct={ytd.ach} color={ytd.ach != null && ytd.ach >= 100 ? '#00E5A0' : '#E24B4A'} size={76} stroke={6} big />
+                  <Gauge pct={ytd.ach} color={ytd.ach != null && ytd.ach >= 100 ? '#00E5A0' : '#FF6B6B'} size={76} stroke={6} big />
                   <div>
                     <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>YTD Budget Achievement</div>
                     <div style={{ fontSize: 13, color: ytd.excess >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 600 }}>{fmtSignedM(ytd.excess)} <span style={{ color: '#555', fontWeight: 400 }}>vs budget</span></div>
