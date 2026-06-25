@@ -1,8 +1,9 @@
 'use client'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useDateContext } from '@/contexts/DateContext'
+import ActualBudgetDetailModal from './ActualBudgetDetailModal'
 
 interface Props {
   open:      boolean
@@ -35,8 +36,9 @@ function Gauge({ pct, color, size = 56, stroke = 5, big = false }: { pct: number
   )
 }
 
-export default function ActualBudgetModal({ open, onClose, hotelId, roomCount: _roomCount }: Props) {
+export default function ActualBudgetModal({ open, onClose, hotelId, roomCount }: Props) {
   const { otbDate, vsOtbDate, otbDates } = useDateContext()
+  const [detailMonth, setDetailMonth] = useState<{ key: string; label: string; isOtb: boolean } | null>(null)
   const baseYear = otbDate ? new Date(otbDate + 'T00:00:00').getFullYear() : new Date().getFullYear()
   const curYM    = otbDate ? otbDate.slice(0, 7) : ''   // 'YYYY-MM' (현재월 경계)
   const minOtbDate = otbDates?.[otbDates.length - 1] ?? ''
@@ -189,7 +191,12 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount: _
       ? <span style={{ fontSize: 8, padding: '2px 6px', borderRadius: 8, background: 'rgba(0,229,160,0.12)', color: '#00E5A0', fontWeight: 600 }}>Actual</span>
       : <span style={{ fontSize: 8, padding: '2px 6px', borderRadius: 8, background: 'rgba(100,160,255,0.12)', color: '#7EA8FF', fontWeight: 600 }}>OTB</span>
     return (
-    <div key={d.ym} style={{ background: '#0f0f0f', border: isCurrent ? '1px solid rgba(100,160,255,0.5)' : '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '12px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+    <div
+      key={d.ym}
+      onClick={() => setDetailMonth({ key: d.ym, label: `${MONTH_NAMES[d.month - 1]} ${d.year}`, isOtb: !isPast })}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)' }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = isCurrent ? 'rgba(100,160,255,0.5)' : 'rgba(255,255,255,0.08)' }}
+      style={{ background: '#0f0f0f', border: isCurrent ? '1px solid rgba(100,160,255,0.5)' : '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '12px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
       <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
           <span style={{ fontSize: 11, color: '#888', fontWeight: 500 }}>{MONTH_NAMES[d.month - 1]}</span>
@@ -214,6 +221,7 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount: _
   }
 
   return (
+    <>
     <div
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
       onClick={onClose}
@@ -276,5 +284,16 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount: _
         </div>
       </div>
     </div>
+
+    <ActualBudgetDetailModal
+      open={!!detailMonth}
+      onClose={() => setDetailMonth(null)}
+      monthKey={detailMonth?.key ?? ''}
+      monthLabel={detailMonth?.label ?? ''}
+      isOtb={detailMonth?.isOtb ?? false}
+      hotelId={hotelId}
+      roomCount={roomCount}
+    />
+    </>
   )
 }
