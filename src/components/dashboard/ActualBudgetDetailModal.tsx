@@ -330,7 +330,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
       onClick={onClose}
     >
       <div
-        style={{ background: '#0a0a0a', border: '1px solid #1f1f1f', borderRadius: 14, width: compareMode === 'ly' ? '1380px' : '1080px', maxWidth: '98vw', height: '90vh', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.3s cubic-bezier(0.22,1,0.36,1)' }}
+        style={{ background: '#0a0a0a', border: '1px solid #1f1f1f', borderRadius: 14, width: compareMode === 'ly' ? '1380px' : '1080px', maxWidth: '98vw', height: 'auto', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.3s cubic-bezier(0.22,1,0.36,1)' }}
         onClick={e => e.stopPropagation()}
       >
         {/* 헤더 */}
@@ -360,9 +360,9 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
         </div>
 
         {/* 본문: 메인 테이블 + (vs LY) 어카운트 패널 */}
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
-          {/* 메인 테이블 (콘텐츠 높이만큼만 차지, 넘치면 스크롤) */}
-          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'auto', padding: 16, alignSelf: 'flex-start', maxHeight: '100%' }}>
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+          {/* 메인 테이블 (콘텐츠 높이 기반, 내부 스크롤 없음) */}
+          <div style={{ flex: 1, padding: 16 }}>
           {loading ? (
             <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: 13 }}>불러오는 중…</div>
           ) : (
