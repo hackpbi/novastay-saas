@@ -42,6 +42,8 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
   const { theme } = useTheme()
   const isDark = theme === 'dark'
   const [compareMode, setCompareMode] = useState<'budget' | 'ly'>(defaultMode)
+  // vs LY 어카운트 패널: 선택된 세그먼트 행 (id=하이라이트, label=헤더, codes=집계)
+  const [selectedSeg, setSelectedSeg] = useState<{ id: string; label: string; codes: string[] } | null>(null)
 
   // YTD 모드: monthKey 없이 monthLabel('YTD 2026')에서 연도 파싱, 1~ytdMonth 집계
   const ytdMonth = ytdToMonth ?? 12
@@ -59,6 +61,8 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
 
   // 진입(open)·기본모드 변경 시 비교 모드 동기화
   useEffect(() => { if (open) setCompareMode(defaultMode) }, [open, defaultMode])
+  // 비교 모드 전환 시 어카운트 선택 초기화
+  useEffect(() => { setSelectedSeg(null) }, [compareMode])
 
   // ── 데이터 소스 ─────────────────────────────────────────────────────────────
   const { data: schema = [], loading: sLoad } = useMarketSchema()
@@ -155,6 +159,37 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
 
   const compareSeg = compareMode === 'budget' ? budgetSeg : lySeg
 
+  // ── 어카운트 증감 (선택 세그먼트, 당해 vs 전년, ΔREV 내림차순) ────────────────
+  const accountList = useMemo(() => {
+    if (!selectedSeg) return []
+    const inCodes = (seg: string) => selectedSeg.codes.includes(seg)
+
+    const currMap: Record<string, { rn: number; rev: number }> = {}
+    const lyMap:   Record<string, { rn: number; rev: number }> = {}
+    for (const r of actualMonthly) {
+      if (!inCodes(r.segmentation)) continue
+      const monthOk = isYtd ? r.month_num <= ytdMonth : r.month_num === month
+      if (!monthOk) continue
+      const k = r.account_name ?? '(없음)'
+      if (r.year === year) {
+        if (!currMap[k]) currMap[k] = { rn: 0, rev: 0 }
+        currMap[k].rn  += r.actual_nights  ?? 0
+        currMap[k].rev += r.actual_revenue ?? 0
+      } else if (r.year === year - 1) {
+        if (!lyMap[k]) lyMap[k] = { rn: 0, rev: 0 }
+        lyMap[k].rn  += r.actual_nights  ?? 0
+        lyMap[k].rev += r.actual_revenue ?? 0
+      }
+    }
+
+    const all = new Set([...Object.keys(currMap), ...Object.keys(lyMap)])
+    return Array.from(all).map(name => ({
+      name,
+      diffRn:  (currMap[name]?.rn  ?? 0) - (lyMap[name]?.rn  ?? 0),
+      diffRev: (currMap[name]?.rev ?? 0) - (lyMap[name]?.rev ?? 0),
+    })).sort((a, b) => Math.abs(b.diffRev) - Math.abs(a.diffRev))
+  }, [selectedSeg, actualMonthly, year, month, isYtd, ytdMonth])
+
   // ── schema 행 순서 정렬 (main 뒤에 sub) ──────────────────────────────────────
   const orderedSchema = useMemo(() => {
     const topLevel = schema.filter(s => s.parent_id === null).sort((a, b) => a.order_index - b.order_index)
@@ -236,12 +271,17 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
     const aAdr = adr(a), cAdr = adr(c)
     const dash = (cond: boolean, node: React.ReactNode) => (cond ? node : <span style={{ opacity: 0.35 }}>—</span>)
 
+    const lyClickable = compareMode === 'ly'
+    const isSel  = selectedSeg?.id === s.id
+    const baseBg = isSel ? `linear-gradient(rgba(255,200,80,0.06), rgba(255,200,80,0.06)), ${rowBg}` : rowBg
+
     return (
       <tr
         key={s.id}
-        style={{ background: rowBg }}
+        onClick={lyClickable ? () => setSelectedSeg({ id: s.id, label: s.name, codes }) : undefined}
+        style={{ background: baseBg, cursor: lyClickable ? 'pointer' : 'default' }}
         onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${rowBg}` }}
-        onMouseLeave={e => { e.currentTarget.style.background = rowBg }}
+        onMouseLeave={e => { e.currentTarget.style.background = baseBg }}
       >
         <td style={{ ...td, textAlign: 'left', minWidth: 140, color: nameColor, fontWeight: s.is_bold ? 700 : 500, paddingLeft: 10 + indent * 14 }}>{s.name}</td>
 
@@ -290,7 +330,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
       onClick={onClose}
     >
       <div
-        style={{ background: '#0a0a0a', border: '1px solid #1f1f1f', borderRadius: 14, width: '1080px', maxWidth: '94vw', maxHeight: '97vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+        style={{ background: '#0a0a0a', border: '1px solid #1f1f1f', borderRadius: 14, width: compareMode === 'ly' ? '1380px' : '1080px', maxWidth: '98vw', maxHeight: '97vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.3s cubic-bezier(0.22,1,0.36,1)' }}
         onClick={e => e.stopPropagation()}
       >
         {/* 헤더 */}
@@ -319,8 +359,10 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
           </div>
         </div>
 
-        {/* 본문 */}
-        <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+        {/* 본문: 메인 테이블 + (vs LY) 어카운트 패널 */}
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          {/* 메인 테이블 */}
+          <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', padding: 16 }}>
           {loading ? (
             <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: 13 }}>불러오는 중…</div>
           ) : (
@@ -364,6 +406,46 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
                 {metricRow('RevPAR', fmtInt(rpA), fmtInt(rpC), fmtSignInt(rpA - rpC), rpA - rpC >= 0)}
               </tbody>
             </table>
+          )}
+          </div>
+
+          {/* 어카운트 패널 — vs Last Year 일때만 */}
+          {compareMode === 'ly' && (
+            <div style={{ width: 280, flexShrink: 0, borderLeft: '1px solid rgba(0,229,160,0.2)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div style={{ padding: '10px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#FFC850' }}>
+                  {selectedSeg ? `${selectedSeg.label} — Account 증감` : 'Account 증감'}
+                </div>
+                <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
+                  vs Last Year · {monthLabel}
+                </div>
+              </div>
+
+              {!selectedSeg ? (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'rgba(255,255,255,0.2)', fontSize: 11 }}>
+                  <span style={{ fontSize: 20 }}>👆</span>
+                  <span>세그먼트 행을 클릭하세요</span>
+                </div>
+              ) : accountList.length === 0 ? (
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.2)', fontSize: 11 }}>데이터 없음</div>
+              ) : (
+                <div style={{ flex: 1, overflowY: 'auto' }}>
+                  {accountList.map(acc => (
+                    <div key={acc.name} style={{ padding: '8px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acc.name}</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+                        <span style={{ fontSize: 9, color: acc.diffRn >= 0 ? '#00E5A0' : '#FF6B6B' }}>
+                          {acc.diffRn >= 0 ? '+' : ''}{acc.diffRn} R/N
+                        </span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: acc.diffRev >= 0 ? '#00E5A0' : '#FF6B6B' }}>
+                          {acc.diffRev >= 0 ? '+' : ''}{(acc.diffRev / 1_000_000).toFixed(1)}M
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
