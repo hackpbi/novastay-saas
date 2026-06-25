@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
 import { useActualMonthly } from '@/hooks/useActualMonthly'
+import { useOtbData } from '@/hooks/useOtbData'
 import { useTheme } from '@/contexts/ThemeContext'
 
 interface Props {
@@ -63,6 +64,8 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
   const { data: schema = [], loading: sLoad } = useMarketSchema()
   // Actual(당해) + LY(전년) 동시 조회
   const { data: actualMonthly = [], isLoading: amLoad } = useActualMonthly({ hotelId, fromYear: year - 1, toYear: year })
+  // OTB월용: useOtbData (현재 otbDate 기준 범위, business_date별 otb_nights/otb_revenue)
+  const { data: otbRows = [], loading: oLoad } = useOtbData()
 
   const { data: budgetRows = [], isLoading: bLoad } = useQuery({
     queryKey: ['ab_detail_budget', hotelId, year, isYtd ? `ytd-${ytdMonth}` : month],
@@ -92,22 +95,38 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
     },
   })
 
-  const loading = sLoad || amLoad || bLoad
+  const loading = sLoad || amLoad || bLoad || (isOtb && oLoad)
 
   // ── segmentation 코드별 합산 맵 ──────────────────────────────────────────────
-  // Actual: useActualMonthly에서 당해 year 필터 (YTD=1~ytdMonth, 월별=해당 월)
+  // Actual/OTB 컬럼: OTB월=useOtbData(otb_*), Actual월=useActualMonthly(actual_*)
   const actualSeg = useMemo(() => {
     const m = new Map<string, Stat>()
-    for (const r of actualMonthly) {
-      if (r.year !== year) continue
-      if (isYtd ? r.month_num > ytdMonth : r.month_num !== month) continue
-      const e = m.get(r.segmentation) ?? { n: 0, r: 0 }
-      e.n += r.actual_nights  ?? 0
-      e.r += r.actual_revenue ?? 0
-      m.set(r.segmentation, e)
+    if (isOtb) {
+      // OTB 데이터: business_date 기준 해당 기간 필터 후 segmentation별 합산
+      for (const r of otbRows) {
+        const d = new Date(r.business_date + 'T00:00:00')
+        const rowYear  = d.getFullYear()
+        const rowMonth = d.getMonth() + 1
+        if (rowYear !== year) continue
+        if (isYtd ? rowMonth > ytdMonth : rowMonth !== month) continue
+        const e = m.get(r.segmentation) ?? { n: 0, r: 0 }
+        e.n += r.otb_nights  ?? 0
+        e.r += r.otb_revenue ?? 0
+        m.set(r.segmentation, e)
+      }
+    } else {
+      // Actual 데이터: useActualMonthly (year/month 또는 1~ytdMonth)
+      for (const r of actualMonthly) {
+        if (r.year !== year) continue
+        if (isYtd ? r.month_num > ytdMonth : r.month_num !== month) continue
+        const e = m.get(r.segmentation) ?? { n: 0, r: 0 }
+        e.n += r.actual_nights  ?? 0
+        e.r += r.actual_revenue ?? 0
+        m.set(r.segmentation, e)
+      }
     }
     return m
-  }, [actualMonthly, year, month, isYtd, ytdMonth])
+  }, [isOtb, otbRows, actualMonthly, year, month, isYtd, ytdMonth])
 
   const budgetSeg = useMemo(() => {
     const m = new Map<string, Stat>()
