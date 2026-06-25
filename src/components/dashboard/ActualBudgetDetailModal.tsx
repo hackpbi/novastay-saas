@@ -4,8 +4,7 @@ import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
-import { useOtbData } from '@/hooks/useOtbData'
-import { useLyPacing } from '@/hooks/useLyPacing'
+import { useActualMonthly } from '@/hooks/useActualMonthly'
 import { useTheme } from '@/contexts/ThemeContext'
 
 interface Props {
@@ -48,8 +47,8 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
 
   // ── 데이터 소스 ─────────────────────────────────────────────────────────────
   const { data: schema = [], loading: sLoad } = useMarketSchema()
-  const { data: otbData = [], loading: oLoad } = useOtbData()
-  const { data: lyData  = [], loading: lLoad } = useLyPacing('v1')
+  // Actual(당해) + LY(전년) 동시 조회
+  const { data: actualMonthly = [], isLoading: amLoad } = useActualMonthly({ hotelId, fromYear: year - 1, toYear: year })
 
   const { data: budgetRows = [], isLoading: bLoad } = useQuery({
     queryKey: ['ab_detail_budget', hotelId, monthKey],
@@ -78,21 +77,21 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
     },
   })
 
-  const loading = sLoad || oLoad || lLoad || bLoad
+  const loading = sLoad || amLoad || bLoad
 
   // ── segmentation 코드별 합산 맵 ──────────────────────────────────────────────
-  // Actual/OTB: otbData에서 monthKey 월 필터 → isOtb면 otb_*, 아니면 act_*
+  // Actual: useActualMonthly에서 당해 year/month 필터
   const actualSeg = useMemo(() => {
     const m = new Map<string, Stat>()
-    for (const r of otbData) {
-      if (r.business_date.slice(0, 7) !== monthKey) continue
+    for (const r of actualMonthly) {
+      if (r.year !== year || r.month_num !== month) continue
       const e = m.get(r.segmentation) ?? { n: 0, r: 0 }
-      e.n += (isOtb ? r.otb_nights  : r.act_nights)  ?? 0
-      e.r += (isOtb ? r.otb_revenue : r.act_revenue) ?? 0
+      e.n += r.actual_nights  ?? 0
+      e.r += r.actual_revenue ?? 0
       m.set(r.segmentation, e)
     }
     return m
-  }, [otbData, monthKey, isOtb])
+  }, [actualMonthly, year, month])
 
   const budgetSeg = useMemo(() => {
     const m = new Map<string, Stat>()
@@ -105,17 +104,18 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
     return m
   }, [budgetRows])
 
+  // LY: useActualMonthly에서 전년(year-1) 동월 필터
   const lySeg = useMemo(() => {
     const m = new Map<string, Stat>()
-    for (const r of lyData) {
-      if (r.business_date.slice(0, 7) !== monthKey) continue
+    for (const r of actualMonthly) {
+      if (r.year !== year - 1 || r.month_num !== month) continue
       const e = m.get(r.segmentation) ?? { n: 0, r: 0 }
-      e.n += r.ly_nights  ?? 0
-      e.r += r.ly_revenue ?? 0
+      e.n += r.actual_nights  ?? 0
+      e.r += r.actual_revenue ?? 0
       m.set(r.segmentation, e)
     }
     return m
-  }, [lyData, monthKey])
+  }, [actualMonthly, year, month])
 
   const compareSeg = compareMode === 'budget' ? budgetSeg : lySeg
 
