@@ -69,6 +69,46 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
   const totalOtbAdr = totalOtbRn > 0 ? Math.round(totalOtbRev / totalOtbRn) : 0
   const totalLyAdr  = totalLyRn  > 0 ? Math.round(totalLyRev  / totalLyRn)  : 0
 
+  // ── YoY% (현재 OTB R/N vs LY Actual R/N) — 이전월은 표시 안 함 ──────────────────
+  const rowYoy = (otbN: number, lyN: number): number | null =>
+    (!isPastMonth && lyN > 0) ? ((otbN - lyN) / lyN) * 100 : null
+  const MAX_ABS = Math.max(
+    ...aggregated.map(r => { const y = rowYoy(r.otb_nights, r.ly_nights); return y === null ? 0 : Math.abs(y) }),
+    1,
+  )
+  const totalYoy = rowYoy(totalOtbRn, totalLyRn)
+
+  // YoY% 셀 (양방향 바 + 숫자). tdExtra로 Total 행 테두리 등 주입
+  const yoyCell = (yoyPct: number | null, tdExtra?: React.CSSProperties) => {
+    if (yoyPct === null) {
+      return <td style={{ ...tdBase, width: 130, textAlign: 'center', color: 'rgba(255,255,255,0.2)', ...tdExtra }}>—</td>
+    }
+    const isPos = yoyPct >= 0
+    const barW = Math.min(Math.abs(yoyPct) / MAX_ABS * 50, 50)
+    return (
+      <td style={{ ...tdBase, position: 'relative', padding: '4px 8px', width: 130, ...tdExtra }}>
+        <div style={{ position: 'relative', height: 16, display: 'flex', alignItems: 'center' }}>
+          {/* 중앙 기준선 */}
+          <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 0.5, background: 'rgba(255,255,255,0.15)' }} />
+          {/* 바 — 양수: 중앙→오른쪽(mint), 음수: 중앙→왼쪽(red) */}
+          <div style={{
+            position: 'absolute', height: 6, borderRadius: 2, top: '50%', transform: 'translateY(-50%)',
+            background: isPos ? '#00E5A0' : '#E24B4A',
+            ...(isPos ? { left: '50%', width: `${barW}%` } : { right: '50%', width: `${barW}%` }),
+          }} />
+          {/* 숫자 — 바 끝 바깥 */}
+          <span style={{
+            position: 'absolute', fontSize: 10, fontWeight: 500, top: '50%', transform: 'translateY(-50%)',
+            whiteSpace: 'nowrap', color: isPos ? '#00B883' : '#E24B4A',
+            ...(isPos ? { left: `calc(50% + ${barW}% + 2px)` } : { right: `calc(50% + ${barW}% + 2px)` }),
+          }}>
+            {isPos ? '+' : ''}{yoyPct.toFixed(1)}%
+          </span>
+        </div>
+      </td>
+    )
+  }
+
   const tdBase: React.CSSProperties = {
     padding: '6px 8px', fontSize: 11, textAlign: 'right', fontVariantNumeric: 'tabular-nums',
     borderBottom: '0.5px solid var(--color-border-subtle)', color: 'var(--color-text-primary)', whiteSpace: 'nowrap',
@@ -101,11 +141,12 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
       </div>
 
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed', minWidth: 780 }}>
+        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed', minWidth: 910 }}>
           <thead>
             {/* 컬럼 그룹 헤더 */}
             <tr>
               <th style={{ width: 130, textAlign: 'left', padding: '5px 8px 2px', fontSize: 9, fontWeight: 500, color: 'var(--color-text-tertiary)' }} />
+              <th style={{ width: 130 }} />
               <th colSpan={3} style={grpTh('var(--color-text-tertiary)')}>{isPastMonth ? 'Actual' : 'Current OTB'}</th>
               {!isPastMonth && (
                 <>
@@ -123,6 +164,7 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
             {/* 컬럼 헤더 */}
             <tr>
               <th style={{ textAlign: 'left', padding: '2px 8px 6px', fontSize: 9, fontWeight: 500, color: 'var(--color-text-tertiary)', borderBottom: '0.5px solid var(--color-border-subtle)' }}>Country</th>
+              <th style={{ ...colTh('rgba(255,180,50,0.6)'), width: 130, textAlign: 'center' }}>YoY%</th>
               {['R/N', 'ADR', 'REV'].map(h => <th key={h} style={colTh('var(--color-text-tertiary)')}>{h}</th>)}
               {!isPastMonth && (
                 <>
@@ -159,6 +201,8 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{row.country_name_en || row.country_name_ko}</span>
                     </div>
                   </td>
+                  {/* YoY% */}
+                  {yoyCell(rowYoy(row.otb_nights, row.ly_nights))}
                   {/* OTB (이전월이면 Actual) */}
                   <td style={tdBase}>{row.otb_nights.toLocaleString('ko-KR')}</td>
                   <td style={tdBase}>{fmtK(otbAdr)}</td>
@@ -188,6 +232,7 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
             {/* 합계 행 */}
             <tr>
               <td style={{ ...tdBase, textAlign: 'left', fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>Total</td>
+              {yoyCell(totalYoy, { borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' })}
               <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{totalOtbRn.toLocaleString('ko-KR')}</td>
               <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtK(totalOtbAdr)}</td>
               <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtM(totalOtbRev)}</td>
