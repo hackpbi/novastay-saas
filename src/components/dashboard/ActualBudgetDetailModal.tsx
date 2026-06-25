@@ -330,7 +330,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
       onClick={onClose}
     >
       <div
-        style={{ background: '#0a0a0a', border: '1px solid #1f1f1f', borderRadius: 14, width: compareMode === 'ly' ? '1380px' : '1080px', maxWidth: '98vw', height: '90vh', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.3s cubic-bezier(0.22,1,0.36,1)' }}
+        style={{ background: '#0a0a0a', border: '1px solid #1f1f1f', borderRadius: 14, width: compareMode === 'ly' ? '1380px' : '1080px', maxWidth: '98vw', height: 'auto', maxHeight: '90vh', minHeight: 400, display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.3s cubic-bezier(0.22,1,0.36,1)' }}
         onClick={e => e.stopPropagation()}
       >
         {/* 헤더 */}
@@ -360,9 +360,9 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
         </div>
 
         {/* 본문: 메인 테이블 + (vs LY) 어카운트 패널 */}
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
+        <div style={{ display: 'flex', overflow: 'hidden', maxHeight: 'calc(90vh - 80px)', minHeight: 0 }}>
           {/* 메인 테이블 */}
-          <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', padding: 16, minHeight: 0 }}>
+          <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', padding: 16, minHeight: 0, maxHeight: '100%' }}>
           {loading ? (
             <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: 13 }}>불러오는 중…</div>
           ) : (
@@ -411,7 +411,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
 
           {/* 어카운트 패널 — vs Last Year 일때만 */}
           {compareMode === 'ly' && (
-            <div style={{ width: 280, flexShrink: 0, borderLeft: '1px solid rgba(0,229,160,0.2)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+            <div style={{ width: 280, flexShrink: 0, borderLeft: '1px solid rgba(0,229,160,0.2)', display: 'flex', flexDirection: 'column', overflow: 'hidden', maxHeight: '100%' }}>
               <div style={{ padding: '10px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: '#FFC850' }}>
                   {selectedSeg ? `${selectedSeg.label} — Account 증감` : 'Account 증감'}
