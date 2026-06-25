@@ -499,16 +499,6 @@ export default function CountryPickupPage() {
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           <div style={{ fontSize: 17, fontWeight: 500, color: 'var(--color-text-primary)' }}>Country Pick-up</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span style={{ display: 'inline-flex' }}>
-              <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} availableDates={otbDates ?? []} accent bare fontPx={11} plain />
-            </span>
-            <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>vs</span>
-            <span style={{ display: 'inline-flex' }}>
-              <DatePicker label="vs" value={vsOtbDate} onChange={setVsOtbDate} availableDates={(otbDates ?? []).filter(d => d < otbDate)} accent bare fontPx={11} plain />
-            </span>
-            <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>· 기준 국가별 OTB 픽업</span>
-          </div>
         </div>
       </div>
 
