@@ -6,6 +6,8 @@ import { supabase } from '@/lib/supabase'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
 import { useActualMonthly } from '@/hooks/useActualMonthly'
 import { useOtbData } from '@/hooks/useOtbData'
+import { useAccountPickupData, type AccountPickupRow } from '@/hooks/useAccountPickupData'
+import { useDateContext } from '@/contexts/DateContext'
 import { useTheme } from '@/contexts/ThemeContext'
 
 interface Props {
@@ -40,6 +42,7 @@ const fmtSignAdrK = (d: number) => `${d >= 0 ? '+' : '-'}${Math.abs(Math.round(d
 
 export default function ActualBudgetDetailModal({ open, onClose, monthKey, monthLabel, isOtb, hotelId, roomCount, isYtd = false, ytdToMonth, defaultMode = 'budget' }: Props) {
   const { theme } = useTheme()
+  const { otbDate, vsOtbDate } = useDateContext()
   const isDark = theme === 'dark'
   const [compareMode, setCompareMode] = useState<'budget' | 'ly'>(defaultMode)
   // vs LY 어카운트 패널: 선택된 세그먼트 행 (id=하이라이트, label=헤더, codes=집계)
@@ -70,6 +73,16 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
   const { data: actualMonthly = [], isLoading: amLoad } = useActualMonthly({ hotelId, fromYear: year - 1, toYear: year })
   // OTB월용: useOtbData (현재 otbDate 기준 범위, business_date별 otb_nights/otb_revenue)
   const { data: otbRows = [], loading: oLoad } = useOtbData()
+  // OTB월 어카운트 증감용: get_account_pickup_data (a02_otb_daily, otb_* vs ly_*)
+  const { data: accountPickupRows = [] } = useAccountPickupData({
+    hotelId,
+    otbDate:     otbDate ?? '',
+    vsDate:      vsOtbDate ?? '',
+    year,
+    month,
+    segFilter:   null,
+    isPastMonth: false,
+  })
 
   const { data: budgetRows = [], isLoading: bLoad } = useQuery({
     queryKey: ['ab_detail_budget', hotelId, year, isYtd ? `ytd-${ytdMonth}` : month],
@@ -164,6 +177,18 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
     if (!selectedSeg) return []
     const inCodes = (seg: string) => selectedSeg.codes.includes(seg)
 
+    // OTB월: get_account_pickup_data 기반 (otb_* - ly_*)
+    if (isOtb) {
+      return (accountPickupRows as AccountPickupRow[])
+        .filter(r => inCodes(r.segmentation))
+        .map(r => ({
+          name:    r.account_name,
+          diffRn:  r.otb_nights  - r.ly_nights,
+          diffRev: r.otb_revenue - r.ly_revenue,
+        }))
+        .sort((a, b) => Math.abs(b.diffRn) - Math.abs(a.diffRn))
+    }
+
     const currMap: Record<string, { rn: number; rev: number }> = {}
     const lyMap:   Record<string, { rn: number; rev: number }> = {}
     for (const r of actualMonthly) {
@@ -188,7 +213,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
       diffRn:  (currMap[name]?.rn  ?? 0) - (lyMap[name]?.rn  ?? 0),
       diffRev: (currMap[name]?.rev ?? 0) - (lyMap[name]?.rev ?? 0),
     })).sort((a, b) => Math.abs(b.diffRn) - Math.abs(a.diffRn))
-  }, [selectedSeg, actualMonthly, year, month, isYtd, ytdMonth])
+  }, [selectedSeg, isOtb, accountPickupRows, actualMonthly, year, month, isYtd, ytdMonth])
 
   // ── schema 행 순서 정렬 (main 뒤에 sub) ──────────────────────────────────────
   const orderedSchema = useMemo(() => {
