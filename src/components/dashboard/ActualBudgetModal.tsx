@@ -3,6 +3,8 @@ import { useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useDateContext } from '@/contexts/DateContext'
+import { useBudgetMonthly } from '@/hooks/useBudgetMonthly'
+import { useLatestConfirmedBudgetDate } from '@/hooks/useLatestConfirmedBudgetDate'
 
 interface Props {
   open:      boolean
@@ -58,29 +60,23 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount: _
     return arr
   }, [baseYear])
 
-  // ── Budget (a03_budget) ─────────────────────────────────────────────────────
-  const { data: budgetRows = [], isLoading: bLoad } = useQuery({
-    queryKey: ['ab_budget', hotelId, baseYear],
-    enabled: open && !!hotelId,
-    staleTime: 5 * 60 * 1000,
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from('a03_budget')
-        .select('year, month, budget_revenue')
-        .eq('hotel_id', hotelId)
-        .gte('year', baseYear).lte('year', baseYear + 1)
-      if (error) throw error
-      return (data ?? []) as { year: number; month: number; budget_revenue: number }[]
-    },
-  })
+  // ── Budget (대시보드와 동일: useBudgetMonthly + 최신 확정 budget date) ──────────
+  const { data: budgetDate = null } = useLatestConfirmedBudgetDate(hotelId || undefined)
+  const { data: budgetRowsCurr = [], isLoading: bLoad1 } = useBudgetMonthly({ hotelId, year: baseYear,     updateDate: budgetDate })
+  const { data: budgetRowsNext = [], isLoading: bLoad2 } = useBudgetMonthly({ hotelId, year: baseYear + 1, updateDate: budgetDate })
+  // 두 호출(연도별)이므로 각 결과를 해당 연도에 매핑 (month_num은 1-based)
   const budgetMap = useMemo(() => {
     const m: Record<string, number> = {}
-    for (const r of budgetRows) {
-      const k = `${r.year}-${pad2(r.month)}`
+    for (const r of budgetRowsCurr) {
+      const k = `${baseYear}-${pad2(r.month_num)}`
+      m[k] = (m[k] ?? 0) + (r.budget_revenue ?? 0)
+    }
+    for (const r of budgetRowsNext) {
+      const k = `${baseYear + 1}-${pad2(r.month_num)}`
       m[k] = (m[k] ?? 0) + (r.budget_revenue ?? 0)
     }
     return m
-  }, [budgetRows])
+  }, [budgetRowsCurr, budgetRowsNext, baseYear])
 
   // ── Actual + LY (a01_actual_daily, room_revenue) ────────────────────────────
   const { data: actualRows = [], isLoading: aLoad } = useQuery({
@@ -132,7 +128,7 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount: _
     return m
   }, [otbRows])
 
-  const loading = bLoad || aLoad || oLoad
+  const loading = bLoad1 || bLoad2 || aLoad || oLoad
 
   // ── 월별 집계 ────────────────────────────────────────────────────────────────
   const monthData = useMemo(() => months.map(({ year, month }) => {
