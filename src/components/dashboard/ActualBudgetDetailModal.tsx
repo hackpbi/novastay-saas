@@ -246,7 +246,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
       onClick={onClose}
     >
       <div
-        style={{ background: '#0a0a0a', border: '1px solid #1f1f1f', borderRadius: 14, width: '1200px', maxWidth: '94vw', maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+        style={{ background: '#0a0a0a', border: '1px solid #1f1f1f', borderRadius: 14, width: '1080px', maxWidth: '94vw', maxHeight: '97vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         onClick={e => e.stopPropagation()}
       >
         {/* 헤더 */}
