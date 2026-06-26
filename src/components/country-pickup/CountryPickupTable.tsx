@@ -100,7 +100,6 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
       <div style={{ padding: '10px 14px', borderBottom: '0.5px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-secondary)' }}>Detailed Data Analysis</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>vs LY: {lyMode === 'date' ? 'Same date' : 'Same period'}</span>
           <button
             onClick={onOpenDistribution}
             style={{
@@ -122,31 +121,46 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
           <thead>
             {/* 컬럼 그룹 헤더 */}
             <tr>
-              <th style={{ width: 210, textAlign: 'left', padding: '5px 8px 2px', fontSize: 9, fontWeight: 500, color: 'var(--color-text-tertiary)', boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.07)' }} />
-              <th colSpan={3} style={grpTh('var(--color-text-tertiary)')}>{isPastMonth ? 'Actual' : 'Current OTB'}</th>
+              <th style={{ width: 320, textAlign: 'left', padding: '5px 8px 2px', fontSize: 9, fontWeight: 500, color: 'var(--color-text-tertiary)', boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.07)' }} />
               {!isPastMonth && (
                 <>
-                  <th style={sepStyle} />
                   <th colSpan={3} style={grpTh('rgba(0,229,160,0.7)')}>Pickup</th>
+                  <th style={sepStyle} />
                 </>
               )}
+              <th colSpan={3} style={grpTh('var(--color-text-tertiary)')}>{isPastMonth ? 'Actual' : 'Current OTB'}</th>
               <th style={sepStyle} />
-              <th colSpan={3} onClick={onToggleLyMode} style={{ ...grpTh('rgba(255,180,50,0.9)'), cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
-                {lyMode === 'date' ? 'OTB vs Same Date LY ⇅' : 'OTB vs Same Period LY ⇅'}
+              <th colSpan={3} style={{ ...grpTh('rgba(255,180,50,0.9)'), whiteSpace: 'nowrap' }}>
+                {lyMode === 'date' ? 'OTB vs Same Date LY' : 'OTB vs Same Period LY'}
               </th>
               <th style={sepStyle} />
-              <th colSpan={3} style={{ ...grpTh('rgba(255,255,255,0.35)'), whiteSpace: 'nowrap' }}>LY Actual</th>
+              <th colSpan={3} style={{ ...grpTh('rgba(255,255,255,0.35)'), whiteSpace: 'nowrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <span>LY Actual</span>
+                  <button
+                    onClick={onToggleLyMode}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 3, background: 'transparent',
+                      border: `0.5px solid ${lyMode === 'date' ? 'rgba(0,229,160,0.4)' : 'rgba(255,255,255,0.15)'}`,
+                      borderRadius: 3, padding: '1px 6px', cursor: 'pointer', fontSize: 9,
+                      color: lyMode === 'date' ? '#00B883' : 'rgba(255,255,255,0.4)',
+                    }}
+                  >
+                    {lyMode === 'date' ? 'Same date' : 'Same period'} ↕
+                  </button>
+                </div>
+              </th>
             </tr>
             {/* 컬럼 헤더 */}
             <tr>
               <th style={{ textAlign: 'left', padding: '2px 8px 6px', fontSize: 9, fontWeight: 500, color: 'var(--color-text-tertiary)', borderBottom: '0.5px solid var(--color-border-subtle)', boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.07)' }}>Country</th>
-              {['R/N', 'ADR', 'REV'].map(h => <th key={h} style={colTh('var(--color-text-tertiary)')}>{h}</th>)}
               {!isPastMonth && (
                 <>
-                  <th style={{ ...sepStyle, borderBottom: '0.5px solid var(--color-border-subtle)' }} />
                   {['R/N', 'ADR', 'REV'].map(h => <th key={'pu-' + h} style={colTh('rgba(0,229,160,0.6)')}>{h}</th>)}
+                  <th style={{ ...sepStyle, borderBottom: '0.5px solid var(--color-border-subtle)' }} />
                 </>
               )}
+              {['R/N', 'ADR', 'REV'].map(h => <th key={h} style={colTh('var(--color-text-tertiary)')}>{h}</th>)}
               <th style={{ ...sepStyle, borderBottom: '0.5px solid var(--color-border-subtle)' }} />
               {['R/N', 'ADR', 'REV'].map(h => <th key={'ly-' + h} style={colTh('rgba(255,180,50,0.6)')}>{h}</th>)}
               <th style={{ ...sepStyle, borderBottom: '0.5px solid var(--color-border-subtle)' }} />
@@ -177,6 +191,15 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{row.country_name_en || row.country_name_ko}</span>
                     </div>
                   </td>
+                  {!isPastMonth && (
+                    <>
+                      {/* Pickup */}
+                      <td style={{ ...tdBase, color: puColor(puRn) }}>{fmtPu(puRn)}</td>
+                      <td style={{ ...tdBase, color: puColor(puAdr) }}>{fmtPuK(puAdr)}</td>
+                      <td style={{ ...tdBase, color: puColor(puRev) }}>{fmtPuM(puRev)}</td>
+                      <td style={sepStyle} />
+                    </>
+                  )}
                   {/* OTB(미래월) / Actual(이전월) — 이전월은 R/N에 YoY% 인라인 */}
                   <td style={tdBase}>
                     {isPastMonth && yoyTag(rowYoyVal)}
@@ -186,15 +209,6 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
                   </td>
                   <td style={tdBase}>{fmtK(otbAdr)}</td>
                   <td style={tdBase}>{fmtM(row.otb_revenue)}</td>
-                  {!isPastMonth && (
-                    <>
-                      <td style={sepStyle} />
-                      {/* Pickup */}
-                      <td style={{ ...tdBase, color: puColor(puRn) }}>{fmtPu(puRn)}</td>
-                      <td style={{ ...tdBase, color: puColor(puAdr) }}>{fmtPuK(puAdr)}</td>
-                      <td style={{ ...tdBase, color: puColor(puRev) }}>{fmtPuM(puRev)}</td>
-                    </>
-                  )}
                   <td style={sepStyle} />
                   {/* OTB vs Same Date LY — R/N에 YoY% 인라인(현재/미래월) */}
                   <td style={tdBase}>
@@ -214,20 +228,20 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
             {/* 합계 행 */}
             <tr>
               <td style={{ ...tdBase, textAlign: 'left', fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none', boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.07)' }}>Total</td>
+              {!isPastMonth && (
+                <>
+                  <td style={{ ...tdBase, fontWeight: 500, color: puColor(totalPuRn), borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtPu(totalPuRn)}</td>
+                  <td style={{ ...tdBase, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none', color: 'var(--color-text-tertiary)' }}>—</td>
+                  <td style={{ ...tdBase, fontWeight: 500, color: puColor(totalPuRev), borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtPuM(totalPuRev)}</td>
+                  <td style={{ ...sepStyle, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }} />
+                </>
+              )}
               <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>
                 {isPastMonth && yoyTag(totalYoyVal)}
                 {totalOtbRn.toLocaleString('ko-KR')}
               </td>
               <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtK(totalOtbAdr)}</td>
               <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtM(totalOtbRev)}</td>
-              {!isPastMonth && (
-                <>
-                  <td style={{ ...sepStyle, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }} />
-                  <td style={{ ...tdBase, fontWeight: 500, color: puColor(totalPuRn), borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtPu(totalPuRn)}</td>
-                  <td style={{ ...tdBase, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none', color: 'var(--color-text-tertiary)' }}>—</td>
-                  <td style={{ ...tdBase, fontWeight: 500, color: puColor(totalPuRev), borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtPuM(totalPuRev)}</td>
-                </>
-              )}
               <td style={{ ...sepStyle, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }} />
               <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>
                 {!isPastMonth && yoyTag(totalYoyVal)}
