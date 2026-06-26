@@ -38,8 +38,11 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
         acc[key].vs_nights   += row.vs_nights ?? 0
         acc[key].otb_revenue += row.otb_revenue ?? 0
         acc[key].vs_revenue  += row.vs_revenue ?? 0
-        acc[key].ly_nights   += row.ly_nights ?? 0
-        acc[key].ly_revenue  += row.ly_revenue ?? 0
+        // country별 LY는 RPC가 모든 행에 동일값을 반환하므로 첫 행만 사용
+        if (acc[key].ly_nights === 0 && (row.ly_nights ?? 0) > 0) {
+          acc[key].ly_nights  = row.ly_nights  ?? 0
+          acc[key].ly_revenue = row.ly_revenue ?? 0
+        }
       }
       return acc
     }, {} as Record<string, Agg>),
@@ -49,9 +52,13 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
   if (isPastMonth && lyData) {
     const lyMap = lyData.reduce((m, r) => {
       const k = r.country
-      if (!m[k]) m[k] = { nights: 0, revenue: 0 }
-      m[k].nights  += r.otb_nights  ?? 0
-      m[k].revenue += r.otb_revenue ?? 0
+      // country별 ly는 모든 행에 동일한 값이 들어오므로 첫 번째 행만 사용
+      if (!m[k]) {
+        m[k] = {
+          nights:  r.ly_nights  ?? 0,
+          revenue: r.ly_revenue ?? 0,
+        }
+      }
       return m
     }, {} as Record<string, { nights: number; revenue: number }>)
     for (const a of aggregated) {

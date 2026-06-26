@@ -241,6 +241,7 @@ export default function CountryPickupPage() {
           p_month:        selectedMonth + 1,
           p_segmentation: null,
           p_account_name: null,
+          p_ly_mode:      lyMode,   // 토글(동일자/동기간) — LY 컬럼 갱신용
         })
         if (error) throw error
         // actual 행 정규화 — actual 값이 어느 키로 와도 otb_nights/otb_revenue로 통일
@@ -268,16 +269,17 @@ export default function CountryPickupPage() {
 
   // 이전월일 때만 전년도 Actual 별도 조회 (vs LY / LY Actual 컬럼용)
   const { data: lyData } = useQuery<CountryPickupRpcRow[] | null>({
-    queryKey: ['country_ly', hotelId, selectedYear, selectedMonth, isPastMonth],
+    queryKey: ['country_ly', hotelId, selectedYear, selectedMonth, isPastMonth, lyMode],
     enabled: !!hotelId && isPastMonth,
     queryFn: async () => {
       if (!isPastMonth) return null
       const { data, error } = await (supabase as any).rpc('get_country_actual_data', {
         p_hotel_id:     hotelId,
-        p_year:         selectedYear - 1,   // 전년도
+        p_year:         selectedYear,   // RPC 내부에서 ly_mode에 따라 -1년 처리
         p_month:        selectedMonth + 1,
         p_segmentation: null,
         p_account_name: null,
+        p_ly_mode:      lyMode,         // 'date' | 'match'
       })
       if (error) throw error
       return ((data ?? []) as any[]).map(r => ({
