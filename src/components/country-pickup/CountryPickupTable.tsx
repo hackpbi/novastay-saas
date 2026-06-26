@@ -145,7 +145,7 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
           <thead>
             {/* 컬럼 그룹 헤더 */}
             <tr>
-              <th style={{ width: 130, textAlign: 'left', padding: '5px 8px 2px', fontSize: 9, fontWeight: 500, color: 'var(--color-text-tertiary)' }} />
+              <th style={{ width: 210, textAlign: 'left', padding: '5px 8px 2px', fontSize: 9, fontWeight: 500, color: 'var(--color-text-tertiary)' }} />
               <th style={{ width: 130 }} />
               <th colSpan={3} style={grpTh('var(--color-text-tertiary)')}>{isPastMonth ? 'Actual' : 'Current OTB'}</th>
               {!isPastMonth && (
