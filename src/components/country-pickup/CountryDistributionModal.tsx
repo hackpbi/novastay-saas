@@ -47,6 +47,14 @@ export default function CountryDistributionModal({ data, segmentOptions, onClose
   const fitSegs = useMemo(() => segmentOptions.filter(s => s.sorting2 === 'fit'), [segmentOptions])
   const grpSegs = useMemo(() => segmentOptions.filter(s => s.sorting2 === 'group'), [segmentOptions])
 
+  // 전체(FIT+GROUP) 선택 — 데이터 있는 세그만 체크
+  const allActiveSegCodes = useMemo(
+    () => [...fitSegs, ...grpSegs].filter(s => activeSegs.has(s.code)).map(s => s.code),
+    [fitSegs, grpSegs, activeSegs],
+  )
+  const isAllSelected = allActiveSegCodes.length > 0 && allActiveSegCodes.every(c => selectedSegs.includes(c))
+  const selectAllSegs = () => { setSelectedSegs(allActiveSegCodes); setSelectedAccIdxs([]); setShowAccList(false) }
+
   // 선택된 세그 기준으로 어카운트 + 국가별 R/N 집계
   const accountList = useMemo(() => {
     const filtered = selectedSegs.length === 0
@@ -173,6 +181,17 @@ export default function CountryDistributionModal({ data, segmentOptions, onClose
         <div ref={segRef} style={{ padding: '10px 18px', borderBottom: '0.5px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, position: 'relative', zIndex: 10 }}>
           <span style={{ fontSize: 10, fontWeight: 500, letterSpacing: '0.04em', color: 'var(--color-text-tertiary)' }}>SEGMENT</span>
           <div style={{ display: 'flex', gap: 5 }}>
+            <button
+              onClick={selectAllSegs}
+              style={{
+                background: 'transparent',
+                border: `0.5px solid ${isAllSelected ? 'rgba(0,229,160,0.6)' : 'rgba(255,255,255,0.15)'}`,
+                borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 500,
+                color: isAllSelected ? '#00E5A0' : 'rgba(255,255,255,0.6)', cursor: 'pointer',
+              }}
+            >
+              전체
+            </button>
             {([{ key: 'fit', label: 'FIT', segs: fitSegs }, { key: 'group', label: 'GROUP', segs: grpSegs }] as const).map(g => {
               const selCount = g.segs.filter(s => selectedSegs.includes(s.code)).length
               const open = openDropdown === g.key

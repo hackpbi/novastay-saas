@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { ChartPie } from 'lucide-react'
 import { fmtK, fmtM } from '@/utils/pickupPageUtils'
 import { getFlagClass, type CountryPickupRpcRow } from './types'
@@ -8,6 +9,8 @@ type Agg = {
   country: string; country_name_ko: string; country_name_en: string; alpha2: string
   otb_nights: number; vs_nights: number; otb_revenue: number; vs_revenue: number; ly_nights: number; ly_revenue: number
 }
+
+type SortCol = 'pu_rn' | 'otb_rn' | 'ly_rn' | 'act_rn'
 
 const puColor = (v: number) => (v > 0 ? '#00B883' : v < 0 ? '#E24B4A' : 'var(--color-text-tertiary)')
 const fmtPu   = (v: number) => (v === 0 ? '—' : v > 0 ? `+${v}` : `${v}`)
@@ -22,6 +25,13 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
   onToggleLyMode: () => void
   onOpenDistribution: () => void
 }) {
+  const [sortCol, setSortCol] = useState<SortCol>('otb_rn')
+  const [sortDir, setSortDir] = useState<-1 | 1>(-1)   // -1 내림차순, 1 오름차순
+  const handleSort = (col: SortCol) => {
+    if (sortCol === col) setSortDir(d => (d === -1 ? 1 : -1))
+    else { setSortCol(col); setSortDir(-1) }
+  }
+
   const aggregated: Agg[] = Object.values(
     data.reduce((acc, row) => {
       const key = row.country
@@ -76,6 +86,18 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
   const totalOtbAdr = totalOtbRn > 0 ? Math.round(totalOtbRev / totalOtbRn) : 0
   const totalLyAdr  = totalLyRn  > 0 ? Math.round(totalLyRev  / totalLyRn)  : 0
 
+  // R/N 컬럼 정렬
+  const sorted = [...aggregated].sort((a, b) => {
+    const getVal = (row: Agg): number => {
+      if (sortCol === 'pu_rn')  return isPastMonth ? 0 : (row.otb_nights - row.vs_nights)
+      if (sortCol === 'otb_rn') return row.otb_nights
+      if (sortCol === 'ly_rn')  return row.otb_nights - row.ly_nights
+      if (sortCol === 'act_rn') return row.ly_nights
+      return 0
+    }
+    return (getVal(a) - getVal(b)) * sortDir
+  })
+
   // ── YoY% (OTB/Actual R/N vs LY Actual R/N) — R/N 셀에 인라인 표시 ────────────────
   const calcYoy = (otb: number, ly: number): number | null =>
     ly > 0 ? ((otb - ly) / ly) * 100 : null
@@ -94,6 +116,12 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
   const sepStyle: React.CSSProperties = { width: 1, padding: 0, background: 'rgba(0,229,160,0.25)' }
   const grpTh = (color: string): React.CSSProperties => ({ textAlign: 'center', padding: '5px 8px 2px', fontSize: 9, fontWeight: 500, letterSpacing: '0.05em', color })
   const colTh = (color: string): React.CSSProperties => ({ textAlign: 'right', padding: '2px 8px 6px', fontSize: 9, fontWeight: 500, color, borderBottom: '0.5px solid var(--color-border-subtle)' })
+  // 클릭 정렬 가능한 R/N 헤더 (활성 mint / 비활성 회색 + 정렬 아이콘)
+  const rnHeader = (col: SortCol) => (
+    <th onClick={() => handleSort(col)} style={{ ...colTh(sortCol === col ? '#00E5A0' : 'rgba(255,255,255,0.3)'), cursor: 'pointer', userSelect: 'none' }}>
+      R/N {sortCol === col ? (sortDir === -1 ? '↓' : '↑') : '↕'}
+    </th>
+  )
 
   return (
     <div style={{ background: 'var(--color-bg-secondary)', border: '0.5px solid var(--color-border-subtle)', borderRadius: 10, overflow: 'hidden' }}>
@@ -157,19 +185,23 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
               <th style={{ textAlign: 'left', padding: '2px 8px 6px', fontSize: 9, fontWeight: 500, color: 'var(--color-text-tertiary)', borderBottom: '0.5px solid var(--color-border-subtle)', boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.07)' }}>Country</th>
               {!isPastMonth && (
                 <>
-                  {['R/N', 'ADR', 'REV'].map(h => <th key={'pu-' + h} style={colTh('rgba(0,229,160,0.6)')}>{h}</th>)}
+                  {rnHeader('pu_rn')}
+                  {['ADR', 'REV'].map(h => <th key={'pu-' + h} style={colTh('rgba(0,229,160,0.6)')}>{h}</th>)}
                   <th style={{ ...sepStyle, borderBottom: '0.5px solid var(--color-border-subtle)' }} />
                 </>
               )}
-              {['R/N', 'ADR', 'REV'].map(h => <th key={h} style={colTh('var(--color-text-tertiary)')}>{h}</th>)}
+              {rnHeader('otb_rn')}
+              {['ADR', 'REV'].map(h => <th key={h} style={colTh('var(--color-text-tertiary)')}>{h}</th>)}
               <th style={{ ...sepStyle, borderBottom: '0.5px solid var(--color-border-subtle)' }} />
-              {['R/N', 'ADR', 'REV'].map(h => <th key={'ly-' + h} style={colTh('rgba(255,180,50,0.6)')}>{h}</th>)}
+              {rnHeader('ly_rn')}
+              {['ADR', 'REV'].map(h => <th key={'ly-' + h} style={colTh('rgba(255,180,50,0.6)')}>{h}</th>)}
               <th style={{ ...sepStyle, borderBottom: '0.5px solid var(--color-border-subtle)' }} />
-              {['R/N', 'ADR', 'REV'].map(h => <th key={'lya-' + h} style={colTh('rgba(255,255,255,0.3)')}>{h}</th>)}
+              {rnHeader('act_rn')}
+              {['ADR', 'REV'].map(h => <th key={'lya-' + h} style={colTh('rgba(255,255,255,0.3)')}>{h}</th>)}
             </tr>
           </thead>
           <tbody>
-            {aggregated.map(row => {
+            {sorted.map(row => {
               const puRn  = row.otb_nights - row.vs_nights
               const puRev = row.otb_revenue - row.vs_revenue
               const otbAdr = row.otb_nights > 0 ? Math.round(row.otb_revenue / row.otb_nights) : 0
