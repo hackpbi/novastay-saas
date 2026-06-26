@@ -243,11 +243,11 @@ export default function CountryPickupPage() {
           p_account_name: null,
         })
         if (error) throw error
-        // actual 행 정규화 — actual 값이 nights/otb_nights/act_nights 어느 키로 와도 nights/room_revenue로 통일
+        // actual 행 정규화 — actual 값이 어느 키로 와도 otb_nights/otb_revenue로 통일
         return ((data ?? []) as any[]).map(r => ({
           ...r,
-          nights:       r.nights       ?? r.otb_nights  ?? r.act_nights  ?? 0,
-          room_revenue: r.room_revenue ?? r.otb_revenue ?? r.act_revenue ?? 0,
+          otb_nights:  r.nights       ?? r.otb_nights  ?? r.act_nights  ?? 0,
+          otb_revenue: r.room_revenue ?? r.otb_revenue ?? r.act_revenue ?? 0,
         })) as CountryPickupRpcRow[]
       }
       // 현재월 이후 → a02_otb_daily
@@ -282,8 +282,8 @@ export default function CountryPickupPage() {
       if (error) throw error
       return ((data ?? []) as any[]).map(r => ({
         ...r,
-        nights:       r.nights       ?? r.otb_nights  ?? r.act_nights  ?? 0,
-        room_revenue: r.room_revenue ?? r.otb_revenue ?? r.act_revenue ?? 0,
+        otb_nights:  r.nights       ?? r.otb_nights  ?? r.act_nights  ?? 0,
+        otb_revenue: r.room_revenue ?? r.otb_revenue ?? r.act_revenue ?? 0,
       })) as CountryPickupRpcRow[]
     },
   })
@@ -465,7 +465,7 @@ export default function CountryPickupPage() {
     const countries = new Set<string>()
     for (const r of filtered) {
       if (isPastMonth) {
-        otbRn += r.nights ?? 0; otbRev += r.room_revenue ?? 0   // 이전월: nights/room_revenue
+        otbRn += r.otb_nights ?? 0; otbRev += r.otb_revenue ?? 0   // 이전월도 otb_nights/otb_revenue로 정규화됨
       } else {
         otbRn += r.otb_nights ?? 0; vsRn += r.vs_nights ?? 0
         otbRev += r.otb_revenue ?? 0; vsRev += r.vs_revenue ?? 0

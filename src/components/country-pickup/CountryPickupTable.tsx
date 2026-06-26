@@ -30,9 +30,9 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
         otb_nights: 0, vs_nights: 0, otb_revenue: 0, vs_revenue: 0, ly_nights: 0, ly_revenue: 0,
       }
       if (isPastMonth) {
-        // 이전월 Actual — nights/room_revenue 컬럼 (LY는 lyData에서 별도 병합)
-        acc[key].otb_nights  += row.nights       ?? 0
-        acc[key].otb_revenue += row.room_revenue ?? 0
+        // 이전월 Actual — otb_nights/otb_revenue로 정규화됨 (LY는 lyData에서 별도 병합)
+        acc[key].otb_nights  += row.otb_nights  ?? 0
+        acc[key].otb_revenue += row.otb_revenue ?? 0
       } else {
         acc[key].otb_nights  += row.otb_nights ?? 0
         acc[key].vs_nights   += row.vs_nights ?? 0
@@ -50,8 +50,8 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
     const lyMap = lyData.reduce((m, r) => {
       const k = r.country
       if (!m[k]) m[k] = { nights: 0, revenue: 0 }
-      m[k].nights  += r.nights       ?? 0
-      m[k].revenue += r.room_revenue ?? 0
+      m[k].nights  += r.otb_nights  ?? 0
+      m[k].revenue += r.otb_revenue ?? 0
       return m
     }, {} as Record<string, { nights: number; revenue: number }>)
     for (const a of aggregated) {
