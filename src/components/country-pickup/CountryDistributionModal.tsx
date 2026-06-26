@@ -19,9 +19,14 @@ export default function CountryDistributionModal({ data, segmentOptions, onClose
   segmentOptions: SegmentOption[]
   onClose:        () => void
 }) {
-  const [selectedSegs,    setSelectedSegs]    = useState<string[]>([])  // segmentation 다중선택
   const [selectedAccIdxs, setSelectedAccIdxs] = useState<number[]>([])  // 어카운트 최대 3개
-  const [openDropdown,    setOpenDropdown]    = useState<'fit' | 'group' | null>(null)
+  // FIT/GROUP 독립 멀티선택 (temp=임시, selected=확정)
+  const [fitOpen, setFitOpen] = useState(false)
+  const [fitTemp, setFitTemp] = useState<string[]>([])
+  const [selectedFit, setSelectedFit] = useState<string[]>([])
+  const [grpOpen, setGrpOpen] = useState(false)
+  const [grpTemp, setGrpTemp] = useState<string[]>([])
+  const [selectedGrp, setSelectedGrp] = useState<string[]>([])
   const [showAccList,     setShowAccList]     = useState(false)   // Done 클릭 후에만 어카운트 리스트 표시
   const charts = useRef<Chart[]>([])
   const segRef = useRef<HTMLDivElement>(null)
@@ -34,11 +39,11 @@ export default function CountryDistributionModal({ data, segmentOptions, onClose
 
   // 드롭다운 외부 클릭 시 닫힘
   useEffect(() => {
-    if (!openDropdown) return
-    const h = (e: MouseEvent) => { if (!segRef.current?.contains(e.target as Node)) setOpenDropdown(null) }
+    if (!fitOpen && !grpOpen) return
+    const h = (e: MouseEvent) => { if (!segRef.current?.contains(e.target as Node)) { setFitOpen(false); setGrpOpen(false) } }
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
-  }, [openDropdown])
+  }, [fitOpen, grpOpen])
 
   // 현재 data에 존재하는 세그먼트 (활성 여부 판단)
   const activeSegs = useMemo(() => new Set(data.map(r => r.segmentation).filter(Boolean)), [data])
@@ -47,13 +52,10 @@ export default function CountryDistributionModal({ data, segmentOptions, onClose
   const fitSegs = useMemo(() => segmentOptions.filter(s => s.sorting2 === 'fit'), [segmentOptions])
   const grpSegs = useMemo(() => segmentOptions.filter(s => s.sorting2 === 'group'), [segmentOptions])
 
-  // 전체(FIT+GROUP) 선택 — 데이터 있는 세그만 체크
-  const allActiveSegCodes = useMemo(
-    () => [...fitSegs, ...grpSegs].filter(s => activeSegs.has(s.code)).map(s => s.code),
-    [fitSegs, grpSegs, activeSegs],
-  )
-  const isAllSelected = allActiveSegCodes.length > 0 && allActiveSegCodes.every(c => selectedSegs.includes(c))
-  const selectAllSegs = () => { setSelectedSegs(allActiveSegCodes); setSelectedAccIdxs([]); setShowAccList(false) }
+  // selectedSegs = FIT+GROUP 확정 합산 (다운스트림 필터/칩에서 사용)
+  const selectedSegs = [...selectedFit, ...selectedGrp]
+  const isAllSelected = (fitSegs.length + grpSegs.length) > 0
+    && selectedFit.length === fitSegs.length && selectedGrp.length === grpSegs.length
 
   // 선택된 세그 기준으로 어카운트 + 국가별 R/N 집계
   const accountList = useMemo(() => {
@@ -77,15 +79,55 @@ export default function CountryDistributionModal({ data, segmentOptions, onClose
           .sort((x, y) => y.r - x.r),
       }))
       .sort((a, b) => b.rn - a.rn)
-  }, [data, selectedSegs])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, selectedFit, selectedGrp])
 
-  const toggleSeg = (seg: string) => {
-    const next = selectedSegs.includes(seg)
-      ? selectedSegs.filter(x => x !== seg)
-      : [...selectedSegs, seg]
-    setSelectedSegs(next)
-    setSelectedAccIdxs([])  // 세그 변경 시 어카운트 초기화
-    if (next.length === 0) setShowAccList(false)
+  // FIT/GROUP 공통 멀티선택 드롭다운 렌더 (temp → Done 시 selected 확정)
+  const segDrop = (
+    label: string, segs: { code: string; name: string }[],
+    temp: string[], setTemp: React.Dispatch<React.SetStateAction<string[]>>,
+    selected: string[], setSelected: React.Dispatch<React.SetStateAction<string[]>>,
+    open: boolean, setOpen: (v: boolean) => void, closeOther: () => void, otherSelected: string[],
+  ) => {
+    const active = selected.length > 0 || open
+    return (
+      <div style={{ position: 'relative' }}>
+        <button
+          onClick={() => { if (!open) { setTemp(selected); closeOther() } setOpen(!open) }}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 500, cursor: 'pointer',
+            border: `0.5px solid ${active ? '#00E5A0' : 'var(--color-border-subtle)'}`,
+            background: active ? 'rgba(0,229,160,0.07)' : 'transparent',
+            color: active ? '#00E5A0' : 'var(--color-text-secondary)',
+          }}
+        >
+          {selected.length === 0 ? label : `${label} (${selected.length})`}
+          <ChevronDown size={11} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+        </button>
+        {open && (
+          <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 1000, background: '#1a1a1a', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '4px 0', minWidth: 160, maxHeight: 200, overflowY: 'auto', marginTop: 4 }}>
+            {segs.length === 0 ? (
+              <div style={{ padding: '6px 12px', fontSize: 11, color: 'var(--color-text-tertiary)' }}>없음</div>
+            ) : segs.map(seg => {
+              const checked = temp.includes(seg.code)
+              return (
+                <div key={seg.code}
+                  onClick={() => setTemp(prev => prev.includes(seg.code) ? prev.filter(c => c !== seg.code) : [...prev, seg.code])}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.8)', background: checked ? 'rgba(0,229,160,0.07)' : 'transparent' }}>
+                  <span style={{ width: 12, height: 12, borderRadius: 2, flexShrink: 0, border: `0.5px solid ${checked ? '#00E5A0' : 'rgba(255,255,255,0.3)'}`, background: checked ? 'rgba(0,229,160,0.2)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#00E5A0' }}>{checked ? '✓' : ''}</span>
+                  {seg.name}
+                </div>
+              )
+            })}
+            <div style={{ display: 'flex', gap: 4, padding: '6px 8px', borderTop: '0.5px solid rgba(255,255,255,0.08)' }}>
+              <button onClick={() => setTemp([])} style={{ flex: 1, background: 'transparent', border: '0.5px solid rgba(255,255,255,0.15)', borderRadius: 4, padding: '2px 0', fontSize: 10, color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>Reset</button>
+              <button onClick={() => setTemp(segs.map(s => s.code))} style={{ flex: 1, background: 'transparent', border: '0.5px solid rgba(255,255,255,0.15)', borderRadius: 4, padding: '2px 0', fontSize: 10, color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>All</button>
+              <button onClick={() => { setSelected(temp); setOpen(false); setSelectedAccIdxs([]); setShowAccList((temp.length + otherSelected.length) > 0) }} style={{ flex: 1, background: 'rgba(0,229,160,0.15)', border: '0.5px solid rgba(0,229,160,0.4)', borderRadius: 4, padding: '2px 0', fontSize: 10, color: '#00E5A0', cursor: 'pointer' }}>Done</button>
+            </div>
+          </div>
+        )}
+      </div>
+    )
   }
 
   const toggleAcc = (idx: number) => {
@@ -181,87 +223,23 @@ export default function CountryDistributionModal({ data, segmentOptions, onClose
         <div ref={segRef} style={{ padding: '10px 18px', borderBottom: '0.5px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, position: 'relative', zIndex: 10 }}>
           <span style={{ fontSize: 10, fontWeight: 500, letterSpacing: '0.04em', color: 'var(--color-text-tertiary)' }}>SEGMENT</span>
           <div style={{ display: 'flex', gap: 5 }}>
+            {/* TOTAL — FIT+GROUP 전체 선택 */}
             <button
-              onClick={selectAllSegs}
+              onClick={() => { setSelectedFit(fitSegs.map(s => s.code)); setSelectedGrp(grpSegs.map(s => s.code)); setSelectedAccIdxs([]); setShowAccList(true) }}
               style={{
                 background: 'transparent',
                 border: `0.5px solid ${isAllSelected ? 'rgba(0,229,160,0.6)' : 'rgba(255,255,255,0.15)'}`,
-                borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 500,
+                borderRadius: 20, padding: '3px 12px', fontSize: 11, fontWeight: 500,
                 color: isAllSelected ? '#00E5A0' : 'rgba(255,255,255,0.6)', cursor: 'pointer',
               }}
             >
-              전체
+              TOTAL
             </button>
-            {([{ key: 'fit', label: 'FIT', segs: fitSegs }, { key: 'group', label: 'GROUP', segs: grpSegs }] as const).map(g => {
-              const selCount = g.segs.filter(s => selectedSegs.includes(s.code)).length
-              const open = openDropdown === g.key
-              const active = selCount > 0 || open
-              return (
-                <div key={g.key} style={{ position: 'relative' }}>
-                  <button
-                    onClick={() => setOpenDropdown(o => (o === g.key ? null : g.key))}
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 4,
-                      padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 500, cursor: 'pointer',
-                      border: `0.5px solid ${active ? '#00E5A0' : 'var(--color-border-subtle)'}`,
-                      background: active ? 'rgba(0,229,160,0.07)' : 'transparent',
-                      color: active ? '#00E5A0' : 'var(--color-text-secondary)',
-                    }}
-                  >
-                    {g.label}{selCount > 0 ? ` ${selCount}` : ''}
-                    <ChevronDown size={11} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
-                  </button>
-                  {open && (
-                    <div style={{
-                      position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 100,
-                      width: 'max-content', minWidth: 200, maxWidth: 360, whiteSpace: 'nowrap', overflow: 'hidden',
-                      background: 'var(--color-bg-secondary)', border: '0.5px solid var(--color-border-subtle)',
-                      borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.5)',
-                    }}>
-                      {/* 세그먼트 체크박스 리스트 (스크롤) */}
-                      <div style={{ maxHeight: 200, overflowY: 'auto', padding: 6 }}>
-                        {g.segs.length === 0 ? (
-                          <div style={{ padding: '6px 8px', fontSize: 11, color: 'var(--color-text-tertiary)' }}>없음</div>
-                        ) : g.segs.map(seg => {
-                          const isActive = activeSegs.has(seg.code)
-                          const isChecked = selectedSegs.includes(seg.code)
-                          return (
-                            <label key={seg.code}
-                              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 5, cursor: isActive ? 'pointer' : 'not-allowed', opacity: isActive ? 1 : 0.4 }}
-                              onMouseEnter={e => { if (isActive) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)' }}
-                              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
-                              <input type="checkbox" checked={isChecked} disabled={!isActive} onChange={() => isActive && toggleSeg(seg.code)} style={{ accentColor: '#00E5A0', width: 14, height: 14, cursor: isActive ? 'pointer' : 'not-allowed', flexShrink: 0 }} />
-                              <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, width: '100%' }}>
-                                <span style={{ fontSize: 11, fontWeight: 500, color: isActive ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)' }}>{seg.name}{!isActive ? ' · no data' : ''}</span>
-                                <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)', marginLeft: 'auto' }}>{seg.code}</span>
-                              </div>
-                            </label>
-                          )
-                        })}
-                      </div>
-                      {/* Reset / Select All / Done */}
-                      <div style={{ display: 'flex', gap: 6, padding: '8px 10px', borderTop: '0.5px solid var(--color-border-subtle)', background: 'var(--color-bg-primary)' }}>
-                        <button onClick={() => { setSelectedSegs([]); setSelectedAccIdxs([]); setShowAccList(false) }}
-                          style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: '0.5px solid var(--color-border-subtle)', background: 'transparent', color: 'var(--color-text-secondary)', fontSize: 11, cursor: 'pointer' }}>
-                          Reset
-                        </button>
-                        <button onClick={() => { setSelectedSegs(g.segs.filter(s => activeSegs.has(s.code)).map(s => s.code)); setSelectedAccIdxs([]) }}
-                          style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: '0.5px solid var(--color-border-subtle)', background: 'transparent', color: 'var(--color-text-secondary)', fontSize: 11, cursor: 'pointer' }}>
-                          All
-                        </button>
-                        <button onClick={() => { setOpenDropdown(null); setShowAccList(selectedSegs.length > 0) }}
-                          style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: 'none', background: '#00E5A0', color: '#0a0a0a', fontSize: 11, fontWeight: 500, cursor: 'pointer' }}>
-                          Done
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+            {segDrop('FIT', fitSegs, fitTemp, setFitTemp, selectedFit, setSelectedFit, fitOpen, setFitOpen, () => setGrpOpen(false), selectedGrp)}
+            {segDrop('GROUP', grpSegs, grpTemp, setGrpTemp, selectedGrp, setSelectedGrp, grpOpen, setGrpOpen, () => setFitOpen(false), selectedFit)}
             {selectedSegs.length > 0 && (
               <button
-                onClick={() => { setSelectedSegs([]); setSelectedAccIdxs([]); setShowAccList(false) }}
+                onClick={() => { setSelectedFit([]); setSelectedGrp([]); setFitTemp([]); setGrpTemp([]); setSelectedAccIdxs([]); setShowAccList(false) }}
                 style={{ padding: '3px 10px', borderRadius: 99, fontSize: 11, cursor: 'pointer', border: '0.5px solid var(--color-border-subtle)', background: 'transparent', color: 'var(--color-text-tertiary)' }}
               >초기화</button>
             )}
