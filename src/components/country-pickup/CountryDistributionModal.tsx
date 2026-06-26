@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useMemo, useState } from 'react'
-import { X, ChevronDown } from 'lucide-react'
+import { X } from 'lucide-react'
 import Chart from 'chart.js/auto'
 import type { CountryPickupRpcRow, SegmentOption } from './types'
 
@@ -37,16 +37,17 @@ export default function CountryDistributionModal({ data, segmentOptions, onClose
     return () => window.removeEventListener('keydown', h)
   }, [onClose])
 
-  // 드롭다운 외부 클릭 시 닫힘
+  // 드롭다운 외부 클릭 시 닫힘 (버튼/패널은 stopPropagation으로 보호)
   useEffect(() => {
-    if (!fitOpen && !grpOpen) return
-    const h = (e: MouseEvent) => { if (!segRef.current?.contains(e.target as Node)) { setFitOpen(false); setGrpOpen(false) } }
+    const h = (e: MouseEvent) => {
+      if (!segRef.current?.contains(e.target as Node)) {
+        setFitOpen(false)
+        setGrpOpen(false)
+      }
+    }
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
-  }, [fitOpen, grpOpen])
-
-  // 현재 data에 존재하는 세그먼트 (활성 여부 판단)
-  const activeSegs = useMemo(() => new Set(data.map(r => r.segmentation).filter(Boolean)), [data])
+  }, [])
 
   // c05 스키마 기반 세그먼트 목록 (sorting2 기준 — 데이터 없는 세그도 포함)
   const fitSegs = useMemo(() => segmentOptions.filter(s => s.sorting2 === 'fit'), [segmentOptions])
@@ -54,7 +55,7 @@ export default function CountryDistributionModal({ data, segmentOptions, onClose
 
   // selectedSegs = FIT+GROUP 확정 합산 (다운스트림 필터/칩에서 사용)
   const selectedSegs = [...selectedFit, ...selectedGrp]
-  const isAllSelected = (fitSegs.length + grpSegs.length) > 0
+  const isAllTotal = (fitSegs.length + grpSegs.length) > 0
     && selectedFit.length === fitSegs.length && selectedGrp.length === grpSegs.length
 
   // 선택된 세그 기준으로 어카운트 + 국가별 R/N 집계
@@ -89,40 +90,47 @@ export default function CountryDistributionModal({ data, segmentOptions, onClose
     selected: string[], setSelected: React.Dispatch<React.SetStateAction<string[]>>,
     open: boolean, setOpen: (v: boolean) => void, closeOther: () => void, otherSelected: string[],
   ) => {
-    const active = selected.length > 0 || open
     return (
       <div style={{ position: 'relative' }}>
         <button
-          onClick={() => { if (!open) { setTemp(selected); closeOther() } setOpen(!open) }}
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); if (!open) { setTemp(selected); closeOther() } setOpen(!open) }}
           style={{
-            display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 500, cursor: 'pointer',
-            border: `0.5px solid ${active ? '#00E5A0' : 'var(--color-border-subtle)'}`,
-            background: active ? 'rgba(0,229,160,0.07)' : 'transparent',
-            color: active ? '#00E5A0' : 'var(--color-text-secondary)',
+            display: 'flex', alignItems: 'center', gap: 4, padding: '3px 12px', borderRadius: 20, fontSize: 11, cursor: 'pointer',
+            background: 'transparent',
+            border: `0.5px solid ${selected.length > 0 ? 'rgba(0,229,160,0.6)' : 'rgba(255,255,255,0.15)'}`,
+            color: selected.length > 0 ? '#00E5A0' : 'rgba(255,255,255,0.6)',
           }}
         >
-          {selected.length === 0 ? label : `${label} (${selected.length})`}
-          <ChevronDown size={11} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+          {selected.length > 0 ? `${label} (${selected.length})` : label}
+          <span style={{ fontSize: 9 }}>{open ? '▲' : '▾'}</span>
         </button>
         {open && (
-          <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 1000, background: '#1a1a1a', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '4px 0', minWidth: 160, maxHeight: 200, overflowY: 'auto', marginTop: 4 }}>
-            {segs.length === 0 ? (
-              <div style={{ padding: '6px 12px', fontSize: 11, color: 'var(--color-text-tertiary)' }}>없음</div>
-            ) : segs.map(seg => {
-              const checked = temp.includes(seg.code)
-              return (
-                <div key={seg.code}
-                  onClick={() => setTemp(prev => prev.includes(seg.code) ? prev.filter(c => c !== seg.code) : [...prev, seg.code])}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.8)', background: checked ? 'rgba(0,229,160,0.07)' : 'transparent' }}>
-                  <span style={{ width: 12, height: 12, borderRadius: 2, flexShrink: 0, border: `0.5px solid ${checked ? '#00E5A0' : 'rgba(255,255,255,0.3)'}`, background: checked ? 'rgba(0,229,160,0.2)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#00E5A0' }}>{checked ? '✓' : ''}</span>
-                  {seg.name}
-                </div>
-              )
-            })}
-            <div style={{ display: 'flex', gap: 4, padding: '6px 8px', borderTop: '0.5px solid rgba(255,255,255,0.08)' }}>
-              <button onClick={() => setTemp([])} style={{ flex: 1, background: 'transparent', border: '0.5px solid rgba(255,255,255,0.15)', borderRadius: 4, padding: '2px 0', fontSize: 10, color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>Reset</button>
-              <button onClick={() => setTemp(segs.map(s => s.code))} style={{ flex: 1, background: 'transparent', border: '0.5px solid rgba(255,255,255,0.15)', borderRadius: 4, padding: '2px 0', fontSize: 10, color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>All</button>
-              <button onClick={() => { setSelected(temp); setOpen(false); setSelectedAccIdxs([]); setShowAccList((temp.length + otherSelected.length) > 0) }} style={{ flex: 1, background: 'rgba(0,229,160,0.15)', border: '0.5px solid rgba(0,229,160,0.4)', borderRadius: 4, padding: '2px 0', fontSize: 10, color: '#00E5A0', cursor: 'pointer' }}>Done</button>
+          <div
+            onMouseDown={e => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
+            style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 1000, background: '#111111', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 8, width: 180, display: 'flex', flexDirection: 'column', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}
+          >
+            <div style={{ overflowY: 'auto', maxHeight: 180, padding: '4px 0' }}>
+              {segs.length === 0 ? (
+                <div style={{ padding: '6px 12px', fontSize: 11, color: 'var(--color-text-tertiary)' }}>없음</div>
+              ) : segs.map(seg => {
+                const checked = temp.includes(seg.code)
+                return (
+                  <div key={seg.code}
+                    onMouseDown={e => e.stopPropagation()}
+                    onClick={e => { e.stopPropagation(); setTemp(prev => prev.includes(seg.code) ? prev.filter(c => c !== seg.code) : [...prev, seg.code]) }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 11, color: 'rgba(255,255,255,0.8)', background: checked ? 'rgba(0,229,160,0.06)' : 'transparent' }}>
+                    <div style={{ width: 13, height: 13, borderRadius: 3, flexShrink: 0, border: `0.5px solid ${checked ? '#00E5A0' : 'rgba(255,255,255,0.3)'}`, background: checked ? 'rgba(0,229,160,0.2)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#00E5A0' }}>{checked ? '✓' : ''}</div>
+                    {seg.name}
+                  </div>
+                )
+              })}
+            </div>
+            <div style={{ display: 'flex', gap: 4, padding: '6px 8px', borderTop: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+              <button onMouseDown={e => e.stopPropagation()} onClick={() => setTemp([])} style={{ flex: 1, background: 'transparent', border: '0.5px solid rgba(255,255,255,0.15)', borderRadius: 4, padding: '3px 0', fontSize: 10, color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>Reset</button>
+              <button onMouseDown={e => e.stopPropagation()} onClick={() => setTemp(segs.map(s => s.code))} style={{ flex: 1, background: 'transparent', border: '0.5px solid rgba(255,255,255,0.15)', borderRadius: 4, padding: '3px 0', fontSize: 10, color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>All</button>
+              <button onMouseDown={e => e.stopPropagation()} onClick={() => { setSelected(temp); setOpen(false); setSelectedAccIdxs([]); setShowAccList((temp.length + otherSelected.length) > 0) }} style={{ flex: 1, background: 'rgba(0,229,160,0.12)', border: '0.5px solid rgba(0,229,160,0.4)', borderRadius: 4, padding: '3px 0', fontSize: 10, color: '#00E5A0', cursor: 'pointer' }}>Done</button>
             </div>
           </div>
         )}
@@ -223,26 +231,28 @@ export default function CountryDistributionModal({ data, segmentOptions, onClose
         <div ref={segRef} style={{ padding: '10px 18px', borderBottom: '0.5px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, position: 'relative', zIndex: 10 }}>
           <span style={{ fontSize: 10, fontWeight: 500, letterSpacing: '0.04em', color: 'var(--color-text-tertiary)' }}>SEGMENT</span>
           <div style={{ display: 'flex', gap: 5 }}>
-            {/* TOTAL — FIT+GROUP 전체 선택 */}
+            {/* TOTAL ↔ 초기화 토글 — FIT+GROUP 전체 선택/해제 */}
             <button
-              onClick={() => { setSelectedFit(fitSegs.map(s => s.code)); setSelectedGrp(grpSegs.map(s => s.code)); setSelectedAccIdxs([]); setShowAccList(true) }}
+              onClick={e => {
+                e.stopPropagation()
+                if (isAllTotal) { setSelectedFit([]); setSelectedGrp([]); setFitTemp([]); setGrpTemp([]) }
+                else {
+                  setSelectedFit(fitSegs.map(s => s.code)); setSelectedGrp(grpSegs.map(s => s.code))
+                  setFitTemp(fitSegs.map(s => s.code)); setGrpTemp(grpSegs.map(s => s.code))
+                }
+                setFitOpen(false); setGrpOpen(false); setSelectedAccIdxs([]); setShowAccList(!isAllTotal)
+              }}
               style={{
                 background: 'transparent',
-                border: `0.5px solid ${isAllSelected ? 'rgba(0,229,160,0.6)' : 'rgba(255,255,255,0.15)'}`,
-                borderRadius: 20, padding: '3px 12px', fontSize: 11, fontWeight: 500,
-                color: isAllSelected ? '#00E5A0' : 'rgba(255,255,255,0.6)', cursor: 'pointer',
+                border: `0.5px solid ${isAllTotal ? 'rgba(0,229,160,0.6)' : 'rgba(255,255,255,0.15)'}`,
+                borderRadius: 20, padding: '3px 12px', fontSize: 11, cursor: 'pointer',
+                color: isAllTotal ? '#00E5A0' : 'rgba(255,255,255,0.6)',
               }}
             >
-              TOTAL
+              {isAllTotal ? '초기화' : 'TOTAL'}
             </button>
             {segDrop('FIT', fitSegs, fitTemp, setFitTemp, selectedFit, setSelectedFit, fitOpen, setFitOpen, () => setGrpOpen(false), selectedGrp)}
             {segDrop('GROUP', grpSegs, grpTemp, setGrpTemp, selectedGrp, setSelectedGrp, grpOpen, setGrpOpen, () => setFitOpen(false), selectedFit)}
-            {selectedSegs.length > 0 && (
-              <button
-                onClick={() => { setSelectedFit([]); setSelectedGrp([]); setFitTemp([]); setGrpTemp([]); setSelectedAccIdxs([]); setShowAccList(false) }}
-                style={{ padding: '3px 10px', borderRadius: 99, fontSize: 11, cursor: 'pointer', border: '0.5px solid var(--color-border-subtle)', background: 'transparent', color: 'var(--color-text-tertiary)' }}
-              >초기화</button>
-            )}
           </div>
         </div>
 
