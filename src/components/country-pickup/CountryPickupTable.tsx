@@ -81,12 +81,12 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
   // YoY% 셀 (양방향 바 + 숫자). tdExtra로 Total 행 테두리 등 주입
   const yoyCell = (yoyPct: number | null, tdExtra?: React.CSSProperties) => {
     if (yoyPct === null) {
-      return <td style={{ ...tdBase, width: 130, textAlign: 'center', color: 'rgba(255,255,255,0.2)', ...tdExtra }}>—</td>
+      return <td style={{ ...tdBase, width: 130, textAlign: 'center', color: 'rgba(255,255,255,0.2)', boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.07)', ...tdExtra }}>—</td>
     }
     const isPos = yoyPct >= 0
     const barW = Math.min(Math.abs(yoyPct) / MAX_ABS * 50, 50)
     return (
-      <td style={{ ...tdBase, position: 'relative', padding: '4px 8px', width: 130, ...tdExtra }}>
+      <td style={{ ...tdBase, position: 'relative', padding: '4px 8px', width: 130, boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.07)', ...tdExtra }}>
         <div style={{ position: 'relative', height: 16, display: 'flex', alignItems: 'center' }}>
           {/* 중앙 기준선 */}
           <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 0.5, background: 'rgba(255,255,255,0.15)' }} />
@@ -145,8 +145,8 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
           <thead>
             {/* 컬럼 그룹 헤더 */}
             <tr>
-              <th style={{ width: 210, textAlign: 'left', padding: '5px 8px 2px', fontSize: 9, fontWeight: 500, color: 'var(--color-text-tertiary)' }} />
-              <th style={{ width: 130 }} />
+              <th style={{ width: 210, textAlign: 'left', padding: '5px 8px 2px', fontSize: 9, fontWeight: 500, color: 'var(--color-text-tertiary)', boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.07)' }} />
+              <th style={{ ...grpTh('rgba(255,180,50,0.6)'), width: 130, textAlign: 'left', boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.07)' }}>YoY%</th>
               <th colSpan={3} style={grpTh('var(--color-text-tertiary)')}>{isPastMonth ? 'Actual' : 'Current OTB'}</th>
               {!isPastMonth && (
                 <>
@@ -163,8 +163,8 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
             </tr>
             {/* 컬럼 헤더 */}
             <tr>
-              <th style={{ textAlign: 'left', padding: '2px 8px 6px', fontSize: 9, fontWeight: 500, color: 'var(--color-text-tertiary)', borderBottom: '0.5px solid var(--color-border-subtle)' }}>Country</th>
-              <th style={{ ...colTh('rgba(255,180,50,0.6)'), width: 130, textAlign: 'center' }}>YoY%</th>
+              <th style={{ textAlign: 'left', padding: '2px 8px 6px', fontSize: 9, fontWeight: 500, color: 'var(--color-text-tertiary)', borderBottom: '0.5px solid var(--color-border-subtle)', boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.07)' }}>Country</th>
+              <th style={{ ...colTh('var(--color-text-tertiary)'), width: 130, textAlign: 'left', boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.07)' }}>vs LY</th>
               {['R/N', 'ADR', 'REV'].map(h => <th key={h} style={colTh('var(--color-text-tertiary)')}>{h}</th>)}
               {!isPastMonth && (
                 <>
@@ -193,7 +193,7 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
                 <tr key={row.country}
                   onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-primary)')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                  <td style={{ ...tdBase, textAlign: 'left', fontWeight: 500 }}>
+                  <td style={{ ...tdBase, textAlign: 'left', fontWeight: 500, boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.07)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
                       {row.alpha2
                         ? <span className={getFlagClass(row.alpha2)} style={{ fontSize: 13, width: 16, flexShrink: 0 }} />
@@ -231,7 +231,7 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
             })}
             {/* 합계 행 */}
             <tr>
-              <td style={{ ...tdBase, textAlign: 'left', fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>Total</td>
+              <td style={{ ...tdBase, textAlign: 'left', fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none', boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.07)' }}>Total</td>
               {yoyCell(totalYoy, { borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' })}
               <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{totalOtbRn.toLocaleString('ko-KR')}</td>
               <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtK(totalOtbAdr)}</td>

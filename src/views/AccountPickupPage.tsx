@@ -142,6 +142,27 @@ function SegDropdown({ label, segs, selected, activeSegs, onApply }: {
   )
 }
 
+// ─── KPI 카드 배경 (canvas 글로우+파티클 / SVG 파도 / 상승 바차트) — 데코, zIndex -1 ──
+function KpiCardBg({ canvasRef }: { canvasRef: React.RefObject<HTMLCanvasElement> }) {
+  return (
+    <>
+      <canvas ref={canvasRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: -1 }} />
+      {/* 파도 곡선 */}
+      <svg viewBox="0 0 220 100" preserveAspectRatio="none" style={{ position: 'absolute', bottom: 0, right: 0, width: 220, height: 100, opacity: 0.35, pointerEvents: 'none', zIndex: -1 }}>
+        <path d="M0,58 Q55,40 110,54 T220,48" fill="none" stroke="#4488cc" strokeWidth={2} />
+        <path d="M0,70 Q55,54 110,66 T220,62" fill="none" stroke="#3366aa" strokeWidth={1.4} />
+        <path d="M0,82 Q55,68 110,78 T220,76" fill="none" stroke="#2255aa" strokeWidth={1} />
+      </svg>
+      {/* 상승 바 차트 */}
+      <div style={{ position: 'absolute', bottom: 16, right: 16, display: 'flex', alignItems: 'flex-end', gap: 3, opacity: 0.5, pointerEvents: 'none', zIndex: -1 }}>
+        {[18, 24, 20, 32, 28, 38, 44, 52, 48, 60].map((h, i) => (
+          <div key={i} style={{ width: 6, height: h, background: 'linear-gradient(to top, #1a4a8a, #3a7bd5)', borderRadius: '2px 2px 0 0' }} />
+        ))}
+      </div>
+    </>
+  )
+}
+
 // ─── 페이지 ──────────────────────────────────────────────────────────────────────
 export default function AccountPickupPage() {
   const { currentHotel } = useHotel()
@@ -265,6 +286,55 @@ export default function AccountPickupPage() {
   // 정렬 기준 변경 시 표시 개수 리셋
   useEffect(() => { setShowing(15) }, [sortBy])
 
+  // ── KPI 카드 배경 애니메이션 (canvas: 우하단 글로우 + 파티클 28개) ──────────────
+  const bg1Ref = useRef<HTMLCanvasElement>(null)
+  const bg2Ref = useRef<HTMLCanvasElement>(null)
+  const bg3Ref = useRef<HTMLCanvasElement>(null)
+  const bg4Ref = useRef<HTMLCanvasElement>(null)
+  useEffect(() => {
+    const canvases = [bg1Ref.current, bg2Ref.current, bg3Ref.current, bg4Ref.current].filter(Boolean) as HTMLCanvasElement[]
+    if (!canvases.length) return
+    const states = canvases.map(cv => {
+      const ctx = cv.getContext('2d')!
+      cv.width = cv.clientWidth || 200; cv.height = cv.clientHeight || 90
+      const particles = Array.from({ length: 28 }, () => ({
+        x: Math.random() * cv.width, y: Math.random() * cv.height,
+        r: 0.3 + Math.random() * 1.5,
+        vx: (Math.random() - 0.5) * 0.6, vy: (Math.random() - 0.5) * 0.6,   // ±0.3px/frame
+        a: 0.15 + Math.random() * 0.45,
+      }))
+      return { cv, ctx, particles }
+    })
+    let raf = 0
+    const draw = () => {
+      for (const { cv, ctx, particles } of states) {
+        if (cv.clientWidth && cv.width !== cv.clientWidth) cv.width = cv.clientWidth
+        if (cv.clientHeight && cv.height !== cv.clientHeight) cv.height = cv.clientHeight
+        ctx.clearRect(0, 0, cv.width, cv.height)
+        // A) 우하단 파란 글로우
+        const gx = cv.width * 0.85, gy = cv.height * 0.85
+        const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, 120)
+        grad.addColorStop(0, 'rgba(30,80,180,0.25)')
+        grad.addColorStop(1, 'rgba(30,80,180,0)')
+        ctx.fillStyle = grad
+        ctx.fillRect(0, 0, cv.width, cv.height)
+        // B) 파티클
+        for (const p of particles) {
+          p.x += p.vx; p.y += p.vy
+          if (p.x < 0) p.x = cv.width; else if (p.x > cv.width) p.x = 0
+          if (p.y < 0) p.y = cv.height; else if (p.y > cv.height) p.y = 0
+          ctx.beginPath()
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2)
+          ctx.fillStyle = `rgba(100,160,255,${p.a})`
+          ctx.fill()
+        }
+      }
+      raf = requestAnimationFrame(draw)
+    }
+    raf = requestAnimationFrame(draw)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
   // YoY 바 정규화 — LY 있는 항목 중 최대 절대 YoY값 기준
   const maxYoy = useMemo(() => Math.max(
     ...rows.filter(r => r.lyRn > 0).map(r => Math.abs((r.otbRn - r.lyRn) / r.lyRn * 100)),
@@ -333,6 +403,7 @@ export default function AccountPickupPage() {
   const cardStyle: React.CSSProperties = {
     background: 'var(--color-bg-secondary)', border: '0.5px solid var(--color-border-subtle)', borderRadius: 10,
     padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6,
+    position: 'relative', overflow: 'hidden', isolation: 'isolate',   // 배경 데코(zIndex -1) 클리핑
   }
   const cardLabel: React.CSSProperties = { fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)' }
   const cardBig: React.CSSProperties = { fontSize: 24, fontWeight: 500, color: 'var(--color-text-primary)', lineHeight: 1 }
@@ -408,6 +479,7 @@ export default function AccountPickupPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-3">
         {/* 1 — Active Accounts */}
         <div style={cardStyle}>
+          <KpiCardBg canvasRef={bg1Ref} />
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
             <span style={cardLabel}>Active Accounts</span>
             <Users size={20} style={{ opacity: 0.3, color: 'var(--color-text-secondary)', flexShrink: 0 }} />
@@ -417,6 +489,7 @@ export default function AccountPickupPage() {
         </div>
         {/* 2 — OTB R/N */}
         <div style={cardStyle}>
+          <KpiCardBg canvasRef={bg2Ref} />
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
             <span style={cardLabel}>{isPastMonth ? 'ACT' : 'OTB'} R/N</span>
             <BarChart2 size={20} style={{ opacity: 0.3, color: 'var(--color-text-secondary)', flexShrink: 0 }} />
@@ -430,6 +503,7 @@ export default function AccountPickupPage() {
         </div>
         {/* 3 — OTB ADR */}
         <div style={cardStyle}>
+          <KpiCardBg canvasRef={bg3Ref} />
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
             <span style={cardLabel}>{isPastMonth ? 'ACT' : 'OTB'} ADR</span>
             <Coins size={20} style={{ opacity: 0.3, color: 'var(--color-text-secondary)', flexShrink: 0 }} />
@@ -441,6 +515,7 @@ export default function AccountPickupPage() {
         </div>
         {/* 4 — OTB Revenue */}
         <div style={cardStyle}>
+          <KpiCardBg canvasRef={bg4Ref} />
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
             <span style={cardLabel}>{isPastMonth ? 'ACT' : 'OTB'} Revenue</span>
             <TrendingUp size={20} style={{ opacity: 0.3, color: 'var(--color-text-secondary)', flexShrink: 0 }} />
