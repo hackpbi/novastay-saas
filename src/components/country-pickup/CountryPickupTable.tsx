@@ -79,10 +79,11 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
   // ── YoY% (OTB/Actual R/N vs LY Actual R/N) — R/N 셀에 인라인 표시 ────────────────
   const calcYoy = (otb: number, ly: number): number | null =>
     ly > 0 ? ((otb - ly) / ly) * 100 : null
-  const fmtYoy = (v: number | null): string =>
-    v === null ? '' : (v >= 0 ? '+' : '') + v.toFixed(1) + '%'
-  const yoyTag = (v: number | null) => v === null ? null : (
-    <span style={{ fontSize: 9, color: v >= 0 ? '#00B883' : '#E24B4A', marginRight: 4 }}>{fmtYoy(v)}</span>
+  // YoY%를 R/N 숫자 하단에 표시 (LY 0/null이면 — , 흐림)
+  const yoyBelow = (v: number | null) => (
+    <div style={{ fontSize: 9, marginTop: 1, color: v === null ? 'rgba(255,255,255,0.2)' : v >= 0 ? '#00B883' : '#E24B4A' }}>
+      {v === null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(1) + '%'}
+    </div>
   )
   const totalYoyVal = calcYoy(totalOtbRn, totalLyRn)
 
@@ -200,20 +201,30 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
                       <td style={sepStyle} />
                     </>
                   )}
-                  {/* OTB(미래월) / Actual(이전월) — 이전월은 R/N에 YoY% 인라인 */}
+                  {/* OTB(미래월) / Actual(이전월) — 이전월은 R/N 하단에 YoY% */}
                   <td style={tdBase}>
-                    {isPastMonth && yoyTag(rowYoyVal)}
-                    {isPastMonth
-                      ? (row.ly_nights > 0 ? row.otb_nights.toLocaleString('ko-KR') : '—')
-                      : row.otb_nights.toLocaleString('ko-KR')}
+                    {isPastMonth ? (
+                      <>
+                        <div>{row.otb_nights > 0 ? row.otb_nights.toLocaleString('ko-KR') : '—'}</div>
+                        {yoyBelow(rowYoyVal)}
+                      </>
+                    ) : (
+                      row.otb_nights.toLocaleString('ko-KR')
+                    )}
                   </td>
                   <td style={tdBase}>{fmtK(otbAdr)}</td>
                   <td style={tdBase}>{fmtM(row.otb_revenue)}</td>
                   <td style={sepStyle} />
-                  {/* OTB vs Same Date LY — R/N에 YoY% 인라인(현재/미래월) */}
+                  {/* OTB vs Same Date LY — R/N 하단에 YoY%(현재/미래월) */}
                   <td style={tdBase}>
-                    {!isPastMonth && yoyTag(rowYoyVal)}
-                    <span style={{ color: puColor(lyRn) }}>{fmtPu(lyRn)}</span>
+                    {!isPastMonth ? (
+                      <>
+                        <div style={{ color: puColor(lyRn) }}>{fmtPu(lyRn)}</div>
+                        {yoyBelow(rowYoyVal)}
+                      </>
+                    ) : (
+                      <span style={{ color: puColor(lyRn) }}>{fmtPu(lyRn)}</span>
+                    )}
                   </td>
                   <td style={{ ...tdBase, color: puColor(lyAdrDiff) }}>{fmtPuK(lyAdrDiff)}</td>
                   <td style={{ ...tdBase, color: puColor(lyRevDiff) }}>{fmtPuM(lyRevDiff)}</td>
@@ -237,15 +248,27 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
                 </>
               )}
               <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>
-                {isPastMonth && yoyTag(totalYoyVal)}
-                {totalOtbRn.toLocaleString('ko-KR')}
+                {isPastMonth ? (
+                  <>
+                    <div>{totalOtbRn.toLocaleString('ko-KR')}</div>
+                    {yoyBelow(totalYoyVal)}
+                  </>
+                ) : (
+                  totalOtbRn.toLocaleString('ko-KR')
+                )}
               </td>
               <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtK(totalOtbAdr)}</td>
               <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtM(totalOtbRev)}</td>
               <td style={{ ...sepStyle, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }} />
               <td style={{ ...tdBase, fontWeight: 500, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>
-                {!isPastMonth && yoyTag(totalYoyVal)}
-                <span style={{ color: puColor(totalOtbRn - totalLyRn) }}>{fmtPu(totalOtbRn - totalLyRn)}</span>
+                {!isPastMonth ? (
+                  <>
+                    <div style={{ color: puColor(totalOtbRn - totalLyRn) }}>{fmtPu(totalOtbRn - totalLyRn)}</div>
+                    {yoyBelow(totalYoyVal)}
+                  </>
+                ) : (
+                  <span style={{ color: puColor(totalOtbRn - totalLyRn) }}>{fmtPu(totalOtbRn - totalLyRn)}</span>
+                )}
               </td>
               <td style={{ ...tdBase, borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none', color: 'var(--color-text-tertiary)' }}>—</td>
               <td style={{ ...tdBase, fontWeight: 500, color: puColor(totalOtbRev - totalLyRev), borderTop: '0.5px solid rgba(0,229,160,0.6)', borderBottom: 'none' }}>{fmtPuM(totalOtbRev - totalLyRev)}</td>
