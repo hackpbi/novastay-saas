@@ -14,7 +14,11 @@
       "PowerShell($env:NEXT_DIST_DIR='.next-verify'; npm run build 2>&1 | Select-Object -Last 10; Remove-Item Env:\\\\NEXT_DIST_DIR; Remove-Item -Recurse -Force .next-verify -ErrorAction SilentlyContinue)",
       "PowerShell($env:NEXT_DIST_DIR='.next-verify'; npm run build 2>&1 | Select-Object -Last 40)",
       "PowerShell(git push 2>&1)",
-      "PowerShell($env:NEXT_DIST_DIR='.next-verify'; npm run build 2>&1 | Select-Object -Last 12)"
+      "PowerShell($env:NEXT_DIST_DIR='.next-verify'; npm run build 2>&1 | Select-Object -Last 12)",
+      "PowerShell($env:NEXT_DIST_DIR='.next-verify'; npm run build 2>&1 | Select-Object -Last 8)"
+    ],
+    "additionalDirectories": [
+      "C:\\dev\\18_NovaStay_Saas_ver1\\.next-verify"
     ]
   }
 }

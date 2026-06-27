@@ -15,6 +15,7 @@ import { todayLocalYMD } from '@/utils/dateLocal'
 import { useAuth } from '@/contexts/AuthContext'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
+import { useFcstDateContext } from '@/contexts/FcstDateContext'
 import PageShell from '@/components/PageShell'
 import SegmentationModal from '@/components/dashboard/SegmentationModal'
 import { PromoCalendarView } from '@/components/rate-strategy/PromoCalendarView'
@@ -489,6 +490,7 @@ export default function RateStrategyPage() {
   const { profile }      = useAuth()
   const { currentHotel } = useHotel()
   const { vsOtbDate }    = useDateContext()
+  const { fcstDate }     = useFcstDateContext()
   const queryClient      = useQueryClient()
   const hotelId          = currentHotel?.id ?? ''
   const profileId        = profile?.id ?? ''
@@ -2164,6 +2166,7 @@ export default function RateStrategyPage() {
         roomTypes={roomTypes}
         baseBarRate={simBaseBar}
         booked={simBooked}
+        fcstUpdateDate={fcstDate}
       />
     </div>
   )
