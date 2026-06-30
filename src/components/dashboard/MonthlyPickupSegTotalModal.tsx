@@ -173,21 +173,7 @@ export default function MonthlyPickupSegTotalModal({
         diffRn:  r.otb_nights - r.vs_nights,    // 픽업 = 현재OTB - vsOTB
         diffRev: r.otb_revenue - r.vs_revenue,
       }))
-      .filter(a => a.diffRn !== 0 || a.diffRev !== 0)
       .sort((a, b) => b.diffRn - a.diffRn)
-  }, [selectedSeg, accountPickupRows])
-
-  // [DEBUG TEMP] selectedSeg.codes ↔ accountPickupRows.segmentation 불일치 확인용 — 확인 후 제거 예정
-  useEffect(() => {
-    if (!selectedSeg) return
-    const acctSegs = (accountPickupRows as Array<{ account_name?: string; segmentation: string; seg_name?: string; otb_nights?: number; vs_nights?: number; otb_revenue?: number; vs_revenue?: number }>)
-    console.log('[SEG-DEBUG] selectedSeg =', selectedSeg)
-    console.log('[SEG-DEBUG] selectedSeg.codes =', selectedSeg.codes)
-    console.log('[SEG-DEBUG] accountPickupRows 총', acctSegs.length, '행')
-    console.log('[SEG-DEBUG] r.segmentation 샘플(고유) =', Array.from(new Set(acctSegs.map(r => r.segmentation))).slice(0, 20))
-    const matched = acctSegs.filter(r => selectedSeg.codes.includes(r.segmentation))
-    console.log('[SEG-DEBUG] 매칭 행 수 =', matched.length)
-    console.table(matched.map(r => ({ account: r.account_name, seg: r.segmentation, otb_nights: r.otb_nights, vs_nights: r.vs_nights, otb_revenue: r.otb_revenue, vs_revenue: r.vs_revenue })))
   }, [selectedSeg, accountPickupRows])
 
   // body scroll lock + 열릴 때 선택 세그먼트 리셋
