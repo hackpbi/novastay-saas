@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useDateContext } from '@/contexts/DateContext'
+import { useHotel } from '@/contexts/HotelContext'
 import DatePicker from '@/components/DatePicker'
 import { useMarketSchema } from '@/hooks/useMarketSchema'
 import { usePickupData } from '@/hooks/usePickupData'
+import { useAccountPickupData } from '@/hooks/useAccountPickupData'
 import {
   buildMonthlyPickupSegTable,
   type MonthlyPickupCell,
@@ -124,7 +126,10 @@ export default function MonthlyPickupSegTotalModal({
 }) {
   const { theme }                                         = useTheme()
   const isDark                                            = theme === 'dark'
+  const { currentHotel }                                  = useHotel()
   const { otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate } = useDateContext()
+  // 우측 패널: 선택된 세그먼트 (대분류 이름 클릭 시 set)
+  const [selectedSeg, setSelectedSeg] = useState<{ label: string; codes: string[] } | null>(null)
   const days = otbDate && vsOtbDate
     ? Math.round((new Date(otbDate).getTime() - new Date(vsOtbDate).getTime()) / 86400000)
     : 0
@@ -143,9 +148,38 @@ export default function MonthlyPickupSegTotalModal({
     if (s.segmentation.includes('HOU')) houRowIds.add(s.id)
   }
 
-  // body scroll lock
+  // ─── 우측 Account Pickup 패널 데이터 ───────────────────────────────────────────
+  // monthKeys 포맷은 'YYYY-MM' (business_date.slice(0,7)) → 월은 slice(5,7)
+  const firstMonthKey = monthKeys[0] ?? ''
+  const pickupYear  = firstMonthKey ? parseInt(firstMonthKey.slice(0, 4)) : new Date().getFullYear()
+  const pickupMonth = firstMonthKey ? parseInt(firstMonthKey.slice(5, 7)) : new Date().getMonth() + 1
+
+  const { data: accountPickupRows = [] } = useAccountPickupData({
+    hotelId:     currentHotel?.id ?? '',
+    otbDate:     otbDate ?? '',
+    vsDate:      vsOtbDate ?? '',
+    year:        pickupYear,
+    month:       pickupMonth,
+    segFilter:   null,
+    isPastMonth: false,
+  })
+
+  const accountList = useMemo(() => {
+    if (!selectedSeg) return []
+    return (accountPickupRows as Array<{ account_name: string; segmentation: string; otb_nights: number; vs_nights: number; otb_revenue: number; vs_revenue: number }>)
+      .filter(r => selectedSeg.codes.includes(r.segmentation))
+      .map(r => ({
+        name:    r.account_name,
+        diffRn:  r.otb_nights - r.vs_nights,    // 픽업 = 현재OTB - vsOTB
+        diffRev: r.otb_revenue - r.vs_revenue,
+      }))
+      .sort((a, b) => b.diffRn - a.diffRn)
+  }, [selectedSeg, accountPickupRows])
+
+  // body scroll lock + 열릴 때 선택 세그먼트 리셋
   useEffect(() => {
     if (!open) return
+    setSelectedSeg(null)
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = '' }
   }, [open])
@@ -173,7 +207,7 @@ export default function MonthlyPickupSegTotalModal({
 
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col"
-        style={{ width: 598, maxWidth: '92vw', maxHeight: '79vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
+        style={{ width: 900, maxWidth: '92vw', maxHeight: '79vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
         <div className="px-6 pt-1 pb-1 shrink-0" style={{ borderBottom: `1px solid ${BORDER.split(' ').pop()}` }}>
@@ -221,8 +255,9 @@ export default function MonthlyPickupSegTotalModal({
           </div>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto">
+        {/* Body: 좌측 테이블 + 우측 Account Pickup 패널 */}
+        <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        <div style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
           {loading ? (
             <Skeleton />
           ) : rows.length === 0 || monthKeys.length === 0 ? (
@@ -248,22 +283,29 @@ export default function MonthlyPickupSegTotalModal({
                     const rowColor = (isDark ? row.fontDarkColor : row.fontLightColor) ?? 'var(--color-text-primary)'
                     const isHou    = houRowIds.has(row.id)
                     const clickable = !!onPickupCellClick && !isHou && row.segmentationCodes.length > 0
+                    // 우측 패널용: 대분류 행만 클릭 가능 / 선택 시 행 하이라이트
+                    const segSelectable = !row.indent && row.segmentationCodes.length > 0
+                    const isSelected    = segSelectable && selectedSeg?.label === row.name
+                    const baseBg        = isSelected ? 'rgba(0,229,160,0.08)' : rowBg
 
                     return (
                       <tr
                         key={row.id}
                         style={{
                           borderBottom: BORDER,
-                          background: rowBg,
+                          background: baseBg,
                           color: rowColor,   // schema 폰트 색상(레벨별 밝기 반영) — 이름·Dash 모두 적용
                           fontWeight: row.isBold ? 600 : 400,
                         }}
                         onMouseEnter={e => {
-                          e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${rowBg}`
+                          e.currentTarget.style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${baseBg}`
                         }}
-                        onMouseLeave={e => { e.currentTarget.style.background = rowBg }}
+                        onMouseLeave={e => { e.currentTarget.style.background = baseBg }}
                       >
-                        <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: BORDER }}>
+                        <td
+                          onClick={segSelectable ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes }) : undefined}
+                          style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: BORDER, cursor: segSelectable ? 'pointer' : 'default' }}
+                        >
                           {row.indent ? (
                             <><span style={{ color: 'var(--brand-dimmed)' }}>└ </span>{row.name}</>
                           ) : row.name}
@@ -303,6 +345,38 @@ export default function MonthlyPickupSegTotalModal({
               </table>
             </div>
           )}
+        </div>
+
+        {/* 우측 Account Pickup 패널 */}
+        <div style={{ width: 220, flexShrink: 0, borderLeft: '0.5px solid rgba(0,229,160,0.2)', display: 'flex', flexDirection: 'column', background: '#0a0a0a' }}>
+          <div style={{ padding: '10px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>Account Pickup</div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
+              {selectedSeg ? `${selectedSeg.label} · 픽업 R/N 기준` : '세그먼트를 클릭하세요'}
+            </div>
+          </div>
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
+            {accountList.length === 0 ? (
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', padding: 12 }}>
+                {selectedSeg ? '픽업 데이터가 없습니다.' : ''}
+              </div>
+            ) : accountList.map((a, i) => (
+              <div key={`${a.name}-${i}`} style={{ padding: '6px 12px', borderBottom: '0.5px solid #1a1a1a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 100 }}>
+                  {a.name}
+                </span>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontSize: 11, color: a.diffRn >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 500 }}>
+                    {a.diffRn >= 0 ? '+' : ''}{a.diffRn.toLocaleString('ko-KR')} R/N
+                  </div>
+                  <div style={{ fontSize: 10, color: a.diffRev >= 0 ? '#00E5A0' : '#E24B4A' }}>
+                    {a.diffRev >= 0 ? '+' : ''}{(a.diffRev / 1_000_000).toFixed(1)}M
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
         </div>
 
         {/* Footer */}

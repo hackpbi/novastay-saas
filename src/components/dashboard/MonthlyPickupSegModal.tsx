@@ -148,7 +148,7 @@ export default function MonthlyPickupSegModal({
   // 현재 페이지 첫 가시 월 기준으로 어카운트 픽업 조회 (PAGE_SIZE=3)
   const firstMonthKey = monthKeys[pageIndex * PAGE_SIZE] ?? ''
   const pickupYear  = firstMonthKey ? parseInt(firstMonthKey.slice(0, 4)) : new Date().getFullYear()
-  const pickupMonth = firstMonthKey ? parseInt(firstMonthKey.slice(4, 6)) : new Date().getMonth() + 1
+  const pickupMonth = firstMonthKey ? parseInt(firstMonthKey.slice(5, 7)) : new Date().getMonth() + 1
 
   const { data: accountPickupRows = [] } = useAccountPickupData({
     hotelId:     currentHotel?.id ?? '',
