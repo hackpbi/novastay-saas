@@ -363,16 +363,15 @@ export default function MonthlyPickupSegTotalModal({
               {selectedSeg ? `${selectedSeg.label} · 6개월 합계` : '세그먼트를 클릭하세요'}
             </div>
             <button
-              onClick={() => selectedSeg && onPickupCellClick?.(selectedSeg.codes, null, selectedSeg.label)}
-              disabled={!selectedSeg}
+              onClick={() => onPickupCellClick?.(selectedSeg?.codes ?? [], null, selectedSeg?.label ?? '전체')}
               style={{
                 fontSize: 10,
                 padding: '3px 8px',
                 borderRadius: 6,
                 border: '1px solid rgba(255,255,255,0.15)',
                 background: 'transparent',
-                color: selectedSeg ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)',
-                cursor: selectedSeg ? 'pointer' : 'default',
+                color: 'rgba(255,255,255,0.6)',
+                cursor: 'pointer',
                 marginTop: 4,
               }}
             >

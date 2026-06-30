@@ -89,6 +89,8 @@ export function ForecastAlertModal({
   const [filter,      setFilter]      = useState<FilterType>('all')
   // 세그먼트 필터 (null = 전체)
   const [segFilter,   setSegFilter]   = useState<Set<string> | null>(null)
+  // 드롭다운 임시 선택 — Done 클릭 시에만 segFilter로 반영
+  const [tempSegFilter, setTempSegFilter] = useState<Set<string> | null>(segFilter)
   const [segDropOpen, setSegDropOpen] = useState(false)
   const segDropRef = useRef<HTMLDivElement>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -153,6 +155,11 @@ export function ForecastAlertModal({
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
+
+  // 드롭다운 열릴 때 임시 선택을 현재 적용값(segFilter)으로 초기화
+  useEffect(() => {
+    if (segDropOpen) setTempSegFilter(segFilter)
+  }, [segDropOpen])
 
   // ── 이상 항목 계산 ──────────────────────────────────────────────────────────
   const alertRows = useMemo((): AlertRow[] => {
@@ -567,6 +574,7 @@ export function ForecastAlertModal({
                       border:        '0.5px solid rgba(255,255,255,0.12)',
                       borderRadius:  8,
                       minWidth:      200,
+                      width:         200,
                       maxHeight:     360,
                       zIndex:        100,
                       display:       'flex',
@@ -587,14 +595,14 @@ export function ForecastAlertModal({
                       }
                       collectLeaves(schema.nodes)
                       return leafNodes.map(node => {
-                        const isSelected = segFilter === null ||
-                          node.segmentationCodes.some(c => segFilter.has(c))
+                        const isSelected = tempSegFilter === null ||
+                          node.segmentationCodes.some(c => tempSegFilter.has(c))
                         return (
                           <div
                             key={node.id}
                             onClick={e => {
                               e.stopPropagation()
-                              setSegFilter(prev => {
+                              setTempSegFilter(prev => {
                                 const allCodes = new Set(schema.allSegmentationCodes)
                                 const base = prev === null ? new Set(allCodes) : new Set(prev)
                                 const codes = node.segmentationCodes
@@ -642,7 +650,7 @@ export function ForecastAlertModal({
                       {/* 하단: 버튼 고정 */}
                       <div style={{ flexShrink: 0, borderTop: '0.5px solid rgba(255,255,255,0.08)', padding: '4px 6px', display: 'flex', gap: 4 }}>
                         <button
-                          onClick={e => { e.stopPropagation(); setSegFilter(null) }}
+                          onClick={e => { e.stopPropagation(); setTempSegFilter(null) }}
                           style={{
                             flex: 1, padding: '5px', borderRadius: 5,
                             border: '0.5px solid rgba(255,255,255,0.1)',
@@ -653,7 +661,7 @@ export function ForecastAlertModal({
                           All
                         </button>
                         <button
-                          onClick={e => { e.stopPropagation(); setSegFilter(new Set()) }}
+                          onClick={e => { e.stopPropagation(); setTempSegFilter(new Set()) }}
                           style={{
                             flex: 1, padding: '5px', borderRadius: 5,
                             border: '0.5px solid rgba(255,255,255,0.1)',
@@ -664,7 +672,7 @@ export function ForecastAlertModal({
                           Reset
                         </button>
                         <button
-                          onClick={e => { e.stopPropagation(); setSegDropOpen(false) }}
+                          onClick={e => { e.stopPropagation(); setSegFilter(tempSegFilter); setSegDropOpen(false) }}
                           style={{
                             flex: 1, padding: '5px', borderRadius: 5,
                             border: 'none',
