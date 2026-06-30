@@ -223,6 +223,18 @@ function gapCell(value: number, unit: 'k' | 'm' | '', opts?: { className?: strin
 
 type SchemaNodeT = ForecastSchema['nodes'][number]
 
+// code로 leaf 노드 찾기 (이름 표시용)
+function findLeafByCode(nodes: SchemaNodeT[], code: string): SchemaNodeT | null {
+  for (const n of nodes) {
+    if (n.segmentationCodes.includes(code) && (!n.children || n.children.length === 0)) return n
+    if (n.children?.length) {
+      const found = findLeafByCode(n.children, code)
+      if (found) return found
+    }
+  }
+  return null
+}
+
 function renderSegmentRows(
   nodes:        SchemaNodeT[],
   tableData:    TableData,
@@ -421,8 +433,8 @@ export function BulkEditModalV2({
   // 미니 ADR 시뮬레이터 상태
   const [simData,   setSimData]   = useState<AdrSimData | null>(null)
   const [barRaw,    setBarRaw]    = useState<number>(0)
-  const [otaPct,    setOtaPct]    = useState<number>(50)
-  const [otaFeePct, setOtaFeePct] = useState<number>(15)
+  const [otaFeePct, setOtaFeePct] = useState<number>(13.5)
+  const [channelMap, setChannelMap] = useState<Record<string, string>>({})   // segCode → 'direct'|'ota'|'other'
 
   // 진입 시 해당 일자 기존 편집값으로 초기화
   useEffect(() => {
@@ -468,6 +480,37 @@ export function BulkEditModalV2({
       })
     return () => { cancelled = true }
   }, [isOpen, selectedDate, hotelId])
+
+  // 세그 채널 분류 (c05.sorting1) — direct/ota 세그별 예상 ADR용
+  useEffect(() => {
+    if (!isOpen || !hotelId) return
+    let cancelled = false
+    ;(supabase as any)
+      .from('c05_market_table_schema')
+      .select('segmentation, sorting1')
+      .eq('hotel_id', hotelId)
+      .then(({ data, error }: any) => {
+        if (cancelled || error || !data) return
+        const m: Record<string, string> = {}
+        for (const row of data) {
+          const sorting1 = (row.sorting1 ?? '').trim().toLowerCase() || 'other'
+          let codes: string[] = []
+          if (Array.isArray(row.segmentation)) {
+            codes = row.segmentation
+          } else if (typeof row.segmentation === 'string') {
+            try {
+              const parsed = JSON.parse(row.segmentation)
+              codes = Array.isArray(parsed) ? parsed : [row.segmentation]
+            } catch {
+              codes = [row.segmentation]
+            }
+          }
+          for (const code of codes) m[code] = sorting1
+        }
+        setChannelMap(m)
+      })
+    return () => { cancelled = true }
+  }, [isOpen, hotelId])
 
   // ESC to close
   useEffect(() => {
@@ -613,63 +656,75 @@ export function BulkEditModalV2({
   const effRooms  = simData?.rooms ?? []
   const effBooked = effRooms.reduce((s: number, r: AdrSimRoom) => s + (r.booked ?? 0), 0)
 
-  const miniCalc = (() => {
-    const TOTAL  = effTotal
-    const curRn  = effBooked
-    const curAdr = effBase
-    const curRev = curAdr * curRn
-    const avail  = Math.max(0, TOTAL - curRn)
-    const curOcc = TOTAL > 0 ? Math.round((curRn / TOTAL) * 100) : 0
+  // 현재 FCST RN (tempEdits 우선) — 실시간 반영
+  const getFcRn = (code: string): number => {
+    const orig = day?.values[code]
+    if (!orig) return 0
+    const ed = tempEdits.get(makeEditKey(selectedDate ?? '', code))
+    return ed?.rn ?? orig.rn
+  }
 
-    const newBar = barRaw
-    const otaFee = otaFeePct / 100
-    const dirPct = 100 - otaPct
-
-    const fcstRn  = totalFcRn    // 기존 합계 변수 재사용
-    const fcstRev = totalFcRev
-    const fcSellRooms = Math.min(avail, Math.max(0, fcstRn - curRn))
-    const sellRatio = avail > 0 ? fcSellRooms / avail : 0
-
-    const detail = effRooms.filter((r: AdrSimRoom) => (r.avail ?? 0) > 0).map((room: AdrSimRoom) => {
-      const rtAvail = room.avail ?? 0
-      const rtSell  = Math.round(rtAvail * sellRatio)
-      const sc      = room.surcharge ?? 0
-      const newFull = newBar + sc
-      const avgRate = newFull * (1 - otaFee) * (otaPct / 100) + newFull * (dirPct / 100)
-      return { room, rtSell, rev: avgRate * rtSell }
-    })
-
-    const sellRooms  = detail.reduce((s, d) => s + d.rtSell, 0)
-    const simTotalRn = curRn + sellRooms
-    const simOcc = TOTAL > 0 ? Math.round((simTotalRn / TOTAL) * 100) : 0
-    const newAvailRev = detail.reduce((s, d) => s + d.rev, 0)
-    const simRev = curRev + newAvailRev
-    const simAdr = simTotalRn > 0 ? Math.round(simRev / simTotalRn) : 0
-
-    return { curOcc, curAdr, curRn, curRev, simOcc, simAdr, simRev, avail, detail, fcstRn, fcstRev }
+  // OTA 비중 — FCST RN 합계 기준 자동 계산 (읽기 전용, 실시간)
+  const otaPct = (() => {
+    let otaRn = 0, directRn = 0
+    for (const code of schema?.allSegmentationCodes ?? []) {
+      const channel = channelMap[code]
+      if (channel !== 'direct' && channel !== 'ota') continue
+      const rn = getFcRn(code)
+      if (channel === 'ota') otaRn += rn
+      else directRn += rn
+    }
+    const total = otaRn + directRn
+    return total > 0 ? Math.round((otaRn / total) * 100) : 50
   })()
 
-  const recState = (() => {
-    if (miniCalc.fcstRev <= 0) return null
-    const fRev = miniCalc.simRev >= miniCalc.fcstRev
-    const fAdr = miniCalc.simAdr >= (miniCalc.fcstRn > 0 ? miniCalc.fcstRev / miniCalc.fcstRn : 0)
-    if (fRev && fAdr) return { kind: 'achievable' as const }
-    if (fRev && !fAdr) return { kind: 'review' as const }
+  // 세그(code)별 surcharge 프리미엄 — OTB ADR - 현재 BAR(effBase)
+  const getSegPremium = (code: string): number => {
+    const orig = day?.values[code]
+    if (!orig || orig.otb_rn <= 0) return 0
+    const otbAdr = Math.round(orig.otb_rev / orig.otb_rn)
+    return otbAdr - effBase
+  }
 
-    const dirPct = 100 - otaPct
-    const channelRate = (otaPct / 100) * (1 - otaFeePct / 100) + (dirPct / 100)
-    if (channelRate <= 0) return null
-    const needRev = miniCalc.fcstRev - miniCalc.curRev
-    if (needRev <= 0) return { kind: 'otb' as const }
+  // 세그별 예상 ADR (direct/ota만, R/N 증가율로 premium 감쇠 반영). barRaw/otaFeePct/tempEdits 변화 시 자동 재계산
+  const getSegExpectedAdr = (code: string, newBar: number): number | null => {
+    const channel = channelMap[code]
+    if (channel !== 'direct' && channel !== 'ota') return null
+    const orig = day?.values[code]
+    if (!orig) return null
+    const premium = getSegPremium(code)
+    const fcRn = getFcRn(code)   // tempEdits 우선 — FCST RN 변경 시 실시간 반영
+    const rnGrowth = orig.otb_rn > 0 ? fcRn / orig.otb_rn : 1
+    // 판매량이 늘수록 평균 surcharge가 낮아지는 경향 (단순 선형 감쇠, 최대 30%)
+    const decay = Math.max(0.7, 1 - (rnGrowth - 1) * 0.1)
+    const base = newBar + premium * decay
+    if (channel === 'ota') return Math.round(base * (1 - otaFeePct / 100))
+    return Math.round(base)
+  }
 
-    const sellDetail = miniCalc.detail.filter(d => d.rtSell > 0)
-    const totalSell = sellDetail.reduce((s, d) => s + d.rtSell, 0)
-    if (totalSell <= 0) return { kind: 'soldout' as const }
-    const surchargeSum = sellDetail.reduce((s, d) => s + d.rtSell * (d.room.surcharge ?? 0), 0)
-    const raw = (needRev / channelRate - surchargeSum) / totalSell
-    if (raw <= 0) return { kind: 'otb' as const }
-    const bar = Math.round(raw / 1000) * 1000
-    return { kind: 'rec' as const, bar }
+  // 전체 적용 시 예상 — 모든 direct/ota 세그에 예상 ADR을 적용했다고 가정한 합계(현재 BAR 기준)
+  const previewAfterApply = (() => {
+    if (!day || !schema) return null
+    let totalRn = 0, totalRev = 0
+    for (const code of schema.allSegmentationCodes) {
+      const orig = day.values[code]
+      if (!orig) continue
+      const fcRn = getFcRn(code)   // tempEdits 반영된 현재 FCST RN
+      const channel = channelMap[code]
+      let fcAdr: number
+      if ((channel === 'direct' || channel === 'ota') && fcRn > 0) {
+        const expected = getSegExpectedAdr(code, barRaw)
+        fcAdr = expected ?? (tempEdits.get(makeEditKey(selectedDate ?? '', code))?.adr ?? orig.adr)
+      } else {
+        fcAdr = tempEdits.get(makeEditKey(selectedDate ?? '', code))?.adr ?? orig.adr
+      }
+      totalRn  += fcRn
+      totalRev += fcRn * fcAdr
+    }
+    const rc  = schema.roomCount
+    const occ = rc > 0 ? (totalRn / rc) * 100 : 0
+    const adr = totalRn > 0 ? Math.round(totalRev / totalRn) : 0
+    return { rn: totalRn, rev: totalRev, occ, adr }
   })()
 
   const currentIdx = selectedDate ? availableDates.indexOf(selectedDate) : -1
@@ -927,40 +982,17 @@ export function BulkEditModalV2({
                     <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>K</span>
                   </div>
 
-                  {/* Recommended BAR */}
-                  {recState?.kind === 'rec' && (
-                    <div style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '6px 8px', borderRadius: 6, background: 'rgba(0,229,160,0.08)',
-                      border: '0.5px solid rgba(0,229,160,0.2)', marginBottom: 8,
-                    }}>
-                      <span style={{ fontSize: 10, color: 'rgba(0,229,160,0.7)' }}>Recommended BAR</span>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: '#00E5A0' }}>{Math.round(recState.bar / 1000)}K</span>
-                      <button
-                        onClick={() => setBarRaw(recState.bar)}
-                        style={{
-                          padding: '2px 8px', borderRadius: 4, border: 'none',
-                          background: '#00E5A0', color: '#0a2018', fontSize: 10, fontWeight: 600, cursor: 'pointer',
-                        }}
-                      >
-                        Apply
-                      </button>
-                    </div>
-                  )}
-                  {recState?.kind === 'achievable' && (
-                    <div style={{ fontSize: 10, color: '#00E5A0', marginBottom: 8 }}>✓ 목표 달성 가능</div>
-                  )}
-                  {recState?.kind === 'soldout' && (
-                    <div style={{ fontSize: 10, color: '#f87171', marginBottom: 8 }}>매진 — 잔여 없음</div>
-                  )}
 
                   {/* 슬라이더 3개 — 라벨/트랙/값 높이 고정으로 세로 정렬 통일 */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
                     {/* OTA */}
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                       <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginBottom: 6, height: 12 }}>OTA</div>
-                      <div style={{ width: '100%', height: 12, display: 'flex', alignItems: 'center' }}>
-                        <input type="range" min={0} max={100} value={otaPct} onChange={e => setOtaPct(parseInt(e.target.value))} className="sim-slider" style={{ width: '100%', margin: 0 }} />
+                      <div style={{ width: '100%', height: 12, display: 'flex', alignItems: 'center', position: 'relative' }}>
+                        <div style={{ width: '100%', height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.1)', position: 'relative' }}>
+                          <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${otaPct}%`, background: '#00E5A0', borderRadius: 2 }} />
+                          <div style={{ position: 'absolute', top: '50%', left: `${otaPct}%`, width: 12, height: 12, borderRadius: '50%', background: '#00E5A0', transform: 'translate(-50%, -50%)' }} />
+                        </div>
                       </div>
                       <div style={{ fontSize: 10, fontWeight: 600, color: '#00E5A0', marginTop: 6, height: 14 }}>{otaPct}%</div>
                     </div>
@@ -979,27 +1011,75 @@ export function BulkEditModalV2({
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                       <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginBottom: 6, height: 12 }}>Commission</div>
                       <div style={{ width: '100%', height: 12, display: 'flex', alignItems: 'center' }}>
-                        <input type="range" min={0} max={30} value={otaFeePct} onChange={e => setOtaFeePct(parseInt(e.target.value))} className="sim-slider amber" style={{ width: '100%', margin: 0 }} />
+                        <input type="range" min={0} max={30} step={0.5} value={otaFeePct} onChange={e => setOtaFeePct(parseFloat(e.target.value))} className="sim-slider amber" style={{ width: '100%', margin: 0 }} />
                       </div>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: '#fbbf24', marginTop: 6, height: 14 }}>{otaFeePct}%</div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: '#fbbf24', marginTop: 6, height: 14 }}>{otaFeePct.toFixed(1)}%</div>
                     </div>
                   </div>
 
-                  {/* OCC/ADR/REV 미리보기 */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-                    <div>
-                      <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>OCC</div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: '#fbbf24' }}>{miniCalc.simOcc}%</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>ADR</div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: '#fbbf24' }}>{Math.round(miniCalc.simAdr / 1000)}K</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>REV</div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: '#fbbf24' }}>{(miniCalc.simRev / 1e6).toFixed(1)}M</div>
+                  {/* 세그먼트별 예상 ADR (direct/ota만) — BAR/R/N 변경 시 재계산, 적용 → FCST ADR 셀 반영 */}
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '0.5px solid rgba(255,255,255,0.07)' }}>
+                    <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginBottom: 6 }}>세그먼트별 예상 ADR</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {schema?.allSegmentationCodes
+                        .filter(code => (channelMap[code] === 'direct' || channelMap[code] === 'ota') && getFcRn(code) > 0)
+                        .map(code => {
+                          const expected = getSegExpectedAdr(code, barRaw)
+                          if (expected === null) return null
+                          const node = findLeafByCode(schema.nodes, code)
+                          const orig = day?.values[code]
+                          const ed = tempEdits.get(makeEditKey(selectedDate ?? '', code))
+                          const currentFcAdr = ed?.adr ?? orig?.adr ?? 0
+                          const diff = expected - currentFcAdr
+                          return (
+                            <div key={code} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 10 }}>
+                              <span style={{ color: 'rgba(255,255,255,0.5)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>{node?.name ?? code}</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ color: diff > 0 ? '#00E5A0' : diff < 0 ? '#f87171' : 'rgba(255,255,255,0.4)', fontWeight: 600 }}>
+                                  {Math.round(expected / 1000)}K
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    const next = new Map(tempEdits)
+                                    const key = makeEditKey(selectedDate ?? '', code)
+                                    next.set(key, { ...next.get(key), adr: expected })
+                                    setTempEdits(next)
+                                  }}
+                                  style={{
+                                    padding: '1px 6px', borderRadius: 3, border: 'none',
+                                    background: 'rgba(0,229,160,0.12)', color: '#00E5A0',
+                                    fontSize: 9, fontWeight: 600, cursor: 'pointer',
+                                  }}
+                                >
+                                  적용
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
                     </div>
                   </div>
+
+                  {/* 전체 적용 시 예상 OCC/ADR/REV */}
+                  {previewAfterApply && (
+                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: '0.5px solid rgba(255,255,255,0.07)' }}>
+                      <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginBottom: 6 }}>전체 적용 시 예상</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                        <div>
+                          <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>OCC</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: '#00E5A0' }}>{previewAfterApply.occ.toFixed(1)}%</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>ADR</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: '#00E5A0' }}>{Math.round(previewAfterApply.adr / 1000)}K</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>REV</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: '#00E5A0' }}>{(previewAfterApply.rev / 1e6).toFixed(1)}M</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* 버튼 영역 */}
