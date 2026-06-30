@@ -7,7 +7,7 @@ export async function fetchForecastSchema(hotelId: string): Promise<ForecastSche
   const [c05Result, detailResult] = await Promise.all([
     (supabase as any)
       .from('c05_market_table_schema')
-      .select('id, name, level, parent_id, segmentation, order_index, is_bold, is_active, bg_dark_color, bg_light_color, sorting1')
+      .select('id, name, level, parent_id, segmentation, order_index, is_bold, is_active, bg_dark_color, bg_light_color, sorting1, font_dark_color')
       .eq('hotel_id', hotelId)
       .eq('is_active', true)
       .order('order_index', { ascending: true }),
@@ -46,6 +46,7 @@ export function buildSchemaTree(rows: C05Row[]): SchemaNode[] {
       bgDarkColor:        row.bg_dark_color  ?? undefined,
       bgLightColor:       row.bg_light_color ?? undefined,
       sorting1:           row.sorting1 ?? undefined,
+      fontDarkColor:      row.font_dark_color ?? undefined,
     })
   }
 

@@ -10,6 +10,7 @@ export type C05Row = {
   bg_dark_color:  string | null
   bg_light_color: string | null
   sorting1: string | null   // 채널 분류 ('direct'/'ota'/그 외)
+  font_dark_color: string | null
 }
 
 // ─── Tree node (built from C05) ────────────────────────────────────────────────
@@ -24,6 +25,7 @@ export type SchemaNode = {
   bgDarkColor?:  string   // c05.bg_dark_color
   bgLightColor?: string   // c05.bg_light_color
   sorting1?: string       // c05.sorting1 — 채널 분류 ('direct'/'ota' 등)
+  fontDarkColor?: string  // c05.font_dark_color
 }
 
 // ─── Column rendering units ────────────────────────────────────────────────────

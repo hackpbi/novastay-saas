@@ -10,6 +10,7 @@ import { fetchBaselineForecast, transformRpcToTableData } from '@/lib/forecast/b
 import { fetchCalendarRange, calendarToMap } from '@/lib/forecast/calendar'
 import { type EditedValues, saveForecastEdits, type SaveEdit } from '@/lib/forecast/save'
 import { BulkEditModal } from '@/components/forecast/BulkEditModal'
+import { BulkEditModalV2 } from '@/components/forecast/BulkEditModalV2'
 import { ForecastAlertModal } from '@/components/forecast/ForecastAlertModal'
 import { ForecastGraphModal } from '@/components/forecast/ForecastGraphModal'
 import { MtdModal } from '@/components/forecast/MtdModal'
@@ -866,7 +867,19 @@ export default function ForecastPage() {
       )}
 
       {/* 일괄수정 모달 */}
-      <BulkEditModal
+      {/* 기존 BulkEditModal (V2 테스트 후 교체 결정 — 그대로 보존) */}
+      {/* <BulkEditModal
+        isOpen={bulkEdit.isOpen}
+        selectedDate={bulkEdit.selectedDate}
+        onClose={closeBulkEditModal}
+        schema={schema}
+        data={data}
+        editedValues={editedValues}
+        onApply={handleBulkApply}
+        hotelId={hotelId}
+        onSelectDate={selectBulkEditDate}
+      /> */}
+      <BulkEditModalV2
         isOpen={bulkEdit.isOpen}
         selectedDate={bulkEdit.selectedDate}
         onClose={closeBulkEditModal}

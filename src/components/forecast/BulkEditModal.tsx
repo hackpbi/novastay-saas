@@ -66,7 +66,7 @@ export interface BulkEditModalProps {
 
 // ── Daily metric helpers ──────────────────────────────────────────────────────
 
-function calcDailyMetrics(
+export function calcDailyMetrics(
   day:          ForecastDayData,
   tempEdits:    EditedValues,
   selectedDate: string,
@@ -90,7 +90,7 @@ function calcDailyMetrics(
   }
 }
 
-function calcOtbMetrics(day: ForecastDayData, roomCount: number) {
+export function calcOtbMetrics(day: ForecastDayData, roomCount: number) {
   let totalRn = 0, totalRev = 0
   for (const orig of Object.values(day.values)) {
     totalRn  += orig.otb_rn
@@ -107,7 +107,7 @@ function calcOtbMetrics(day: ForecastDayData, roomCount: number) {
 
 // ── Monthly metric helpers ────────────────────────────────────────────────────
 
-function calcMonthlyBefore(data: ForecastDayData[], roomCount: number) {
+export function calcMonthlyBefore(data: ForecastDayData[], roomCount: number) {
   let totalRn = 0, totalRev = 0
   for (const day of data) {
     for (const [, orig] of Object.entries(day.values)) {
@@ -124,7 +124,7 @@ function calcMonthlyBefore(data: ForecastDayData[], roomCount: number) {
   }
 }
 
-function calcMonthlyAfter(data: ForecastDayData[], tempEdits: EditedValues, roomCount: number) {
+export function calcMonthlyAfter(data: ForecastDayData[], tempEdits: EditedValues, roomCount: number) {
   let totalRn = 0, totalRev = 0
   for (const day of data) {
     for (const [code, orig] of Object.entries(day.values)) {
@@ -146,7 +146,7 @@ function calcMonthlyAfter(data: ForecastDayData[], tempEdits: EditedValues, room
 
 // ── Monthly OTB helper ────────────────────────────────────────────────────────
 
-function calcMonthlyOtb(data: ForecastDayData[], roomCount: number) {
+export function calcMonthlyOtb(data: ForecastDayData[], roomCount: number) {
   let totalRn = 0, totalRev = 0
   for (const day of data) {
     for (const orig of Object.values(day.values)) {
@@ -164,13 +164,13 @@ function calcMonthlyOtb(data: ForecastDayData[], roomCount: number) {
 
 // ── Gap helpers ───────────────────────────────────────────────────────────────
 
-function gapColor(v: number): string {
+export function gapColor(v: number): string {
   if (v > 0) return 'var(--color-success, #10B981)'
   if (v < 0) return 'var(--color-text-danger, #ef4444)'
   return 'var(--color-text-muted)'
 }
 
-function fmtGap(v: number, unit: 'k' | 'm' | '' = ''): string {
+export function fmtGap(v: number, unit: 'k' | 'm' | '' = ''): string {
   if (v === 0) return '0'
   const sign = v > 0 ? '+' : '-'
   const abs  = Math.abs(v)
@@ -518,7 +518,7 @@ function TotalOccRow({ fc, otb, roomCount }: { fc: FcMetrics; otb: OtbMetrics; r
 
 type DailyMetrics = ReturnType<typeof calcDailyMetrics>
 
-function DailyImpactCard({ kpi, isOverCapacity = false }: {
+export function DailyImpactCard({ kpi, isOverCapacity = false }: {
   kpi: { before: DailyMetrics; after: DailyMetrics } | null
   isOverCapacity?: boolean
 }) {
@@ -579,7 +579,7 @@ function DailyImpactCard({ kpi, isOverCapacity = false }: {
 
 type MonthlyMetrics = ReturnType<typeof calcMonthlyBefore>
 
-function MonthlyImpactCard({
+export function MonthlyImpactCard({
   selectedDate,
   kpi,
 }: {
@@ -673,7 +673,7 @@ function StatusSection({
   )
 }
 
-function StatusCard({
+export function StatusCard({
   dayLabel, monthLabel,
   dayOtb, dayFcst, monthOtb, monthFcst,
 }: {

@@ -61,7 +61,14 @@
       "PowerShell($env:NEXT_DIST_DIR='.next-verify'; npm run build 2>&1 | Select-Object -Last 40)",
       "PowerShell($out = npx tsc --noEmit -p tsconfig.json 2>&1; $errs = $out | Select-String -Pattern \"error TS\"; Write-Output \\(\"TS error count: \" + \\($errs | Measure-Object\\).Count\\); $errs | Select-Object -First 20)",
       "PowerShell($ports = 3000..3010; foreach \\($p in $ports\\) { $c = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue; if \\($c\\) { $pid = \\($c | Select-Object -First 1\\).OwningProcess; $proc = \\(Get-Process -Id $pid -ErrorAction SilentlyContinue\\).ProcessName; Write-Output \\(\"LISTEN :$p  pid=$pid  proc=$proc\"\\) } })",
-      "PowerShell($out = npx tsc --noEmit -p tsconfig.json 2>&1; $errs = $out | Select-String -Pattern \"error TS\"; Write-Output \\(\"TS error count: \" + \\($errs | Measure-Object\\).Count\\); $errs | Select-Object -First 10)"
+      "PowerShell($out = npx tsc --noEmit -p tsconfig.json 2>&1; $errs = $out | Select-String -Pattern \"error TS\"; Write-Output \\(\"TS error count: \" + \\($errs | Measure-Object\\).Count\\); $errs | Select-Object -First 10)",
+      "PowerShell($out = npx tsc --noEmit -p tsconfig.json 2>&1; $errs = $out | Select-String -Pattern \"error TS\"; Write-Output \\(\"TS error count: \" + \\($errs | Measure-Object\\).Count\\); $errs | Select-Object -First 25)",
+      "Bash(node \"C:/Users/hackp/AppData/Local/Temp/claude/c--dev-18-NovaStay-Saas-ver1/dc8d3133-404e-490b-810d-4d9f9d470d28/scratchpad/q.mjs\")",
+      "Bash(cp \"C:/Users/hackp/AppData/Local/Temp/claude/c--dev-18-NovaStay-Saas-ver1/dc8d3133-404e-490b-810d-4d9f9d470d28/scratchpad/q.mjs\" c:/dev/18_NovaStay_Saas_ver1/_tmp_q.mjs)",
+      "Bash(node _tmp_q.mjs)",
+      "Bash(rm -f c:/dev/18_NovaStay_Saas_ver1/_tmp_q.mjs)",
+      "PowerShell($out = npx tsc --noEmit -p tsconfig.json 2>&1; $errs = $out | Select-String -Pattern \"error TS\"; Write-Output \\(\"TS error count: \" + \\($errs | Measure-Object\\).Count\\); $errs | Select-Object -First 12)",
+      "PowerShell($out = npx tsc --noEmit -p tsconfig.json 2>&1; $errs = $out | Select-String -Pattern \"error TS\"; Write-Output \\(\"TS error count: \" + \\($errs | Measure-Object\\).Count\\); $errs | Select-Object -First 15)"
     ],
     "additionalDirectories": [
       "C:\\dev\\18_NovaStay_Saas_ver1\\.next-verify"
