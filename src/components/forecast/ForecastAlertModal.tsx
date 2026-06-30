@@ -618,9 +618,9 @@ export function ForecastAlertModal({
 
               {searchDropOpen && (
                 <div onClick={e => e.stopPropagation()} style={{
-                  position: 'absolute', top: 'calc(100% + 8px)', left: 0,
+                  position: 'absolute', top: 'calc(100% + 8px)', right: 0,
                   background: '#161616', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 14,
-                  padding: 8, minWidth: 360, zIndex: 100,
+                  padding: 8, minWidth: 360, maxWidth: 380, zIndex: 100,
                   display: 'flex', flexDirection: 'column', gap: 4,
                   boxShadow: '0 16px 40px rgba(0,0,0,0.5)',
                 }}>
@@ -822,186 +822,6 @@ export function ForecastAlertModal({
               )}
             </div>
 
-                {/* Segment 드롭다운 트리거 */}
-                <div ref={segDropRef} style={{ position: 'relative' }}>
-                  <button
-                    onClick={e => { e.stopPropagation(); setSegDropOpen(prev => !prev) }}
-                    style={{
-                      display:      'inline-flex',
-                      alignItems:   'center',
-                      gap:          5,
-                      padding:      '5px 12px',
-                      borderRadius: 999,
-                      border:       'none',
-                      cursor:       'pointer',
-                      background:   segFilter !== null && segFilter.size > 0
-                        ? 'rgba(0,229,160,0.15)'
-                        : 'transparent',
-                      color:        segFilter !== null && segFilter.size > 0
-                        ? '#00E5A0'
-                        : 'rgba(255,255,255,0.3)',
-                      fontSize:     12,
-                      fontWeight:   600,
-                      whiteSpace:   'nowrap',
-                      transition:   'all 0.15s',
-                    }}
-                  >
-                    <SlidersHorizontal size={11} />
-                    Segment
-                    {segFilter !== null && segFilter.size > 0 && (
-                      <span style={{
-                        display:        'inline-flex',
-                        alignItems:     'center',
-                        justifyContent: 'center',
-                        width:          16,
-                        height:         16,
-                        borderRadius:   '50%',
-                        background:     '#00E5A0',
-                        color:          '#0a2018',
-                        fontSize:       9,
-                        fontWeight:     700,
-                      }}>
-                        {(() => {
-                          const leafNodes: typeof schema.nodes[0][] = []
-                          function collectLeaves(nodes: typeof schema.nodes) {
-                            for (const node of nodes) {
-                              if (node.children && node.children.length > 0) collectLeaves(node.children)
-                              else leafNodes.push(node)
-                            }
-                          }
-                          collectLeaves(schema.nodes)
-                          return leafNodes.filter(n => n.segmentationCodes.some(c => segFilter!.has(c))).length
-                        })()}
-                      </span>
-                    )}
-                    <ChevronDown size={11} style={{ opacity: 0.5 }} />
-                  </button>
-
-                  {/* 드롭다운 — fixed 위치 (잘림 방지) */}
-                  {segDropOpen && (() => {
-                    const rect = segDropRef.current?.getBoundingClientRect()
-                    return (
-                    <div style={{
-                      position:      'fixed',
-                      top:           rect ? rect.bottom + 8 : 0,
-                      right:         rect ? window.innerWidth - rect.right : 0,
-                      background:    '#1a1a1a',
-                      border:        '0.5px solid rgba(255,255,255,0.12)',
-                      borderRadius:  8,
-                      minWidth:      200,
-                      width:         200,
-                      maxHeight:     360,
-                      zIndex:        100,
-                      display:       'flex',
-                      flexDirection: 'column',
-                    }}>
-                      {/* 세그먼트 목록 (스크롤) — 대분류 제외, leaf만 */}
-                      <div style={{ overflowY: 'auto', flex: 1, padding: '4px 6px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      {(() => {
-                      const leafNodes: typeof schema.nodes[0][] = []
-                      function collectLeaves(nodes: typeof schema.nodes) {
-                        for (const node of nodes) {
-                          if (node.children && node.children.length > 0) {
-                            collectLeaves(node.children)
-                          } else {
-                            leafNodes.push(node)
-                          }
-                        }
-                      }
-                      collectLeaves(schema.nodes)
-                      return leafNodes.map(node => {
-                        const isSelected = tempSegFilter === null ||
-                          node.segmentationCodes.some(c => tempSegFilter.has(c))
-                        return (
-                          <div
-                            key={node.id}
-                            onClick={e => {
-                              e.stopPropagation()
-                              setTempSegFilter(prev => {
-                                const allCodes = new Set(schema.allSegmentationCodes)
-                                const base = prev === null ? new Set(allCodes) : new Set(prev)
-                                const codes = node.segmentationCodes
-                                const allIn = codes.every(c => base.has(c))
-                                if (allIn) codes.forEach(c => base.delete(c))
-                                else codes.forEach(c => base.add(c))
-                                if (base.size === allCodes.size) return null
-                                return new Set(base)
-                              })
-                            }}
-                            style={{
-                              display:      'flex',
-                              alignItems:   'center',
-                              gap:          8,
-                              padding:      '6px 8px',
-                              borderRadius: 5,
-                              cursor:       'pointer',
-                              fontSize:     12,
-                              color:        isSelected ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.35)',
-                            }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
-                          >
-                            <div style={{
-                              width:           14,
-                              height:          14,
-                              borderRadius:    3,
-                              background:      isSelected ? '#00E5A0' : 'transparent',
-                              border:          `0.5px solid ${isSelected ? '#00E5A0' : 'rgba(255,255,255,0.2)'}`,
-                              display:         'flex',
-                              alignItems:      'center',
-                              justifyContent:  'center',
-                              flexShrink:      0,
-                              transition:      'all 0.15s',
-                            }}>
-                              {isSelected && <Check size={9} color="#0a2018" />}
-                            </div>
-                            {node.name}
-                          </div>
-                        )
-                      })
-                      })()}
-                      </div>
-
-                      {/* 하단: 버튼 고정 */}
-                      <div style={{ flexShrink: 0, borderTop: '0.5px solid rgba(255,255,255,0.08)', padding: '4px 6px', display: 'flex', gap: 4 }}>
-                        <button
-                          onClick={e => { e.stopPropagation(); setTempSegFilter(null) }}
-                          style={{
-                            flex: 1, padding: '5px', borderRadius: 5,
-                            border: '0.5px solid rgba(255,255,255,0.1)',
-                            background: 'rgba(255,255,255,0.04)',
-                            color: 'rgba(255,255,255,0.4)', fontSize: 10, cursor: 'pointer',
-                          }}
-                        >
-                          All
-                        </button>
-                        <button
-                          onClick={e => { e.stopPropagation(); setTempSegFilter(new Set()) }}
-                          style={{
-                            flex: 1, padding: '5px', borderRadius: 5,
-                            border: '0.5px solid rgba(255,255,255,0.1)',
-                            background: 'rgba(255,255,255,0.04)',
-                            color: 'rgba(255,255,255,0.4)', fontSize: 10, cursor: 'pointer',
-                          }}
-                        >
-                          Reset
-                        </button>
-                        <button
-                          onClick={e => { e.stopPropagation(); setSegFilter(tempSegFilter); setSegDropOpen(false) }}
-                          style={{
-                            flex: 1, padding: '5px', borderRadius: 5,
-                            border: 'none',
-                            background: 'rgba(0,229,160,0.12)',
-                            color: '#00E5A0', fontSize: 10, fontWeight: 600, cursor: 'pointer',
-                          }}
-                        >
-                          Done
-                        </button>
-                      </div>
-                    </div>
-                    )
-                  })()}
-                </div>
             <button onClick={onClose} style={{
               width: 26, height: 26, borderRadius: 6,
               border: '0.5px solid rgba(255,255,255,0.09)',
@@ -1096,6 +916,161 @@ export function ForecastAlertModal({
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Segment 트리거 — Filter와 Bulk edit 사이 */}
+            <div ref={segDropRef} style={{ position: 'relative' }}>
+              <button
+                onClick={e => { e.stopPropagation(); setSegDropOpen(prev => !prev) }}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '5px 12px', borderRadius: 7, height: 30, boxSizing: 'border-box',
+                  border: segFilter !== null && segFilter.size > 0
+                    ? '0.5px solid rgba(0,229,160,0.4)' : '0.5px solid rgba(255,255,255,0.12)',
+                  background: segFilter !== null && segFilter.size > 0
+                    ? 'rgba(0,229,160,0.1)' : 'rgba(255,255,255,0.05)',
+                  color: segFilter !== null && segFilter.size > 0 ? '#00E5A0' : 'rgba(255,255,255,0.6)',
+                  fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+              >
+                <SlidersHorizontal size={13} />
+                Segment
+                {segFilter !== null && segFilter.size > 0 && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: 15, height: 15, borderRadius: '50%', background: '#00E5A0', color: '#0a2018',
+                    fontSize: 9, fontWeight: 700,
+                  }}>
+                    {segFilter.size}
+                  </span>
+                )}
+                <ChevronDown size={11} style={{ opacity: 0.5 }} />
+              </button>
+
+              {/* 드롭다운 — fixed 위치 (잘림 방지) */}
+              {segDropOpen && (() => {
+                const rect = segDropRef.current?.getBoundingClientRect()
+                return (
+                <div style={{
+                  position:      'fixed',
+                  top:           rect ? rect.bottom + 8 : 0,
+                  left:          rect ? rect.left : 0,
+                  background:    '#1a1a1a',
+                  border:        '0.5px solid rgba(255,255,255,0.12)',
+                  borderRadius:  8,
+                  minWidth:      200,
+                  width:         200,
+                  maxHeight:     360,
+                  zIndex:        100,
+                  display:       'flex',
+                  flexDirection: 'column',
+                }}>
+                  {/* 세그먼트 목록 (스크롤) — 대분류 제외, leaf만 */}
+                  <div style={{ overflowY: 'auto', flex: 1, padding: '4px 6px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {(() => {
+                  const leafNodes: typeof schema.nodes[0][] = []
+                  function collectLeaves(nodes: typeof schema.nodes) {
+                    for (const node of nodes) {
+                      if (node.children && node.children.length > 0) {
+                        collectLeaves(node.children)
+                      } else {
+                        leafNodes.push(node)
+                      }
+                    }
+                  }
+                  collectLeaves(schema.nodes)
+                  return leafNodes.map(node => {
+                    const isSelected = tempSegFilter === null ||
+                      node.segmentationCodes.some(c => tempSegFilter.has(c))
+                    return (
+                      <div
+                        key={node.id}
+                        onClick={e => {
+                          e.stopPropagation()
+                          setTempSegFilter(prev => {
+                            const allCodes = new Set(schema.allSegmentationCodes)
+                            const base = prev === null ? new Set(allCodes) : new Set(prev)
+                            const codes = node.segmentationCodes
+                            const allIn = codes.every(c => base.has(c))
+                            if (allIn) codes.forEach(c => base.delete(c))
+                            else codes.forEach(c => base.add(c))
+                            if (base.size === allCodes.size) return null
+                            return new Set(base)
+                          })
+                        }}
+                        style={{
+                          display:      'flex',
+                          alignItems:   'center',
+                          gap:          8,
+                          padding:      '6px 8px',
+                          borderRadius: 5,
+                          cursor:       'pointer',
+                          fontSize:     12,
+                          color:        isSelected ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.35)',
+                        }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+                      >
+                        <div style={{
+                          width:           14,
+                          height:          14,
+                          borderRadius:    3,
+                          background:      isSelected ? '#00E5A0' : 'transparent',
+                          border:          `0.5px solid ${isSelected ? '#00E5A0' : 'rgba(255,255,255,0.2)'}`,
+                          display:         'flex',
+                          alignItems:      'center',
+                          justifyContent:  'center',
+                          flexShrink:      0,
+                          transition:      'all 0.15s',
+                        }}>
+                          {isSelected && <Check size={9} color="#0a2018" />}
+                        </div>
+                        {node.name}
+                      </div>
+                    )
+                  })
+                  })()}
+                  </div>
+
+                  {/* 하단: 버튼 고정 */}
+                  <div style={{ flexShrink: 0, borderTop: '0.5px solid rgba(255,255,255,0.08)', padding: '4px 6px', display: 'flex', gap: 4 }}>
+                    <button
+                      onClick={e => { e.stopPropagation(); setTempSegFilter(null) }}
+                      style={{
+                        flex: 1, padding: '5px', borderRadius: 5,
+                        border: '0.5px solid rgba(255,255,255,0.1)',
+                        background: 'rgba(255,255,255,0.04)',
+                        color: 'rgba(255,255,255,0.4)', fontSize: 10, cursor: 'pointer',
+                      }}
+                    >
+                      All
+                    </button>
+                    <button
+                      onClick={e => { e.stopPropagation(); setTempSegFilter(new Set()) }}
+                      style={{
+                        flex: 1, padding: '5px', borderRadius: 5,
+                        border: '0.5px solid rgba(255,255,255,0.1)',
+                        background: 'rgba(255,255,255,0.04)',
+                        color: 'rgba(255,255,255,0.4)', fontSize: 10, cursor: 'pointer',
+                      }}
+                    >
+                      Reset
+                    </button>
+                    <button
+                      onClick={e => { e.stopPropagation(); setSegFilter(tempSegFilter); setSegDropOpen(false) }}
+                      style={{
+                        flex: 1, padding: '5px', borderRadius: 5,
+                        border: 'none',
+                        background: 'rgba(0,229,160,0.12)',
+                        color: '#00E5A0', fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                      }}
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+                )
+              })()}
             </div>
 
             <div ref={bulkDropRef} style={{ position: 'relative' }}>
