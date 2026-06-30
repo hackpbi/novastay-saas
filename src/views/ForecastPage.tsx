@@ -4,13 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import ForecastTable from '@/components/forecast/ForecastTable'
 import ForecastHeader from '@/components/forecast/ForecastHeader'
 import SegmentFilter from '@/components/forecast/SegmentFilter'
-import KpiBar from '@/components/forecast/KpiBar'
-import { Download, Pencil, ClipboardList, Zap, TrendingUp, BarChart2 } from 'lucide-react'
+import { Download, Pencil, ClipboardList, Zap, TrendingUp, BarChart2, AlertTriangle } from 'lucide-react'
 import { fetchForecastSchema } from '@/lib/forecast/schema'
 import { fetchBaselineForecast, transformRpcToTableData } from '@/lib/forecast/baseline'
 import { fetchCalendarRange, calendarToMap } from '@/lib/forecast/calendar'
 import { type EditedValues, saveForecastEdits, type SaveEdit } from '@/lib/forecast/save'
 import { BulkEditModal } from '@/components/forecast/BulkEditModal'
+import { ForecastAlertModal } from '@/components/forecast/ForecastAlertModal'
 import { ForecastGraphModal } from '@/components/forecast/ForecastGraphModal'
 import { MtdModal } from '@/components/forecast/MtdModal'
 import { useHotel } from '@/contexts/HotelContext'
@@ -294,6 +294,7 @@ export default function ForecastPage() {
 
   const [graphModalOpen, setGraphModalOpen] = useState(false)
   const [mtdModalOpen,   setMtdModalOpen]   = useState(false)
+  const [alertModalOpen, setAlertModalOpen] = useState(false)
 
   const openBulkEditModal  = useCallback((date: string, fromGraph = false) => {
     setBulkEdit({ isOpen: true, selectedDate: date, fromGraph })
@@ -413,255 +414,252 @@ export default function ForecastPage() {
           boxShadow:     '0 2px 4px rgba(0,0,0,0.05)',
         }}
       >
-        {/* ── 헤더: 1행(월 네비 + 데이터 액션) / 2행(KPI + 편집 컨트롤) ── */}
+        {/* ── 헤더: 1행(월 네비 + 불러오기) / 2행(보기 + 편집) ── */}
         <ForecastHeader
           year={currentMonth.year}
           month={currentMonth.month}
           onPrev={goPrev}
           onNext={goNext}
-          rightActions={schema && schema.nodes.length > 0 ? (
-            <>
-              {loadableDates.length > 0 ? (
-                <DatePicker
-                  label="불러오기"
-                  value={selectedLoadDate}
-                  onChange={() => {}}
-                  availableDates={loadableDates}
-                  confirmMode
-                  onConfirm={handleLoadConfirm}
-                />
-              ) : (
-                <button
-                  disabled
-                  title="저장된 forecast가 없습니다"
-                  style={{
-                    display:      'flex',
-                    alignItems:   'center',
-                    gap:          4,
-                    padding:      '4px 8px',
-                    fontSize:     12,
-                    fontWeight:   500,
-                    cursor:       'not-allowed',
-                    border:       '1px solid var(--color-border-default)',
-                    borderRadius: 6,
-                    background:   'var(--color-bg-surface)',
-                    color:        'var(--color-text-tertiary)',
-                    opacity:      0.5,
-                  }}
-                >
-                  <Download size={13} />
-                  불러오기
-                </button>
-              )}
-              <button
-                onClick={handleGenerate}
-                disabled={isGenerating || !hotelId}
-                title="baseline + a05 기준으로 자동 생성"
-                style={{
-                  display:      'flex',
-                  alignItems:   'center',
-                  gap:          4,
-                  padding:      '4px 10px',
-                  fontSize:     12,
-                  fontWeight:   600,
-                  cursor:       isGenerating ? 'wait' : 'pointer',
-                  border:       'none',
-                  borderRadius: 6,
-                  background:   'var(--color-accent-primary, #00E5A0)',
-                  color:        '#000',
-                  opacity:      isGenerating ? 0.6 : 1,
-                  whiteSpace:   'nowrap',
-                }}
-              >
-                <Zap size={13} />
-                {isGenerating ? '생성 중...' : '자동 생성'}
-              </button>
-            </>
-          ) : undefined}
-          kpiBar={schema && <KpiBar fcst={monthFcst} vsBudget={vsBudget} isLoaded={isLoaded} />}
-          rightControls={schema && schema.nodes.length > 0 ? (
-            <>
-              {/* [보기] 칩: Seg / 그래프 / MTD */}
-              <div style={{
-                display:      'inline-flex',
-                alignItems:   'center',
-                borderRadius: 7,
-                border:       '0.5px solid var(--color-border-secondary)',
-                background:   'var(--color-bg-elevated)',
+          rightExtra={
+            loadableDates.length > 0 ? (
+              <DatePicker
+                label="불러오기"
+                value={selectedLoadDate}
+                onChange={() => {}}
+                availableDates={loadableDates}
+                confirmMode
+                onConfirm={handleLoadConfirm}
+              />
+            ) : (
+              <span style={{
+                fontSize: 11,
+                color:    'var(--color-text-tertiary)',
+                opacity:  0.4,
               }}>
-                <span style={{
-                  padding:     '5px 9px 5px 11px',
-                  fontSize:    11,
-                  color:       'var(--color-text-tertiary)',
-                  borderRight: '0.5px solid var(--color-border-secondary)',
-                  background:  'rgba(255,255,255,0.02)',
-                  whiteSpace:  'nowrap',
-                }}>
-                  보기
-                </span>
-                <div style={{ borderRight: '0.5px solid var(--color-border-secondary)' }}>
-                  <SegmentFilter
-                    nodes={schema.nodes}
-                    selectedIds={selectedNodeIds}
-                    onToggle={toggleNode}
-                    onAll={selectAll}
-                    onReset={selectNone}
-                  />
-                </div>
+                저장된 데이터 없음
+              </span>
+            )
+          }
+          viewControls={schema && schema.nodes.length > 0 ? (
+            <>
+              {/* Alerts */}
+              {isLoaded && data.length > 0 && (
                 <button
-                  onClick={() => setGraphModalOpen(true)}
-                  disabled={!isLoaded || data.length === 0}
-                  title={!isLoaded ? 'forecast를 먼저 생성하세요' : 'OTB vs FCST 그래프'}
-                  onMouseEnter={e => {
-                    if (!(!isLoaded || data.length === 0))
-                      (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-accent-primary, #00E5A0)'
-                  }}
-                  onMouseLeave={e => {
-                    (e.currentTarget as HTMLButtonElement).style.color = !isLoaded ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)'
-                  }}
+                  onClick={() => setAlertModalOpen(true)}
                   style={{
                     display:     'flex',
                     alignItems:  'center',
                     gap:         4,
-                    padding:     '5px 9px',
-                    fontSize:    12,
+                    padding:     '0 9px',
+                    fontSize:    11,
                     fontWeight:  500,
                     background:  'transparent',
                     border:      'none',
                     borderRight: '0.5px solid var(--color-border-secondary)',
-                    cursor:      !isLoaded || data.length === 0 ? 'not-allowed' : 'pointer',
-                    color:       !isLoaded ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)',
-                    opacity:     !isLoaded || data.length === 0 ? 0.45 : 1,
+                    cursor:      'pointer',
+                    color:       '#f87171',
                     whiteSpace:  'nowrap',
-                    transition:  'color 0.15s',
+                    minHeight:   23,
                   }}
                 >
-                  <TrendingUp size={12} />
-                  그래프
+                  <AlertTriangle size={12} />
+                  Alerts
                 </button>
-                <button
-                  onClick={() => setMtdModalOpen(true)}
-                  title="MTD 보기 (세그별 + 월 전체)"
-                  onMouseEnter={e => {
-                    (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-accent-primary, #00E5A0)'
-                  }}
-                  onMouseLeave={e => {
-                    (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-text-primary)'
-                  }}
-                  style={{
-                    display:    'flex',
-                    alignItems: 'center',
-                    gap:        4,
-                    padding:    '5px 11px 5px 9px',
-                    fontSize:   12,
-                    fontWeight: 500,
-                    background: 'transparent',
-                    border:     'none',
-                    cursor:     'pointer',
-                    color:      'var(--color-text-primary)',
-                    whiteSpace: 'nowrap',
-                    transition: 'color 0.15s',
-                  }}
-                >
-                  <BarChart2 size={12} aria-hidden="true" />
-                  MTD
-                </button>
+              )}
+              {/* Seg */}
+              <div style={{ display: 'flex', alignItems: 'center', minHeight: 23, borderRight: '0.5px solid var(--color-border-secondary)' }}>
+                <SegmentFilter
+                  nodes={schema.nodes}
+                  selectedIds={selectedNodeIds}
+                  onToggle={toggleNode}
+                  onAll={selectAll}
+                  onReset={selectNone}
+                />
               </div>
+              {/* 그래프 */}
+              <button
+                onClick={() => setGraphModalOpen(true)}
+                disabled={!isLoaded || data.length === 0}
+                onMouseEnter={e => {
+                  if (!(!isLoaded || data.length === 0))
+                    (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-accent-primary, #00E5A0)'
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLButtonElement).style.color = !isLoaded ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)'
+                }}
+                style={{
+                  display:     'flex',
+                  alignItems:  'center',
+                  gap:         4,
+                  padding:     '0 9px',
+                  fontSize:    11,
+                  fontWeight:  500,
+                  background:  'transparent',
+                  border:      'none',
+                  borderRight: '0.5px solid var(--color-border-secondary)',
+                  cursor:      !isLoaded || data.length === 0 ? 'not-allowed' : 'pointer',
+                  color:       !isLoaded ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)',
+                  opacity:     !isLoaded || data.length === 0 ? 0.45 : 1,
+                  whiteSpace:  'nowrap',
+                  transition:  'color 0.15s',
+                  minHeight:   23,
+                }}
+              >
+                <TrendingUp size={12} />
+                그래프
+              </button>
+              {/* MTD Table */}
+              <button
+                onClick={() => setMtdModalOpen(true)}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-accent-primary, #00E5A0)'
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-text-primary)'
+                }}
+                style={{
+                  display:    'flex',
+                  alignItems: 'center',
+                  gap:        4,
+                  padding:    '0 9px',
+                  fontSize:   11,
+                  fontWeight: 500,
+                  background: 'transparent',
+                  border:     'none',
+                  cursor:     'pointer',
+                  color:      'var(--color-text-primary)',
+                  whiteSpace: 'nowrap',
+                  transition: 'color 0.15s',
+                  minHeight:  23,
+                }}
+              >
+                <BarChart2 size={12} aria-hidden="true" />
+                MTD Table
+              </button>
+            </>
+          ) : undefined}
+          editControls={schema && schema.nodes.length > 0 ? (
+            <>
               {/* 슬라이딩 pill 토글 */}
               <div
                 onClick={() => setEditMode(prev => prev === 'bulk' ? 'inline' : 'bulk')}
                 style={{
+                  display:     'flex',
+                  alignItems:  'center',
+                  padding:     '0 7px',
+                  borderRight: '0.5px solid var(--color-border-secondary)',
+                  cursor:      'pointer',
+                  minHeight:   23,
+                }}
+              >
+                <div style={{
                   display:      'inline-flex',
                   alignItems:   'center',
                   background:   'rgba(255,255,255,0.06)',
                   borderRadius: 999,
-                  padding:      3,
-                  border:       '1px solid rgba(255,255,255,0.1)',
-                  cursor:       'pointer',
-                  userSelect:   'none',
+                  padding:      2,
                   position:     'relative',
-                  flexShrink:   0,
-                }}
-              >
-                <div style={{
-                  position:     'absolute',
-                  top:          3,
-                  left:         editMode === 'bulk' ? 3 : '50%',
-                  width:        'calc(50% - 3px)',
-                  height:       'calc(100% - 6px)',
-                  background:   '#00E5A0',
-                  borderRadius: 999,
-                  transition:   'left 0.22s cubic-bezier(0.4,0,0.2,1)',
-                  zIndex:       0,
-                }} />
-                <div style={{
-                  display:      'flex',
-                  alignItems:   'center',
-                  gap:          4,
-                  padding:      '5px 12px',
-                  borderRadius: 999,
-                  fontSize:     12,
-                  fontWeight:   600,
-                  position:     'relative',
-                  zIndex:       1,
-                  color:        editMode === 'bulk' ? '#0F2E20' : 'var(--color-text-tertiary)',
-                  transition:   'color 0.2s',
-                  whiteSpace:   'nowrap',
                 }}>
-                  <ClipboardList size={13} aria-hidden="true" />
-                  일괄수정
-                </div>
-                <div style={{
-                  display:      'flex',
-                  alignItems:   'center',
-                  gap:          4,
-                  padding:      '5px 12px',
-                  borderRadius: 999,
-                  fontSize:     12,
-                  fontWeight:   600,
-                  position:     'relative',
-                  zIndex:       1,
-                  color:        editMode === 'inline' ? '#0F2E20' : 'var(--color-text-tertiary)',
-                  transition:   'color 0.2s',
-                  whiteSpace:   'nowrap',
-                }}>
-                  <Pencil size={13} aria-hidden="true" />
-                  직접수정
+                  <div style={{
+                    position:     'absolute',
+                    top:          2,
+                    left:         editMode === 'bulk' ? 2 : '50%',
+                    width:        'calc(50% - 2px)',
+                    height:       'calc(100% - 4px)',
+                    background:   '#00E5A0',
+                    borderRadius: 999,
+                    transition:   'left 0.22s cubic-bezier(0.4,0,0.2,1)',
+                    zIndex:       0,
+                  }} />
+                  <div style={{
+                    display:      'flex',
+                    alignItems:   'center',
+                    gap:          3,
+                    padding:      '2px 9px',
+                    borderRadius: 999,
+                    fontSize:     10,
+                    fontWeight:   600,
+                    position:     'relative',
+                    zIndex:       1,
+                    color:        editMode === 'bulk' ? '#0F2E20' : 'var(--color-text-tertiary)',
+                    transition:   'color 0.2s',
+                    whiteSpace:   'nowrap',
+                  }}>
+                    <ClipboardList size={11} aria-hidden="true" />
+                    일괄
+                  </div>
+                  <div style={{
+                    display:      'flex',
+                    alignItems:   'center',
+                    gap:          3,
+                    padding:      '2px 9px',
+                    borderRadius: 999,
+                    fontSize:     10,
+                    fontWeight:   600,
+                    position:     'relative',
+                    zIndex:       1,
+                    color:        editMode === 'inline' ? '#0F2E20' : 'var(--color-text-tertiary)',
+                    transition:   'color 0.2s',
+                    whiteSpace:   'nowrap',
+                  }}>
+                    <Pencil size={11} aria-hidden="true" />
+                    직접
+                  </div>
                 </div>
               </div>
-              {/* 변경/저장 */}
-              {modifiedCount > 0 && (
-                <div style={{
-                  display:      'flex',
-                  alignItems:   'center',
-                  gap:          4,
-                  padding:      '4px 8px',
-                  fontSize:     11,
-                  fontWeight:   500,
-                  color:        'var(--color-warning, #F5A623)',
-                  background:   'rgba(245, 158, 11, 0.08)',
-                  borderRadius: 4,
-                  whiteSpace:   'nowrap',
-                }}>
-                  ⚠ 변경 {modifiedCount}건
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    style={{
-                      padding:      '3px 10px',
-                      fontSize:     11,
-                      fontWeight:   600,
-                      background:   'var(--color-accent-primary, #00E5A0)',
-                      color:        '#000',
-                      border:       'none',
-                      borderRadius: 4,
-                      cursor:       saving ? 'wait' : 'pointer',
-                      opacity:      saving ? 0.6 : 1,
-                    }}
-                  >
-                    {saving ? '저장 중...' : '저장'}
-                  </button>
-                </div>
+              {/* 자동생성 */}
+              <button
+                onClick={handleGenerate}
+                disabled={isGenerating || !hotelId}
+                style={{
+                  display:     'flex',
+                  alignItems:  'center',
+                  gap:         4,
+                  padding:     '0 10px',
+                  fontSize:    11,
+                  fontWeight:  600,
+                  cursor:      isGenerating ? 'wait' : 'pointer',
+                  border:      'none',
+                  borderRight: '0.5px solid var(--color-border-secondary)',
+                  background:  'rgba(0,229,160,0.1)',
+                  color:       '#00E5A0',
+                  opacity:     isGenerating ? 0.6 : 1,
+                  whiteSpace:  'nowrap',
+                  minHeight:   23,
+                }}
+              >
+                <Zap size={12} />
+                {isGenerating ? '생성 중...' : '자동 생성'}
+              </button>
+              {/* 저장 */}
+              {isLoaded && (
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  style={{
+                    display:    'flex',
+                    alignItems: 'center',
+                    gap:        4,
+                    padding:    '0 10px',
+                    fontSize:   11,
+                    fontWeight: 600,
+                    cursor:     saving ? 'wait' : 'pointer',
+                    border:     'none',
+                    background: modifiedCount > 0 ? 'rgba(0,229,160,0.15)' : 'transparent',
+                    color:      modifiedCount > 0 ? '#00E5A0' : 'var(--color-text-tertiary)',
+                    opacity:    saving ? 0.6 : 1,
+                    whiteSpace: 'nowrap',
+                    minHeight:  23,
+                    transition: 'background 0.15s, color 0.15s',
+                  }}
+                >
+                  {modifiedCount > 0 && (
+                    <span style={{ fontSize: 10, color: 'var(--color-warning, #F5A623)', marginRight: 2 }}>
+                      ⚠{modifiedCount}
+                    </span>
+                  )}
+                  저장
+                </button>
               )}
             </>
           ) : undefined}
@@ -879,6 +877,21 @@ export default function ForecastPage() {
         hotelId={hotelId}
         onSelectDate={selectBulkEditDate}
       />
+
+      {/* Alert 모달 */}
+      {alertModalOpen && schema && isLoaded && (
+        <ForecastAlertModal
+          isOpen={alertModalOpen}
+          onClose={() => setAlertModalOpen(false)}
+          schema={schema}
+          data={data}
+          editedValues={editedValues}
+          onEditChange={setEditedValues}
+          saving={saving}
+          onSave={handleSave}
+          otbDate={otbDate || new Date().toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })}
+        />
+      )}
     </div>
   )
 }

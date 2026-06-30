@@ -417,13 +417,20 @@ type OtbMetrics = ReturnType<typeof calcOtbMetrics>
 
 
 function TotalOccRow({ fc, otb, roomCount }: { fc: FcMetrics; otb: OtbMetrics; roomCount: number }) {
-  const gapRn  = fc.totalRn  - otb.totalRn
-  const gapRev = fc.totalRev - otb.totalRev
-  const gapAdr = fc.adr - otb.adr
-  const gapOcc = fc.occ - otb.occ
+  const gapRn     = fc.totalRn  - otb.totalRn
+  const gapRev    = fc.totalRev - otb.totalRev
+  const gapAdr    = fc.adr      - otb.adr
+  const gapOcc    = fc.occ      - otb.occ
+  const gapRevpar = fc.revpar   - otb.revpar
 
-  const cell: React.CSSProperties = { textAlign: 'right', fontSize: 12 }
+  const cell:  React.CSSProperties = { textAlign: 'right', fontSize: 12 }
   const label: React.CSSProperties = { fontSize: 11, fontWeight: 700, letterSpacing: '0.05em' }
+  const PURPLE = 'rgba(99,102,241,0.8)'
+  const MINT   = 'rgba(0,229,160,0.8)'
+  // GAP 색상 (양수 민트 / 음수 빨강)
+  const gColor = (v: number) => (v > 0 ? '#00E5A0' : v < 0 ? '#f87171' : 'var(--color-text-muted)')
+  // LY 합계는 미제공 → '—' 자리 (테이블 LY 컬럼 정렬)
+  const dash: React.CSSProperties = { ...cell, gridColumn: 'span 3', textAlign: 'center', color: 'var(--color-text-muted)' }
 
   return (
     <div style={{
@@ -432,6 +439,7 @@ function TotalOccRow({ fc, otb, roomCount }: { fc: FcMetrics; otb: OtbMetrics; r
       background:   'var(--color-bg-secondary)',
       borderRadius: 8,
       border:       '1px solid var(--color-border-default)',
+      borderTop:    '1px solid rgba(255,255,255,0.1)',
     }}>
 
       {/* 그룹 헤더 */}
@@ -440,48 +448,63 @@ function TotalOccRow({ fc, otb, roomCount }: { fc: FcMetrics; otb: OtbMetrics; r
         <div style={{ ...label, gridColumn: 'span 3', textAlign: 'center', color: 'var(--color-accent-primary)' }}>FC</div>
         <div style={{ ...label, gridColumn: 'span 3', textAlign: 'center', color: 'var(--color-text-muted)' }}>OTB</div>
         <div style={{ ...label, gridColumn: 'span 3', textAlign: 'center', color: 'var(--color-text-secondary)' }}>Gap</div>
+        <div style={{ ...label, gridColumn: 'span 3', textAlign: 'center', color: 'var(--color-text-muted)' }}>LY</div>
       </div>
 
       {/* Total 행 */}
       <div style={{ display: 'grid', gridTemplateColumns: GRID_TEMPLATE, gap: 4, alignItems: 'center' }}>
-        <div style={{ ...label, color: 'var(--color-text-primary)' }}>Total</div>
+        <div style={{ ...label, color: 'rgba(255,255,255,0.85)' }}>Total</div>
         {/* FC */}
-        <div style={{ ...cell, color: fc.isOverCapacity ? 'var(--color-text-danger, #ef4444)' : 'var(--color-text-primary)', fontWeight: 600 }}>
+        <div style={{ ...cell, color: fc.isOverCapacity ? 'var(--color-text-danger, #ef4444)' : 'rgba(255,255,255,0.85)', fontWeight: 600 }}>
           {fc.totalRn}{fc.isOverCapacity ? ' ⚠' : ''}
         </div>
-        <div style={{ ...cell, fontWeight: 600, color: 'var(--color-text-primary)' }}>
-          {Math.round(fc.adr / 1000)}K
-        </div>
-        <div style={{ ...cell, fontWeight: 600, color: 'var(--color-text-primary)' }}>
-          {(fc.totalRev / 1_000_000).toFixed(1)}M
-        </div>
+        <div style={{ ...cell, fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>{Math.round(fc.adr / 1000)}K</div>
+        <div style={{ ...cell, fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>{(fc.totalRev / 1_000_000).toFixed(1)}M</div>
         {/* OTB */}
         <div style={{ ...cell, color: 'var(--color-text-secondary)' }}>{otb.totalRn}</div>
         <div style={{ ...cell, color: 'var(--color-text-secondary)' }}>{Math.round(otb.adr / 1000)}K</div>
         <div style={{ ...cell, color: 'var(--color-text-secondary)' }}>{(otb.totalRev / 1_000_000).toFixed(1)}M</div>
         {/* Gap */}
-        <div style={{ ...cell, color: gapColor(gapRn) }}>{fmtGap(gapRn)}</div>
-        <div style={{ ...cell, color: gapColor(gapAdr) }}>{fmtGap(gapAdr, 'k')}</div>
-        <div style={{ ...cell, color: gapColor(gapRev) }}>{fmtGap(gapRev, 'm')}</div>
+        <div style={{ ...cell, color: gColor(gapRn) }}>{fmtGap(gapRn)}</div>
+        <div style={{ ...cell, color: gColor(gapAdr) }}>{fmtGap(gapAdr, 'k')}</div>
+        <div style={{ ...cell, color: gColor(gapRev) }}>{fmtGap(gapRev, 'm')}</div>
+        {/* LY */}
+        <div style={dash}>—</div>
       </div>
 
       {/* 구분선 */}
       <div style={{ borderTop: '1px solid var(--color-border-default)', margin: '8px 0' }} />
 
-      {/* OCC 행 */}
+      {/* OCC 행 (보라) */}
       <div style={{ display: 'grid', gridTemplateColumns: GRID_TEMPLATE, gap: 4, alignItems: 'center' }}>
-        <div style={{ ...label, color: 'var(--color-text-primary)' }}>OCC</div>
+        <div style={{ ...label, color: PURPLE }}>OCC</div>
         <div style={{ ...cell, gridColumn: 'span 3', textAlign: 'center', fontWeight: 700,
-          color: fc.isOverCapacity ? 'var(--color-text-danger, #ef4444)' : 'var(--color-text-primary)',
+          color: fc.isOverCapacity ? 'var(--color-text-danger, #ef4444)' : PURPLE,
         }}>
           {fc.occ.toFixed(1)}%{fc.isOverCapacity ? ' ⚠' : ''}
         </div>
         <div style={{ ...cell, gridColumn: 'span 3', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
           {otb.occ.toFixed(1)}%
         </div>
-        <div style={{ ...cell, gridColumn: 'span 3', textAlign: 'center', color: gapColor(gapOcc) }}>
+        <div style={{ ...cell, gridColumn: 'span 3', textAlign: 'center', color: gColor(gapOcc) }}>
           {fmtGapPct(gapOcc)}
         </div>
+        <div style={dash}>—</div>
+      </div>
+
+      {/* RevPAR 행 (민트) */}
+      <div style={{ display: 'grid', gridTemplateColumns: GRID_TEMPLATE, gap: 4, alignItems: 'center', marginTop: 4 }}>
+        <div style={{ ...label, color: MINT }}>RevPAR</div>
+        <div style={{ ...cell, gridColumn: 'span 3', textAlign: 'center', fontWeight: 700, color: MINT }}>
+          {Math.round(fc.revpar / 1000)}K
+        </div>
+        <div style={{ ...cell, gridColumn: 'span 3', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
+          {Math.round(otb.revpar / 1000)}K
+        </div>
+        <div style={{ ...cell, gridColumn: 'span 3', textAlign: 'center', color: gColor(gapRevpar) }}>
+          {fmtGap(gapRevpar, 'k')}
+        </div>
+        <div style={dash}>—</div>
       </div>
 
       <div style={{ marginTop: 6, textAlign: 'right', fontSize: 10, color: 'var(--color-text-muted)' }}>
@@ -826,6 +849,11 @@ function DailyTab({ schema, day, selectedDate, tempEdits, setTempEdits, hotelId,
           columns={columns}
           data={tableData}
           segWidth={COL.SEG}
+        />
+        <TotalOccRow
+          fc={calcDailyMetrics(day, tempEdits, selectedDate, schema.roomCount)}
+          otb={calcOtbMetrics(day, schema.roomCount)}
+          roomCount={schema.roomCount}
         />
       </div>
     </div>

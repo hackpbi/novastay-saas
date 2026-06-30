@@ -9,6 +9,7 @@ export type C05Row = {
   is_bold: boolean
   bg_dark_color:  string | null
   bg_light_color: string | null
+  sorting1: string | null   // 채널 분류 ('direct'/'ota'/그 외)
 }
 
 // ─── Tree node (built from C05) ────────────────────────────────────────────────
@@ -22,6 +23,7 @@ export type SchemaNode = {
   children: SchemaNode[]
   bgDarkColor?:  string   // c05.bg_dark_color
   bgLightColor?: string   // c05.bg_light_color
+  sorting1?: string       // c05.sorting1 — 채널 분류 ('direct'/'ota' 등)
 }
 
 // ─── Column rendering units ────────────────────────────────────────────────────

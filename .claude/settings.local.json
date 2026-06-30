@@ -49,7 +49,19 @@
       "Bash(grep -nA2 \"<RateChartView\" src/views/RateStrategyPage.tsx)",
       "Bash(grep -nE \"const barDay    = effectiveBarRateMap|const baseRateK|const fmtRate|Pencil size=|/* 기존 요금 표시|변경$|기존 요금 표시\" src/components/rate-strategy/RateCalendarView.tsx)",
       "Bash(grep -nE \"^  return \\\\\\(|^    <>|return \\\\\\(\\\\s*$\" src/components/rate-strategy/RateCalendarView.tsx)",
-      "PowerShell(git add -A)"
+      "PowerShell(git add -A)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(xargs grep -l \"use server\\\\|server action\")",
+      "PowerShell(git -C \"c:/dev/18_NovaStay_Saas_ver1\" status --short)",
+      "PowerShell(git -C \"c:/dev/18_NovaStay_Saas_ver1\" diff --stat -- src/views/ForecastPage.tsx)",
+      "PowerShell(git -C \"c:/dev/18_NovaStay_Saas_ver1\" --no-pager diff src/views/ForecastPage.tsx)",
+      "PowerShell(git -C \"c:/dev/18_NovaStay_Saas_ver1\" diff --stat src/components/forecast/ForecastHeader.tsx src/views/ForecastPage.tsx)",
+      "PowerShell(git -C \"c:/dev/18_NovaStay_Saas_ver1\" --no-pager diff src/components/forecast/ForecastHeader.tsx)",
+      "PowerShell(git -C \"c:/dev/18_NovaStay_Saas_ver1\" --no-pager diff src/components/forecast/ForecastAlertModal.tsx)",
+      "PowerShell($env:NEXT_DIST_DIR='.next-verify'; npm run build 2>&1 | Select-Object -Last 40)"
+    ],
+    "additionalDirectories": [
+      "C:\\dev\\18_NovaStay_Saas_ver1\\.next-verify"
     ]
   }
 }
