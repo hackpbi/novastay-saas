@@ -579,13 +579,24 @@ export function ForecastAlertModal({
                 {searched ? `${alertRows.length} items` : '검색 대기 중'} · Room cap: {roomCount}
               </div>
             </div>
-
+            {rnCount > 0 && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '3px 8px', borderRadius: 999, fontSize: 10, fontWeight: 500, background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '0.5px solid rgba(239,68,68,0.2)' }}>
+                <TrendingDown size={10} />{rnCount} RN gaps
+              </div>
+            )}
+            {adrCount > 0 && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '3px 8px', borderRadius: 999, fontSize: 10, fontWeight: 500, background: 'rgba(245,158,11,0.12)', color: '#fbbf24', border: '0.5px solid rgba(245,158,11,0.2)' }}>
+                <AlertTriangle size={10} />{adrCount} ADR issues
+              </div>
+            )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
             {/* Search 트리거 + 드롭다운 */}
             <div ref={searchDropRef} style={{ position: 'relative' }}>
               <button
                 onClick={e => { e.stopPropagation(); setSearchDropOpen(prev => !prev) }}
                 style={{
-                  padding: '5px 14px', borderRadius: 7,
+                  padding: '5px 14px', borderRadius: 7, height: 30, boxSizing: 'border-box',
                   border: '0.5px solid rgba(0,229,160,0.3)',
                   background: 'rgba(0,229,160,0.08)', color: '#00E5A0',
                   fontSize: 12, fontWeight: 600, cursor: 'pointer',
@@ -810,127 +821,6 @@ export function ForecastAlertModal({
                 </div>
               )}
             </div>
-            {rnCount > 0 && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '3px 8px', borderRadius: 999, fontSize: 10, fontWeight: 500, background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '0.5px solid rgba(239,68,68,0.2)' }}>
-                <TrendingDown size={10} />{rnCount} RN gaps
-              </div>
-            )}
-            {adrCount > 0 && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '3px 8px', borderRadius: 999, fontSize: 10, fontWeight: 500, background: 'rgba(245,158,11,0.12)', color: '#fbbf24', border: '0.5px solid rgba(245,158,11,0.2)' }}>
-                <AlertTriangle size={10} />{adrCount} ADR issues
-              </div>
-            )}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            {/* 통합 필터: All / R/N / ADR / Segment */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-
-              {/* 통합 필터 컨테이너 */}
-              <div style={{
-                display:      'inline-flex',
-                alignItems:   'center',
-                background:   'rgba(255,255,255,0.05)',
-                borderRadius: 999,
-                padding:      4,
-                border:       '0.5px solid rgba(255,255,255,0.12)',
-                gap:          2,
-              }}>
-                {/* Filter 드롭다운 트리거 */}
-                <div ref={filterDropRef} style={{ position: 'relative' }}>
-                  <button
-                    onClick={e => { e.stopPropagation(); setFilterDropOpen(prev => !prev) }}
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 6,
-                      padding: '5px 14px', borderRadius: 999,
-                      border: filter !== 'all' ? '0.5px solid rgba(0,229,160,0.4)' : '0.5px solid rgba(255,255,255,0.12)',
-                      background: filter !== 'all' ? 'rgba(0,229,160,0.1)' : 'rgba(255,255,255,0.05)',
-                      color: filter !== 'all' ? '#00E5A0' : 'rgba(255,255,255,0.6)',
-                      fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-                    }}
-                  >
-                    Filter: {filter === 'all' ? 'All' : filter === 'rn' ? 'R/N' : filter === 'adr' ? 'ADR' : 'R/N+ADR'}
-                    <ChevronDown size={11} style={{ opacity: 0.5 }} />
-                  </button>
-
-                  {filterDropOpen && (
-                    <div style={{
-                      position: 'absolute', top: 'calc(100% + 8px)', left: 0,
-                      background: '#1a1a1a', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 10,
-                      padding: 6, minWidth: 160, zIndex: 100,
-                      display: 'flex', flexDirection: 'column', gap: 2,
-                      boxShadow: '0 12px 32px rgba(0,0,0,0.6)',
-                    }}>
-                      {([
-                        ['all', 'All'],
-                        ['rn', 'R/N'],
-                        ['adr', 'ADR'],
-                        ['both', 'R/N+ADR'],
-                      ] as [FilterType, string][]).map(([f, label]) => (
-                        <div
-                          key={f}
-                          onClick={() => setFilter(f)}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: 8,
-                            padding: '7px 9px', borderRadius: 6, cursor: 'pointer',
-                            background: filter === f ? 'rgba(0,229,160,0.08)' : 'transparent',
-                          }}
-                          onMouseEnter={e => { if (filter !== f) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)' }}
-                          onMouseLeave={e => { if (filter !== f) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
-                        >
-                          <div style={{
-                            width: 14, height: 14, borderRadius: '50%',
-                            border: `1.5px solid ${filter === f ? '#00E5A0' : 'rgba(255,255,255,0.25)'}`,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                          }}>
-                            {filter === f && <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#00E5A0' }} />}
-                          </div>
-                          <span style={{
-                            fontSize: 12, fontWeight: 500,
-                            color: filter === f ? '#fff' : 'rgba(255,255,255,0.6)',
-                          }}>
-                            {label}
-                          </span>
-                        </div>
-                      ))}
-
-                      <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.08)', margin: '4px 2px' }} />
-
-                      {/* 하단 버튼: All / Reset / Done */}
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button
-                          onClick={() => setFilter('all')}
-                          style={{
-                            flex: 1, padding: '5px', borderRadius: 5,
-                            border: '0.5px solid rgba(255,255,255,0.1)',
-                            background: 'rgba(255,255,255,0.04)',
-                            color: 'rgba(255,255,255,0.4)', fontSize: 10, cursor: 'pointer',
-                          }}
-                        >All</button>
-                        <button
-                          onClick={() => setFilter('all')}
-                          style={{
-                            flex: 1, padding: '5px', borderRadius: 5,
-                            border: '0.5px solid rgba(255,255,255,0.1)',
-                            background: 'rgba(255,255,255,0.04)',
-                            color: 'rgba(255,255,255,0.4)', fontSize: 10, cursor: 'pointer',
-                          }}
-                        >Reset</button>
-                        <button
-                          onClick={() => setFilterDropOpen(false)}
-                          style={{
-                            flex: 1, padding: '5px', borderRadius: 5,
-                            border: 'none',
-                            background: 'rgba(0,229,160,0.12)',
-                            color: '#00E5A0', fontSize: 10, fontWeight: 600, cursor: 'pointer',
-                          }}
-                        >Done</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* 구분선 */}
-                <div style={{ width: '0.5px', height: 16, background: 'rgba(255,255,255,0.12)', margin: '0 2px' }} />
 
                 {/* Segment 드롭다운 트리거 */}
                 <div ref={segDropRef} style={{ position: 'relative' }}>
@@ -1112,9 +1002,6 @@ export function ForecastAlertModal({
                     )
                   })()}
                 </div>
-              </div>
-
-            </div>
             <button onClick={onClose} style={{
               width: 26, height: 26, borderRadius: 6,
               border: '0.5px solid rgba(255,255,255,0.09)',
@@ -1142,12 +1029,81 @@ export function ForecastAlertModal({
             background:  '#0f0f0f',
             borderBottom: '0.5px solid rgba(0,229,160,0.07)',
           }}>
+            {/* Filter 트리거 — Bulk edit 왼쪽 */}
+            <div ref={filterDropRef} style={{ position: 'relative' }}>
+              <button
+                onClick={e => { e.stopPropagation(); setFilterDropOpen(prev => !prev) }}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '5px 14px', borderRadius: 7, height: 30, boxSizing: 'border-box',
+                  border: filter !== 'all' ? '0.5px solid rgba(0,229,160,0.4)' : '0.5px solid rgba(255,255,255,0.12)',
+                  background: filter !== 'all' ? 'rgba(0,229,160,0.1)' : 'rgba(255,255,255,0.05)',
+                  color: filter !== 'all' ? '#00E5A0' : 'rgba(255,255,255,0.6)',
+                  fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+              >
+                Filter: {filter === 'all' ? 'All' : filter === 'rn' ? 'R/N' : filter === 'adr' ? 'ADR' : 'R/N+ADR'}
+                <ChevronDown size={11} style={{ opacity: 0.5 }} />
+              </button>
+
+              {filterDropOpen && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 8px)', left: 0,
+                  background: '#1a1a1a', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 10,
+                  padding: 6, minWidth: 160, zIndex: 100,
+                  display: 'flex', flexDirection: 'column', gap: 2,
+                  boxShadow: '0 12px 32px rgba(0,0,0,0.6)',
+                }}>
+                  {([
+                    ['all', 'All'],
+                    ['rn', 'R/N'],
+                    ['adr', 'ADR'],
+                    ['both', 'R/N+ADR'],
+                  ] as [FilterType, string][]).map(([f, label]) => (
+                    <div
+                      key={f}
+                      onClick={() => setFilter(f)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '7px 9px', borderRadius: 6, cursor: 'pointer',
+                        background: filter === f ? 'rgba(0,229,160,0.08)' : 'transparent',
+                      }}
+                      onMouseEnter={e => { if (filter !== f) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)' }}
+                      onMouseLeave={e => { if (filter !== f) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+                    >
+                      <div style={{
+                        width: 14, height: 14, borderRadius: '50%',
+                        border: `1.5px solid ${filter === f ? '#00E5A0' : 'rgba(255,255,255,0.25)'}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>
+                        {filter === f && <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#00E5A0' }} />}
+                      </div>
+                      <span style={{
+                        fontSize: 12, fontWeight: 500,
+                        color: filter === f ? '#fff' : 'rgba(255,255,255,0.6)',
+                      }}>
+                        {label}
+                      </span>
+                    </div>
+                  ))}
+
+                  <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.08)', margin: '4px 2px' }} />
+
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button onClick={() => setFilter('all')} style={{ flex: 1, padding: '5px', borderRadius: 5, border: '0.5px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.4)', fontSize: 10, cursor: 'pointer' }}>All</button>
+                    <button onClick={() => setFilter('all')} style={{ flex: 1, padding: '5px', borderRadius: 5, border: '0.5px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.4)', fontSize: 10, cursor: 'pointer' }}>Reset</button>
+                    <button onClick={() => setFilterDropOpen(false)} style={{ flex: 1, padding: '5px', borderRadius: 5, border: 'none', background: 'rgba(0,229,160,0.12)', color: '#00E5A0', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>Done</button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div ref={bulkDropRef} style={{ position: 'relative' }}>
               <button
                 onClick={() => selectedIds.size > 0 && setBulkDropOpen(prev => !prev)}
                 disabled={selectedIds.size === 0}
                 style={{
-                  padding: '5px 14px', borderRadius: 7,
+                  padding: '5px 14px', borderRadius: 7, height: 30, boxSizing: 'border-box',
                   border: selectedIds.size > 0 ? '0.5px solid rgba(0,229,160,0.3)' : '0.5px solid rgba(255,255,255,0.08)',
                   background: selectedIds.size > 0 ? 'rgba(0,229,160,0.08)' : 'rgba(255,255,255,0.03)',
                   color: selectedIds.size > 0 ? '#00E5A0' : 'rgba(255,255,255,0.2)',
