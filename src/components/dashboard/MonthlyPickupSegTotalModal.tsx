@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useDateContext } from '@/contexts/DateContext'
-import { useHotel } from '@/contexts/HotelContext'
 import DatePicker from '@/components/DatePicker'
 import { useMarketSchema } from '@/hooks/useMarketSchema'
 import { usePickupData } from '@/hooks/usePickupData'
-import { useAccountPickupData } from '@/hooks/useAccountPickupData'
+import {
+  buildMonthlyPickupAccountTable,
+  type MonthlyPickupAccountGroup,
+} from '@/utils/monthlyPickupAccountTable'
 import {
   buildMonthlyPickupSegTable,
   type MonthlyPickupCell,
@@ -126,7 +128,6 @@ export default function MonthlyPickupSegTotalModal({
 }) {
   const { theme }                                         = useTheme()
   const isDark                                            = theme === 'dark'
-  const { currentHotel }                                  = useHotel()
   const { otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate } = useDateContext()
   // 우측 패널: 선택된 세그먼트 (대분류 이름 클릭 시 set)
   const [selectedSeg, setSelectedSeg] = useState<{ label: string; codes: string[]; monthKey: string } | null>(null)
@@ -148,33 +149,40 @@ export default function MonthlyPickupSegTotalModal({
     if (s.segmentation.includes('HOU')) houRowIds.add(s.id)
   }
 
-  // ─── 우측 Account Pickup 패널 데이터 ───────────────────────────────────────────
-  // monthKeys 포맷은 'YYYY-MM' (business_date.slice(0,7)) → 월은 slice(5,7)
-  const activeMonthKey = selectedSeg?.monthKey || monthKeys[0] || ''
-  const pickupYear  = activeMonthKey ? parseInt(activeMonthKey.slice(0, 4)) : new Date().getFullYear()
-  const pickupMonth = activeMonthKey ? parseInt(activeMonthKey.slice(5, 7)) : new Date().getMonth() + 1
-
-  const { data: accountPickupRows = [] } = useAccountPickupData({
-    hotelId:     currentHotel?.id ?? '',
-    otbDate:     otbDate ?? '',
-    vsDate:      vsOtbDate ?? '',
-    year:        pickupYear,
-    month:       pickupMonth,
-    segFilter:   null,
-    isPastMonth: false,
-  })
+  // ─── 우측 Account Pickup 패널 데이터 (usePickupData 기반 6개월 합계) ────────────────
+  // 추가 RPC 없이 이미 로드된 pickup으로 계정 단위 6개월 합계 집계 (합계 표와 동일 소스)
+  const { groups: accountGroups } = !loading && schema.length > 0
+    ? buildMonthlyPickupAccountTable({ schema, pickup, roomCount })
+    : { groups: [] as MonthlyPickupAccountGroup[] }
 
   const accountList = useMemo(() => {
     if (!selectedSeg) return []
-    return (accountPickupRows as Array<{ account_name: string; segmentation: string; otb_nights: number; vs_nights: number; otb_revenue: number; vs_revenue: number }>)
-      .filter(r => selectedSeg.codes.includes(r.segmentation))
-      .map(r => ({
-        name:    r.account_name,
-        diffRn:  r.otb_nights - r.vs_nights,    // 픽업 = 현재OTB - vsOTB
-        diffRev: r.otb_revenue - r.vs_revenue,
-      }))
+    // selectedSeg.codes(세그 코드) → 해당 코드를 가진 schema 세그 이름 집합
+    // (account 그룹은 segmentationName 키라 codes로 직접 매칭 불가 → 이름으로 변환)
+    const segNames = new Set<string>()
+    for (const s of schema) {
+      if (s.level === 'main') continue
+      if (s.segmentation.some(c => selectedSeg.codes.includes(c))) segNames.add(s.name)
+    }
+    // 매칭 그룹의 계정 rows → 계정 단위 6개월 합계 (계정명 중복 제거)
+    const seen = new Set<string>()
+    const out: { name: string; diffRn: number; diffRev: number }[] = []
+    for (const g of accountGroups) {
+      if (!segNames.has(g.segmentationName)) continue
+      for (const row of g.rows) {
+        if (seen.has(row.account_name)) continue
+        seen.add(row.account_name)
+        out.push({
+          name:    row.account_name,
+          diffRn:  row.totalPickup.pickupNights,
+          diffRev: row.totalPickup.pickupRevenue,
+        })
+      }
+    }
+    return out
+      .filter(a => a.diffRn !== 0 || a.diffRev !== 0)
       .sort((a, b) => b.diffRn - a.diffRn)
-  }, [selectedSeg, accountPickupRows])
+  }, [selectedSeg, accountGroups, schema])
 
   // body scroll lock + 열릴 때 선택 세그먼트 리셋
   useEffect(() => {
@@ -352,7 +360,7 @@ export default function MonthlyPickupSegTotalModal({
           <div style={{ padding: '10px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>Account Pickup</div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
-              {selectedSeg ? `${selectedSeg.label} · ${selectedSeg.monthKey} 기준 (참고용)` : '세그먼트를 클릭하세요'}
+              {selectedSeg ? `${selectedSeg.label} · 6개월 합계` : '세그먼트를 클릭하세요'}
             </div>
             <button
               onClick={() => selectedSeg && onPickupCellClick?.(selectedSeg.codes, null, selectedSeg.label)}
