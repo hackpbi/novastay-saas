@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useDateContext } from '@/contexts/DateContext'
+import { useHotel } from '@/contexts/HotelContext'
 import DatePicker from '@/components/DatePicker'
 import { useMarketSchema } from '@/hooks/useMarketSchema'
 import { usePickupData } from '@/hooks/usePickupData'
+import { useAccountPickupData } from '@/hooks/useAccountPickupData'
 import {
   buildMonthlyPickupSegTable,
   type MonthlyPickupSegRow,
@@ -122,7 +124,10 @@ export default function MonthlyPickupSegModal({
 }) {
   const { theme }                                         = useTheme()
   const isDark                                            = theme === 'dark'
+  const { currentHotel }                                  = useHotel()
   const { otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate } = useDateContext()
+  // 우측 패널: 선택된 세그먼트 (대분류 이름 클릭 시 set)
+  const [selectedSeg, setSelectedSeg] = useState<{ label: string; codes: string[] } | null>(null)
   const days = otbDate && vsOtbDate
     ? Math.round((new Date(otbDate).getTime() - new Date(vsOtbDate).getTime()) / 86400000)
     : 0
@@ -138,6 +143,34 @@ export default function MonthlyPickupSegModal({
 
   const totalPages    = Math.ceil(monthKeys.length / PAGE_SIZE)
   const visibleMonths = monthKeys.slice(pageIndex * PAGE_SIZE, pageIndex * PAGE_SIZE + PAGE_SIZE)
+
+  // ─── 우측 Account Pickup 패널 데이터 ───────────────────────────────────────────
+  // 현재 페이지 첫 가시 월 기준으로 어카운트 픽업 조회 (PAGE_SIZE=3)
+  const firstMonthKey = monthKeys[pageIndex * PAGE_SIZE] ?? ''
+  const pickupYear  = firstMonthKey ? parseInt(firstMonthKey.slice(0, 4)) : new Date().getFullYear()
+  const pickupMonth = firstMonthKey ? parseInt(firstMonthKey.slice(4, 6)) : new Date().getMonth() + 1
+
+  const { data: accountPickupRows = [] } = useAccountPickupData({
+    hotelId:     currentHotel?.id ?? '',
+    otbDate:     otbDate ?? '',
+    vsDate:      vsOtbDate ?? '',
+    year:        pickupYear,
+    month:       pickupMonth,
+    segFilter:   null,
+    isPastMonth: false,
+  })
+
+  const accountList = useMemo(() => {
+    if (!selectedSeg) return []
+    return (accountPickupRows as Array<{ account_name: string; segmentation: string; otb_nights: number; vs_nights: number; otb_revenue: number; vs_revenue: number }>)
+      .filter(r => selectedSeg.codes.includes(r.segmentation))
+      .map(r => ({
+        name:    r.account_name,
+        diffRn:  r.otb_nights - r.vs_nights,    // 픽업 = 현재OTB - vsOTB
+        diffRev: r.otb_revenue - r.vs_revenue,
+      }))
+      .sort((a, b) => b.diffRn - a.diffRn)
+  }, [selectedSeg, accountPickupRows])
 
   // HOU 행 식별
   const houRowIds = new Set<string>()
@@ -160,9 +193,9 @@ export default function MonthlyPickupSegModal({
     return () => window.removeEventListener('keydown', handler)
   }, [open, onClose])
 
-  // 열릴 때 페이지 리셋
+  // 열릴 때 페이지 + 선택 세그먼트 리셋
   useEffect(() => {
-    if (open) setPageIndex(0)
+    if (open) { setPageIndex(0); setSelectedSeg(null) }
   }, [open])
 
   if (!open) return null
@@ -180,7 +213,7 @@ export default function MonthlyPickupSegModal({
       />
 
       <div
-        className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-5xl"
+        className="relative rounded-2xl overflow-hidden flex flex-col w-[96vw] max-w-[1400px]"
         style={{ maxHeight: '88vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
@@ -226,6 +259,20 @@ export default function MonthlyPickupSegModal({
                 </div>
               )}
               <button
+                onClick={() => onPickupCellClick?.(selectedSeg?.codes ?? [], null, selectedSeg?.label ?? '')}
+                style={{
+                  fontSize: 11,
+                  padding: '3px 10px',
+                  borderRadius: 6,
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  background: 'transparent',
+                  color: 'rgba(255,255,255,0.5)',
+                  cursor: 'pointer',
+                }}
+              >
+                Account View →
+              </button>
+              <button
                 onClick={onClose}
                 className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1"
                 aria-label="닫기"
@@ -258,8 +305,9 @@ export default function MonthlyPickupSegModal({
           </div>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto">
+        {/* Body: 좌측 테이블 + 우측 Account Pickup 패널 */}
+        <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
+        <div style={{ width: 'calc(100% - 220px)', flexShrink: 0, overflowX: 'auto', overflowY: 'auto' }}>
           {loading ? (
             <Skeleton cols={colCount} />
           ) : rows.length === 0 || monthKeys.length === 0 ? (
@@ -295,15 +343,22 @@ export default function MonthlyPickupSegModal({
                     const isHou    = houRowIds.has(row.id)
                     const clickable = !!onPickupCellClick && !isHou && row.segmentationCodes.length > 0
                     const nameColor = row.indent ? 'rgba(255,255,255,0.45)' : rowColor
+                    // 우측 패널용: 대분류 행만 클릭 가능 / 선택 시 행 하이라이트
+                    const segSelectable = !row.indent && row.segmentationCodes.length > 0
+                    const isSelected    = segSelectable && selectedSeg?.label === row.name
+                    const baseBg        = isSelected ? 'rgba(0,229,160,0.08)' : rowBg
 
                     return (
                       <tr
                         key={row.id}
                         style={{ borderBottom: BORDER, color: rowColor, fontWeight: row.isBold ? 600 : 400 }}
-                        onMouseEnter={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${rowBg}` })}
-                        onMouseLeave={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = rowBg })}
+                        onMouseEnter={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${baseBg}` })}
+                        onMouseLeave={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = baseBg })}
                       >
-                        <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: BORDER, color: nameColor, background: rowBg }}>
+                        <td
+                          onClick={segSelectable ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes }) : undefined}
+                          style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: BORDER, color: nameColor, background: baseBg, cursor: segSelectable ? 'pointer' : 'default' }}
+                        >
                           {row.indent ? (
                             <><span style={{ color: nameColor }}>└ </span>{row.name}</>
                           ) : row.name}
@@ -313,7 +368,7 @@ export default function MonthlyPickupSegModal({
                           const handleClick = clickable
                             ? () => onPickupCellClick!(row.segmentationCodes, mk, `${row.name} · ${formatYYYYMM(mk)}`)
                             : undefined
-                          return <MonthCells key={mk} cell={cell} clickable={clickable} onClick={handleClick} isLast={idx === visibleMonths.length - 1} fontColor={rowColor} bg={rowBg} />
+                          return <MonthCells key={mk} cell={cell} clickable={clickable} onClick={handleClick} isLast={idx === visibleMonths.length - 1} fontColor={rowColor} bg={baseBg} />
                         })}
                       </tr>
                     )
@@ -350,6 +405,42 @@ export default function MonthlyPickupSegModal({
               </table>
             </div>
           )}
+        </div>
+
+        {/* 우측 Account Pickup 패널 */}
+        <div style={{ width: 220, flexShrink: 0, borderLeft: BORDER, display: 'flex', flexDirection: 'column', background: '#0a0a0a', overflowY: 'auto' }}>
+          <div className="px-3 pt-3 pb-2 shrink-0" style={{ borderBottom: BORDER }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>Account Pickup</div>
+            <div style={{ fontSize: 10, color: 'var(--brand-dimmed)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {selectedSeg ? `${selectedSeg.label} · 픽업 R/N 기준` : '세그먼트를 클릭하세요'}
+            </div>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'thin' }}>
+            {accountList.length === 0 ? (
+              <div style={{ fontSize: 11, color: 'var(--brand-dimmed)', padding: 12 }}>
+                {selectedSeg ? '픽업 데이터가 없습니다.' : ''}
+              </div>
+            ) : accountList.map((a, i) => (
+              <div
+                key={`${a.name}-${i}`}
+                className="flex items-center justify-between"
+                style={{ padding: '6px 12px', borderBottom: '0.5px solid #1a1a1a' }}
+              >
+                <span style={{ fontSize: 11, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 92 }}>
+                  {a.name}
+                </span>
+                <span className="font-mono" style={{ display: 'flex', gap: 6, fontSize: 10, whiteSpace: 'nowrap' }}>
+                  <span style={{ color: a.diffRn >= 0 ? '#00E5A0' : '#E24B4A' }}>
+                    {a.diffRn >= 0 ? '+' : ''}{a.diffRn.toLocaleString('ko-KR')}
+                  </span>
+                  <span style={{ color: a.diffRev >= 0 ? '#00E5A0' : '#E24B4A' }}>
+                    {a.diffRev >= 0 ? '+' : ''}{(a.diffRev / 1_000_000).toFixed(1)}M
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
         </div>
 
         {/* Footer */}
