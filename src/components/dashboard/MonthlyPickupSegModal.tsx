@@ -169,6 +169,7 @@ export default function MonthlyPickupSegModal({
         diffRn:  r.otb_nights - r.vs_nights,    // 픽업 = 현재OTB - vsOTB
         diffRev: r.otb_revenue - r.vs_revenue,
       }))
+      .filter(a => a.diffRn !== 0 || a.diffRev !== 0)
       .sort((a, b) => b.diffRn - a.diffRn)
   }, [selectedSeg, accountPickupRows])
 

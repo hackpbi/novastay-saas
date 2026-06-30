@@ -60,7 +60,8 @@
       "PowerShell(git -C \"c:/dev/18_NovaStay_Saas_ver1\" --no-pager diff src/components/forecast/ForecastAlertModal.tsx)",
       "PowerShell($env:NEXT_DIST_DIR='.next-verify'; npm run build 2>&1 | Select-Object -Last 40)",
       "PowerShell($out = npx tsc --noEmit -p tsconfig.json 2>&1; $errs = $out | Select-String -Pattern \"error TS\"; Write-Output \\(\"TS error count: \" + \\($errs | Measure-Object\\).Count\\); $errs | Select-Object -First 20)",
-      "PowerShell($ports = 3000..3010; foreach \\($p in $ports\\) { $c = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue; if \\($c\\) { $pid = \\($c | Select-Object -First 1\\).OwningProcess; $proc = \\(Get-Process -Id $pid -ErrorAction SilentlyContinue\\).ProcessName; Write-Output \\(\"LISTEN :$p  pid=$pid  proc=$proc\"\\) } })"
+      "PowerShell($ports = 3000..3010; foreach \\($p in $ports\\) { $c = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue; if \\($c\\) { $pid = \\($c | Select-Object -First 1\\).OwningProcess; $proc = \\(Get-Process -Id $pid -ErrorAction SilentlyContinue\\).ProcessName; Write-Output \\(\"LISTEN :$p  pid=$pid  proc=$proc\"\\) } })",
+      "PowerShell($out = npx tsc --noEmit -p tsconfig.json 2>&1; $errs = $out | Select-String -Pattern \"error TS\"; Write-Output \\(\"TS error count: \" + \\($errs | Measure-Object\\).Count\\); $errs | Select-Object -First 10)"
     ],
     "additionalDirectories": [
       "C:\\dev\\18_NovaStay_Saas_ver1\\.next-verify"
