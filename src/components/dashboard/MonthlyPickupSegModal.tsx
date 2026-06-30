@@ -127,7 +127,7 @@ export default function MonthlyPickupSegModal({
   const { currentHotel }                                  = useHotel()
   const { otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate } = useDateContext()
   // 우측 패널: 선택된 세그먼트 (대분류 이름 클릭 시 set)
-  const [selectedSeg, setSelectedSeg] = useState<{ label: string; codes: string[] } | null>(null)
+  const [selectedSeg, setSelectedSeg] = useState<{ label: string; codes: string[]; monthKey: string } | null>(null)
   const days = otbDate && vsOtbDate
     ? Math.round((new Date(otbDate).getTime() - new Date(vsOtbDate).getTime()) / 86400000)
     : 0
@@ -145,10 +145,10 @@ export default function MonthlyPickupSegModal({
   const visibleMonths = monthKeys.slice(pageIndex * PAGE_SIZE, pageIndex * PAGE_SIZE + PAGE_SIZE)
 
   // ─── 우측 Account Pickup 패널 데이터 ───────────────────────────────────────────
-  // 현재 페이지 첫 가시 월 기준으로 어카운트 픽업 조회 (PAGE_SIZE=3)
-  const firstMonthKey = monthKeys[pageIndex * PAGE_SIZE] ?? ''
-  const pickupYear  = firstMonthKey ? parseInt(firstMonthKey.slice(0, 4)) : new Date().getFullYear()
-  const pickupMonth = firstMonthKey ? parseInt(firstMonthKey.slice(5, 7)) : new Date().getMonth() + 1
+  // 선택된 세그먼트의 monthKey(클릭한 셀의 월) 기준 조회, 미선택 시 첫 달 폴백
+  const activeMonthKey = selectedSeg?.monthKey || monthKeys[0] || ''
+  const pickupYear  = activeMonthKey ? parseInt(activeMonthKey.slice(0, 4)) : new Date().getFullYear()
+  const pickupMonth = activeMonthKey ? parseInt(activeMonthKey.slice(5, 7)) : new Date().getMonth() + 1
 
   const { data: accountPickupRows = [] } = useAccountPickupData({
     hotelId:     currentHotel?.id ?? '',
@@ -356,7 +356,7 @@ export default function MonthlyPickupSegModal({
                         onMouseLeave={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = baseBg })}
                       >
                         <td
-                          onClick={segSelectable ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes }) : undefined}
+                          onClick={segSelectable ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes, monthKey: visibleMonths[0] ?? '' }) : undefined}
                           style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: BORDER, color: nameColor, background: baseBg, cursor: segSelectable ? 'pointer' : 'default' }}
                         >
                           {row.indent ? (
@@ -366,7 +366,7 @@ export default function MonthlyPickupSegModal({
                         {visibleMonths.map((mk, idx) => {
                           const cell = row.monthlyPickup[mk] ?? { pickupNights: 0, pickupAdr: 0, pickupRevenue: 0 }
                           const handleClick = clickable
-                            ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes })
+                            ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes, monthKey: mk })
                             : undefined
                           return <MonthCells key={mk} cell={cell} clickable={clickable} onClick={handleClick} isLast={idx === visibleMonths.length - 1} fontColor={rowColor} bg={baseBg} />
                         })}
@@ -412,7 +412,7 @@ export default function MonthlyPickupSegModal({
           <div className="px-3 pt-3 pb-2 shrink-0" style={{ borderBottom: BORDER }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>Account Pickup</div>
             <div style={{ fontSize: 10, color: 'var(--brand-dimmed)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {selectedSeg ? `${selectedSeg.label} · 픽업 R/N 기준` : '세그먼트를 클릭하세요'}
+              {selectedSeg ? `${selectedSeg.label} · ${selectedSeg.monthKey} · 픽업 R/N 기준` : '세그먼트를 클릭하세요'}
             </div>
             <button
               onClick={() => selectedSeg && onPickupCellClick?.(selectedSeg.codes, null, selectedSeg.label)}
