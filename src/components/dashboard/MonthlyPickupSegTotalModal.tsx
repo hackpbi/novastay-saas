@@ -314,7 +314,7 @@ export default function MonthlyPickupSegTotalModal({
                           cell={row.totalPickup}
                           clickable={clickable}
                           fontColor={isDark ? row.fontDarkColor ?? undefined : row.fontLightColor ?? undefined}
-                          onClick={clickable ? () => onPickupCellClick!(row.segmentationCodes, null, `${row.name} · 전체`) : undefined}
+                          onClick={clickable ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes }) : undefined}
                         />
                       </tr>
                     )
@@ -354,6 +354,22 @@ export default function MonthlyPickupSegTotalModal({
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
               {selectedSeg ? `${selectedSeg.label} · 픽업 R/N 기준` : '세그먼트를 클릭하세요'}
             </div>
+            <button
+              onClick={() => selectedSeg && onPickupCellClick?.(selectedSeg.codes, null, selectedSeg.label)}
+              disabled={!selectedSeg}
+              style={{
+                fontSize: 10,
+                padding: '3px 8px',
+                borderRadius: 6,
+                border: '1px solid rgba(255,255,255,0.15)',
+                background: 'transparent',
+                color: selectedSeg ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)',
+                cursor: selectedSeg ? 'pointer' : 'default',
+                marginTop: 4,
+              }}
+            >
+              Account 보기 →
+            </button>
           </div>
           <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
             {accountList.length === 0 ? (

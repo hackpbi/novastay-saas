@@ -366,7 +366,7 @@ export default function MonthlyPickupSegModal({
                         {visibleMonths.map((mk, idx) => {
                           const cell = row.monthlyPickup[mk] ?? { pickupNights: 0, pickupAdr: 0, pickupRevenue: 0 }
                           const handleClick = clickable
-                            ? () => onPickupCellClick!(row.segmentationCodes, mk, `${row.name} · ${formatYYYYMM(mk)}`)
+                            ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes })
                             : undefined
                           return <MonthCells key={mk} cell={cell} clickable={clickable} onClick={handleClick} isLast={idx === visibleMonths.length - 1} fontColor={rowColor} bg={baseBg} />
                         })}
@@ -414,6 +414,22 @@ export default function MonthlyPickupSegModal({
             <div style={{ fontSize: 10, color: 'var(--brand-dimmed)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {selectedSeg ? `${selectedSeg.label} · 픽업 R/N 기준` : '세그먼트를 클릭하세요'}
             </div>
+            <button
+              onClick={() => selectedSeg && onPickupCellClick?.(selectedSeg.codes, null, selectedSeg.label)}
+              disabled={!selectedSeg}
+              style={{
+                fontSize: 10,
+                padding: '3px 8px',
+                borderRadius: 6,
+                border: '1px solid rgba(255,255,255,0.15)',
+                background: 'transparent',
+                color: selectedSeg ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)',
+                cursor: selectedSeg ? 'pointer' : 'default',
+                marginTop: 4,
+              }}
+            >
+              Account 보기 →
+            </button>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'thin' }}>
             {accountList.length === 0 ? (
