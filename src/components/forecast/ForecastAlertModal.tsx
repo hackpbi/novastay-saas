@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useRef, useEffect } from 'react'
-import { X, AlertTriangle, TrendingDown, ChevronDown, Check, SlidersHorizontal } from 'lucide-react'
+import { X, AlertTriangle, TrendingDown, ChevronDown, Check, SlidersHorizontal, Search, Pencil } from 'lucide-react'
 import type { ForecastSchema, ForecastDayData } from '@/lib/forecast/types'
 import { type EditedValues, makeEditKey, type SaveEdit } from '@/lib/forecast/save'
 import { fmtRn, fmtAdr } from '@/lib/forecast/format'
@@ -109,6 +109,32 @@ export function ForecastAlertModal({
   // FCST ADR 입력 포커스 여부 (포커스 시 원단위, 아니면 천원단위 표시)
   const [focusedAdrKey, setFocusedAdrKey] = useState<string | null>(null)
 
+  // 검색 조건 (Search 드롭다운)
+  const [searchDropOpen, setSearchDropOpen] = useState(false)
+  const searchDropRef = useRef<HTMLDivElement>(null)
+  const [condRnEnabled,  setCondRnEnabled]  = useState(false)  // R/N: FCST<OTB
+  const [condAdrEnabled, setCondAdrEnabled] = useState(false)  // ADR 차이
+  const [adrThreshold,   setAdrThreshold]   = useState(10)     // ±%
+  const [condOccEnabled, setCondOccEnabled] = useState(false)  // OCC%
+  const [occDirection,   setOccDirection]   = useState<'gte' | 'lte'>('gte')
+  const [occThreshold,   setOccThreshold]   = useState(90)
+  const [occBasis,       setOccBasis]       = useState<'otb' | 'fcst'>('otb')
+  // 검색 실행 여부 — 검색 버튼을 누르기 전엔 false
+  const [searched, setSearched] = useState(false)
+  const [searchWarning, setSearchWarning] = useState(false)   // 조건 미선택 경고
+  // 실제 검색에 적용된 조건 스냅샷 (입력 중인 값과 분리)
+  const [appliedCond, setAppliedCond] = useState({
+    rn: false, adr: false, adrThreshold: 10,
+    occ: false, occDirection: 'gte' as 'gte' | 'lte', occThreshold: 90,
+    occBasis: 'otb' as 'otb' | 'fcst',
+  })
+  // Bulk edit 드롭다운
+  const [bulkDropOpen, setBulkDropOpen] = useState(false)
+  const bulkDropRef = useRef<HTMLDivElement>(null)
+  // Filter 드롭다운
+  const [filterDropOpen, setFilterDropOpen] = useState(false)
+  const filterDropRef = useRef<HTMLDivElement>(null)
+
   const roomCount = schema.roomCount
 
   // 세그 채널 분류 — c05를 직접 조회 (ADR 시뮬레이터와 동일, 코드별 last-write-wins)
@@ -161,8 +187,69 @@ export function ForecastAlertModal({
     if (segDropOpen) setTempSegFilter(segFilter)
   }, [segDropOpen])
 
+  // Search 드롭다운 외부 클릭 닫기
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (searchDropRef.current && !searchDropRef.current.contains(e.target as Node)) setSearchDropOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  // Bulk edit 드롭다운 외부 클릭 닫기
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (bulkDropRef.current && !bulkDropRef.current.contains(e.target as Node)) setBulkDropOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  // Filter 드롭다운 외부 클릭 닫기
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (filterDropRef.current && !filterDropRef.current.contains(e.target as Node)) setFilterDropOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  // 선택된 행이 0개가 되면 Bulk edit 드롭다운 자동 닫기
+  useEffect(() => {
+    if (selectedIds.size === 0) setBulkDropOpen(false)
+  }, [selectedIds])
+
+  // Search 드롭다운 열릴 때 경고 초기화
+  useEffect(() => {
+    if (searchDropOpen) setSearchWarning(false)
+  }, [searchDropOpen])
+
+  // 검색 버튼 — 입력 조건을 스냅샷으로 적용하고 검색 실행
+  function handleSearch() {
+    if (!condRnEnabled && !condAdrEnabled && !condOccEnabled) {
+      setSearchWarning(true)
+      return  // 조건 미선택 → 검색 실행 안 함
+    }
+    setSearchWarning(false)
+
+    const cond = {
+      rn: condRnEnabled,
+      adr: condAdrEnabled,
+      adrThreshold,
+      occ: condOccEnabled,
+      occDirection,
+      occThreshold,
+      occBasis,
+    }
+    setAppliedCond(cond)
+    setSearched(true)
+    setSearchDropOpen(false)
+  }
+
   // ── 이상 항목 계산 ──────────────────────────────────────────────────────────
   const alertRows = useMemo((): AlertRow[] => {
+    if (!searched) return []   // 검색 전엔 빈 배열
+
     const rows: AlertRow[] = []
     // schema에서 세그 이름 맵
     const segNameMap = new Map<string, string>()
@@ -187,16 +274,41 @@ export function ForecastAlertModal({
         const otb_rn   = v.otb_rn
         const otb_adr  = otb_rn > 0 ? Math.round(v.otb_rev / otb_rn) : 0
 
-        const isRnAlert  = otb_rn > fcst_rn + RN_THRESHOLD
-        const adrDiffPct = otb_adr > 0
-          ? ((fcst_adr - otb_adr) / otb_adr) * 100
-          : 0
-        const isAdrAlert = Math.abs(adrDiffPct) >= ADR_THRESHOLD
+        // R/N 조건: FCST < OTB (체크박스 ON일 때만)
+        const isRnAlert = appliedCond.rn && (otb_rn > fcst_rn)
 
-        if (!isRnAlert && !isAdrAlert) continue
+        // ADR 조건 (체크박스 ON일 때만)
+        const adrDiffPct = otb_adr > 0 ? ((fcst_adr - otb_adr) / otb_adr) * 100 : 0
+        const isAdrAlert = appliedCond.adr && (Math.abs(adrDiffPct) >= appliedCond.adrThreshold)
 
-        const alertType: AlertType = isRnAlert && isAdrAlert ? 'both'
-          : isRnAlert ? 'rn' : 'adr'
+        // OCC% 조건 (체크박스 ON일 때만) — 날짜 전체 OCC 기준
+        let isOccAlert = false
+        if (appliedCond.occ) {
+          let totalRn = 0
+          for (const c of schema.allSegmentationCodes) {
+            const dv = day.values[c]
+            if (!dv) continue
+            if (appliedCond.occBasis === 'fcst') {
+              const edited = editedValues.get(makeEditKey(day.business_date, c))
+              totalRn += edited?.rn ?? dv.rn
+            } else {
+              totalRn += dv.otb_rn ?? 0
+            }
+          }
+          const occPct = roomCount > 0 ? (totalRn / roomCount) * 100 : 0
+          isOccAlert = appliedCond.occDirection === 'gte'
+            ? occPct >= appliedCond.occThreshold
+            : occPct <= appliedCond.occThreshold
+        }
+
+        // 체크된 조건 중 하나라도 만족하면 alert (OR)
+        if (!isRnAlert && !isAdrAlert && !isOccAlert) continue
+
+        const alertType: AlertType =
+          (isRnAlert && isAdrAlert) ? 'both' :
+          isRnAlert ? 'rn' :
+          isAdrAlert ? 'adr' :
+          isOccAlert ? 'both' : 'rn'  // OCC 단독이면 R/N+ADR 둘다 보이게 'both'
 
         rows.push({
           business_date: day.business_date,
@@ -232,7 +344,7 @@ export function ForecastAlertModal({
       }
     }
     return rows
-  }, [data, schema, editedValues, otbDate, roomCount])
+  }, [searched, appliedCond, data, schema, editedValues, otbDate, roomCount])
 
   // ── BAR Rate fetch — 모달 열릴 때 alertRows 날짜들에 대해 ─────────────────────
   useEffect(() => {
@@ -329,7 +441,16 @@ export function ForecastAlertModal({
     const channel = channelMap[r.segmentation]
     if (channel !== 'direct' && channel !== 'ota') return null
 
-    const base = barInfo.bar_rate + barInfo.surcharge_avg
+    // 세그별 surcharge 프리미엄 = OTB ADR - 현재 BAR Rate
+    // (이 세그가 평소 BAR 대비 어느 정도 비싼/저렴한 객실타입을 쓰는지)
+    const premium = r.otb_rn > 0 ? (r.otb_adr - barInfo.bar_rate) : 0
+
+    // R/N 증가율 반영 — FCST RN이 OTB RN보다 많이 늘었으면 프리미엄을 약하게 할인 (재고 소진 가정)
+    const rnGrowth = r.otb_rn > 0 ? r.fcst_rn / r.otb_rn : 1
+    const decay = Math.max(0.7, 1 - (rnGrowth - 1) * 0.1)
+    const adjustedPremium = premium * decay
+
+    const base = barInfo.bar_rate + adjustedPremium
     if (channel === 'ota') {
       return Math.round(base * (1 - commission / 100))
     }
@@ -455,8 +576,239 @@ export function ForecastAlertModal({
             <div>
               <div style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>Forecast Alerts</div>
               <div style={{ fontSize: 10, color: MUTED, marginTop: 1 }}>
-                {alertRows.length} items · Room cap: {roomCount}
+                {searched ? `${alertRows.length} items` : '검색 대기 중'} · Room cap: {roomCount}
               </div>
+            </div>
+
+            {/* Search 트리거 + 드롭다운 */}
+            <div ref={searchDropRef} style={{ position: 'relative' }}>
+              <button
+                onClick={e => { e.stopPropagation(); setSearchDropOpen(prev => !prev) }}
+                style={{
+                  padding: '5px 14px', borderRadius: 7,
+                  border: '0.5px solid rgba(0,229,160,0.3)',
+                  background: 'rgba(0,229,160,0.08)', color: '#00E5A0',
+                  fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                }}
+              >
+                <Search size={13} />
+                Search
+                {((condRnEnabled ? 1 : 0) + (condAdrEnabled ? 1 : 0) + (condOccEnabled ? 1 : 0)) > 0 && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: 15, height: 15, borderRadius: '50%', background: '#00E5A0', color: '#0a2018',
+                    fontSize: 9, fontWeight: 700,
+                  }}>
+                    {(condRnEnabled ? 1 : 0) + (condAdrEnabled ? 1 : 0) + (condOccEnabled ? 1 : 0)}
+                  </span>
+                )}
+              </button>
+
+              {searchDropOpen && (
+                <div onClick={e => e.stopPropagation()} style={{
+                  position: 'absolute', top: 'calc(100% + 8px)', left: 0,
+                  background: '#161616', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 14,
+                  padding: 8, minWidth: 360, zIndex: 100,
+                  display: 'flex', flexDirection: 'column', gap: 4,
+                  boxShadow: '0 16px 40px rgba(0,0,0,0.5)',
+                }}>
+                  {/* R/N 조건 */}
+                  <div
+                    onClick={() => { setCondRnEnabled(p => !p); setSearchWarning(false) }}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                      padding: '12px 12px', borderRadius: 10, cursor: 'pointer',
+                      background: condRnEnabled ? 'rgba(0,229,160,0.06)' : 'transparent',
+                      border: condRnEnabled ? '1px solid rgba(0,229,160,0.25)' : '1px solid transparent',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{
+                        width: 20, height: 20, borderRadius: 6,
+                        border: `1.5px solid ${condRnEnabled ? '#00E5A0' : 'rgba(255,255,255,0.2)'}`,
+                        background: condRnEnabled ? '#00E5A0' : 'transparent',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>
+                        {condRnEnabled && <Check size={13} color="#0a2018" strokeWidth={3} />}
+                      </div>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: condRnEnabled ? '#fff' : 'rgba(255,255,255,0.5)' }}>R/N</span>
+                    </div>
+                    <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', whiteSpace: 'nowrap' }}>
+                      FCST &lt; OTB
+                    </span>
+                  </div>
+
+                  {/* ADR 차이 조건 */}
+                  <div
+                    onClick={() => { setCondAdrEnabled(p => !p); setSearchWarning(false) }}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                      padding: '12px 12px', borderRadius: 10, cursor: 'pointer',
+                      background: condAdrEnabled ? 'rgba(0,229,160,0.06)' : 'transparent',
+                      border: condAdrEnabled ? '1px solid rgba(0,229,160,0.25)' : '1px solid transparent',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{
+                        width: 20, height: 20, borderRadius: 6,
+                        border: `1.5px solid ${condAdrEnabled ? '#00E5A0' : 'rgba(255,255,255,0.2)'}`,
+                        background: condAdrEnabled ? '#00E5A0' : 'transparent',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>
+                        {condAdrEnabled && <Check size={13} color="#0a2018" strokeWidth={3} />}
+                      </div>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: condAdrEnabled ? '#fff' : 'rgba(255,255,255,0.5)' }}>ADR 차이</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, opacity: condAdrEnabled ? 1 : 0.3 }}>
+                      <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>±</span>
+                      <input
+                        type="number"
+                        value={adrThreshold}
+                        onClick={e => e.stopPropagation()}
+                        onFocus={e => e.currentTarget.select()}
+                        onChange={e => setAdrThreshold(parseInt(e.target.value) || 0)}
+                        style={{
+                          width: 52, padding: '7px 6px', fontSize: 13, fontWeight: 600, borderRadius: 7,
+                          border: 'none', background: '#0d0d0d',
+                          color: '#fff', textAlign: 'center', outline: 'none',
+                        }}
+                      />
+                      <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>%</span>
+                    </div>
+                  </div>
+
+                  {/* OCC% 조건 — 강조 카드 */}
+                  <div
+                    onClick={() => { setCondOccEnabled(p => !p); setSearchWarning(false) }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      padding: '14px 12px', borderRadius: 12, cursor: 'pointer',
+                      background: condOccEnabled ? 'rgba(0,229,160,0.08)' : 'transparent',
+                      border: condOccEnabled ? '1px solid rgba(0,229,160,0.3)' : '1px solid transparent',
+                    }}
+                  >
+                    <div style={{
+                      width: 20, height: 20, borderRadius: 6,
+                      border: `1.5px solid ${condOccEnabled ? '#00E5A0' : 'rgba(255,255,255,0.2)'}`,
+                      background: condOccEnabled ? '#00E5A0' : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    }}>
+                      {condOccEnabled && <Check size={13} color="#0a2018" strokeWidth={3} />}
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: condOccEnabled ? '#fff' : 'rgba(255,255,255,0.5)', flexShrink: 0 }}>OCC%</span>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: condOccEnabled ? 1 : 0.3, flexWrap: 'nowrap' }}>
+                      {/* OTB / FCST 토글 */}
+                      <div style={{ display: 'inline-flex', borderRadius: 7, background: '#0d0d0d', overflow: 'hidden' }}>
+                        <button
+                          onClick={e => { e.stopPropagation(); setOccBasis('otb') }}
+                          style={{
+                            padding: '6px 10px', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+                            background: occBasis === 'otb' ? 'rgba(99,102,241,0.2)' : 'transparent',
+                            color: occBasis === 'otb' ? '#a5b4fc' : 'rgba(255,255,255,0.35)',
+                          }}
+                        >OTB</button>
+                        <button
+                          onClick={e => { e.stopPropagation(); setOccBasis('fcst') }}
+                          style={{
+                            padding: '6px 10px', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+                            background: occBasis === 'fcst' ? 'rgba(0,229,160,0.2)' : 'transparent',
+                            color: occBasis === 'fcst' ? '#00E5A0' : 'rgba(255,255,255,0.35)',
+                          }}
+                        >FCST</button>
+                      </div>
+
+                      {/* 이상 / 이하 토글 */}
+                      <div style={{ display: 'inline-flex', borderRadius: 7, background: '#0d0d0d', overflow: 'hidden' }}>
+                        <button
+                          onClick={e => { e.stopPropagation(); setOccDirection('gte') }}
+                          style={{
+                            padding: '6px 11px', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+                            background: occDirection === 'gte' ? 'rgba(0,229,160,0.2)' : 'transparent',
+                            color: occDirection === 'gte' ? '#00E5A0' : 'rgba(255,255,255,0.35)',
+                          }}
+                        >이상</button>
+                        <button
+                          onClick={e => { e.stopPropagation(); setOccDirection('lte') }}
+                          style={{
+                            padding: '6px 11px', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+                            background: occDirection === 'lte' ? 'rgba(0,229,160,0.2)' : 'transparent',
+                            color: occDirection === 'lte' ? '#00E5A0' : 'rgba(255,255,255,0.35)',
+                          }}
+                        >이하</button>
+                      </div>
+
+                      <input
+                        type="number"
+                        value={occThreshold}
+                        onClick={e => e.stopPropagation()}
+                        onFocus={e => e.currentTarget.select()}
+                        onChange={e => setOccThreshold(parseInt(e.target.value) || 0)}
+                        style={{
+                          width: 52, padding: '7px 6px', fontSize: 13, fontWeight: 600, borderRadius: 7,
+                          border: 'none', background: '#0d0d0d',
+                          color: '#fff', textAlign: 'center', outline: 'none',
+                        }}
+                      />
+                      <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>%</span>
+                    </div>
+                  </div>
+
+                  {searchWarning && (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '8px 12px', borderRadius: 8,
+                      background: 'rgba(239,68,68,0.08)', border: '0.5px solid rgba(239,68,68,0.2)',
+                      fontSize: 11, color: '#f87171',
+                    }}>
+                      <AlertTriangle size={13} />
+                      하나 이상의 조건을 선택해주세요
+                    </div>
+                  )}
+
+                  {/* 안내 텍스트 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 12px 4px', fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>
+                    체크된 조건만
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', padding: '1px 6px', borderRadius: 4,
+                      background: 'rgba(255,255,255,0.08)', fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.5)',
+                    }}>OR</span>
+                    조건으로 적용됩니다
+                  </div>
+
+                  <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.07)', margin: '4px 0' }} />
+
+                  {/* footer */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px 4px' }}>
+                    <span
+                      onClick={() => {
+                        setCondRnEnabled(false)
+                        setCondAdrEnabled(false)
+                        setAdrThreshold(10)
+                        setCondOccEnabled(false)
+                        setOccBasis('otb')
+                        setOccDirection('gte')
+                        setOccThreshold(90)
+                      }}
+                      style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', cursor: 'pointer' }}
+                    >
+                      초기화
+                    </span>
+                    <button
+                      onClick={handleSearch}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '9px 22px', borderRadius: 10, border: 'none',
+                        background: '#00E5A0', color: '#0a2018', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                      }}
+                    >
+                      <Search size={14} />
+                      검색
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             {rnCount > 0 && (
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '3px 8px', borderRadius: 999, fontSize: 10, fontWeight: 500, background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '0.5px solid rgba(239,68,68,0.2)' }}>
@@ -483,26 +835,99 @@ export function ForecastAlertModal({
                 border:       '0.5px solid rgba(255,255,255,0.12)',
                 gap:          2,
               }}>
-                {(['all', 'rn', 'adr', 'both'] as FilterType[]).map(f => (
+                {/* Filter 드롭다운 트리거 */}
+                <div ref={filterDropRef} style={{ position: 'relative' }}>
                   <button
-                    key={f}
-                    onClick={e => { e.stopPropagation(); setFilter(f) }}
+                    onClick={e => { e.stopPropagation(); setFilterDropOpen(prev => !prev) }}
                     style={{
-                      padding:      '5px 14px',
-                      borderRadius: 999,
-                      fontSize:     12,
-                      fontWeight:   600,
-                      border:       'none',
-                      cursor:       'pointer',
-                      background:   filter === f ? '#00E5A0' : 'transparent',
-                      color:        filter === f ? '#0a2018' : 'rgba(255,255,255,0.3)',
-                      transition:   'all 0.15s',
-                      whiteSpace:   'nowrap',
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '5px 14px', borderRadius: 999,
+                      border: filter !== 'all' ? '0.5px solid rgba(0,229,160,0.4)' : '0.5px solid rgba(255,255,255,0.12)',
+                      background: filter !== 'all' ? 'rgba(0,229,160,0.1)' : 'rgba(255,255,255,0.05)',
+                      color: filter !== 'all' ? '#00E5A0' : 'rgba(255,255,255,0.6)',
+                      fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
                     }}
                   >
-                    {f === 'all' ? 'All' : f === 'rn' ? 'R/N' : f === 'adr' ? 'ADR' : 'R/N+ADR'}
+                    Filter: {filter === 'all' ? 'All' : filter === 'rn' ? 'R/N' : filter === 'adr' ? 'ADR' : 'R/N+ADR'}
+                    <ChevronDown size={11} style={{ opacity: 0.5 }} />
                   </button>
-                ))}
+
+                  {filterDropOpen && (
+                    <div style={{
+                      position: 'absolute', top: 'calc(100% + 8px)', left: 0,
+                      background: '#1a1a1a', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 10,
+                      padding: 6, minWidth: 160, zIndex: 100,
+                      display: 'flex', flexDirection: 'column', gap: 2,
+                      boxShadow: '0 12px 32px rgba(0,0,0,0.6)',
+                    }}>
+                      {([
+                        ['all', 'All'],
+                        ['rn', 'R/N'],
+                        ['adr', 'ADR'],
+                        ['both', 'R/N+ADR'],
+                      ] as [FilterType, string][]).map(([f, label]) => (
+                        <div
+                          key={f}
+                          onClick={() => setFilter(f)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            padding: '7px 9px', borderRadius: 6, cursor: 'pointer',
+                            background: filter === f ? 'rgba(0,229,160,0.08)' : 'transparent',
+                          }}
+                          onMouseEnter={e => { if (filter !== f) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)' }}
+                          onMouseLeave={e => { if (filter !== f) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+                        >
+                          <div style={{
+                            width: 14, height: 14, borderRadius: '50%',
+                            border: `1.5px solid ${filter === f ? '#00E5A0' : 'rgba(255,255,255,0.25)'}`,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                          }}>
+                            {filter === f && <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#00E5A0' }} />}
+                          </div>
+                          <span style={{
+                            fontSize: 12, fontWeight: 500,
+                            color: filter === f ? '#fff' : 'rgba(255,255,255,0.6)',
+                          }}>
+                            {label}
+                          </span>
+                        </div>
+                      ))}
+
+                      <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.08)', margin: '4px 2px' }} />
+
+                      {/* 하단 버튼: All / Reset / Done */}
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button
+                          onClick={() => setFilter('all')}
+                          style={{
+                            flex: 1, padding: '5px', borderRadius: 5,
+                            border: '0.5px solid rgba(255,255,255,0.1)',
+                            background: 'rgba(255,255,255,0.04)',
+                            color: 'rgba(255,255,255,0.4)', fontSize: 10, cursor: 'pointer',
+                          }}
+                        >All</button>
+                        <button
+                          onClick={() => setFilter('all')}
+                          style={{
+                            flex: 1, padding: '5px', borderRadius: 5,
+                            border: '0.5px solid rgba(255,255,255,0.1)',
+                            background: 'rgba(255,255,255,0.04)',
+                            color: 'rgba(255,255,255,0.4)', fontSize: 10, cursor: 'pointer',
+                          }}
+                        >Reset</button>
+                        <button
+                          onClick={() => setFilterDropOpen(false)}
+                          style={{
+                            flex: 1, padding: '5px', borderRadius: 5,
+                            border: 'none',
+                            background: 'rgba(0,229,160,0.12)',
+                            color: '#00E5A0', fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                          }}
+                        >Done</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* 구분선 */}
                 <div style={{ width: '0.5px', height: 16, background: 'rgba(255,255,255,0.12)', margin: '0 2px' }} />
@@ -703,9 +1128,9 @@ export function ForecastAlertModal({
         </div>
 
         {/* ── 테이블 스크롤 컨테이너 ── */}
-        <div style={{ overflowY: 'auto', flex: 1 }}>
+        <div style={{ overflowY: 'auto', flex: 1, minHeight: 320 }}>
 
-          {/* Bulk bar — sticky */}
+          {/* Bulk bar — sticky (트리거 + 드롭다운) */}
           <div style={{
             position:    'sticky',
             top:         0,
@@ -716,54 +1141,127 @@ export function ForecastAlertModal({
             padding:     '8px 18px',
             background:  '#0f0f0f',
             borderBottom: '0.5px solid rgba(0,229,160,0.07)',
-            flexWrap:    'wrap',
           }}>
-            <span style={{ fontSize: 11, color: 'rgba(0,229,160,0.7)' }}>Bulk edit</span>
-            <div style={{ width: '0.5px', height: 13, background: 'rgba(255,255,255,0.08)' }} />
-            {/* RN / ADR */}
-            {(['rn', 'adr'] as BulkField[]).map(f => (
-              <div key={f} onClick={() => setBulkField(f)} style={{
-                padding: '3px 8px', fontSize: 10, fontWeight: 600, cursor: 'pointer',
-                border: '0.5px solid rgba(255,255,255,0.09)', borderRadius: 4,
-                background: bulkField === f ? '#00E5A0' : 'rgba(255,255,255,0.05)',
-                color: bulkField === f ? '#0a2018' : 'rgba(255,255,255,0.3)',
-              }}>
-                {f.toUpperCase()}
-              </div>
-            ))}
-            {/* +flat / +% / set */}
-            <div style={{ display: 'inline-flex', border: '0.5px solid rgba(255,255,255,0.09)', borderRadius: 4, overflow: 'hidden' }}>
-              {([['flat', '+flat'], ['pct', '+%'], ['set', 'set']] as [BulkMode, string][]).map(([m, label]) => (
-                <div key={m} onClick={() => setBulkMode(m)} style={{
-                  padding: '3px 8px', fontSize: 10, fontWeight: 600, cursor: 'pointer',
-                  borderRight: '0.5px solid rgba(255,255,255,0.07)',
-                  background: bulkMode === m ? 'rgba(0,229,160,0.15)' : 'transparent',
-                  color: bulkMode === m ? '#00E5A0' : 'rgba(255,255,255,0.3)',
-                }}>{label}</div>
-              ))}
+            <div ref={bulkDropRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => selectedIds.size > 0 && setBulkDropOpen(prev => !prev)}
+                disabled={selectedIds.size === 0}
+                style={{
+                  padding: '5px 14px', borderRadius: 7,
+                  border: selectedIds.size > 0 ? '0.5px solid rgba(0,229,160,0.3)' : '0.5px solid rgba(255,255,255,0.08)',
+                  background: selectedIds.size > 0 ? 'rgba(0,229,160,0.08)' : 'rgba(255,255,255,0.03)',
+                  color: selectedIds.size > 0 ? '#00E5A0' : 'rgba(255,255,255,0.2)',
+                  fontSize: 12, fontWeight: 600,
+                  cursor: selectedIds.size > 0 ? 'pointer' : 'not-allowed',
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                }}
+              >
+                <Pencil size={13} />
+                Bulk edit
+                <ChevronDown size={11} style={{ opacity: 0.5 }} />
+              </button>
+
+              {bulkDropOpen && (
+                <div onClick={e => e.stopPropagation()} style={{
+                  position: 'absolute', top: 'calc(100% + 8px)', left: 0,
+                  background: '#1f1f1f', border: '1px solid rgba(0,229,160,0.3)', borderRadius: 10,
+                  padding: 14, minWidth: 280, zIndex: 100,
+                  display: 'flex', flexDirection: 'column', gap: 10,
+                  boxShadow: '0 12px 32px rgba(0,0,0,0.6)',
+                }}>
+                  {/* 대상: RN/ADR */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>대상</span>
+                    <div style={{ display: 'inline-flex', borderRadius: 6, border: '0.5px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+                      {(['rn', 'adr'] as BulkField[]).map(f => (
+                        <button key={f} onClick={() => setBulkField(f)} style={{
+                          padding: '5px 11px', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer',
+                          borderRight: '0.5px solid rgba(255,255,255,0.08)',
+                          background: bulkField === f ? 'rgba(0,229,160,0.15)' : '#161616',
+                          color: bulkField === f ? '#00E5A0' : 'rgba(255,255,255,0.4)',
+                        }}>{f.toUpperCase()}</button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* 방식: +flat/+%/set */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>방식</span>
+                    <div style={{ display: 'inline-flex', borderRadius: 6, border: '0.5px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+                      {([['flat', '+flat'], ['pct', '+%'], ['set', 'set']] as [BulkMode, string][]).map(([m, label]) => (
+                        <button key={m} onClick={() => setBulkMode(m)} style={{
+                          padding: '5px 11px', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer',
+                          borderRight: '0.5px solid rgba(255,255,255,0.08)',
+                          background: bulkMode === m ? 'rgba(0,229,160,0.15)' : '#161616',
+                          color: bulkMode === m ? '#00E5A0' : 'rgba(255,255,255,0.4)',
+                        }}>{label}</button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* 값 */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>값</span>
+                    <input
+                      value={bulkValue}
+                      onChange={e => setBulkValue(e.target.value)}
+                      style={{
+                        width: 60, padding: '5px 6px', fontSize: 11, borderRadius: 5,
+                        border: '0.5px solid rgba(255,255,255,0.15)', background: '#161616',
+                        color: 'rgba(255,255,255,0.9)', textAlign: 'center', outline: 'none',
+                      }}
+                    />
+                  </div>
+                  <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.08)' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <button onClick={matchOtb} style={{
+                      padding: '6px 12px', borderRadius: 7,
+                      border: '0.5px solid rgba(255,255,255,0.1)', background: 'transparent',
+                      color: 'rgba(255,255,255,0.4)', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap',
+                    }}>Match OTB</button>
+                    <button onClick={() => { applyBulk(); setBulkDropOpen(false) }} style={{
+                      flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                      padding: '6px 16px', borderRadius: 7, border: 'none',
+                      background: '#00E5A0', color: '#0a2018', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                    }}>
+                      <Check size={12} />
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-            <input
-              value={bulkValue}
-              onChange={e => setBulkValue(e.target.value)}
-              style={{ width: 42, padding: '3px 6px', fontSize: 10, borderRadius: 4, border: '0.5px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.7)', textAlign: 'center', outline: 'none' }}
-            />
-            <button onClick={applyBulk} style={{
-              padding: '3px 9px', borderRadius: 4, border: 'none',
-              background: '#00E5A0', color: '#0a2018', fontSize: 10, fontWeight: 600, cursor: 'pointer',
-            }}>Apply</button>
-            <button onClick={matchOtb} style={{
-              padding: '3px 9px', borderRadius: 4,
-              border: '0.5px solid rgba(255,255,255,0.08)', background: 'transparent',
-              color: 'rgba(255,255,255,0.3)', fontSize: 10, cursor: 'pointer',
-            }}>Match OTB</button>
+
+            {/* 현재 설정 요약 */}
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>
+              {bulkField.toUpperCase()} · {bulkMode === 'flat' ? '+flat' : bulkMode === 'pct' ? '+%' : 'set'} {bulkValue}
+            </span>
+
             <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', marginLeft: 'auto' }}>
               {selectedIds.size} selected
             </span>
           </div>
 
+          {!searched ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 320, gap: 8 }}>
+              <Search size={28} style={{ color: 'rgba(255,255,255,0.15)' }} />
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>검색 조건을 설정하고 검색해주세요</span>
+            </div>
+          ) : (
+          <>
         {/* ── Table ── */}
           <style>{`
             .alert-row:hover td { background: rgba(0,229,160,0.025) !important; }
+            /* 예상 ADR hover apply 버튼 */
+            .exp-adr-cell { position: relative; }
+            .exp-adr-val { transition: opacity 0.15s; }
+            .exp-adr-apply-btn {
+              position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+              display: none; align-items: center; gap: 3px;
+              padding: 3px 8px; border-radius: 5px; border: none;
+              background: #00E5A0; color: #0a2018; font-size: 10px; font-weight: 700; cursor: pointer;
+              box-shadow: 0 2px 8px rgba(0,229,160,0.3);
+            }
+            .alert-row:hover .exp-adr-apply-btn { display: inline-flex; }
+            .alert-row:hover .exp-adr-val { opacity: 0.4; }
             input[type=number]::-webkit-inner-spin-button,
             input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
             input[type=number] { -moz-appearance: textfield; }
@@ -992,7 +1490,10 @@ export function ForecastAlertModal({
                           }}
                         />
                       ) : (
-                        <span style={{ color: MUTED }}>—</span>
+                        // ADR 전용 알럿 행 — 읽기 전용으로 현재 FCST RN 표시
+                        <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>
+                          {fmtRn(r.fcst_rn)}
+                        </span>
                       )}
                     </td>
                     {/* GAP (FCST - OTB) */}
@@ -1084,13 +1585,31 @@ export function ForecastAlertModal({
                         return <td style={{ ...tdBase, color: MUTED }}>—</td>
                       }
                       const isGood = expected >= fcstAdr
+                      const alreadyApplied = localFix.get(rowKey(r))?.adr === expected
                       return (
-                        <td style={{
-                          ...tdBase,
-                          fontWeight: 600,
-                          color:      isGood ? '#00E5A0' : '#f87171',
-                        }}>
-                          {`${Math.round(expected / 1000)}K`}
+                        <td className="exp-adr-cell" style={{ ...tdBase, fontWeight: 600 }}>
+                          {alreadyApplied ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#00E5A0', fontWeight: 600 }}>
+                              <Check size={11} />
+                              적용됨 {Math.round(expected / 1000)}K
+                            </span>
+                          ) : (
+                            <>
+                              <span className="exp-adr-val" style={{ color: isGood ? '#00E5A0' : '#f87171' }}>
+                                {`${Math.round(expected / 1000)}K`}
+                              </span>
+                              <button
+                                className="exp-adr-apply-btn"
+                                onClick={e => {
+                                  e.stopPropagation()
+                                  setFix(r.business_date, r.segmentation, 'adr', expected)
+                                }}
+                              >
+                                <Check size={10} />
+                                적용
+                              </button>
+                            </>
+                          )}
                         </td>
                       )
                     })()}
@@ -1099,6 +1618,8 @@ export function ForecastAlertModal({
               })}
             </tbody>
           </table>
+          </>
+          )}
         </div>
 
         {/* ── Footer ── */}
