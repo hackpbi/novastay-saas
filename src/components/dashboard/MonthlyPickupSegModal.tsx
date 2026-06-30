@@ -259,7 +259,7 @@ export default function MonthlyPickupSegModal({
                 </div>
               )}
               <button
-                onClick={() => onPickupCellClick?.(selectedSeg?.codes ?? [], null, selectedSeg?.label ?? '')}
+                onClick={() => onPickupCellClick?.(selectedSeg?.codes ?? [], selectedSeg?.monthKey || null, selectedSeg?.label ?? '')}
                 style={{
                   fontSize: 11,
                   padding: '3px 10px',
@@ -415,7 +415,7 @@ export default function MonthlyPickupSegModal({
               {selectedSeg ? `${selectedSeg.label} · ${selectedSeg.monthKey} · 픽업 R/N 기준` : '세그먼트를 클릭하세요'}
             </div>
             <button
-              onClick={() => selectedSeg && onPickupCellClick?.(selectedSeg.codes, null, selectedSeg.label)}
+              onClick={() => selectedSeg && onPickupCellClick?.(selectedSeg.codes, selectedSeg.monthKey || null, selectedSeg.label)}
               disabled={!selectedSeg}
               style={{
                 fontSize: 10,
