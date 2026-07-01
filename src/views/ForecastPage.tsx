@@ -308,6 +308,22 @@ export default function ForecastPage() {
     setBulkEdit(prev => ({ ...prev, selectedDate: date }))
   }, [])
 
+  // 일괄수정 진입 시 기본 선택 날짜 결정:
+  // currentMonth가 otbDate가 속한 달이면 otbDate 그대로, 아니면 해당 달의 1일.
+  function getDefaultBulkEditDate(): string {
+    const today = otbDate || new Date().toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })
+    const todayDate = new Date(today + 'T00:00:00')
+
+    const isSameMonth =
+      currentMonth.year === todayDate.getFullYear() &&
+      currentMonth.month === todayDate.getMonth() + 1
+
+    if (isSameMonth) return today
+
+    const firstDay = new Date(currentMonth.year, currentMonth.month - 1, 1)
+    return firstDay.toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })
+  }
+
   const handleBulkApply = useCallback((newEdits: EditedValues) => {
     setEditedValues(prev => {
       const next = new Map(prev)
@@ -460,7 +476,7 @@ export default function ForecastPage() {
                     cursor:      'pointer',
                     color:       '#f87171',
                     whiteSpace:  'nowrap',
-                    minHeight:   23,
+                    minHeight:   24,
                   }}
                 >
                   <AlertTriangle size={12} />
@@ -468,7 +484,7 @@ export default function ForecastPage() {
                 </button>
               )}
               {/* Seg */}
-              <div style={{ display: 'flex', alignItems: 'center', minHeight: 23, borderRight: '0.5px solid var(--color-border-secondary)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', minHeight: 24, borderRight: '0.5px solid var(--color-border-secondary)' }}>
                 <SegmentFilter
                   nodes={schema.nodes}
                   selectedIds={selectedNodeIds}
@@ -503,7 +519,7 @@ export default function ForecastPage() {
                   opacity:     !isLoaded || data.length === 0 ? 0.45 : 1,
                   whiteSpace:  'nowrap',
                   transition:  'color 0.15s',
-                  minHeight:   23,
+                  minHeight:   24,
                 }}
               >
                 <TrendingUp size={12} />
@@ -531,7 +547,7 @@ export default function ForecastPage() {
                   color:      'var(--color-text-primary)',
                   whiteSpace: 'nowrap',
                   transition: 'color 0.15s',
-                  minHeight:  23,
+                  minHeight:  24,
                 }}
               >
                 <BarChart2 size={12} aria-hidden="true" />
@@ -543,14 +559,21 @@ export default function ForecastPage() {
             <>
               {/* 슬라이딩 pill 토글 */}
               <div
-                onClick={() => setEditMode(prev => prev === 'bulk' ? 'inline' : 'bulk')}
+                onClick={() => setEditMode(prev => {
+                  const next = prev === 'bulk' ? 'inline' : 'bulk'
+                  if (next === 'bulk') {
+                    // '일괄'로 전환 시 기본 날짜 선택 후 BulkEditModalV2 즉시 오픈
+                    openBulkEditModal(getDefaultBulkEditDate())
+                  }
+                  return next
+                })}
                 style={{
                   display:     'flex',
                   alignItems:  'center',
                   padding:     '0 7px',
                   borderRight: '0.5px solid var(--color-border-secondary)',
                   cursor:      'pointer',
-                  minHeight:   23,
+                  minHeight:   24,
                 }}
               >
                 <div style={{
@@ -576,7 +599,7 @@ export default function ForecastPage() {
                     display:      'flex',
                     alignItems:   'center',
                     gap:          3,
-                    padding:      '2px 9px',
+                    padding:      '3px 10px',
                     borderRadius: 999,
                     fontSize:     10,
                     fontWeight:   600,
@@ -593,7 +616,7 @@ export default function ForecastPage() {
                     display:      'flex',
                     alignItems:   'center',
                     gap:          3,
-                    padding:      '2px 9px',
+                    padding:      '3px 10px',
                     borderRadius: 999,
                     fontSize:     10,
                     fontWeight:   600,
@@ -626,7 +649,7 @@ export default function ForecastPage() {
                   color:       '#00E5A0',
                   opacity:     isGenerating ? 0.6 : 1,
                   whiteSpace:  'nowrap',
-                  minHeight:   23,
+                  minHeight:   24,
                 }}
               >
                 <Zap size={12} />
@@ -650,7 +673,7 @@ export default function ForecastPage() {
                     color:      modifiedCount > 0 ? '#00E5A0' : 'var(--color-text-tertiary)',
                     opacity:    saving ? 0.6 : 1,
                     whiteSpace: 'nowrap',
-                    minHeight:  23,
+                    minHeight:  24,
                     transition: 'background 0.15s, color 0.15s',
                   }}
                 >
