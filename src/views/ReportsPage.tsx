@@ -150,7 +150,7 @@ function ReportCard({ item }: { item: ReportCatalogItem }) {
 
   return (
     <Link
-      href={`/reports/${item.slug}`}
+      href={item.path ?? `/reports/${item.slug}`}
       style={{
         display: 'flex', flexDirection: 'column', gap: 10, padding: 16, borderRadius: 12,
         background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)',

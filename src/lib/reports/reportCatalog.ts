@@ -12,6 +12,7 @@ export interface ReportCatalogItem {
   icon:         string          // 아이콘 키 (reportIcons 매핑)
   fav:          boolean
   updatedLabel: string          // 예: '오늘', '3일 전'
+  path?:        string          // 전용 페이지가 구현된 경우 명시, 없으면 /reports/[slug] placeholder로 이동
 }
 
 // 카테고리 칩 (all = 전체)
@@ -47,7 +48,7 @@ const CATALOG: ReportCatalogItem[] = [
   { id: 6,  slug: 'demand-calendar',   name: '수요 캘린더',         desc: '향후 픽업 페이스 기반 고/저수요 일자를 시각화합니다.',         category: 'forecast', icon: 'calendar',      fav: false, updatedLabel: '오늘' },
 
   // ── 세그먼트/채널 ──
-  { id: 7,  slug: 'segment-mix',       name: '세그먼트 믹스',       desc: '세그먼트별 R/N·ADR·매출 비중과 6개월 추이.',                  category: 'segment',  icon: 'pie',           fav: true,  updatedLabel: '오늘' },
+  { id: 7,  slug: 'segment-mix',       name: '세그먼트 믹스',       desc: '세그먼트별 R/N·ADR·매출 비중과 6개월 추이.',                  category: 'segment',  icon: 'pie',           fav: true,  updatedLabel: '오늘', path: '/reports/segment-mix' },
   { id: 8,  slug: 'channel-production', name: '채널 생산성',        desc: 'Direct/OTA 채널별 생산 비중과 수수료 영향 분석.',             category: 'segment',  icon: 'share',         fav: false, updatedLabel: '2일 전' },
   { id: 9,  slug: 'account-pickup',    name: '어카운트 픽업',       desc: '주요 거래처별 픽업과 전년 대비 성장률.',                       category: 'segment',  icon: 'users',         fav: false, updatedLabel: '3일 전' },
 

@@ -110,11 +110,11 @@ export default function ForecastPage() {
     setHasAutoLoaded(false)
   }, [hotelId, currentMonth])
 
-  async function doFetch() {
+  async function doFetch(loadDate?: string) {
     const { start, end } = monthRange(currentMonth.year, currentMonth.month)
     setIsLoading(true)
     setLoadProgress(0)
-    const rows = await fetchBaselineForecast(hotelId, start, end, otbDate || undefined)
+    const rows = await fetchBaselineForecast(hotelId, start, end, otbDate || undefined, loadDate)
     setData(transformRpcToTableData(rows, (pct) => {
       setLoadProgress(pct)
     }))
@@ -257,7 +257,7 @@ export default function ForecastPage() {
         if (!loadableDates.includes(updateDate)) {
           setLoadableDates(prev => [updateDate, ...prev])
         }
-        doFetch().catch(() => {})
+        await doFetch(updateDate).catch(() => {})   // 저장한 update_date 스냅샷으로 재조회 (baseline 재계산 방지)
       } catch (err) {
         alert(`저장 실패: ${(err as Error).message}`)
       } finally {
@@ -274,7 +274,7 @@ export default function ForecastPage() {
       const result     = await saveForecastEdits(hotelId, updateDate, edits)
       alert(`저장 완료: 총 ${result.saved_count}건 (신규 ${result.inserted_count}, 수정 ${result.updated_count})`)
       setEditedValues(new Map())
-      doFetch().catch(() => {})
+      await doFetch(updateDate).catch(() => {})   // 저장한 update_date 스냅샷으로 재조회 (baseline 재계산 방지)
     } catch (err) {
       alert(`저장 실패: ${(err as Error).message}`)
     } finally {
@@ -924,7 +924,7 @@ export default function ForecastPage() {
           editedValues={editedValues}
           onEditChange={setEditedValues}
           saving={saving}
-          onSave={handleSave}
+          onSave={async () => { await handleSave() }}
           otbDate={otbDate || new Date().toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })}
         />
       )}

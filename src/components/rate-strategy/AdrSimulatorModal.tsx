@@ -112,13 +112,12 @@ export default function AdrSimulatorModal({
 
   const [barRaw,    setBarRaw]    = useState(baseBarRate)   // 원단위 저장 (표시는 K)
   const [otaPct,    setOtaPct]    = useState(60)
-  const [otaFeePct, setOtaFeePct] = useState(15)
+  const [otaFeePct, setOtaFeePct] = useState(13.5)
   const [showFcstPanel, setShowFcstPanel] = useState(false)
   const [showRoomPanel, setShowRoomPanel] = useState(false)
   const [editedFcst, setEditedFcst] = useState<Record<string, { rn: number; adr: number }>>({})
   const [fcstSaving, setFcstSaving] = useState(false)
   const [editCell, setEditCell] = useState<{ code: string; field: 'rn' | 'adr' } | null>(null)
-  const [occFilter, setOccFilter] = useState(90)   // 고점유 퀵셀렉터 OTB OCC 필터
   const [editMode, setEditMode] = useState<'fcst' | 'otb'>('fcst')   // 일괄 편집 모드
   const [selectedFields, setSelectedFields] = useState<('rn' | 'adr')[]>([])
   const [modeOpen, setModeOpen] = useState(false)   // 모드 커스텀 드롭다운
@@ -126,6 +125,15 @@ export default function AdrSimulatorModal({
   const [checkedSegs,  setCheckedSegs]  = useState<string[]>([])   // 체크된 segCode
   const [sellOverride, setSellOverride] = useState<Record<string, number>>({})   // 객실타입별 예상판매 수동값
   const [showOtb, setShowOtb] = useState(false)   // Forecast 패널 OTB 컬럼 표시(기본 숨김)
+  const [appliedSegs, setAppliedSegs] = useState<Record<string, boolean>>({})   // 세그별 예상 ADR '적용' → ✓ 피드백
+  // 픽업 급증 — 요금 인상 추천
+  const [pickupThreshold,   setPickupThreshold]   = useState(20)     // 픽업 증가 기준 %
+  const [pickupMult,        setPickupMult]        = useState(0.5)    // 계수
+  const [pickupCap,         setPickupCap]         = useState(30)     // 상한 %
+  const [selectedPickupIdx, setSelectedPickupIdx] = useState<number | null>(null)
+  const [pickupToast,       setPickupToast]       = useState<string | null>(null)
+  const scrollBodyRef   = useRef<HTMLDivElement>(null)                       // 좌측 본문 스크롤 컨테이너
+  const pendingRecBarRef = useRef<{ date: string; bar: number } | null>(null) // 픽업 추천 적용 → sim 로드 후 재적용용
 
   // get_adr_simulator_data — simDate(date)/FCST date 변경 시 재호출
   const { data: sim } = useQuery({
@@ -159,7 +167,7 @@ export default function AdrSimulatorModal({
   })
   const { data: fcstSchema } = useQuery({
     queryKey: ['adr_fcst_schema', hotelId],
-    enabled: isOpen && showFcstPanel && !!hotelId,
+    enabled: isOpen && !!hotelId,   // 예상 ADR 패널의 세그먼트명/코드용 — 패널 미개봉에도 필요
     queryFn: () => fetchForecastSchema(hotelId!),
   })
 
@@ -176,27 +184,64 @@ export default function AdrSimulatorModal({
       return fetchBaselineForecast(hotelId!, start, end, undefined, fcstUpdateDate ?? null)
     },
   })
-  const highOccDates = useMemo(() => {
-    const by: Record<string, { otbRn: number; otbRev: number; fcstRn: number; fcstRev: number }> = {}
-    for (const r of monthRows) {
-      const o = by[r.business_date] ?? (by[r.business_date] = { otbRn: 0, otbRev: 0, fcstRn: 0, fcstRev: 0 })
-      o.otbRn  += r.current_otb_rn ?? 0
-      o.otbRev += r.current_otb_revenue ?? 0
-      o.fcstRn += r.forecast_rn ?? 0
-      o.fcstRev += r.forecast_revenue ?? 0
+  // ── 픽업 급증 — get_pickup_data (어제/30일전/월1일 기준) + 현 BAR(s02_rate_detail) ──
+  const pickupOtbDate = new Date(Date.now() - 86400000).toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })          // 어제
+  const pickupVsDate  = new Date(Date.now() - 30 * 86400000).toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })     // 30일 전
+  const pickupMinDate = monthYM ? `${monthYM}-01` : ''                                                                 // 조회 월 1일
+  const { data: pickupRows = [], refetch: refetchPickup } = useQuery({
+    queryKey: ['adr_pickup', hotelId, pickupOtbDate, pickupVsDate, pickupMinDate],
+    enabled: isOpen && !!hotelId && !!pickupOtbDate && !!pickupVsDate && !!pickupMinDate,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('get_pickup_data', {
+        p_hotel_id:    hotelId,
+        p_otb_date:    pickupOtbDate,
+        p_vs_otb_date: pickupVsDate,
+        p_min_date:    pickupMinDate,
+      })
+      if (error) throw error
+      return (data ?? []) as { business_date: string; otb_nights: number; vs_otb_nights: number }[]
+    },
+  })
+  const { data: barRateRows = [] } = useQuery({
+    queryKey: ['adr_bar_rates', hotelId, monthYM],
+    enabled: isOpen && !!hotelId && !!monthYM,
+    queryFn: async () => {
+      const [yy, mm] = monthYM.split('-').map(Number)
+      const lastDay = new Date(yy, mm, 0).getDate()
+      const { data, error } = await (supabase as any)
+        .from('s02_rate_detail')
+        .select('stay_date, new_rate')
+        .eq('hotel_id', hotelId).eq('room_type_code', 'BASE').eq('date_type', 'single')
+        .gte('stay_date', `${monthYM}-01`).lte('stay_date', `${monthYM}-${String(lastDay).padStart(2, '0')}`)
+      if (error) throw error
+      return (data ?? []) as { stay_date: string; new_rate: number }[]
+    },
+  })
+  // stay_date별 픽업 급증 + 추천 BAR (pickupPct 내림차순, 조회 월·미래 일자, BAR 존재분)
+  const pickupList = useMemo(() => {
+    const agg: Record<string, { otb: number; vs: number }> = {}
+    for (const r of pickupRows) {
+      const a = agg[r.business_date] ?? (agg[r.business_date] = { otb: 0, vs: 0 })
+      a.otb += r.otb_nights ?? 0
+      a.vs  += r.vs_otb_nights ?? 0
     }
-    const rooms = effTotal
-    return Object.entries(by).map(([d, v]) => {
-      const otbOcc  = rooms > 0 ? Math.round((v.otbRn / rooms) * 100) : 0
-      const fcstOcc = rooms > 0 ? Math.round((v.fcstRn / rooms) * 100) : 0
-      const otbAdr  = v.otbRn > 0 ? v.otbRev / v.otbRn : 0
-      const fcstAdr = v.fcstRn > 0 ? v.fcstRev / v.fcstRn : 0
-      return { date: d, otbOcc, fcstOcc, dOcc: fcstOcc - otbOcc, dAdr: Math.round((fcstAdr - otbAdr) / 1000) }
-    }).sort((a, b) => b.otbOcc - a.otbOcc)
-  }, [monthRows, effTotal])
-  const filteredHighOcc = useMemo(() => highOccDates.filter(d =>
-    occFilter === 0 ? true : occFilter === 100 ? d.otbOcc === 100 : d.otbOcc >= occFilter
-  ), [highOccDates, occFilter])
+    const barMap: Record<string, number> = {}
+    for (const b of barRateRows) barMap[b.stay_date] = b.new_rate
+    return Object.entries(agg).map(([d, v]) => {
+      const p1 = v.otb, p30 = v.vs                                             // 1일전(현재)/1달전 OTB R/N
+      const pickupPct = p30 > 0 ? Math.round((p1 - p30) / p30 * 100) : 0
+      const occ  = effTotal > 0 ? Math.round((p1 / effTotal) * 100) : 0
+      const barK = Math.round((barMap[d] ?? 0) / 1000)
+      const rawIncrease    = pickupPct / 100 * pickupMult
+      const actualIncrease = Math.min(rawIncrease, pickupCap / 100)
+      const capped         = rawIncrease > pickupCap / 100
+      const recBarK        = Math.round(barK * (1 + actualIncrease) / 5) * 5   // 5K 단위 반올림
+      return { date: d, occ, barK, p1, p30, pickupPct, recBarK, capped, incPct: Math.round(actualIncrease * 100) }
+    })
+      .filter(r => r.pickupPct >= pickupThreshold && r.barK > 0
+        && (!otbDate || r.date >= otbDate) && r.date.slice(0, 7) === monthYM)
+      .sort((a, b) => a.date.localeCompare(b.date))
+  }, [pickupRows, barRateRows, effTotal, pickupThreshold, pickupMult, pickupCap, otbDate, monthYM])
 
   // 좌측 OTB 실현값 — simDate(date) 기준 monthRows 집계 (우측 Forecast 패널 OTB와 동일 정의)
   const otbForDate = useMemo(() => {
@@ -208,6 +253,21 @@ export default function AdrSimulatorModal({
       }
     }
     return { rn, rev, adr: rn > 0 ? rev / rn : 0 }
+  }, [monthRows, date])
+
+  // simDate 세그먼트별 map (monthRows 기반 — 항상 로드, Forecast 패널 미개봉에도 사용) — 예상 ADR 패널용
+  const segByDate = useMemo(() => {
+    const m: Record<string, { otbRn: number; otbRev: number; fcRn: number; fcAdr: number }> = {}
+    for (const r of monthRows) {
+      if (r.business_date !== date) continue
+      m[r.segmentation] = {
+        otbRn:  r.current_otb_rn      ?? 0,
+        otbRev: r.current_otb_revenue ?? 0,
+        fcRn:   r.forecast_rn         ?? 0,
+        fcAdr:  r.forecast_adr        ?? 0,
+      }
+    }
+    return m
   }, [monthRows, date])
 
   // 세그먼트 채널 분류 — c05_market_table_schema.sorting1 ('direct'/'ota'/그 외, 대소문자 무관)
@@ -233,22 +293,6 @@ export default function AdrSimulatorModal({
     }
     return m
   }, [segSchemaRows])
-
-  // 세그먼트별 잔여(Forecast − OTB)를 채널별 합산 (simDate 기준, 편집값 반영)
-  const segGaps = useMemo(() => {
-    let directAvail = 0, otaAvail = 0, otherAvail = 0
-    for (const r of monthRows) {
-      if (r.business_date !== date) continue
-      const fcRn = editedFcst[r.segmentation]?.rn ?? r.forecast_rn ?? 0   // 편집값 우선 → 슬라이더 자동 재계산
-      const gap = Math.max(0, fcRn - (r.current_otb_rn ?? 0))
-      if (gap <= 0) continue
-      const ch = channelOf[r.segmentation] ?? 'other'
-      if (ch === 'direct') directAvail += gap
-      else if (ch === 'ota') otaAvail += gap
-      else otherAvail += gap
-    }
-    return { directAvail, otaAvail, otherAvail }
-  }, [monthRows, date, channelOf, editedFcst])
 
   const fcstByCode = useMemo(() => {
     const m: Record<string, ForecastRpcRow> = {}
@@ -294,8 +338,17 @@ export default function AdrSimulatorModal({
   // 현재 BAR(effBase) 변경 시 BAR 입력 동기화 — 0이면 현재 입력값 유지
   useEffect(() => { if (effBase > 0) setBarRaw(effBase) }, [effBase])
 
+  // 픽업 추천 클릭 → 날짜 이동 후 sim 로드로 위 effBase 효과가 barRaw를 덮어쓰면 추천 BAR 재적용 (일회성)
+  useEffect(() => {
+    const p = pendingRecBarRef.current
+    if (p && effBase > 0 && p.date === date) {
+      setBarRaw(p.bar)
+      pendingRecBarRef.current = null
+    }
+  }, [effBase, date])
+
   // 날짜 변경 시 Forecast 편집값 초기화
-  useEffect(() => { setEditedFcst({}); setEditCell(null); setCheckedSegs([]); setSellOverride({}) }, [date])
+  useEffect(() => { setEditedFcst({}); setEditCell(null); setCheckedSegs([]); setSellOverride({}); setAppliedSegs({}) }, [date])
 
   // 모드 드롭다운 외부 클릭 닫기
   useEffect(() => {
@@ -306,12 +359,19 @@ export default function AdrSimulatorModal({
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  // 세그먼트 채널 잔여 비율로 OTA/다이렉트 슬라이더 자동 세팅 (이후 사용자 수동 조정 가능)
+  // OTA 비중 초기 세팅 — direct/ota 세그의 FCST R/N 합계 기준 (BulkEditV2 방식, editedFcst 반영). 이후 수동 조정 가능
   useEffect(() => {
-    const total = segGaps.directAvail + segGaps.otaAvail
-    if (total <= 0) return   // 세그 데이터 없거나 잔여 0 → 기존 슬라이더 값 유지(fallback)
-    setOtaPct(Math.round((segGaps.otaAvail / total) * 100))
-  }, [segGaps])
+    let otaRn = 0, directRn = 0
+    for (const code of Object.keys(segByDate)) {
+      const ch = channelOf[code]
+      if (ch !== 'direct' && ch !== 'ota') continue
+      const rn = editedFcst[code]?.rn ?? segByDate[code]?.fcRn ?? 0   // 편집값 우선 → 원본 FCST R/N
+      if (ch === 'ota') otaRn += rn
+      else directRn += rn
+    }
+    const total = otaRn + directRn
+    setOtaPct(total > 0 ? Math.round((otaRn / total) * 100) : 50)   // fallback 50 (BulkEditV2 동일)
+  }, [segByDate, channelOf, editedFcst])
 
   // ESC + scroll lock
   useEffect(() => {
@@ -432,15 +492,23 @@ export default function AdrSimulatorModal({
     const days = ['일', '월', '화', '수', '목', '금', '토']
     return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} (${days[d.getDay()]})`
   }
-  // 고점유 퀵셀렉터 GAP 표시 (0이면 '=')
-  const hoGap = (v: number, unit: string) => (
-    v === 0
-      ? <span style={{ color: TXT3 }}>=</span>
-      : <span style={{ color: v > 0 ? POS : RED }}>{v > 0 ? '▲ +' : '▼ '}{Math.abs(v)}{unit}</span>
-  )
-
   const navBtn: React.CSSProperties = { background: 'transparent', border: 'none', color: TXT2, width: 22, height: 22, cursor: 'pointer', fontSize: 16, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }
   const chanBox: React.CSSProperties = { flex: 1, minWidth: 0, background: BG_CARD, border: `0.5px solid ${BORDER}`, borderRadius: 7, padding: '5px 7px' }
+  // 픽업 급증 섹션 컨트롤 스타일
+  const pickupInput: React.CSSProperties = { width: 32, background: '#0a0a0a', border: '1px solid #2a2a2a', color: '#00E5A0', borderRadius: 3, fontSize: 10, textAlign: 'right', padding: '1px 3px', outline: 'none' }
+  const pickupCtrl:  React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 10, color: '#666' }
+  const pickupCols = '58px 34px 42px 30px 62px 1fr'
+  // 픽업 추천 행 클릭 → 날짜 이동 + 추천 BAR 자동 입력 + 상단 스크롤 + 토스트
+  const handlePickupRowClick = (idx: number, row: { date: string; recBarK: number }) => {
+    setSelectedPickupIdx(idx)
+    pendingRecBarRef.current = { date: row.date, bar: row.recBarK * 1000 }   // sim 로드 후 재적용 보장
+    onDateChange(row.date)
+    setBarRaw(row.recBarK * 1000)
+    scrollBodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+    const mmdd = `${row.date.slice(5, 7)}/${row.date.slice(8, 10)}`
+    setPickupToast(`${mmdd} · BAR ${row.recBarK}K 적용됨`)
+    setTimeout(() => setPickupToast(null), 1800)
+  }
 
   // ── Forecast 편집 패널 — 입력/저장/초기화 ──
   const segGapColor = (v: number) => (v > 0 ? POS : v < 0 ? RED : TXT3)
@@ -451,6 +519,71 @@ export default function AdrSimulatorModal({
       adr: field === 'adr' ? val : (prev[code]?.adr ?? getFcstAdr(code)),
     },
   }))
+
+  // ── 세그먼트별 예상 ADR (BulkEditModalV2 로직 재사용, segByDate 기반) ──
+  const segNameByCode: Record<string, string> = {}
+  for (const r of fcstEditRows) if (r.kind === 'sub') segNameByCode[r.code] = r.name
+  // 편집(editedFcst) 우선 → segByDate(forecast) 폴백
+  const segFcRn  = (code: string) => editedFcst[code]?.rn  ?? segByDate[code]?.fcRn  ?? 0
+  const segFcAdr = (code: string) => editedFcst[code]?.adr ?? segByDate[code]?.fcAdr ?? 0
+  // 세그(code)별 surcharge 프리미엄 — OTB ADR − 현재 BAR(effBase)
+  const getSegPremium = (code: string): number => {
+    const s = segByDate[code]
+    if (!s || s.otbRn <= 0) return 0
+    return Math.round(s.otbRev / s.otbRn) - effBase
+  }
+  // 세그별 예상 ADR (direct/ota만, R/N 증가율로 premium 감쇠) — barRaw/otaFeePct/editedFcst 변화 시 재계산
+  const getSegExpectedAdr = (code: string, newBar: number): number | null => {
+    const ch = channelOf[code]
+    if (ch !== 'direct' && ch !== 'ota') return null
+    const s = segByDate[code]
+    if (!s) return null
+    const premium  = getSegPremium(code)
+    const fcRn     = segFcRn(code)
+    const rnGrowth = s.otbRn > 0 ? fcRn / s.otbRn : 1
+    const decay    = Math.max(0.7, 1 - (rnGrowth - 1) * 0.1)   // 판매량↑ → 평균 surcharge↓ (최대 30% 감쇠)
+    const base     = newBar + premium * decay
+    if (ch === 'ota') return Math.round(base * (1 - otaFeePct / 100))
+    return Math.round(base)
+  }
+  // 적용 → 해당 세그 FCST ADR을 예상값으로 set (editedFcst 체인 → 좌/우 패널 동기화)
+  const applyExpected = (code: string, expected: number) => {
+    setEditedFcst(prev => ({ ...prev, [code]: { rn: prev[code]?.rn ?? segFcRn(code), adr: expected } }))
+    setAppliedSegs(prev => ({ ...prev, [code]: true }))
+    setTimeout(() => setAppliedSegs(prev => ({ ...prev, [code]: false })), 1800)
+  }
+  // 렌더용 direct/ota 세그 목록 (R/N > 0)
+  const segExpectedList = Object.keys(segByDate)
+    .filter(code => (channelOf[code] === 'direct' || channelOf[code] === 'ota') && segFcRn(code) > 0)
+    .map(code => {
+      const expected = getSegExpectedAdr(code, barRaw)
+      if (expected === null) return null
+      return { code, name: segNameByCode[code] ?? code, expected, currentAdr: segFcAdr(code) }
+    })
+    .filter((x): x is { code: string; name: string; expected: number; currentAdr: number } => x !== null)
+  // 전체 적용 시 예상 — 모든 direct/ota 세그에 예상 ADR을 적용했다고 가정한 합계
+  const previewAfterApply = (() => {
+    const codes = Object.keys(segByDate)
+    if (codes.length === 0) return null
+    let totalRn = 0, totalRev = 0
+    for (const code of codes) {
+      const fcRn = segFcRn(code)
+      if (fcRn <= 0) continue
+      const ch = channelOf[code]
+      const fcAdr = (ch === 'direct' || ch === 'ota')
+        ? (getSegExpectedAdr(code, barRaw) ?? segFcAdr(code))
+        : segFcAdr(code)
+      totalRn  += fcRn
+      totalRev += fcRn * fcAdr
+    }
+    if (totalRn === 0) return null
+    return {
+      rn:  totalRn,
+      rev: totalRev,
+      occ: effTotal > 0 ? (totalRn / effTotal) * 100 : 0,
+      adr: Math.round(totalRev / totalRn),
+    }
+  })()
   // 표시 포맷 — 값 0이면 '-'
   const fmtRN  = (v: number) => (v === 0 ? '-' : `${v}`)
   const fmtADR = (v: number) => (v === 0 ? '-' : `${Math.round(v / 1000).toLocaleString('ko-KR')}K`)
@@ -545,7 +678,7 @@ export default function AdrSimulatorModal({
         .fc-spin-hide { -moz-appearance: textfield; }`}</style>
       <div className="absolute inset-0 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.7)' }} onClick={onClose} />
       {/* 래퍼 — 좌측 Simulation + 우측 Forecast 편집 패널 */}
-      <div className="relative rounded-2xl overflow-hidden flex flex-row w-full" style={{ maxWidth: 400 + (showRoomPanel ? 200 : 0) + (showFcstPanel ? 700 : 0), transition: 'max-width 0.2s ease', border: `0.5px solid ${BORDER}`, height: '80vh', boxShadow: 'var(--shadow-elevated)' }}>
+      <div className="relative rounded-2xl overflow-hidden flex flex-row w-full" style={{ maxWidth: 440 + (showRoomPanel ? 200 : 0) + (showFcstPanel ? 700 : 0), transition: 'max-width 0.2s ease', border: `0.5px solid ${BORDER}`, height: '80vh', boxShadow: 'var(--shadow-elevated)' }}>
         {/* ───────── 객실타입 패널 (세로탭 왼쪽, 슬라이드인) ───────── */}
         {showRoomPanel && (
           <div style={{ width: 200, flexShrink: 0, background: BG_BODY, borderRight: `0.5px solid ${BORDER}`, display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'slideInLeft 0.15s ease' }}>
@@ -589,7 +722,7 @@ export default function AdrSimulatorModal({
         </div>
 
         {/* ───────── 좌측: Simulation ───────── */}
-        <div className="flex flex-col" style={{ flex: '0 0 auto', width: 360, background: BG_BODY, height: '100%', overflow: 'hidden' }}>
+        <div className="flex flex-col" style={{ flex: '0 0 auto', width: 400, background: BG_BODY, height: '100%', overflow: 'hidden' }}>
           {/* Header */}
           <div className="shrink-0" style={{ display: 'flex', alignItems: 'center', padding: '10px 14px', borderBottom: `0.5px solid ${BORDER}`, position: 'relative' }}>
             {/* 날짜 네비 — 정중앙 */}
@@ -674,7 +807,7 @@ export default function AdrSimulatorModal({
           </div>
 
           {/* 본문 (고정 상단 + 잔여 객실타입 현황이 하단 채움) */}
-          <div className="flex-1 flex flex-col" style={{ minHeight: 0, overflowY: 'auto' }}>
+          <div ref={scrollBodyRef} className="flex-1 flex flex-col" style={{ minHeight: 0, overflowY: 'auto' }}>
             <div>
               {/* 달성률 바 3개 — Forecast 있을 때만 */}
               {fcst && ach && (
@@ -698,56 +831,104 @@ export default function AdrSimulatorModal({
               )}
             </div>
 
-            {/* 고점유 날짜 퀵셀렉터 — 하단 빈 공간 채움 */}
-            <div style={{ flex: 1, minHeight: 0, margin: '6px 14px 10px', border: `0.5px solid ${BORDER}`, borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ padding: '6px 12px', borderBottom: `0.5px solid ${BORDER}`, fontSize: 10, color: TXT3, textTransform: 'uppercase', letterSpacing: '0.5px', flexShrink: 0 }}>고점유 날짜</div>
-              {/* OCC 필터 칩 */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderBottom: `0.5px solid ${BORDER}`, flexShrink: 0 }}>
-                <span style={{ fontSize: 10, color: TXT3, whiteSpace: 'nowrap' }}>OTB OCC</span>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {[{ label: '전체', val: 0 }, { label: '90%+', val: 90 }, { label: '95%+', val: 95 }, { label: '100%', val: 100 }].map(({ label, val }) => (
-                    <button key={val} onClick={() => setOccFilter(val)}
-                      style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, cursor: 'pointer', whiteSpace: 'nowrap',
-                        background: occFilter === val ? 'var(--color-accent-dim)' : 'transparent',
-                        border: `0.5px solid ${occFilter === val ? BORDER_ACCENT : BORDER}`,
-                        color: occFilter === val ? MINT : TXT3 }}>
-                      {label}
-                    </button>
-                  ))}
+            {/* 세그먼트별 예상 ADR + 전체 적용 시 예상 (KPI 아래 divider) */}
+            {segExpectedList.length > 0 && (
+              <div style={{ margin: '0 14px 10px', paddingTop: 10, borderTop: '1px solid #1f1f1f', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {/* 세그먼트별 예상 ADR */}
+                <div style={{ background: '#111', border: '1px solid #1f1f1f', borderRadius: 8, overflow: 'hidden' }}>
+                  <div style={{ padding: '7px 14px', color: '#888', fontSize: 11, borderBottom: '1px solid #1f1f1f' }}>세그먼트별 예상 ADR</div>
+                  {segExpectedList.map((s, i) => {
+                    const isMint   = s.expected >= s.currentAdr
+                    const adrColor = isMint ? '#00E5A0' : '#E24B4A'
+                    const applied  = !!appliedSegs[s.code]
+                    return (
+                      <div key={s.code} style={{ display: 'flex', alignItems: 'center', padding: '6px 14px', gap: 10, borderBottom: i < segExpectedList.length - 1 ? '1px solid #1a1a1a' : 'none' }}>
+                        <span style={{ color: '#ccc', fontSize: 12, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                        <span style={{ color: adrColor, fontSize: 13, fontWeight: 600 }}>{Math.round(s.expected / 1000)}K</span>
+                        <button onClick={() => applyExpected(s.code, s.expected)}
+                          style={{ borderRadius: 4, padding: '2px 8px', fontSize: 10, cursor: 'pointer', flexShrink: 0,
+                            background: isMint ? '#0a2e1f' : '#2e0a0a', border: `1px solid ${adrColor}`, color: adrColor }}>
+                          {applied ? '✓' : '적용'}
+                        </button>
+                      </div>
+                    )
+                  })}
                 </div>
-              </div>
-              {/* 2행 헤더 */}
-              <div style={{ display: 'grid', gridTemplateColumns: '92px 56px 112px', padding: '3px 12px', borderBottom: `0.5px solid ${BORDER}`, flexShrink: 0 }}>
-                <span style={{ fontSize: 9, color: TXT3 }} />
-                <span style={{ fontSize: 9, color: TXT3, textAlign: 'right' }}>OTB</span>
-                <span style={{ fontSize: 9, color: PURPLE, textAlign: 'center', borderBottom: `0.5px solid ${PURPLE}40`, paddingBottom: 2 }}>FC − OTB</span>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '92px 56px 56px 56px', padding: '3px 12px', borderBottom: `0.5px solid ${BORDER}`, flexShrink: 0 }}>
-                <span style={{ fontSize: 9, color: TXT3 }}>날짜</span>
-                <span style={{ fontSize: 9, color: TXT3, textAlign: 'right' }}>OCC</span>
-                <span style={{ fontSize: 9, color: PURPLE, textAlign: 'right', opacity: 0.5 }}>ΔOCC</span>
-                <span style={{ fontSize: 9, color: PURPLE, textAlign: 'right', opacity: 0.5 }}>ΔADR</span>
-              </div>
-              {/* 날짜 목록 */}
-              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-                {filteredHighOcc.length === 0 ? (
-                  <div style={{ padding: 14, textAlign: 'center', fontSize: 11, color: TXT3 }}>해당 조건의 날짜가 없습니다</div>
-                ) : filteredHighOcc.map(d => {
-                  const isActive = d.date === date
-                  const occColor = d.otbOcc >= 95 ? POS : d.otbOcc >= 90 ? WARN : TXT2
-                  return (
-                    <div key={d.date} onClick={() => onDateChange(d.date)}
-                      style={{ display: 'grid', gridTemplateColumns: '92px 56px 56px 56px', alignItems: 'center', padding: '5px 12px',
-                        borderTop: `0.5px solid ${BORDER}`, cursor: 'pointer',
-                        background: isActive ? SUCCESS_BG : 'transparent',
-                        borderLeft: `2px solid ${isActive ? MINT : 'transparent'}` }}>
-                      <span style={{ fontSize: 11, color: isActive ? MINT : TXT2 }}>{formatDate(d.date)}</span>
-                      <span style={{ fontSize: 11, fontWeight: 500, textAlign: 'right', color: occColor }}>{d.otbOcc}%</span>
-                      <span style={{ fontSize: 11, textAlign: 'right' }}>{hoGap(d.dOcc, '%')}</span>
-                      <span style={{ fontSize: 11, textAlign: 'right' }}>{hoGap(d.dAdr, 'K')}</span>
+                {/* 전체 적용 시 예상 */}
+                {previewAfterApply && (
+                  <div style={{ background: '#0d1f17', border: '1px solid rgba(0,229,160,0.19)', borderRadius: 8, padding: '7px 14px' }}>
+                    <div style={{ color: '#888', fontSize: 10, marginBottom: 8 }}>전체 적용 시 예상</div>
+                    <div style={{ display: 'flex', gap: 24 }}>
+                      {([
+                        ['OCC', `${previewAfterApply.occ.toFixed(1)}%`],
+                        ['ADR', `${Math.round(previewAfterApply.adr / 1000)}K`],
+                        ['REV', `${(previewAfterApply.rev / 1e6).toFixed(1)}M`],
+                      ] as const).map(([label, val]) => (
+                        <div key={label}>
+                          <div style={{ color: '#666', fontSize: 10 }}>{label}</div>
+                          <div style={{ color: '#00E5A0', fontSize: 14, fontWeight: 700 }}>{val}</div>
+                        </div>
+                      ))}
                     </div>
-                  )
-                })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 픽업 급증 — 요금 인상 추천 (전체 적용 시 예상 아래, divider) */}
+            <div style={{ flex: 1, minHeight: 0, margin: '0 14px 10px', paddingTop: 10, borderTop: '1px solid #1f1f1f', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ flex: 1, minHeight: 0, background: '#111', border: '1px solid rgba(0,229,160,0.12)', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                {/* 헤더행: 제목 + 컨트롤 + 조회 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', padding: '8px 14px', borderBottom: '1px solid #1f1f1f', flexShrink: 0 }}>
+                  <span style={{ color: '#00E5A0', fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap' }}>픽업 급증</span>
+                  <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <label style={pickupCtrl}>픽업<input className="fc-spin-hide" type="number" value={pickupThreshold} onChange={e => setPickupThreshold(Number(e.target.value) || 0)} style={pickupInput} />%↑</label>
+                    <label style={pickupCtrl}>계수<input className="fc-spin-hide" type="number" step={0.1} value={pickupMult} onChange={e => setPickupMult(Number(e.target.value) || 0)} style={pickupInput} /></label>
+                    <label style={pickupCtrl}>상한<input className="fc-spin-hide" type="number" value={pickupCap} onChange={e => setPickupCap(Number(e.target.value) || 0)} style={pickupInput} />%</label>
+                    <button onClick={() => refetchPickup()} style={{ background: '#00E5A0', color: '#0a0a0a', fontWeight: 600, border: 'none', borderRadius: 4, padding: '3px 10px', fontSize: 11, cursor: 'pointer' }}>조회</button>
+                  </div>
+                </div>
+                {/* 컬럼 헤더 */}
+                <div style={{ display: 'grid', gridTemplateColumns: pickupCols, gap: 4, padding: '4px 14px', borderBottom: '1px solid #1f1f1f', color: '#444', fontSize: 10, flexShrink: 0 }}>
+                  <span>일자</span>
+                  <span style={{ textAlign: 'right' }}>OCC</span>
+                  <span style={{ textAlign: 'right' }}>현 BAR</span>
+                  <span style={{ textAlign: 'right' }}>1달전</span>
+                  <span style={{ textAlign: 'right' }}>1일전</span>
+                  <span style={{ textAlign: 'right' }}>추천 BAR</span>
+                </div>
+                {/* 목록 */}
+                <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                  {pickupList.length === 0 ? (
+                    <div style={{ padding: 14, textAlign: 'center', fontSize: 11, color: '#333' }}>해당 조건의 날짜가 없습니다</div>
+                  ) : pickupList.map((r, idx) => {
+                    const selected = selectedPickupIdx === idx
+                    const occColor = r.occ >= 80 ? '#00E5A0' : r.occ >= 65 ? '#f59e0b' : '#555'
+                    const wd = new Date(r.date + 'T00:00:00').getDay()
+                    const isFriSat = wd === 5 || wd === 6
+                    return (
+                      <div key={r.date} onClick={() => handlePickupRowClick(idx, r)}
+                        onMouseEnter={e => { if (!selected) (e.currentTarget as HTMLElement).style.background = '#161f16' }}
+                        onMouseLeave={e => { if (!selected) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+                        style={{ display: 'grid', gridTemplateColumns: pickupCols, gap: 4, alignItems: 'center', padding: '6px 14px', cursor: 'pointer', fontSize: 11,
+                          borderTop: '1px solid #1a1a1a',
+                          background: selected ? '#0d1f17' : 'transparent',
+                          borderLeft: `2px solid ${selected ? '#00E5A0' : 'transparent'}` }}>
+                        <span style={{ color: isFriSat ? '#E24B4A' : '#ccc', whiteSpace: 'nowrap' }}>{formatDate(r.date)}</span>
+                        <span style={{ textAlign: 'right', color: occColor }}>{r.occ}%</span>
+                        <span style={{ textAlign: 'right', color: '#888' }}>{r.barK}K</span>
+                        <span style={{ textAlign: 'right', color: '#888' }}>{r.p30}</span>
+                        <span style={{ textAlign: 'right', color: '#ccc', whiteSpace: 'nowrap' }}>{r.p1} <span style={{ color: r.pickupPct >= 0 ? '#00E5A0' : '#E24B4A' }}>({r.pickupPct >= 0 ? '+' : ''}{r.pickupPct}%)</span></span>
+                        <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.15 }}>
+                          <span style={{ color: '#00E5A0', fontSize: 12, fontWeight: 600 }}>{r.recBarK}K</span>
+                          {r.capped
+                            ? <span style={{ background: '#2e1a0a', color: '#f59e0b', fontSize: 9, borderRadius: 3, padding: '1px 4px', whiteSpace: 'nowrap' }}>+{r.incPct}%상한</span>
+                            : <span style={{ color: '#00E5A0', fontSize: 9 }}>+{r.incPct}%</span>}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             </div>
           </div>
@@ -964,6 +1145,16 @@ export default function AdrSimulatorModal({
             </div>
           </div>
         )}
+
+        {/* 픽업 추천 적용 토스트 */}
+        <div style={{
+          position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+          background: '#0a2e1f', border: '1px solid #00E5A0', color: '#00E5A0',
+          borderRadius: 6, padding: '6px 14px', fontSize: 11, whiteSpace: 'nowrap',
+          pointerEvents: 'none', opacity: pickupToast ? 1 : 0, transition: 'opacity 0.25s',
+        }}>
+          {pickupToast ?? ''}
+        </div>
       </div>
     </div>
   )

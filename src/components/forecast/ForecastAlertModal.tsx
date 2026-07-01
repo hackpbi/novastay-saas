@@ -15,7 +15,7 @@ interface ForecastAlertModalProps {
   editedValues:  EditedValues
   onEditChange:  (next: EditedValues) => void
   saving:        boolean
-  onSave:        () => void
+  onSave:        () => Promise<void>
   otbDate:       string
 }
 
@@ -500,14 +500,16 @@ export function ForecastAlertModal({
   }
 
   // ── 저장 — localFix를 editedValues에 머지 후 onSave ──────────────────────────
-  function handleSave() {
+  async function handleSave() {
     const next = new Map(editedValues)
     for (const [key, fix] of localFix.entries()) {
       const existing = next.get(key) ?? {}
       next.set(key, { ...existing, ...fix })
     }
     onEditChange(next)
-    setTimeout(() => onSave(), 0)
+    await onSave()          // 저장 완료(+재조회)까지 대기
+    setLocalFix(new Map())  // localFix 초기화
+    onClose()               // 저장 성공 시 모달 자동 닫기
   }
 
   if (!isOpen) return null
