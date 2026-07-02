@@ -23,6 +23,11 @@ interface DailyStatusChartProps {
   otbDate:     string            // 'YYYY-MM-DD'
   chartHeight?: number           // 미지정 시 부모 높이 100%
   isLY?:       boolean
+  isOTBMonth?: boolean           // 해당 월 전체가 OTB면 true (월 단위 구분)
+  barData?:    (number | null)[] // BAR Rate (원), otbDate 이전은 null
+  showOcc?:    boolean           // default true
+  showAdr?:    boolean           // default true
+  showBar?:    boolean           // default true
   events:      EventItem[]
   onDayClick:  (day: number) => void
 }
@@ -50,10 +55,10 @@ function createBarGradient(
 }
 
 interface Badge { day: number; x: number; names: string[]; color: string }
-interface LabelItem { day: number; x: number; y: number; occ: number; adr: number | null; isOTB: boolean; isLY: boolean }
+interface LabelItem { day: number; x: number; occY: number; adrY: number | null; barY: number | null; occ: number; adr: number | null; bar: number | null; isOTB: boolean; isLY: boolean }
 
 export default function DailyStatusChart({
-  year, month, occData, adrData, otbDate, chartHeight, isLY = false, events, onDayClick,
+  year, month, occData, adrData, otbDate, chartHeight, isLY = false, isOTBMonth = false, barData, showOcc = true, showAdr = true, showBar = true, events, onDayClick,
 }: DailyStatusChartProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const chartRef  = useRef<Chart | null>(null)
@@ -65,7 +70,7 @@ export default function DailyStatusChart({
   const pad      = (n: number) => String(n).padStart(2, '0')
   const ymd      = (d: number) => `${year}-${pad(month)}-${pad(d)}`
   const todayYMD = new Date().toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })
-  const isOTBDay = (d: number) => !isLY && ymd(d) >= otbDate
+  const isOTBDay = (_d: number) => !isLY && isOTBMonth   // 월 단위: 해당 월 전체가 OTB
 
   const eventsByDay = new Map<number, EventItem[]>()
   for (const e of events ?? []) {
@@ -86,6 +91,8 @@ export default function DailyStatusChart({
         const meta = chart.getDatasetMeta(0)
         if (!meta?.data?.length) return
         const adrDs = chart.data.datasets[1]
+        const yAdr = chart.scales.yAdr
+        const chartTop = chart.chartArea.top
         const items: LabelItem[] = []
         meta.data.forEach((bar, i) => {
           const occ = chart.data.datasets[0].data[i] as number | null
@@ -93,7 +100,21 @@ export default function DailyStatusChart({
           const b = bar as unknown as { x: number; y: number; width: number }
           if ((b.width ?? 0) < 12) return
           const adr = adrDs.data[i] as number | null
-          items.push({ day: i + 1, x: b.x, y: b.y - 20, occ, adr, isOTB: isOTBDay(i + 1), isLY })
+          // ADR 숫자 y = ADR 선의 실제 픽셀 위치(yAdr scale). 너무 위(차트 상단)면 생략
+          let adrY: number | null = null
+          if (adr != null && adr > 0 && yAdr) {
+            const py = yAdr.getPixelForValue(adr)
+            adrY = py >= chartTop + 8 ? py : null
+          }
+          // BAR Rate — ADR과 동일 yAdr scale로 y 계산
+          const barVal = barData?.[i] ?? null
+          let barY: number | null = null
+          if (barVal != null && barVal > 0 && yAdr) {
+            const py = yAdr.getPixelForValue(barVal)
+            barY = py >= chartTop + 8 ? py : null
+          }
+          // x는 xScale 기준 (dataset show/hide로 bar.x가 흔들려도 tick 위치는 고정)
+          items.push({ day: i + 1, x: chart.scales.x.getPixelForTick(i), occY: b.y - 20, adrY, barY, occ, adr, bar: barVal, isOTB: isOTBDay(i + 1), isLY })
         })
         setLabelItems(items)
       },
@@ -143,6 +164,11 @@ export default function DailyStatusChart({
       },
     }
 
+    // yAdr 축 범위 고정 — ADR 숨김(hidden) 시에도 scale이 붕괴되지 않아 BAR 위치 계산이 유지됨
+    const yAdrSrc = [...adrData, ...(barData ?? [])].filter((v): v is number => typeof v === 'number' && v > 0)
+    const yAdrMin = yAdrSrc.length ? Math.floor(Math.min(...yAdrSrc) / 10000) * 10000 : undefined
+    const yAdrMax = yAdrSrc.length ? Math.ceil(Math.max(...yAdrSrc) / 10000) * 10000 : undefined
+
     const config: ChartConfiguration = {
       type: 'bar',
       plugins: [labelPositionPlugin, glowPlugin, xTickPlugin],
@@ -162,6 +188,7 @@ export default function DailyStatusChart({
             borderColor: occData.map((_, i) => (isOTBDay(i + 1) ? 'rgba(0,229,160,0.45)' : 'transparent')),
             borderWidth: 1,
             borderRadius: 2,
+            hidden: !showOcc,
             yAxisID: 'yOcc',
             order: 2,
           },
@@ -176,6 +203,7 @@ export default function DailyStatusChart({
             tension: 0.4,
             spanGaps: true,
             fill: false,
+            hidden: !showAdr,
             yAxisID: 'yAdr',
             order: 1,
           },
@@ -189,20 +217,8 @@ export default function DailyStatusChart({
         onClick: (_e, els) => { if (els.length > 0) onDayClick(els[0].index + 1) },
         interaction: { mode: 'index', intersect: false },
         plugins: {
-          tooltip: {
-            callbacks: {
-              title: (items) => {
-                const d = Number(items[0]?.label)
-                const evs = eventsByDay.get(d)
-                const base = `${month}/${d}`
-                return evs ? `${base} · ★ ${evs.map(e => e.name).join(', ')}` : base
-              },
-              label: (item) => {
-                if (item.dataset.label === 'ADR') return `ADR ₩${Math.round(Number(item.raw)).toLocaleString('ko-KR')}`
-                return `OCC ${Number(item.raw).toFixed(1)}%`
-              },
-            },
-          },
+          tooltip: { enabled: false },
+          legend: { display: false },
         },
         scales: {
           x: {
@@ -216,6 +232,8 @@ export default function DailyStatusChart({
           },
           yAdr: {
             position: 'right',
+            min: yAdrMin, max: yAdrMax,                        // 범위 고정 → ADR 숨김 시 BAR y 계산 유지
+            afterFit: (scale: any) => { scale.width = 42 },   // 폭 고정 → ADR 토글 시 chartArea 이동 방지
             ticks: {
               color: isLY ? 'rgba(136,153,204,0.7)' : '#5B8DEF',
               font: { size: 9 },
@@ -251,36 +269,58 @@ export default function DailyStatusChart({
 
     return () => { ro.disconnect(); chart.destroy(); chartRef.current = null }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, month, occData, adrData, otbDate, isLY, events])
+  }, [year, month, occData, adrData, otbDate, isLY, isOTBMonth, barData, showBar, events])
+
+  // OCC bar / ADR line 표시 토글 (차트 재생성 없이 hidden만 갱신)
+  useEffect(() => {
+    const chart = chartRef.current
+    if (!chart) return
+    chart.data.datasets[0].hidden = !showOcc
+    chart.data.datasets[1].hidden = !showAdr
+    chart.update('none')
+  }, [showOcc, showAdr])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: chartHeight ?? '100%', minHeight: 0 }}>
       <div ref={wrapRef} style={{ position: 'relative', flex: 1, minHeight: 0, width: '100%' }}>
         <canvas ref={canvasRef} />
-        {/* OCC% + ADR 칩 HTML 오버레이 (canvas 위, clip 없음) */}
+        {/* OCC% 칩 + ADR 숫자 HTML 오버레이 (canvas 위, clip 없음) — 독립 배치 */}
         <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-          {labelItems.map(item => (
-            <div key={item.day} style={{
-              position: 'absolute', left: item.x, top: item.y, transform: 'translateX(-50%)',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+          {/* OCC% — 텍스트만 (배경/테두리 제거) */}
+          {showOcc && labelItems.map(item => (
+            <div key={`o${item.day}`} style={{
+              position: 'absolute', left: item.x, top: item.occY, transform: 'translateX(-50%)',
+              fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap', lineHeight: '13px',
+              color: item.isOTB ? 'rgba(0,229,160,0.7)' : item.isLY ? 'rgba(255,255,255,0.6)' : '#00E5A0',
+              textShadow: '0 1px 3px rgba(0,0,0,0.9)',
             }}>
-              <div style={{
-                background: item.isOTB ? 'rgba(0,229,160,0.15)' : item.isLY ? 'rgba(255,255,255,0.12)' : 'rgba(0,229,160,0.85)',
-                color:      item.isOTB ? '#00E5A0' : item.isLY ? 'rgba(255,255,255,0.8)' : '#000',
-                fontSize: 9, fontWeight: 600, padding: '1px 4px', borderRadius: 3, whiteSpace: 'nowrap', lineHeight: '14px',
-              }}>
-                {Math.round(item.occ)}%
-              </div>
-              {item.adr != null && item.adr > 0 && (
-                <div style={{
-                  color: item.isLY ? 'rgba(180,200,255,0.85)' : 'rgba(255,255,255,0.85)',
-                  fontSize: 8, fontWeight: 500, whiteSpace: 'nowrap', lineHeight: '11px',
-                  textShadow: '0 0 4px rgba(0,0,0,0.8)',
-                }}>
-                  ₩{Math.round(item.adr / 1000)}K
-                </div>
-              )}
+              {Math.round(item.occ)}%
             </div>
+          ))}
+          {/* ADR — 칩 형태 (₩ 없이 숫자K), ADR 선 y 위치 */}
+          {showAdr && labelItems.map(item => (
+            item.adr != null && item.adr > 0 && item.adrY != null ? (
+              <div key={`a${item.day}`} style={{
+                position: 'absolute', left: item.x, top: item.adrY - 16, transform: 'translateX(-50%)',
+                background: item.isLY ? 'rgba(100,140,220,0.85)' : 'rgba(0,229,160,0.85)',
+                color: '#000', fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 3,
+                whiteSpace: 'nowrap', lineHeight: '13px', textShadow: 'none',
+              }}>
+                {Math.round(item.adr / 1000)}K
+              </div>
+            ) : null
+          ))}
+          {/* BAR Rate — 골드 텍스트, BAR 요금 y 위치(yAdr scale) */}
+          {showBar && labelItems.map(item => (
+            item.bar != null && item.bar > 0 && item.barY != null ? (
+              <div key={`b${item.day}`} style={{
+                position: 'absolute', left: item.x, top: item.barY - 12, transform: 'translateX(-50%)',
+                fontSize: 8, fontWeight: 600, whiteSpace: 'nowrap', lineHeight: '11px',
+                color: 'rgba(240,165,0,0.95)', textShadow: '0 1px 3px rgba(0,0,0,0.9)',
+              }}>
+                {Math.round(item.bar / 1000)}K
+              </div>
+            ) : null
           ))}
         </div>
       </div>

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import { supabase } from '@/lib/supabase'
@@ -16,6 +16,13 @@ const MINT = '#00E5A0'
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const pad = (n: number) => String(n).padStart(2, '0')
 
+// otbDate 다음날 (KST 안전) — 당일 stay는 update_date=otbDate+1 스냅샷에 존재
+function addOneDay(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00+09:00')
+  d.setDate(d.getDate() + 1)
+  return d.toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })
+}
+
 interface DailyRow { business_date: string; nights: number; room_revenue: number }
 interface DayAgg   { rn: number[]; rev: number[] }   // index 0 = 1일
 
@@ -27,8 +34,8 @@ export default function DailyStatusPage() {
   const { currentHotel } = useHotel()
   const hotelId = currentHotel?.id ?? ''
 
-  const { otbDate: globalOtbDate } = useDateContext()   // 글로벌 헤더의 master OTB 날짜
-  const otbDate = globalOtbDate || todayLocalYMD()      // 로드 전 fallback
+  const { otbDate: globalOtbDate, vsOtbDate } = useDateContext()   // 글로벌 헤더의 master OTB 날짜
+  const otbDate = globalOtbDate || todayLocalYMD()                 // 로드 전 fallback
   const [currentMonth, setCurrentMonth] = useState<{ year: number; month: number }>(() => {
     const t = new Date()
     return { year: t.getFullYear(), month: t.getMonth() + 1 }
@@ -36,11 +43,20 @@ export default function DailyStatusPage() {
   const [modalDay, setModalDay] = useState<number | null>(null)
   const [showDow, setShowDow] = useState(false)
   const [lyMode, setLyMode] = useState<'date' | 'match'>('date')   // 전년동일자 / 전년동기간(yoy_match)
+  const [showOcc, setShowOcc] = useState(true)   // OCC% 표시 (올해/LY 공유)
+  const [showAdr, setShowAdr] = useState(true)   // ADR 표시 (올해/LY 공유)
+  const [showBar, setShowBar] = useState(true)   // BAR Rate 표시 (올해 차트만)
 
   const { year, month } = currentMonth
   const days       = new Date(year, month, 0).getDate()
   const monthStart = `${year}-${pad(month)}-01`
   const monthEnd   = `${year}-${pad(month)}-${pad(days)}`
+
+  // Actual/OTB 구분을 월 단위로: 보고 있는 월 < otbDate 월 → 전체 Actual, 같거나 이후 → 전체 OTB
+  const otbYear   = parseInt(otbDate.slice(0, 4), 10)
+  const otbMonth  = parseInt(otbDate.slice(5, 7), 10)
+  const isActualMonth = year < otbYear || (year === otbYear && month < otbMonth)
+  const isOTBMonth    = !isActualMonth
 
   const goPrev = () => setCurrentMonth(p => (p.month === 1 ? { year: p.year - 1, month: 12 } : { year: p.year, month: p.month - 1 }))
   const goNext = () => setCurrentMonth(p => (p.month === 12 ? { year: p.year + 1, month: 1 } : { year: p.year, month: p.month + 1 }))
@@ -66,31 +82,49 @@ export default function DailyStatusPage() {
 
   // 당해년도 — Actual(a01) + OTB(a02) 병합
   const { data: curAgg } = useQuery({
-    queryKey: ['ds-cur', hotelId, year, month, otbDate],
+    queryKey: ['ds-cur', hotelId, year, month, otbDate, vsOtbDate],
     enabled:  !!hotelId,
     queryFn:  async () => {
-      const [actRes, otbRes] = await Promise.all([
-        (supabase as any).from('a01_actual_daily')
-          .select('business_date, nights, room_revenue')
-          .eq('hotel_id', hotelId).gte('business_date', monthStart).lte('business_date', monthEnd),
-        (supabase as any).from('a02_otb_daily')
-          .select('business_date, nights, room_revenue')
-          .eq('hotel_id', hotelId).eq('update_date', otbDate)
-          .gte('business_date', monthStart).lte('business_date', monthEnd),
-      ])
-      const actMap = new Map<string, { rn: number; rev: number }>()
-      const otbMap = new Map<string, { rn: number; rev: number }>()
-      for (const r of (actRes.data ?? []) as DailyRow[]) {
-        const c = actMap.get(r.business_date) ?? { rn: 0, rev: 0 }; c.rn += r.nights ?? 0; c.rev += r.room_revenue ?? 0; actMap.set(r.business_date, c)
-      }
-      for (const r of (otbRes.data ?? []) as DailyRow[]) {
-        const c = otbMap.get(r.business_date) ?? { rn: 0, rev: 0 }; c.rn += r.nights ?? 0; c.rev += r.room_revenue ?? 0; otbMap.set(r.business_date, c)
-      }
       const agg = emptyAgg(days)
-      for (let d = 1; d <= days; d++) {
-        const date = `${year}-${pad(month)}-${pad(d)}`
-        const src  = date < otbDate ? actMap.get(date) : otbMap.get(date)   // 기준일 이전=Actual, 이후=OTB
-        if (src) { agg.rn[d - 1] = src.rn; agg.rev[d - 1] = src.rev }
+
+      // 이전 월 → 전체 Actual (a01_actual_daily)
+      if (isActualMonth) {
+        const { data } = await (supabase as any).from('a01_actual_daily')
+          .select('business_date, nights, room_revenue')
+          .eq('hotel_id', hotelId).gte('business_date', monthStart).lte('business_date', monthEnd)
+        for (const r of (data ?? []) as DailyRow[]) {
+          const d = Number(r.business_date.slice(8, 10))
+          if (d >= 1 && d <= days) { agg.rn[d - 1] += r.nights ?? 0; agg.rev[d - 1] += r.room_revenue ?? 0 }
+        }
+        return agg
+      }
+
+      // 당월 이상 → 전체 OTB (get_pickup_data). otbDate 당일 stay는 다음날 스냅샷으로 보완
+      const nextOtbDate = addOneDay(otbDate)
+      const [otbRes, otbTodayRes] = await Promise.all([
+        (supabase as any).rpc('get_pickup_data', {
+          p_hotel_id: hotelId, p_otb_date: otbDate, p_vs_otb_date: vsOtbDate || otbDate, p_min_date: monthStart,
+        }),
+        (supabase as any).rpc('get_pickup_data', {
+          p_hotel_id: hotelId, p_otb_date: nextOtbDate, p_vs_otb_date: otbDate, p_min_date: monthStart,
+        }),
+      ])
+      for (const r of (otbRes.data ?? []) as { business_date: string; otb_nights: number; otb_revenue: number }[]) {
+        if (r.business_date < monthStart || r.business_date > monthEnd) continue
+        const d = Number(r.business_date.slice(8, 10))
+        if (d >= 1 && d <= days) { agg.rn[d - 1] += r.otb_nights ?? 0; agg.rev[d - 1] += r.otb_revenue ?? 0 }
+      }
+      // otbDate 당일 보완 (해당 월에 otbDate 포함 & 아직 값 없을 때만 다음날 스냅샷 합산)
+      if (otbDate >= monthStart && otbDate <= monthEnd) {
+        const od = Number(otbDate.slice(8, 10))
+        if (agg.rn[od - 1] === 0) {
+          let rn = 0, rev = 0
+          for (const r of (otbTodayRes.data ?? []) as { business_date: string; otb_nights: number; otb_revenue: number }[]) {
+            if (r.business_date !== otbDate) continue
+            rn += r.otb_nights ?? 0; rev += r.otb_revenue ?? 0
+          }
+          if (rn > 0 || rev > 0) { agg.rn[od - 1] = rn; agg.rev[od - 1] = rev }
+        }
       }
       return agg
     },
@@ -142,6 +176,30 @@ export default function DailyStatusPage() {
     },
   })
 
+  // BAR Rate (당월) — s02_rate_detail BASE/single의 new_rate (Rate Strategy와 동일 소스)
+  const { data: barRows = [] } = useQuery({
+    queryKey: ['ds-bar', hotelId, year, month],
+    enabled:  !!hotelId,
+    queryFn:  async () => {
+      const { data } = await (supabase as any).from('s02_rate_detail')
+        .select('stay_date, new_rate')
+        .eq('hotel_id', hotelId).eq('date_type', 'single')
+        .gte('stay_date', monthStart).lte('stay_date', monthEnd)
+        .order('stay_date', { ascending: true })
+      return (data ?? []) as { stay_date: string; new_rate: number }[]
+    },
+  })
+  // otbDate 이전은 null (BAR는 기준일 이후 미래 요금)
+  const barData = useMemo<(number | null)[]>(() => {
+    const m: Record<string, number> = {}
+    for (const r of barRows) m[r.stay_date] = r.new_rate
+    return Array.from({ length: days }, (_, i) => {
+      const date = `${year}-${pad(month)}-${pad(i + 1)}`
+      if (date < otbDate) return null
+      return m[date] ?? null
+    })
+  }, [barRows, year, month, days, otbDate])
+
   // OCC/ADR 배열 + KPI 파생
   const derive = (agg: DayAgg | undefined) => {
     const rn = agg?.rn ?? Array(days).fill(0)
@@ -188,10 +246,19 @@ export default function DailyStatusPage() {
       </div>
 
       {/* ── 2026 (당해년도) ── */}
-      <Section flex={1} badge={{ text: `${year}`, bg: '#0d2a1f', color: MINT }} kpi={cur}>
+      <Section flex={1} badge={{ text: `${year}`, bg: '#0d2a1f', color: MINT }} kpi={cur}
+        extra={
+          <div style={{ display: 'flex', gap: 5 }}>
+            <EyeToggle label="OCC%" active={showOcc} color="#00E5A0" onToggle={() => setShowOcc(v => !v)} />
+            <EyeToggle label="ADR"  active={showAdr} color="#5B8DEF" onToggle={() => setShowAdr(v => !v)} />
+            <EyeToggle label="BAR"  active={showBar} color="#f0a500" onToggle={() => setShowBar(v => !v)} />
+          </div>
+        }
+      >
         <DailyStatusChart
           year={year} month={month} occData={cur.occ} adrData={cur.adr} otbDate={otbDate}
-          events={curEvents} onDayClick={setModalDay}
+          isOTBMonth={isOTBMonth} showOcc={showOcc} showAdr={showAdr}
+          barData={barData} showBar={showBar} events={curEvents} onDayClick={setModalDay}
         />
       </Section>
 
@@ -199,7 +266,7 @@ export default function DailyStatusPage() {
 
       {/* ── 2025 LY ── */}
       <Section flex={1} badge={{ text: `${year - 1} LY`, bg: '#1a1a2e', color: '#8899cc' }} kpi={ly}
-        extra={
+        afterBadge={
           <div style={{ display: 'flex', gap: 4 }}>
             {(['date', 'match'] as const).map(mode => (
               <button key={mode} onClick={() => setLyMode(mode)}
@@ -214,10 +281,16 @@ export default function DailyStatusPage() {
             ))}
           </div>
         }
+        extra={
+          <div style={{ display: 'flex', gap: 5 }}>
+            <EyeToggle label="OCC%" active={showOcc} color="#8899cc" onToggle={() => setShowOcc(v => !v)} />
+            <EyeToggle label="ADR"  active={showAdr} color="#8899cc" onToggle={() => setShowAdr(v => !v)} />
+          </div>
+        }
       >
         <DailyStatusChart
           year={year - 1} month={month} occData={ly.occ} adrData={ly.adr} otbDate={otbDate}
-          isLY events={lyEvents} onDayClick={() => {}}
+          isLY showOcc={showOcc} showAdr={showAdr} events={lyEvents} onDayClick={() => {}}
         />
       </Section>
 
@@ -225,6 +298,7 @@ export default function DailyStatusPage() {
       {modalDay != null && (
         <DailyStatusModal
           hotelId={hotelId} year={year} month={month} day={modalDay} otbDate={otbDate}
+          isOTBMonth={isOTBMonth}
           onClose={() => setModalDay(null)}
           onDayChange={d => { if (d >= 1 && d <= days) setModalDay(d) }}
         />
@@ -244,10 +318,11 @@ export default function DailyStatusPage() {
   )
 }
 
-function Section({ badge, kpi, flex, extra, children }: {
+function Section({ badge, kpi, flex, afterBadge, extra, children }: {
   badge: { text: string; bg: string; color: string }
   kpi: { avgOcc: number; totalRn: number; avgAdr: number; totalRev: number }
   flex: number
+  afterBadge?: React.ReactNode
   extra?: React.ReactNode
   children: React.ReactNode
 }) {
@@ -255,6 +330,8 @@ function Section({ badge, kpi, flex, extra, children }: {
     <div style={{ flex, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '8px 20px' }}>
       <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 16, marginBottom: 6 }}>
         <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 8px', borderRadius: 4, background: badge.bg, color: badge.color }}>{badge.text}</span>
+        {afterBadge}
+        {afterBadge && <div style={{ width: 1, height: 14, background: '#2a2a2a' }} />}
         <Kpi label="OCC" value={`${kpi.avgOcc.toFixed(1)}%`} color="#00E5A0" />
         <Kpi label="R/N" value={kpi.totalRn.toLocaleString('ko-KR')} color="#ccc" />
         <Kpi label="ADR" value={`₩${Math.round(kpi.avgAdr).toLocaleString('ko-KR')}`} color="#5B8DEF" />
@@ -262,6 +339,21 @@ function Section({ badge, kpi, flex, extra, children }: {
         {extra && <div style={{ marginLeft: 'auto' }}>{extra}</div>}
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
+    </div>
+  )
+}
+
+function EyeToggle({ label, active, color, onToggle }: { label: string; active: boolean; color: string; onToggle: () => void }) {
+  const Icon = active ? Eye : EyeOff
+  return (
+    <div onClick={onToggle} style={{
+      display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', padding: '3px 8px', borderRadius: 5,
+      border: `1px solid ${active ? color + '4d' : '#2a2a2a'}`,
+      background: active ? color + '14' : 'transparent',
+      transition: 'all 0.15s', userSelect: 'none',
+    }}>
+      <Icon size={13} style={{ color: active ? color : '#444' }} />
+      <span style={{ fontSize: 11, color: active ? color : '#444' }}>{label}</span>
     </div>
   )
 }

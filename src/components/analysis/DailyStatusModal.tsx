@@ -12,6 +12,7 @@ interface DailyStatusModalProps {
   month:       number
   day:         number
   otbDate:     string
+  isOTBMonth:  boolean   // 해당 월 전체가 OTB면 true (월 단위 구분)
   onClose:     () => void
   onDayChange: (day: number) => void
 }
@@ -28,6 +29,13 @@ const MINT = '#00E5A0'
 const BLUE = '#5B8DEF'
 const DOW  = ['일', '월', '화', '수', '목', '금', '토']
 
+// otbDate 다음날 (KST 안전)
+function addOneDay(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00+09:00')
+  d.setDate(d.getDate() + 1)
+  return d.toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })
+}
+
 const fmtRN  = (v: number) => (v ? Math.round(v).toLocaleString('ko-KR') : '–')
 const fmtADR = (v: number) => (v ? `${Math.round(v / 1000)}k` : '–')
 const fmtREV = (v: number) => (v ? `${(v / 1_000_000).toFixed(1)}M` : '–')
@@ -35,11 +43,11 @@ const fmtOCC = (v: number) => (v ? `${v.toFixed(1)}%` : '–')
 const fmtRP  = (v: number) => (v ? `${Math.round(v / 1000)}k` : '–')
 
 export default function DailyStatusModal({
-  hotelId, year, month, day, otbDate, onClose, onDayChange,
+  hotelId, year, month, day, otbDate, isOTBMonth, onClose, onDayChange,
 }: DailyStatusModalProps) {
   const pad       = (n: number) => String(n).padStart(2, '0')
   const targetYMD = `${year}-${pad(month)}-${pad(day)}`
-  const isOTB     = targetYMD >= otbDate
+  const isOTB     = isOTBMonth   // 월 단위 구분 — 해당 월 전체가 OTB
   const lastDay   = new Date(year, month, 0).getDate()
   const dow       = new Date(year, month - 1, day).getDay()
 
@@ -58,12 +66,16 @@ export default function DailyStatusModal({
     enabled:  !!hotelId,
     queryFn:  async () => {
       if (isOTB) {
-        const { data, error } = await (supabase as any)
-          .from('a02_otb_daily')
-          .select('segmentation, account_name, nights, room_revenue')
-          .eq('hotel_id', hotelId).eq('update_date', otbDate).eq('business_date', targetYMD)
+        // OTB: get_pickup_data RPC(검증됨) → 해당 일자 세그×어카운트 필터
+        // otbDate 당일 stay는 update_date=otbDate 스냅샷에 없으므로 다음날 스냅샷 사용
+        const effOtb = targetYMD === otbDate ? addOneDay(otbDate) : otbDate
+        const { data, error } = await (supabase as any).rpc('get_pickup_data', {
+          p_hotel_id: hotelId, p_otb_date: effOtb, p_vs_otb_date: otbDate, p_min_date: targetYMD,
+        })
         if (error) return []
-        return (data ?? []) as DayRow[]
+        return ((data ?? []) as any[])
+          .filter(r => r.business_date === targetYMD)
+          .map(r => ({ segmentation: r.segmentation, account_name: r.account_name, nights: r.otb_nights ?? 0, room_revenue: r.otb_revenue ?? 0 })) as DayRow[]
       }
       const { data, error } = await (supabase as any)
         .from('a01_actual_daily')
