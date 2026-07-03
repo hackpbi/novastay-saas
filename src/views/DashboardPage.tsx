@@ -20,6 +20,7 @@ import { useFcstDateContext } from '@/contexts/FcstDateContext'
 import { useLatestConfirmedBudgetDate } from '@/hooks/useLatestConfirmedBudgetDate'
 import ForecastBudgetModal from '@/components/dashboard/ForecastBudgetModal'
 import ActualBudgetModal from '@/components/dashboard/ActualBudgetModal'
+import GMDailyReportModal from '@/components/dashboard/GMDailyReportModal'
 import { useForecastMonthly, type ForecastMonthlyRow } from '@/hooks/useForecastMonthly'
 import { useBudgetMonthly, type BudgetMonthlyRow } from '@/hooks/useBudgetMonthly'
 import { supabase } from '@/lib/supabase'
@@ -531,6 +532,7 @@ export default function DashboardPage() {
   const [lyMode, setLyMode] = useState<LyPacingMode>('v1')
   const [segModal,     setSegModal]     = useState<{ open: boolean; year?: number; month?: number }>({ open: false })
   const [actualBudgetModal, setActualBudgetModal] = useState(false)
+  const [gmReportOpen, setGmReportOpen] = useState(false)
   const [monthlyPickupSegOpen,       setMonthlyPickupSegOpen]       = useState(false)
   const [pickupViewMode,             setPickupViewMode]             = useState<'monthly' | 'total'>('total')
   const [forecastBudgetModal,        setForecastBudgetModal]        = useState<{
@@ -729,14 +731,31 @@ export default function DashboardPage() {
           <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text-primary)', margin: 0 }}>
             대시보드
           </h1>
-          <button
-            onClick={() => setActualBudgetModal(true)}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: '0.5px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '4px 12px', fontSize: 11, color: 'rgba(255,255,255,0.5)', cursor: 'pointer', transition: 'border-color 0.15s' }}
-            onMouseEnter={e => (e.currentTarget.style.borderColor = '#00E5A0')}
-            onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)')}
-          >
-            Actual vs Budget vs LY
-          </button>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => setActualBudgetModal(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: '0.5px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '4px 12px', fontSize: 11, color: 'rgba(255,255,255,0.5)', cursor: 'pointer', transition: 'border-color 0.15s' }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = '#00E5A0')}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)')}
+            >
+              Actual vs Budget vs LY
+            </button>
+            <button
+              onClick={() => setGmReportOpen(true)}
+              style={{
+                padding: '6px 12px',
+                fontSize: 13,
+                borderRadius: 6,
+                border: '1px solid var(--color-border-default)',
+                background: 'transparent',
+                color: 'var(--color-text-primary)',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              GM Daily Report
+            </button>
+          </div>
         </div>
         {pickupLoading ? (
           <div className="h-5 w-80 rounded animate-pulse" style={{ background: 'var(--color-bg-tertiary)' }} />
@@ -986,6 +1005,13 @@ export default function DashboardPage() {
               }
             : undefined
         }
+      />
+
+      <GMDailyReportModal
+        open={gmReportOpen}
+        onClose={() => setGmReportOpen(false)}
+        hotelId={hotelId}
+        otbDate={otbDate}
       />
     </div>
   )

@@ -70,7 +70,10 @@
       "PowerShell($out = npx tsc --noEmit -p tsconfig.json 2>&1; $errs = $out | Select-String -Pattern \"error TS\"; Write-Output \\(\"TS error count: \" + \\($errs | Measure-Object\\).Count\\); $errs | Select-Object -First 12)",
       "PowerShell($out = npx tsc --noEmit -p tsconfig.json 2>&1; $errs = $out | Select-String -Pattern \"error TS\"; Write-Output \\(\"TS error count: \" + \\($errs | Measure-Object\\).Count\\); $errs | Select-Object -First 15)",
       "PowerShell($env:NEXT_DIST_DIR='.next-verify'; npm run build 2>&1 | Select-String -Pattern \"daily_status|Error|Failed|Type error|✓ Compiled\" | Select-Object -First 10; Remove-Item -Recurse -Force .next-verify -ErrorAction SilentlyContinue)",
-      "PowerShell($env:NEXT_DIST_DIR='.next-verify'; npm run build 2>&1 | Select-Object -Last 4)"
+      "PowerShell($env:NEXT_DIST_DIR='.next-verify'; npm run build 2>&1 | Select-Object -Last 4)",
+      "Bash(grep -nE \"<ActualBudgetModal|</ActualBudgetModal|<Monthly|actualBudgetModal &&|^\\\\s*</div>\\\\s*$\" src/views/DashboardPage.tsx)",
+      "PowerShell($env:NEXT_DIST_DIR='.next-verify'; npm run build 2>&1 | Select-String -Pattern \"dashboard|Error|Failed|Type error|✓ Compiled\" | Select-Object -First 10; Remove-Item -Recurse -Force .next-verify -ErrorAction SilentlyContinue)",
+      "PowerShell($env:NEXT_DIST_DIR='.next-verify'; npm run build 2>&1 | Select-String -Pattern \"dashboard|Error|Failed|Type error|✓ Compiled\" | Select-Object -First 8; Remove-Item -Recurse -Force .next-verify -ErrorAction SilentlyContinue)"
     ],
     "additionalDirectories": [
       "C:\\dev\\18_NovaStay_Saas_ver1\\.next-verify"
