@@ -4,8 +4,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useDateContext } from '@/contexts/DateContext'
+import { useHotel } from '@/contexts/HotelContext'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
 import { usePickupData } from '@/hooks/usePickupData'
+import { useAccountPickupData } from '@/hooks/useAccountPickupData'
 import { buildSegTable, type SegTableRow, type SegTableSummary } from '@/utils/segmentationTable'
 import DatePicker from '@/components/DatePicker'
 import AccountModal from '@/components/dashboard/AccountModal'
@@ -103,25 +105,14 @@ function getSegCodes(row: SegTableRow, schema: MarketSchemaRow[]): string[] {
   return schema.find(s => s.id === row.id)?.segmentation ?? []
 }
 
-function getRowLabel(row: SegTableRow, schema: MarketSchemaRow[]): string {
-  if (row.level === 'sub') {
-    const sr = schema.find(s => s.id === row.id)
-    if (sr?.parent_id) {
-      const parent = schema.find(p => p.id === sr.parent_id)
-      if (parent) return `${parent.name} · ${row.name}`
-    }
-  }
-  return row.name
-}
-
 // ─── DataRow ──────────────────────────────────────────────────────────────────
 
-function DataRow({ row, schema, houRowIds, onPickupCellClick, onRowClick }: {
-  row:               SegTableRow
-  schema:            MarketSchemaRow[]
-  houRowIds:         Set<string>
-  onPickupCellClick?: (segCodes: string[], label: string) => void
-  onRowClick?:        (segCodes: string[], label: string) => void
+function DataRow({ row, schema, houRowIds, onSelect, selectedLabel }: {
+  row:            SegTableRow
+  schema:         MarketSchemaRow[]
+  houRowIds:      Set<string>
+  onSelect?:      (segCodes: string[], label: string) => void
+  selectedLabel?: string
 }) {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
@@ -129,29 +120,28 @@ function DataRow({ row, schema, houRowIds, onPickupCellClick, onRowClick }: {
   const rowColor = (isDark ? row.fontDarkColor : row.fontLightColor) ?? 'var(--color-text-primary)'
   const nameColor = row.indent ? 'rgba(255,255,255,0.45)' : rowColor
 
-  const isHou      = houRowIds.has(row.id)
-  const segCodes   = getSegCodes(row, schema)
-  const label      = getRowLabel(row, schema)
-  const clickable  = !!onPickupCellClick && !isHou && segCodes.length > 0
-  const handlePickup = clickable
-    ? (e: React.MouseEvent) => { e.stopPropagation(); onPickupCellClick!(segCodes, label) }
-    : undefined
-
-  const rowClickable = !!onRowClick && !isHou && segCodes.length > 0
-  const handleRowClick = rowClickable ? () => onRowClick!(segCodes, label) : undefined
+  const isHou        = houRowIds.has(row.id)
+  const segCodes     = getSegCodes(row, schema)
+  const selectable   = !!onSelect && !isHou && segCodes.length > 0
+  const nameSelectable = selectable && !row.indent   // 대분류 이름 셀만 클릭
+  const isSelected   = nameSelectable && selectedLabel === row.name
+  const baseBg       = isSelected ? 'rgba(0,229,160,0.08)' : rowBg
+  const handleSelect = selectable ? () => onSelect!(segCodes, row.name) : undefined
 
   const puTd = (extra: React.CSSProperties): React.CSSProperties => ({
-    ...tdBase, textAlign: 'right', cursor: clickable ? 'pointer' : 'default', background: rowBg, ...extra,
+    ...tdBase, textAlign: 'right', cursor: selectable ? 'pointer' : 'default', background: baseBg, ...extra,
   })
 
   return (
     <tr
-      style={{ borderBottom: BORDER_GROUP, color: rowColor, fontWeight: row.isBold ? 600 : 400, cursor: rowClickable ? 'pointer' : 'default' }}
-      onClick={handleRowClick}
-      onMouseEnter={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${rowBg}` })}
-      onMouseLeave={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = rowBg })}
+      style={{ borderBottom: BORDER_GROUP, color: rowColor, fontWeight: row.isBold ? 600 : 400 }}
+      onMouseEnter={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${baseBg}` })}
+      onMouseLeave={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = baseBg })}
     >
-      <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, background: rowBg, color: nameColor }}>
+      <td
+        onClick={nameSelectable ? handleSelect : undefined}
+        style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, background: baseBg, color: nameColor, cursor: nameSelectable ? 'pointer' : 'default' }}
+      >
         {row.indent ? (
           <>
             <span style={{ color: nameColor }}>└ </span>
@@ -159,22 +149,22 @@ function DataRow({ row, schema, houRowIds, onPickupCellClick, onRowClick }: {
           </>
         ) : row.name}
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: DOUBLE_GROUP, background: rowBg }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: DOUBLE_GROUP, background: baseBg }}>
         <FmtNights n={row.otbNights} fontColor={rowColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: GRID, background: rowBg }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: GRID, background: baseBg }}>
         <FmtAdr n={row.otbAdr} fontColor={rowColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: GRID, background: rowBg }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: GRID, background: baseBg }}>
         <FmtRev n={row.otbRevenue} fontColor={rowColor} />
       </td>
-      <td className="font-mono" style={puTd({ borderLeft: DOUBLE_GROUP })} onClick={handlePickup}>
+      <td className="font-mono" style={puTd({ borderLeft: DOUBLE_GROUP })} onClick={handleSelect}>
         <DeltaNights v={row.puNights} fontColor={rowColor} />
       </td>
-      <td className="font-mono" style={puTd({ borderLeft: GRID })} onClick={handlePickup}>
+      <td className="font-mono" style={puTd({ borderLeft: GRID })} onClick={handleSelect}>
         <DeltaAdr v={row.puAdr} fontColor={rowColor} />
       </td>
-      <td className="font-mono" style={puTd({ borderLeft: GRID })} onClick={handlePickup}>
+      <td className="font-mono" style={puTd({ borderLeft: GRID })} onClick={handleSelect}>
         <DeltaRev v={row.puRevenue} fontColor={rowColor} />
       </td>
     </tr>
@@ -183,13 +173,13 @@ function DataRow({ row, schema, houRowIds, onPickupCellClick, onRowClick }: {
 
 // ─── DataTable ─────────────────────────────────────────────────────────────────
 
-function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, onRowClick, year, month, day, roomCount, curYear, curMonth, onPrevMonth, onNextMonth, canPrevMonth, canNextMonth }: {
+function DataTable({ rows, summary, schema, houRowIds, onSelect, selectedLabel, year, month, day, roomCount, curYear, curMonth, onPrevMonth, onNextMonth, canPrevMonth, canNextMonth }: {
   rows:               SegTableRow[]
   summary:            SegTableSummary
   schema:             MarketSchemaRow[]
   houRowIds:          Set<string>
-  onPickupCellClick?: (segCodes: string[], label: string) => void
-  onRowClick?:        (segCodes: string[], label: string) => void
+  onSelect?:          (segCodes: string[], label: string) => void
+  selectedLabel?:     string
   year:               number
   month:              number
   day?:               number
@@ -282,8 +272,8 @@ function DataTable({ rows, summary, schema, houRowIds, onPickupCellClick, onRowC
               row={row}
               schema={schema}
               houRowIds={houRowIds}
-              onPickupCellClick={onPickupCellClick}
-              onRowClick={onRowClick}
+              onSelect={onSelect}
+              selectedLabel={selectedLabel}
             />
           ))}
         </tbody>
@@ -354,8 +344,11 @@ export default function SegmentationModal({
   onPickupCellClick?: (segCodes: string[], label: string, year: number, month: number) => void
 }) {
   const { otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate } = useDateContext()
+  const { currentHotel } = useHotel()
 
   const [accountModalSeg, setAccountModalSeg] = useState<{ segCodes: string[]; label: string } | null>(null)
+  // 우측 Account Pickup 패널: 선택된 세그먼트 (이름/픽업 셀 클릭 시 set)
+  const [selectedSeg, setSelectedSeg] = useState<{ label: string; codes: string[] } | null>(null)
   const [curYear,  setCurYear]  = useState(year)
   const [curMonth, setCurMonth] = useState(month)
 
@@ -365,6 +358,7 @@ export default function SegmentationModal({
       setCurYear(year)
       setCurMonth(month)
       setAccountModalSeg(null)
+      setSelectedSeg(null)
     }
   }, [open, year, month])
 
@@ -406,6 +400,30 @@ export default function SegmentationModal({
     }
     return ids
   }, [schema])
+
+  // ─── 우측 Account Pickup 패널 데이터 ───────────────────────────────────────────
+  const { data: accountPickupRows = [] } = useAccountPickupData({
+    hotelId:     currentHotel?.id ?? '',
+    otbDate:     otbDate ?? '',
+    vsDate:      vsOtbDate ?? '',
+    year:        curYear,
+    month:       curMonth,
+    segFilter:   null,
+    isPastMonth: false,
+  })
+
+  const accountList = useMemo(() => {
+    if (!selectedSeg) return []
+    return (accountPickupRows as Array<{ account_name: string; segmentation: string; otb_nights: number; vs_nights: number; otb_revenue: number; vs_revenue: number }>)
+      .filter(r => selectedSeg.codes.includes(r.segmentation))
+      .map(r => ({
+        name:    r.account_name,
+        diffRn:  r.otb_nights - r.vs_nights,    // 픽업 = 현재OTB - vsOTB
+        diffRev: r.otb_revenue - r.vs_revenue,
+      }))
+      .filter(a => a.diffRn !== 0 || a.diffRev !== 0)
+      .sort((a, b) => b.diffRn - a.diffRn)
+  }, [selectedSeg, accountPickupRows])
 
   useEffect(() => {
     if (!open) return
@@ -473,44 +491,97 @@ export default function SegmentationModal({
           </div>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          {loading ? (
-            <Skeleton />
-          ) : error ? (
-            <p className="text-center py-12 text-sm" style={{ color: 'var(--brand-dimmed)' }}>데이터를 불러오지 못했습니다.</p>
-          ) : rows.length === 0 ? (
-            <p className="text-center py-12 text-sm" style={{ color: 'var(--brand-dimmed)' }}>이 기간에 표시할 segmentation 데이터가 없습니다.</p>
-          ) : (
-            <DataTable
-              rows={rows}
-              summary={summary}
-              schema={schema}
-              houRowIds={houRowIds}
-              onPickupCellClick={
-                onPickupCellClick
-                  ? (segCodes, label) => onPickupCellClick(segCodes, label, curYear, curMonth)
-                  : undefined
-              }
-              onRowClick={(segCodes, label) => setAccountModalSeg({ segCodes, label })}
-              year={curYear}
-              month={curMonth}
-              day={day}
-              roomCount={roomCount}
-              curYear={curYear}
-              curMonth={curMonth}
-              onPrevMonth={goPrev}
-              onNextMonth={goNext}
-              canPrevMonth={canGoPrev}
-              canNextMonth={canGoNext}
-            />
-          )}
+        {/* Body: 좌측 테이블 + 우측 Account Pickup 패널 */}
+        <div className="flex-1 flex overflow-hidden" style={{ minHeight: 0 }}>
+          <div className="overflow-y-auto px-6 py-4" style={{ width: 'calc(100% - 220px)', flexShrink: 0 }}>
+            {loading ? (
+              <Skeleton />
+            ) : error ? (
+              <p className="text-center py-12 text-sm" style={{ color: 'var(--brand-dimmed)' }}>데이터를 불러오지 못했습니다.</p>
+            ) : rows.length === 0 ? (
+              <p className="text-center py-12 text-sm" style={{ color: 'var(--brand-dimmed)' }}>이 기간에 표시할 segmentation 데이터가 없습니다.</p>
+            ) : (
+              <DataTable
+                rows={rows}
+                summary={summary}
+                schema={schema}
+                houRowIds={houRowIds}
+                onSelect={(segCodes, label) => setSelectedSeg({ label, codes: segCodes })}
+                selectedLabel={selectedSeg?.label}
+                year={curYear}
+                month={curMonth}
+                day={day}
+                roomCount={roomCount}
+                curYear={curYear}
+                curMonth={curMonth}
+                onPrevMonth={goPrev}
+                onNextMonth={goNext}
+                canPrevMonth={canGoPrev}
+                canNextMonth={canGoNext}
+              />
+            )}
+          </div>
+
+          {/* 우측 Account Pickup 패널 */}
+          <div style={{ width: 220, flexShrink: 0, borderLeft: '1px solid var(--divider-color)', display: 'flex', flexDirection: 'column', background: '#0a0a0a', minHeight: 0 }}>
+            <div className="px-3 pt-3 pb-2 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>Account Pickup</div>
+              <div style={{ fontSize: 10, color: 'var(--brand-dimmed)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {selectedSeg ? `${selectedSeg.label} · ${curYear}.${String(curMonth).padStart(2, '0')} · 픽업 R/N 기준` : '세그먼트를 클릭하세요'}
+              </div>
+              <button
+                onClick={() => {
+                  if (!selectedSeg) return
+                  if (onPickupCellClick) onPickupCellClick(selectedSeg.codes, selectedSeg.label, curYear, curMonth)
+                  else setAccountModalSeg({ segCodes: selectedSeg.codes, label: selectedSeg.label })
+                }}
+                disabled={!selectedSeg}
+                style={{
+                  fontSize: 10,
+                  padding: '3px 8px',
+                  borderRadius: 6,
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  background: 'transparent',
+                  color: selectedSeg ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)',
+                  cursor: selectedSeg ? 'pointer' : 'default',
+                  marginTop: 4,
+                }}
+              >
+                Account 보기 →
+              </button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'thin' }}>
+              {accountList.length === 0 ? (
+                <div style={{ fontSize: 11, color: 'var(--brand-dimmed)', padding: 12 }}>
+                  {selectedSeg ? '픽업 데이터가 없습니다.' : ''}
+                </div>
+              ) : accountList.map((a, i) => (
+                <div
+                  key={`${a.name}-${i}`}
+                  className="flex items-center justify-between"
+                  style={{ padding: '6px 12px', borderBottom: '0.5px solid #1a1a1a' }}
+                >
+                  <span style={{ fontSize: 11, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 92 }}>
+                    {a.name}
+                  </span>
+                  <span className="font-mono" style={{ display: 'flex', gap: 6, fontSize: 10, whiteSpace: 'nowrap' }}>
+                    <span style={{ color: a.diffRn >= 0 ? '#00E5A0' : '#E24B4A' }}>
+                      {a.diffRn >= 0 ? '+' : ''}{a.diffRn.toLocaleString('ko-KR')}
+                    </span>
+                    <span style={{ color: a.diffRev >= 0 ? '#00E5A0' : '#E24B4A' }}>
+                      {a.diffRev >= 0 ? '+' : ''}{(a.diffRev / 1_000_000).toFixed(1)}M
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Footer */}
         <div className="flex justify-end px-6 py-3 shrink-0" style={{ borderTop: '1px solid var(--divider-color)' }}>
           <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>
-            대분류 행 클릭 → Account 보기{onPickupCellClick ? ' · Pickup 셀 클릭 → Account 보기' : ''} · ESC로 닫기
+            세그먼트 · Pickup 셀 클릭 → 우측 Account Pickup · ESC로 닫기
           </span>
         </div>
       </div>
