@@ -15,6 +15,7 @@ interface GMDailyReportModalProps {
   onClose: () => void
   hotelId: string
   otbDate: string   // 'YYYY-MM-DD'
+  otbDates?: string[]   // get_otb_dates RPC 결과, update_date 목록 (DatePicker availableDates)
   lyData?:    LyPacingRow[]   // DashboardPage useLyPacing 결과 재활용 (섹션 D)
   lyLoading?: boolean
   forecastRows?: ForecastMonthlyRow[]   // DashboardPage useForecastMonthly 결과 재활용 (섹션 D)
@@ -148,25 +149,6 @@ const DUMMY_MONTHLY_OTB: MonthOtb[] = [
   },
 ]
 
-const DUMMY_YESTERDAY = [
-  { label: 'OCC%', value: '82.3%', ly: 'LY +2.8%p', lyDir: 'up' },
-  { label: 'R/N',  value: '59실',   ly: 'LY +2실',   lyDir: 'up' },
-  { label: 'ADR (천원)',  value: '178', ly: 'LY +6.1%', lyDir: 'up' },
-  { label: 'REV (백만)',  value: '10.5',  ly: 'LY -1.3%',  lyDir: 'dn' },
-  { label: 'RevPAR (천원)', value: '147', ly: 'LY +9.2%', lyDir: 'up' },
-]
-
-const DUMMY_TODAY_OTB = [
-  { label: '현재 OCC%', value: '74.6%', sub: '잔여 18실', subDir: 'neu' },
-  { label: '예상 ADR',  value: '165', sub: 'LY +4.3%', subDir: 'up' },
-  { label: '전일 대비 Pick-up', value: '+7실', sub: '총 +7실', subDir: 'up' },
-]
-
-const DUMMY_CHART = {
-  labels: ['7/1 화', '7/2 수', '7/3 목', '7/4 금', '7/5 토', '7/6 일', '7/7 월'],
-  otb:  [74.6, 68.2, 71.5, 88.4, 92.1, 89.7, 65.3],
-  fcst: [78.0, 73.5, 76.2, 91.0, 94.5, 91.2, 68.0],
-}
 
 // ── 색상 헬퍼 ──────────────────────────────────────────────────────────────────
 const dirColor = (dir: string) => {
@@ -183,7 +165,6 @@ const badgeStyle = (dir: string): React.CSSProperties => {
 const accColor = (n: number): React.CSSProperties => ({ color: n > 0 ? C.textPrimary : n < 0 ? C.red : C.textMuted, fontWeight: 400 })
 const sumColor = (n: number): React.CSSProperties => ({ color: n > 0 ? C.mint : n < 0 ? C.red : C.textMuted, fontWeight: 500 })
 
-const isWeekendLabel = (l: string) => /금|토/.test(l)
 
 // 'YYYY-MM-DD' → 하루 전 'YYYY-MM-DD' (KST 로컬)
 const getYesterday = (dateStr: string): string => {
@@ -191,6 +172,15 @@ const getYesterday = (dateStr: string): string => {
   const dt = new Date(y, m - 1, d)
   dt.setDate(dt.getDate() - 1)
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+}
+
+// otbDates 목록 중 기준일 바로 이전(update_date) 날짜
+function getPrevOtbDate(otbDates: string[], currentOtbDate: string): string {
+  const sorted = [...otbDates].sort()   // 오름차순
+  const idx = sorted.indexOf(currentOtbDate)
+  if (idx > 0) return sorted[idx - 1]
+  const prev = sorted.filter(d => d < currentOtbDate)
+  return prev.length > 0 ? prev[prev.length - 1] : ''
 }
 
 // LY 대비 배지 포맷
@@ -294,9 +284,9 @@ const holidayBadge: React.CSSProperties = { fontSize: 9, background: '#faeeda', 
 const renderEventCard = (ev: EventGroup) => {
   const evTh: React.CSSProperties = { fontSize: 9, color: C.textMuted, fontWeight: 500, padding: '0 4px 5px 0', borderBottom: `0.5px solid ${C.border}` }
   return (
-    <div key={ev.name} style={{ background: C.cardBg, borderRadius: 8, padding: '10px 14px', breakInside: 'avoid', marginBottom: 8 }}>
+    <div key={ev.name} style={{ background: C.cardBg, borderRadius: 8, padding: '8px 14px', breakInside: 'avoid', marginBottom: 8 }}>
       {/* 헤더 — 이벤트명 + 공휴일 배지 */}
-      <div style={{ marginBottom: 8, paddingBottom: 6, borderBottom: `0.5px solid ${C.border}` }}>
+      <div style={{ marginBottom: 4, paddingBottom: 4, borderBottom: `0.5px solid ${C.border}` }}>
         <span style={{ fontSize: 11, fontWeight: 500, color: C.textPrimary }}>{ev.name}</span>
         {ev.isHoliday && <span style={{ fontSize: 8, background: '#faeeda', color: '#854f0b', padding: '1px 4px', borderRadius: 3, marginLeft: 3, fontWeight: 500 }}>공휴일</span>}
       </div>
@@ -322,11 +312,11 @@ const renderEventCard = (ev: EventGroup) => {
         <tbody>
           {ev.dates.map((d, i) => (
             <tr key={d.date} style={{ borderBottom: i < ev.dates.length - 1 ? `0.5px solid ${C.border}` : 'none' }}>
-              <td style={{ padding: '4px 4px 4px 0' }}>
+              <td style={{ padding: '2px 4px 2px 0' }}>
                 <span style={{ fontSize: 10, fontWeight: 500, color: C.textPrimary }}>{mmdd(d.date)}</span>
                 <span style={{ fontSize: 8, marginLeft: 2, color: isFriSat(d.day) ? '#e24b4a' : C.textMuted }}>{d.day}</span>
               </td>
-              <td style={{ padding: '4px 4px 4px 0' }}>
+              <td style={{ padding: '2px 4px 2px 0' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <div style={{ width: 36, height: 4, background: C.border, borderRadius: 2, overflow: 'hidden', flexShrink: 0 }}>
                     <div style={{ width: `${Math.min(d.otbOcc ?? 0, 100)}%`, height: '100%', background: d.occColor, borderRadius: 2 }} />
@@ -334,16 +324,16 @@ const renderEventCard = (ev: EventGroup) => {
                   <span style={{ fontSize: 10, fontWeight: 500, color: d.occColor }}>{d.otbOcc !== null ? `${d.otbOcc}%` : '-'}</span>
                 </div>
               </td>
-              <td style={{ padding: '4px 4px 4px 0', textAlign: 'right' }}>
+              <td style={{ padding: '2px 4px 2px 0', textAlign: 'right' }}>
                 <span style={{ fontSize: 10, color: C.textSecondary }}>{d.adr !== null ? `${Math.round(d.adr / 1000)}k` : '-'}</span>
               </td>
-              <td style={{ padding: '4px 4px 4px 0', textAlign: 'right' }}>
+              <td style={{ padding: '2px 4px 2px 0', textAlign: 'right' }}>
                 <span style={{ fontSize: 10, fontWeight: 500, color: C.textPrimary }}>{d.barRate !== null ? `${Math.round(d.barRate / 1000)}k` : '-'}</span>
               </td>
-              <td style={{ padding: '4px 4px 4px 0', textAlign: 'right' }}>
+              <td style={{ padding: '2px 4px 2px 0', textAlign: 'right' }}>
                 <span style={{ fontSize: 10, fontWeight: 500, color: puColor(d.puNights) }}>{puText(d.puNights)}</span>
               </td>
-              <td style={{ padding: '4px 0', textAlign: 'right' }}>
+              <td style={{ padding: '2px 0', textAlign: 'right' }}>
                 <span style={{ fontSize: 10, color: C.textSecondary }}>{d.lyOcc !== null ? `${d.lyOcc}%` : '-'}</span>
               </td>
             </tr>
@@ -370,21 +360,113 @@ const TXT3 = C.textMuted
 const BORDER = C.border
 const BG_ELEV = C.cardBg
 
-export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, lyData: lyPacingData, lyLoading, forecastRows, budgetRows }: GMDailyReportModalProps) {
-  const [printModalOpen, setPrintModalOpen] = useState(false)
-  const [compact, setCompact] = useState(false)
-  const chartRef  = useRef<HTMLCanvasElement>(null)
-  const chartInst = useRef<Chart | null>(null)
+// ── 3페이지 OCC & BAR Rate 차트 (D+0 ~ D+44, 15일 × 3) ──
+interface Page3Day { date: string; dateLabel: string; day: string; isFriSat: boolean; occ: number; adr: number; barRate: number | null; occColor: string }
+
+const getPage3Days = (dateStr: string): string[][] => {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const allDays = Array.from({ length: 45 }, (_, i) => {
+    const dt = new Date(y, m - 1, d + i)
+    return dt.toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })
+  })
+  return [allDays.slice(0, 15), allDays.slice(15, 30), allDays.slice(30, 45)]
+}
+
+// Canvas 플러그인 — OCC% 상단 라벨 + BAR Rate 칩(막대 중앙)
+const occBarPlugin = {
+  id: 'occBarPlugin',
+  afterDatasetsDraw(chart: any) {
+    const { ctx, data, scales } = chart
+    const meta = chart.getDatasetMeta(0)
+    const yBar = scales['yBar']
+    meta.data.forEach((bar: any, i: number) => {
+      const occ     = data.datasets[0].data[i]
+      const barRate = data.datasets[1]?.data[i]
+      if (occ === null || occ === undefined) return
+      // OCC% 라벨
+      ctx.save()
+      ctx.font = 'bold 8px -apple-system, sans-serif'
+      ctx.fillStyle = occ >= 80 ? '#1a5fa8' : occ >= 60 ? '#c87800' : '#c0392b'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'bottom'
+      ctx.fillText(Math.round(occ) + '%', bar.x, bar.y - 2)
+      ctx.restore()
+      // BAR Rate 칩 — yBar 축 기준 실제 값 위치에 표시
+      if (barRate && yBar) {
+        const chipW = 28, chipH = 12
+        const chipX = bar.x - chipW / 2
+        const chipCenterY = yBar.getPixelForValue(barRate)
+        const chipY = chipCenterY - chipH / 2
+        ctx.save()
+        ctx.fillStyle = 'rgba(255,255,255,0.85)'
+        ctx.beginPath()
+        ctx.roundRect(chipX, chipY, chipW, chipH, 2)
+        ctx.fill()
+        ctx.font = '6.5px -apple-system, sans-serif'
+        ctx.fillStyle = '#4a4a48'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(barRate + 'k', bar.x, chipCenterY)
+        ctx.restore()
+      }
+    })
+  },
+}
+
+const createPage3Chart = (
+  canvas: HTMLCanvasElement | null,
+  kpiRows: Page3Day[],
+  chartRef: React.MutableRefObject<Chart | null>,
+) => {
+  if (!canvas) return
+  chartRef.current?.destroy()
+  chartRef.current = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: kpiRows.map(d => [d.dateLabel, d.day]),   // 2줄: 날짜 + 요일
+      datasets: [
+        { label: 'OCC%', data: kpiRows.map(d => d.occ), backgroundColor: kpiRows.map(d => d.occColor), barPercentage: 0.8, categoryPercentage: 0.9 },
+        { label: 'BAR Rate', data: kpiRows.map(d => d.barRate) as any, yAxisID: 'yBar', backgroundColor: 'transparent', borderColor: 'transparent', borderWidth: 0, barPercentage: 0, categoryPercentage: 0 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          mode: 'index', intersect: false,
+          callbacks: {
+            label: (ctx: any) => {
+              if (ctx.datasetIndex === 0) return ` OCC: ${ctx.raw}%`
+              if (ctx.datasetIndex === 1 && ctx.raw) return ` BAR: ${ctx.raw}k`
+              return undefined
+            },
+          },
+        },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { align: 'center', textStrokeWidth: 0, font: { size: 8 }, color: (ctx: any) => { const dy = kpiRows[ctx.index]?.day; return (dy === '금' || dy === '토') ? '#e24b4a' : '#898781' }, maxRotation: 0 }, border: { display: false } },
+        y: { min: 0, max: 100, position: 'left', grid: { color: '#e1e0d9', lineWidth: 0.5 }, ticks: { font: { size: 8 }, color: '#898781', stepSize: 25, callback: (v: any) => v + '%' }, border: { display: false } },
+        yBar: { type: 'linear', position: 'right', min: 0, max: 500, grid: { display: false }, ticks: { display: false }, border: { display: false } },
+      },
+      layout: { padding: { top: 16 } },
+    },
+    plugins: [occBarPlugin],
+  })
+}
+
+export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, otbDates = [], lyData: lyPacingData, lyLoading, forecastRows, budgetRows }: GMDailyReportModalProps) {
+  const [compact, setCompact] = useState(false)   // false=전체, true=압축(세그별 Top3 + 기타)
 
   // ── 기준일/vs 로컬 관리 (모달 내부 DatePicker로 독립 변경) ──
   const [localOtbDate, setLocalOtbDate] = useState(otbDate)
-  const [localVsDate, setLocalVsDate]   = useState(() => (otbDate ? getYesterday(otbDate) : ''))
+  const [localVsDate, setLocalVsDate]   = useState(() => getPrevOtbDate(otbDates, otbDate))
   useEffect(() => {
     if (open) {
       setLocalOtbDate(otbDate)
-      setLocalVsDate(otbDate ? getYesterday(otbDate) : '')
+      setLocalVsDate(getPrevOtbDate(otbDates, otbDate))
     }
-  }, [open, otbDate])
+  }, [open, otbDate, otbDates])
 
   // ── 어제 날짜(KST) + 월 분기 ──
   const yesterday   = localOtbDate ? getYesterday(localOtbDate) : ''
@@ -519,6 +601,310 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ly
     return { occ, rn, adr, rev, revpar, diffOcc, diffAdr, diffRev, diffRevpar }
   }, [yesterdayData, lyData, roomCount])
 
+  // ── 컴팩트 바 — 당일 OTB/vs/LY (어제 실적은 기존 yesterdayKpi 재사용) ──
+  // 당일 OTB (update_date=localOtbDate, business_date=localOtbDate)
+  const { data: todayOtbData } = useQuery({
+    queryKey: ['gm_today_otb', hotelId, localOtbDate],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('a02_otb_daily').select('nights, room_revenue')
+        .eq('hotel_id', hotelId).eq('update_date', localOtbDate).eq('business_date', localOtbDate)
+      if (error) { console.error('[GMReport] today otb error:', error); return [] }
+      return data ?? []
+    },
+    enabled: open && !!hotelId && !!localOtbDate,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // 당일 vs OTB (update_date=localVsDate, business_date=localOtbDate)
+  const { data: todayVsData } = useQuery({
+    queryKey: ['gm_today_vs', hotelId, localVsDate, localOtbDate],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('a02_otb_daily').select('nights')
+        .eq('hotel_id', hotelId).eq('update_date', localVsDate).eq('business_date', localOtbDate)
+      if (error) { console.error('[GMReport] today vs error:', error); return [] }
+      return data ?? []
+    },
+    enabled: open && !!hotelId && !!localVsDate && !!localOtbDate,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // 당일 yoy_match (c06_calendar, date=localOtbDate)
+  const { data: todayCalendar } = useQuery({
+    queryKey: ['gm_today_yoy', localOtbDate],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('c06_calendar').select('yoy_match').eq('date', localOtbDate).single()
+      if (error) { console.error('[GMReport] today yoy error:', error); return null }
+      return data
+    },
+    enabled: open && !!localOtbDate,
+    staleTime: 60 * 60 * 1000,
+  })
+  const todayYoyMatch: string | null = todayCalendar?.yoy_match ?? null
+
+  // 당일 LY (a01_actual_daily, business_date=yoy_match)
+  const { data: todayLyData } = useQuery({
+    queryKey: ['gm_today_ly', hotelId, todayYoyMatch],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('a01_actual_daily').select('nights, room_revenue')
+        .eq('hotel_id', hotelId).eq('business_date', todayYoyMatch)
+      if (error) { console.error('[GMReport] today ly error:', error); return [] }
+      return data ?? []
+    },
+    enabled: open && !!hotelId && !!todayYoyMatch,
+    staleTime: 10 * 60 * 1000,
+  })
+
+  const todayKpi = useMemo(() => {
+    const otbRn  = (todayOtbData ?? []).reduce((s: number, r: any) => s + (r.nights ?? 0), 0)
+    const otbRev = (todayOtbData ?? []).reduce((s: number, r: any) => s + (r.room_revenue ?? 0), 0)
+    const vsRn   = (todayVsData ?? []).reduce((s: number, r: any) => s + (r.nights ?? 0), 0)
+    const lyRn   = (todayLyData ?? []).reduce((s: number, r: any) => s + (r.nights ?? 0), 0)
+    const lyRev  = (todayLyData ?? []).reduce((s: number, r: any) => s + (r.room_revenue ?? 0), 0)
+
+    const occ       = roomCount > 0 ? Math.round((otbRn / roomCount) * 1000) / 10 : 0
+    const adr       = otbRn > 0 ? Math.round(otbRev / otbRn / 1000) : 0
+    const rev       = Math.round(otbRev / 1000000)
+    const remaining = roomCount - otbRn
+    const pu        = otbRn - vsRn
+
+    const lyOcc  = roomCount > 0 && lyRn > 0 ? Math.round((lyRn / roomCount) * 1000) / 10 : null
+    const lyAdr  = lyRn > 0 ? Math.round(lyRev / lyRn / 1000) : null
+    const lyRev2 = lyRev > 0 ? Math.round(lyRev / 1000000) : null
+
+    const diffOcc = lyOcc !== null ? Math.round((occ - lyOcc) * 10) / 10 : null
+    const diffAdr = lyAdr !== null ? adr - lyAdr : null
+    const diffRev = lyRev2 !== null ? rev - lyRev2 : null
+
+    return { occ, rn: otbRn, adr, rev, remaining, pu, diffOcc, diffAdr, diffRev }
+  }, [todayOtbData, todayVsData, todayLyData, roomCount])
+
+  // ── OTB 차트 (컴팩트 바 아래) ──
+  // 월요일이면 직전 금요일(D-3)부터 10일, 그 외 오늘(D+0)부터 7일
+  const getChartDays = (dateStr: string): string[] => {
+    const [gy, gm, gd] = dateStr.split('-').map(Number)
+    const dow = new Date(gy, gm - 1, gd).getDay()   // 0=일 ... 6=토
+    const startOffset = dow === 1 ? -3 : 0
+    const totalDays   = dow === 1 ? 10 : 7
+    const start = new Date(gy, gm - 1, gd + startOffset)
+    return Array.from({ length: totalDays }, (_, i) => {
+      const day = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i)
+      return day.toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })
+    })
+  }
+  const chartDays = localOtbDate ? getChartDays(localOtbDate) : []
+
+  // 과거 + 다른 달 날짜 = actual(a01_actual_daily) 사용, 그 외 = OTB(a02) 사용
+  const [otbY, otbM] = (localOtbDate || '2000-01-01').split('-').map(Number)
+  const actualDates: string[] = chartDays.filter(date => {
+    const [dy, dm] = date.split('-').map(Number)
+    return date < localOtbDate && (dy !== otbY || dm !== otbM)
+  })
+
+  // OTB (a02_otb_daily) — 7일 OCC/ADR
+  const { data: chartOtbData } = useQuery({
+    queryKey: ['gm_chart_otb', hotelId, localOtbDate, chartDays],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('a02_otb_daily').select('business_date, nights, room_revenue')
+        .eq('hotel_id', hotelId).eq('update_date', localOtbDate).in('business_date', chartDays)
+      if (error) { console.error('[GMReport] chart otb error:', error); return [] }
+      return data ?? []
+    },
+    enabled: open && !!hotelId && !!localOtbDate && chartDays.length > 0,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // 캘린더 (c06_calendar) — 요일 + yoy_match
+  const { data: chartCalData } = useQuery({
+    queryKey: ['gm_chart_cal', chartDays],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('c06_calendar').select('date, day, yoy_match').in('date', chartDays)
+      if (error) { console.error('[GMReport] chart cal error:', error); return [] }
+      return data ?? []
+    },
+    enabled: open && chartDays.length > 0,
+    staleTime: 60 * 60 * 1000,
+  })
+  const chartLyDates: string[] = (chartCalData ?? []).map((r: any) => r.yoy_match).filter(Boolean)
+
+  // LY OCC (a01_actual_daily, yoy_match)
+  const { data: chartLyData } = useQuery({
+    queryKey: ['gm_chart_ly', hotelId, chartLyDates],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('a01_actual_daily').select('business_date, nights')
+        .eq('hotel_id', hotelId).in('business_date', chartLyDates)
+      if (error) { console.error('[GMReport] chart ly error:', error); return [] }
+      return data ?? []
+    },
+    enabled: open && !!hotelId && chartLyDates.length > 0,
+    staleTime: 10 * 60 * 1000,
+  })
+
+  // BAR Rate (s02_rate_detail) — change > single > base
+  const { data: chartBarData } = useQuery({
+    queryKey: ['gm_chart_bar', hotelId, chartDays],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('s02_rate_detail').select('stay_date, date_type, new_rate')
+        .eq('hotel_id', hotelId).in('stay_date', chartDays)
+        .in('date_type', ['change', 'single', 'base'])
+      if (error) { console.error('[GMReport] chart bar error:', error); return [] }
+      return data ?? []
+    },
+    enabled: open && !!hotelId && chartDays.length > 0,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // Actual (a01_actual_daily) — 과거 다른 달 날짜의 실제 OCC/ADR
+  const { data: chartActualData } = useQuery({
+    queryKey: ['gm_chart_actual', hotelId, actualDates],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('a01_actual_daily').select('business_date, nights, room_revenue')
+        .eq('hotel_id', hotelId).in('business_date', actualDates)
+      if (error) { console.error('[GMReport] chart actual error:', error); return [] }
+      return data ?? []
+    },
+    enabled: open && !!hotelId && actualDates.length > 0,
+    staleTime: 10 * 60 * 1000,
+  })
+
+  const chartKpi = useMemo(() => {
+    const calMap: Record<string, { day: string; yoy_match: string | null }> = {}
+    ;(chartCalData ?? []).forEach((r: any) => { calMap[r.date] = { day: r.day, yoy_match: r.yoy_match } })
+    const lyMap: Record<string, number> = {}
+    ;(chartLyData ?? []).forEach((r: any) => { lyMap[r.business_date] = (lyMap[r.business_date] ?? 0) + (r.nights ?? 0) })
+    const barPriority: Record<string, number> = { change: 3, single: 2, base: 1 }
+    const barMap: Record<string, number> = {}
+    const barPrio: Record<string, number> = {}
+    ;(chartBarData ?? []).forEach((r: any) => {
+      const p = barPriority[r.date_type] ?? 0
+      if (!barMap[r.stay_date] || p > barPrio[r.stay_date]) { barMap[r.stay_date] = r.new_rate; barPrio[r.stay_date] = p }
+    })
+    return chartDays.map(date => {
+      const [dy, dm] = date.split('-').map(Number)
+      const isPast   = date < localOtbDate
+      const isActual = isPast && (dy !== otbY || dm !== otbM)   // 과거 다른 달 → actual
+      const srcRows  = isActual
+        ? (chartActualData ?? []).filter((r: any) => r.business_date === date)
+        : (chartOtbData    ?? []).filter((r: any) => r.business_date === date)
+      const otbRn   = srcRows.reduce((s: number, r: any) => s + (r.nights ?? 0), 0)
+      const otbRev  = srcRows.reduce((s: number, r: any) => s + (r.room_revenue ?? 0), 0)
+      const otbOcc  = roomCount > 0 ? Math.round((otbRn / roomCount) * 1000) / 10 : 0
+      const adr     = otbRn > 0 ? Math.round(otbRev / otbRn / 1000) : 0
+      const cal     = calMap[date]
+      const lyRn    = cal?.yoy_match ? (lyMap[cal.yoy_match] ?? 0) : 0
+      const lyOcc   = roomCount > 0 && lyRn > 0 ? Math.round((lyRn / roomCount) * 1000) / 10 : null
+      const barRate = barMap[date] ? Math.round(barMap[date] / 1000) : null
+      const occColor = otbOcc >= 80 ? '#2a78d6' : otbOcc >= 60 ? '#eda100' : '#e24b4a'
+      const [, mm, dd] = date.split('-')
+      const dateLabel = `${parseInt(mm)}/${parseInt(dd)}`
+      const day       = cal?.day ?? ''
+      const isFriSat  = day === '금' || day === '토'
+      const isToday   = date === localOtbDate
+      return { date, dateLabel, day, isFriSat, isToday, isPast, isActual, otbOcc, adr, barRate, lyOcc, occColor }
+    })
+  }, [chartDays, chartOtbData, chartActualData, chartCalData, chartLyData, chartBarData, roomCount, localOtbDate, otbY, otbM])
+
+  // ── 3페이지 — OCC & BAR Rate 차트 (D+0 ~ D+44, 15일 × 3) ──
+  const chart1Ref  = useRef<HTMLCanvasElement>(null)
+  const chart2Ref  = useRef<HTMLCanvasElement>(null)
+  const chart3Ref  = useRef<HTMLCanvasElement>(null)
+  const chartInst1 = useRef<Chart | null>(null)
+  const chartInst2 = useRef<Chart | null>(null)
+  const chartInst3 = useRef<Chart | null>(null)
+
+  const page3DayGroups = localOtbDate ? getPage3Days(localOtbDate) : [[], [], []]
+  const page3AllDays   = page3DayGroups.flat()
+
+  // OTB (a02_otb_daily)
+  const { data: page3OtbData } = useQuery({
+    queryKey: ['gm_page3_otb', hotelId, localOtbDate, page3AllDays],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('a02_otb_daily').select('business_date, nights, room_revenue')
+        .eq('hotel_id', hotelId).eq('update_date', localOtbDate).in('business_date', page3AllDays)
+      if (error) { console.error('[GMReport] page3 otb error:', error); return [] }
+      return data ?? []
+    },
+    enabled: open && !!hotelId && !!localOtbDate && page3AllDays.length > 0,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // 캘린더 (c06_calendar) — 요일
+  const { data: page3CalData } = useQuery({
+    queryKey: ['gm_page3_cal', page3AllDays],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('c06_calendar').select('date, day').in('date', page3AllDays)
+      if (error) { console.error('[GMReport] page3 cal error:', error); return [] }
+      return data ?? []
+    },
+    enabled: open && page3AllDays.length > 0,
+    staleTime: 60 * 60 * 1000,
+  })
+
+  // BAR Rate (s02_rate_detail) — change > single > base
+  const { data: page3BarData } = useQuery({
+    queryKey: ['gm_page3_bar', hotelId, page3AllDays],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('s02_rate_detail').select('stay_date, date_type, new_rate')
+        .eq('hotel_id', hotelId).in('stay_date', page3AllDays)
+        .in('date_type', ['change', 'single', 'base'])
+      if (error) { console.error('[GMReport] page3 bar error:', error); return [] }
+      return data ?? []
+    },
+    enabled: open && !!hotelId && page3AllDays.length > 0,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const page3Kpi = useMemo(() => {
+    const calMap: Record<string, string> = {}
+    ;(page3CalData ?? []).forEach((r: any) => { calMap[r.date] = r.day })
+    const barPriority: Record<string, number> = { change: 3, single: 2, base: 1 }
+    const barMap: Record<string, number> = {}
+    const barPrio: Record<string, number> = {}
+    ;(page3BarData ?? []).forEach((r: any) => {
+      const p = barPriority[r.date_type] ?? 0
+      if (!barMap[r.stay_date] || p > barPrio[r.stay_date]) { barMap[r.stay_date] = Math.round(r.new_rate / 1000); barPrio[r.stay_date] = p }
+    })
+    return page3DayGroups.map(days => days.map((date): Page3Day => {
+      const otbRows = (page3OtbData ?? []).filter((r: any) => r.business_date === date)
+      const otbRn   = otbRows.reduce((s: number, r: any) => s + (r.nights ?? 0), 0)
+      const otbRev  = otbRows.reduce((s: number, r: any) => s + (r.room_revenue ?? 0), 0)
+      const occ     = roomCount > 0 ? Math.round((otbRn / roomCount) * 1000) / 10 : 0
+      const adr     = otbRn > 0 ? Math.round(otbRev / otbRn / 1000) : 0
+      const barRate = barMap[date] ?? null
+      const day     = calMap[date] ?? ''
+      const isFriSat = day === '금' || day === '토'
+      const [, mm, dd] = date.split('-')
+      const dateLabel = `${parseInt(mm)}/${parseInt(dd)}`
+      const occColor = occ >= 80 ? '#2a78d6' : occ >= 60 ? '#eda100' : '#e24b4a'
+      return { date, dateLabel, day, isFriSat, occ, adr, barRate, occColor }
+    }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page3OtbData, page3BarData, page3CalData, roomCount, localOtbDate])
+
+  // 3페이지 차트 생성/파괴
+  useEffect(() => {
+    if (!open) return
+    createPage3Chart(chart1Ref.current, page3Kpi[0] ?? [], chartInst1)
+    createPage3Chart(chart2Ref.current, page3Kpi[1] ?? [], chartInst2)
+    createPage3Chart(chart3Ref.current, page3Kpi[2] ?? [], chartInst3)
+    return () => {
+      chartInst1.current?.destroy(); chartInst1.current = null
+      chartInst2.current?.destroy(); chartInst2.current = null
+      chartInst3.current?.destroy(); chartInst3.current = null
+    }
+  }, [open, page3Kpi])
+
   // ESC + 스크롤락
   useEffect(() => {
     if (!open) return
@@ -542,6 +928,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ly
         .gm-a4 * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .gm-no-print { display: none !important; }
         .gm-page-break { break-before: page; }
+        .gm-page3-chart { height: 280px !important; }
         .gm-page-divider { display: none !important; }
         * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       }
@@ -720,42 +1107,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ly
     })
   }, [lyPacingData, forecastRows, budgetRows, threeMonths, roomCount])
 
-  // 차트 생성/파괴
-  useEffect(() => {
-    if (!open || !chartRef.current) return
-    const bg = DUMMY_CHART.labels.map(l => (isWeekendLabel(l) ? '#3987e5' : '#2a78d6'))
-    chartInst.current = new Chart(chartRef.current, {
-      type: 'bar',
-      data: {
-        labels: DUMMY_CHART.labels,
-        datasets: [
-          { type: 'bar', label: 'OTB OCC%', data: DUMMY_CHART.otb, backgroundColor: bg, borderRadius: 2, order: 2 },
-          { type: 'line', label: 'FCST OCC%', data: DUMMY_CHART.fcst, borderColor: '#1d9e75', borderDash: [4, 3], borderWidth: 1.5, pointRadius: 0, tension: 0.3, order: 1 },
-        ],
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false, animation: false,
-        plugins: { legend: { display: false }, tooltip: { enabled: false } },
-        scales: {
-          y: { min: 0, max: 100, ticks: { callback: (v) => `${v}%`, font: { size: 9 }, color: C.textMuted }, grid: { color: C.border } },
-          x: { ticks: { font: { size: 9 }, color: (c: any) => (isWeekendLabel(DUMMY_CHART.labels[c.index] ?? '') ? '#e24b4a' : C.textMuted) }, grid: { display: false } },
-        },
-      },
-    })
-    return () => { chartInst.current?.destroy(); chartInst.current = null }
-  }, [open])
-
   if (!open) return null
-
-  // 섹션 E — 어제 실적 카드 (로딩='…', 없음='-') · LY 배지는 이번 작업 제외
-  const yv = (v: number | null, suffix = '') => (yesterdayLoading ? '…' : v !== null ? `${v.toLocaleString()}${suffix}` : '-')
-  const yesterdayCards: { label: string; value: string; ly: LyBadge | null }[] = [
-    { label: 'OCC%',          value: yesterdayLoading ? '…' : (yesterdayKpi.occ !== null ? `${yesterdayKpi.occ}%` : '-'), ly: fmtLyOcc(yesterdayKpi.diffOcc) },
-    { label: 'R/N',           value: yv(yesterdayKpi.rn, '실'), ly: null },
-    { label: 'ADR (천원)',    value: yv(yesterdayKpi.adr),      ly: fmtLyNum(yesterdayKpi.diffAdr, '천원') },
-    { label: 'REV (백만)',    value: yv(yesterdayKpi.rev),      ly: fmtLyNum(yesterdayKpi.diffRev, '백만') },
-    { label: 'RevPAR (천원)', value: yv(yesterdayKpi.revpar),   ly: fmtLyNum(yesterdayKpi.diffRevpar, '천원') },
-  ]
 
   // 섹션 A/B — 3개월 Pick-up 파생값
   const pm: any[][] = [pickupQ0.data ?? [], pickupQ1.data ?? [], pickupQ2.data ?? []]
@@ -848,8 +1200,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ly
     )
   }
 
-  const doPrintAll = () => { setCompact(false); setPrintModalOpen(false); setTimeout(() => window.print(), 50) }
-  const doPrintCompact = () => { setCompact(true); setPrintModalOpen(false); setTimeout(() => window.print(), 50) }
+  const handlePrint = () => { setTimeout(() => window.print(), 50) }
 
   const overlay: React.CSSProperties = {
     position: 'fixed', inset: 0, background: C.overlay, zIndex: 10000,
@@ -869,18 +1220,35 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ly
 
         {/* ── 헤더 ── */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 16, fontWeight: 500, color: TXT }}>GM Daily Report</span>
-            <div data-theme="light" style={{ colorScheme: 'light', display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 12 }} onClick={e => e.stopPropagation()}>
+            <div data-theme="light" style={{ colorScheme: 'light', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }} onClick={e => e.stopPropagation()}>
               <span style={{ color: TXT2 }}>기준일</span>
-              <DatePicker label="" value={localOtbDate} onChange={setLocalOtbDate} bare plain fontPx={12} dateColor={TXT} underlineColor="transparent" />
+              <DatePicker label="" value={localOtbDate} onChange={setLocalOtbDate} availableDates={otbDates} bare plain fontPx={12} dateColor={TXT} underlineColor="transparent" />
               <span style={{ color: C.borderStrong, fontSize: 10 }}>|</span>
               <span style={{ color: TXT3 }}>vs</span>
-              <DatePicker label="" value={localVsDate} onChange={setLocalVsDate} bare plain fontPx={12} dateColor={TXT} underlineColor="transparent" />
+              <DatePicker label="" value={localVsDate} onChange={setLocalVsDate} availableDates={otbDates.filter(d => d < localOtbDate)} bare plain fontPx={12} dateColor={TXT} underlineColor="transparent" />
             </div>
           </div>
           <div className="gm-no-print" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button onClick={() => setPrintModalOpen(true)}
+            {/* 보기 토글 — 전체 / 압축 (섹션 B Pick-up 상세 표시량) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+              <span style={{ color: C.textMuted }}>보기</span>
+              <span style={{ color: C.borderStrong }}>|</span>
+              <button onClick={() => setCompact(false)}
+                style={{ border: 'none', cursor: 'pointer', padding: '2px 6px', fontSize: 11, borderRadius: 4,
+                  color: !compact ? C.textPrimary : C.textMuted, fontWeight: !compact ? 500 : 400,
+                  background: !compact ? C.cardBg : 'transparent' }}>
+                전체
+              </button>
+              <button onClick={() => setCompact(true)}
+                style={{ border: 'none', cursor: 'pointer', padding: '2px 6px', fontSize: 11, borderRadius: 4,
+                  color: compact ? C.textPrimary : C.textMuted, fontWeight: compact ? 500 : 400,
+                  background: compact ? C.cardBg : 'transparent' }}>
+                압축
+              </button>
+            </div>
+            <button onClick={handlePrint}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, padding: '5px 11px', borderRadius: 6, border: `1px solid ${BORDER}`, background: 'transparent', color: TXT, cursor: 'pointer' }}>
               🖨️ 출력
             </button>
@@ -890,6 +1258,198 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ly
         </div>
 
         {/* ══════════ 1페이지 ══════════ */}
+
+          {/* 컴팩트 바 — 어제 실적 + 당일 OTB */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.5px 1fr', background: C.cardBg, borderRadius: 8, padding: '14px 18px', marginBottom: 14 }}>
+
+            {/* 어제 실적 */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingRight: 24 }}>
+              <div style={{ marginBottom: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: C.textPrimary }}>어제 실적</span>
+                <span style={{ fontSize: 10, color: C.textMuted, marginLeft: 6 }}>{yesterday}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-start', width: '100%' }}>
+                {[
+                  { name: 'OCC%',   val: yesterdayKpi.occ    !== null ? `${yesterdayKpi.occ}%`    : '-', diff: yesterdayKpi.diffOcc,    unit: '%p' },
+                  { name: 'ADR',    val: yesterdayKpi.adr    !== null ? `${yesterdayKpi.adr}k`    : '-', diff: yesterdayKpi.diffAdr,    unit: 'k' },
+                  { name: 'REV',    val: yesterdayKpi.rev    !== null ? `${yesterdayKpi.rev}m`    : '-', diff: yesterdayKpi.diffRev,    unit: 'm' },
+                  { name: 'RevPAR', val: yesterdayKpi.revpar !== null ? `${yesterdayKpi.revpar}k` : '-', diff: yesterdayKpi.diffRevpar, unit: 'k' },
+                ].map(({ name, val, diff, unit }, idx, arr) => (
+                  <div key={name} style={idx === arr.length - 1 ? { flex: 'none', marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' } : { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: 9, color: C.textMuted, marginBottom: 4 }}>{name}</span>
+                    <span style={{ fontSize: 18, fontWeight: 500, color: C.textPrimary, lineHeight: 1.1, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{val}</span>
+                    {diff !== null ? (
+                      <span style={{ ...badgeStyle(diff > 0 ? 'up' : diff < 0 ? 'dn' : 'neu'), height: 18, lineHeight: '16px', whiteSpace: 'nowrap' }}>LY {diff > 0 ? `+${diff}${unit}` : `${diff}${unit}`}</span>
+                    ) : (
+                      <div style={{ height: 18 }} />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 구분선 */}
+            <div style={{ width: 0.5, background: C.border }} />
+
+            {/* 당일 OTB */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingLeft: 24 }}>
+              <div style={{ marginBottom: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: C.textPrimary }}>당일 OTB</span>
+                <span style={{ fontSize: 10, color: C.textMuted, marginLeft: 6 }}>{localOtbDate}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-start', width: '100%' }}>
+                {[
+                  { name: 'OCC%', val: `${todayKpi.occ}%`, diff: todayKpi.diffOcc, unit: '%p', color: C.textPrimary },
+                  { name: 'ADR',  val: `${todayKpi.adr}k`,  diff: todayKpi.diffAdr, unit: 'k',  color: C.textPrimary },
+                  { name: 'REV',  val: `${todayKpi.rev}m`,  diff: todayKpi.diffRev, unit: 'm',  color: C.textPrimary },
+                ].map(({ name, val, diff, unit, color }) => (
+                  <div key={name} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: 9, color: C.textMuted, marginBottom: 4 }}>{name}</span>
+                    <span style={{ fontSize: 18, fontWeight: 500, color, lineHeight: 1.1, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{val}</span>
+                    {diff !== null ? (
+                      <span style={{ ...badgeStyle(diff > 0 ? 'up' : diff < 0 ? 'dn' : 'neu'), height: 18, lineHeight: '16px', whiteSpace: 'nowrap' }}>LY {diff > 0 ? `+${diff}${unit}` : `${diff}${unit}`}</span>
+                    ) : (
+                      <div style={{ height: 18 }} />
+                    )}
+                  </div>
+                ))}
+
+                {/* 전일 픽업 — 오른쪽 끝 */}
+                <div style={{ flex: 'none', marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <span style={{ fontSize: 9, color: C.textMuted, marginBottom: 4 }}>전일 픽업</span>
+                  <span style={{ fontSize: 18, fontWeight: 500, lineHeight: 1.1, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: todayKpi.pu > 0 ? '#1d9e75' : todayKpi.pu < 0 ? '#a32d2d' : C.textMuted }}>{todayKpi.pu > 0 ? `+${todayKpi.pu}` : todayKpi.pu < 0 ? `${todayKpi.pu}` : '±0'}</span>
+                  <span style={{ fontSize: 9, color: todayKpi.remaining > 0 ? C.textMuted : '#a32d2d', height: 18 }}>잔여 {todayKpi.remaining}</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* 7일 OTB 차트 */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: C.textPrimary, marginBottom: 10 }}>OTB 현황 (7일)</div>
+            <div style={{ background: C.cardBg, borderRadius: 8, padding: '14px 16px' }}>
+              {/* 막대 차트 + KPI 테이블 — 단일 table로 컬럼 공유 */}
+              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 9 }}>
+                <colgroup>
+                  <col style={{ width: 28 }} />
+                  {chartDays.map((_, i) => <col key={i} />)}
+                </colgroup>
+                <tbody>
+                  {/* 막대 차트 행 */}
+                  <tr style={{ height: 120 }}>
+                    <td style={{ verticalAlign: 'bottom', paddingBottom: 4 }} />
+                    {chartKpi.map(d => (
+                      <td key={d.date} style={{ verticalAlign: 'bottom', padding: '0 2px', height: 120 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end' }}>
+                          <div style={{ width: '40%', height: 'calc(100% - 20px)', background: d.isToday ? '#e8eeff' : d.isPast ? '#f0efea' : C.border, borderRadius: 4, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative', overflow: 'visible' }}>
+                            <div style={{ width: '100%', height: `${d.otbOcc}%`, background: d.occColor, borderRadius: '4px 4px 0 0', position: 'relative' }}>
+                              <span style={{ position: 'absolute', top: -14, left: '50%', transform: 'translateX(-50%)', fontSize: 8, fontWeight: 500, color: d.occColor, whiteSpace: 'nowrap' }}>{d.otbOcc}%</span>
+                            </div>
+                          </div>
+                          <div style={{ fontSize: 8, fontWeight: d.isToday ? 600 : 400, color: d.isToday ? '#2a78d6' : C.textPrimary, marginTop: 4, whiteSpace: 'nowrap', textAlign: 'center' }}>
+                            {d.dateLabel}
+                            <span style={{ fontSize: 7, marginLeft: 1, color: d.isFriSat ? '#e24b4a' : d.isToday ? '#2a78d6' : C.textMuted }}>{d.day}</span>
+                          </div>
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                  {/* ADR 행 */}
+                  <tr style={{ borderTop: `0.5px solid ${C.border}` }}>
+                    <td style={{ fontSize: 8, color: C.textMuted, padding: '3px 2px' }}>ADR</td>
+                    {chartKpi.map(d => (
+                      <td key={d.date} style={{ textAlign: 'center', padding: '3px 2px', fontSize: 9, color: C.textSecondary, fontWeight: d.isToday ? 500 : 400, background: d.isToday ? '#f0f4ff' : d.isPast ? '#fafaf8' : 'transparent', borderBottom: `0.5px solid ${C.border}` }}>{d.adr > 0 ? `${d.adr}k` : '-'}</td>
+                    ))}
+                  </tr>
+                  {/* BAR 행 */}
+                  <tr>
+                    <td style={{ fontSize: 8, color: C.textMuted, padding: '3px 2px' }}>BAR</td>
+                    {chartKpi.map(d => (
+                      <td key={d.date} style={{ textAlign: 'center', padding: '3px 2px', fontSize: 9, color: C.textPrimary, fontWeight: 500, background: d.isToday ? '#f0f4ff' : d.isPast ? '#fafaf8' : 'transparent', borderBottom: `0.5px solid ${C.border}` }}>{d.barRate !== null ? `${d.barRate}k` : '-'}</td>
+                    ))}
+                  </tr>
+                  {/* LY 행 */}
+                  <tr>
+                    <td style={{ fontSize: 8, color: C.textMuted, padding: '3px 2px' }}>LY</td>
+                    {chartKpi.map(d => (
+                      <td key={d.date} style={{ textAlign: 'center', padding: '3px 2px', fontSize: 9, color: C.textMuted, background: d.isToday ? '#f0f4ff' : d.isPast ? '#fafaf8' : 'transparent' }}>{d.lyOcc !== null ? `${d.lyOcc}%` : '-'}</td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* 섹션 D — 월별 OTB 현황 */}
+          <div style={{ marginBottom: 18 }}>
+            <div style={sectionTitle}>월별 OTB 현황<span style={{ fontSize: 10, color: C.textMuted, marginLeft: 8, fontWeight: 400 }}>· LY 기준: 전년동월</span></div>
+            <div style={{ ...card, padding: '10px 14px' }}>
+              {/* 2줄 헤더 */}
+              <div style={{ display: 'grid', gridTemplateColumns: '70px repeat(6, 1fr)', borderBottom: `0.5px solid ${BORDER}` }}>
+                <span />
+                <span style={{ ...th, fontSize: 8, gridColumn: 'span 3', textAlign: 'center', color: '#2a78d6', fontWeight: 600 }}>OTB 현황</span>
+                <span style={{ ...th, fontSize: 8, gridColumn: 'span 3', textAlign: 'center', color: '#1d9e75', fontWeight: 600, borderLeft: `1px solid ${BORDER}` }}>Forecast<span style={{ fontSize: 8, color: C.textMuted, fontWeight: 400, marginLeft: 3 }}>(하단: Budget 대비)</span></span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '70px repeat(6, 1fr)', borderBottom: `0.5px solid ${BORDER}`, paddingBottom: 3 }}>
+                <span style={{ ...th, fontSize: 8 }}>구분</span>
+                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>OCC%</span>
+                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>ADR(천원)</span>
+                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>REV(백만)</span>
+                <span style={{ ...th, fontSize: 8, textAlign: 'right', borderLeft: `1px solid ${BORDER}` }}>OCC%</span>
+                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>ADR(천원)</span>
+                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>REV(백만)</span>
+              </div>
+              {lyLoading ? (
+                <div style={{ padding: '10px 4px', fontSize: 10, color: TXT3, textAlign: 'center' }}>월별 데이터 불러오는 중…</div>
+              ) : monthlyKpi.length === 0 ? (
+                <div style={{ padding: '10px 4px', fontSize: 10, color: TXT3, textAlign: 'center' }}>-</div>
+              ) : monthlyKpi.map((r, i) => {
+                const signOcc = (n: number) => (n > 0 ? `+${n}%p` : n < 0 ? `${n}%p` : '±0%p')
+                const cell = (main: string, sub: string, dir: string, bl = false) => (
+                  <span style={{ textAlign: 'right', padding: '4px 4px 4px 0', borderLeft: bl ? `1px solid ${BORDER}` : undefined }}>
+                    <span style={{ display: 'block', fontSize: 10, color: TXT, fontWeight: 400 }}>{main}</span>
+                    <span style={{ display: 'block', fontSize: 8, color: dirColor(dir) }}>{sub}</span>
+                  </span>
+                )
+                return (
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '70px repeat(6, 1fr)', alignItems: 'center' }}>
+                    <span style={{ fontSize: 10, fontWeight: 500, color: TXT, padding: '4px 6px' }}>{r.month}월</span>
+                    {cell(`${r.otbOcc}%`, `LY ${signOcc(r.diffLyOcc)}`, dir3(r.diffLyOcc))}
+                    {cell(r.otbAdr.toLocaleString(), `LY ${sign(r.diffLyAdr)}k`, dir3(r.diffLyAdr))}
+                    {cell(r.otbRevM.toLocaleString(), `LY ${sign(r.diffLyRevM)}m`, dir3(r.diffLyRevM))}
+                    {cell(`${r.fcOcc}%`, `Bud ${signOcc(r.diffBudOcc)}`, dir3(r.diffBudOcc), true)}
+                    {cell(r.fcAdr.toLocaleString(), `Bud ${sign(r.diffBudAdr)}k`, dir3(r.diffBudAdr))}
+                    {cell(r.fcRevM.toLocaleString(), `Bud ${sign(r.diffBudRevM)}m`, dir3(r.diffBudRevM))}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* 섹션 C — 이벤트 일정 */}
+          <div style={{ marginBottom: 18 }}>
+            <div style={sectionTitle}>이벤트 일정</div>
+            {!calendarEvents ? (
+              <div style={{ ...card, fontSize: 11, color: TXT3, textAlign: 'center' }}>이벤트 데이터 불러오는 중…</div>
+            ) : eventGroups.length === 0 ? (
+              <div style={{ ...card, fontSize: 11, color: TXT3, textAlign: 'center' }}>해당 기간 이벤트 없음</div>
+            ) : (
+              <div style={{ columnCount: 2, columnGap: 8 }}>
+                {eventGroups.map(renderEventCard)}
+              </div>
+            )}
+          </div>
+
+        {/* ── 페이지 구분선 ── */}
+        <div className="gm-page-divider" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0' }}>
+          <div style={{ flex: 1, borderTop: `1.5px dashed ${BORDER}` }} />
+          <span style={{ fontSize: 10, color: TXT3, background: C.pageBg, padding: '2px 8px', borderRadius: 10, border: `0.5px solid ${BORDER}` }}>2페이지 시작</span>
+          <div style={{ flex: 1, borderTop: `1.5px dashed ${BORDER}` }} />
+        </div>
+
+        {/* ══════════ 2페이지 ══════════ */}
+        <div className="gm-page-break">
 
         {/* 섹션 A — 3개월 Pick-up */}
         <div style={{ marginBottom: 18 }}>
@@ -949,156 +1509,44 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ly
           )}
         </div>
 
-        {/* ── 페이지 구분선 ── */}
+        </div>
+
+        {/* ── 페이지 구분선 (2→3) ── */}
         <div className="gm-page-divider" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0' }}>
           <div style={{ flex: 1, borderTop: `1.5px dashed ${BORDER}` }} />
-          <span style={{ fontSize: 10, color: TXT3, background: C.pageBg, padding: '2px 8px', borderRadius: 10, border: `0.5px solid ${BORDER}` }}>2페이지 시작</span>
+          <span style={{ fontSize: 10, color: TXT3, background: C.pageBg, padding: '2px 8px', borderRadius: 10, border: `0.5px solid ${BORDER}` }}>3페이지 시작</span>
           <div style={{ flex: 1, borderTop: `1.5px dashed ${BORDER}` }} />
         </div>
 
-        {/* ══════════ 2페이지 ══════════ */}
-        <div className="gm-page-break">
-
-          {/* 섹션 D — 월별 OTB 현황 */}
-          <div style={{ marginBottom: 18 }}>
-            <div style={sectionTitle}>월별 OTB 현황<span style={{ fontSize: 10, color: C.textMuted, marginLeft: 8, fontWeight: 400 }}>· LY 기준: 전년동월</span></div>
-            <div style={{ ...card, padding: '10px 14px' }}>
-              {/* 2줄 헤더 */}
-              <div style={{ display: 'grid', gridTemplateColumns: '70px repeat(6, 1fr)', borderBottom: `0.5px solid ${BORDER}` }}>
-                <span />
-                <span style={{ ...th, fontSize: 8, gridColumn: 'span 3', textAlign: 'center', color: '#2a78d6', fontWeight: 600 }}>OTB 현황</span>
-                <span style={{ ...th, fontSize: 8, gridColumn: 'span 3', textAlign: 'center', color: '#1d9e75', fontWeight: 600, borderLeft: `1px solid ${BORDER}` }}>Forecast<span style={{ fontSize: 8, color: C.textMuted, fontWeight: 400, marginLeft: 3 }}>(하단: Budget 대비)</span></span>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '70px repeat(6, 1fr)', borderBottom: `0.5px solid ${BORDER}`, paddingBottom: 3 }}>
-                <span style={{ ...th, fontSize: 8 }}>구분</span>
-                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>OCC%</span>
-                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>ADR(천원)</span>
-                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>REV(백만)</span>
-                <span style={{ ...th, fontSize: 8, textAlign: 'right', borderLeft: `1px solid ${BORDER}` }}>OCC%</span>
-                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>ADR(천원)</span>
-                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>REV(백만)</span>
-              </div>
-              {lyLoading ? (
-                <div style={{ padding: '10px 4px', fontSize: 10, color: TXT3, textAlign: 'center' }}>월별 데이터 불러오는 중…</div>
-              ) : monthlyKpi.length === 0 ? (
-                <div style={{ padding: '10px 4px', fontSize: 10, color: TXT3, textAlign: 'center' }}>-</div>
-              ) : monthlyKpi.map((r, i) => {
-                const signOcc = (n: number) => (n > 0 ? `+${n}%p` : n < 0 ? `${n}%p` : '±0%p')
-                const cell = (main: string, sub: string, dir: string, bl = false) => (
-                  <span style={{ textAlign: 'right', padding: '4px 4px 4px 0', borderLeft: bl ? `1px solid ${BORDER}` : undefined }}>
-                    <span style={{ display: 'block', fontSize: 10, color: TXT, fontWeight: 400 }}>{main}</span>
-                    <span style={{ display: 'block', fontSize: 8, color: dirColor(dir) }}>{sub}</span>
-                  </span>
-                )
-                return (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '70px repeat(6, 1fr)', alignItems: 'center' }}>
-                    <span style={{ fontSize: 10, fontWeight: 500, color: TXT, padding: '4px 6px' }}>{r.month}월</span>
-                    {cell(`${r.otbOcc}%`, `LY ${signOcc(r.diffLyOcc)}`, dir3(r.diffLyOcc))}
-                    {cell(r.otbAdr.toLocaleString(), `LY ${sign(r.diffLyAdr)}k`, dir3(r.diffLyAdr))}
-                    {cell(r.otbRevM.toLocaleString(), `LY ${sign(r.diffLyRevM)}m`, dir3(r.diffLyRevM))}
-                    {cell(`${r.fcOcc}%`, `Bud ${signOcc(r.diffBudOcc)}`, dir3(r.diffBudOcc), true)}
-                    {cell(r.fcAdr.toLocaleString(), `Bud ${sign(r.diffBudAdr)}k`, dir3(r.diffBudAdr))}
-                    {cell(r.fcRevM.toLocaleString(), `Bud ${sign(r.diffBudRevM)}m`, dir3(r.diffBudRevM))}
-                  </div>
-                )
-              })}
-            </div>
+        {/* ══════════ 3페이지 — OCC & BAR Rate ══════════ */}
+        <div className="gm-page-break gm-page3">
+          <div style={{ fontSize: 13, fontWeight: 500, color: C.textPrimary, marginBottom: 12 }}>
+            OCC &amp; BAR Rate
+            <span style={{ fontSize: 10, color: C.textMuted, marginLeft: 8, fontWeight: 400 }}>· {localOtbDate} ~ D+44</span>
           </div>
-
-          {/* 섹션 E — 어제 실적 */}
-          <div style={{ marginBottom: 18 }}>
-            <div style={{ ...sectionTitle, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <span>어제 실적</span>
-              <span style={{ fontSize: 10, color: C.textMuted, fontWeight: 400 }}>{yesterday}</span>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
-              {yesterdayCards.map(k => (
-                <div key={k.label} style={{ ...card, padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, minHeight: 14 }}>
-                    <span style={{ fontSize: 10, color: TXT3 }}>{k.label}</span>
-                    {k.ly && k.ly.text !== '-' && <span style={badgeStyle(k.ly.dir)}>{k.ly.text}</span>}
+          {page3DayGroups.map((days, gi) => (
+            <div key={gi} style={{ background: C.cardBg, borderRadius: 8, padding: '12px 16px', marginBottom: 8 }}>
+              {/* 범위 라벨 + 범례 */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 10, fontWeight: 500, color: C.textSecondary }}>
+                  {days.length > 0 ? `${days[0].replace(/-/g, '/').slice(5)} ~ ${days[days.length - 1].replace(/-/g, '/').slice(5)}` : ''}
+                </span>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: C.textMuted }}>
+                    <div style={{ width: 10, height: 10, borderRadius: 2, background: '#2a78d6' }} />OCC%
                   </div>
-                  <div style={{ fontSize: 15, fontWeight: 500, color: TXT }}>{k.value}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 섹션 F — 당일 OTB + 차트 */}
-          <div>
-            <div style={{ ...sectionTitle, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <span>당일 OTB 현황</span>
-              <span style={{ fontSize: 10, color: C.textMuted, fontWeight: 400 }}>{localOtbDate}</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                {DUMMY_TODAY_OTB.map(k => (
-                  <div key={k.label} style={{ ...card, padding: '10px 12px' }}>
-                    <div style={{ fontSize: 10, color: TXT3, marginBottom: 4 }}>{k.label}</div>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                      <span style={{ fontSize: 18, fontWeight: 500, color: TXT }}>{k.value}</span>
-                      <span style={{ fontSize: 10, color: dirColor(k.subDir) }}>{k.sub}</span>
-                    </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: C.textMuted }}>
+                    <span style={{ fontSize: 8, background: 'rgba(255,255,255,0.8)', color: '#4a4a48', borderRadius: 3, padding: '1px 4px', border: `0.5px solid ${C.border}` }}>150k</span>BAR Rate
                   </div>
-                ))}
-              </div>
-              <div style={{ ...card, padding: '10px 14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 6 }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: TXT2 }}>
-                    <span style={{ width: 10, height: 10, borderRadius: 2, background: '#2a78d6' }} /> OTB OCC%
-                  </span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: TXT2 }}>
-                    <span style={{ width: 10, height: 10, borderRadius: 2, background: '#1d9e75' }} /> FCST OCC%
-                  </span>
-                </div>
-                <div style={{ height: 150, position: 'relative' }}>
-                  <canvas ref={chartRef} />
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* 섹션 C — 이벤트 일정 */}
-          <div style={{ marginBottom: 18 }}>
-            <div style={sectionTitle}>이벤트 일정</div>
-            {!calendarEvents ? (
-              <div style={{ ...card, fontSize: 11, color: TXT3, textAlign: 'center' }}>이벤트 데이터 불러오는 중…</div>
-            ) : eventGroups.length === 0 ? (
-              <div style={{ ...card, fontSize: 11, color: TXT3, textAlign: 'center' }}>해당 기간 이벤트 없음</div>
-            ) : (
-              <div style={{ columnCount: 2, columnGap: 8 }}>
-                {eventGroups.map(renderEventCard)}
+              <div className="gm-page3-chart" style={{ height: 280, position: 'relative' }}>
+                <canvas ref={[chart1Ref, chart2Ref, chart3Ref][gi]} />
               </div>
-            )}
-          </div>
-
+            </div>
+          ))}
         </div>
       </div>
-
-      {/* ── 출력 서브모달 ── */}
-      {printModalOpen && (
-        <div className="gm-no-print" onClick={() => setPrintModalOpen(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div onClick={e => e.stopPropagation()}
-            style={{ width: 320, background: BG_ELEV, borderRadius: 12, padding: 24, border: `0.5px solid ${BORDER}` }}>
-            <div style={{ fontSize: 14, fontWeight: 500, color: TXT, marginBottom: 6 }}>어카운트 출력 방식 선택</div>
-            <div style={{ fontSize: 12, color: TXT3, marginBottom: 16 }}>어카운트가 많을 경우 페이지가 늘어날 수 있습니다.</div>
-
-            <button onClick={doPrintAll}
-              style={{ width: '100%', textAlign: 'left', padding: '10px 12px', borderRadius: 8, border: `1px solid ${BORDER}`, background: 'transparent', color: TXT, cursor: 'pointer', marginBottom: 8 }}>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>전체 출력</div>
-              <div style={{ fontSize: 11, color: TXT3, marginTop: 2 }}>움직임 있는 어카운트 전체 표시 / 페이지 수 자동 증가</div>
-            </button>
-            <button onClick={doPrintCompact}
-              style={{ width: '100%', textAlign: 'left', padding: '10px 12px', borderRadius: 8, border: `1px solid ${BORDER}`, background: 'transparent', color: TXT, cursor: 'pointer', marginBottom: 12 }}>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>압축 출력</div>
-              <div style={{ fontSize: 11, color: TXT3, marginTop: 2 }}>세그별 Top 3 + 기타 합산 / 항상 2페이지 고정</div>
-            </button>
-            <button onClick={() => setPrintModalOpen(false)}
-              style={{ width: '100%', padding: '6px', background: 'transparent', border: 'none', color: TXT3, cursor: 'pointer', fontSize: 12 }}>취소</button>
-          </div>
-        </div>
-      )}
     </div>
   )
 

@@ -555,7 +555,7 @@ export default function DashboardPage() {
   const { currentHotel } = useHotel()
   const hotelId = currentHotel?.id ?? ''
 
-  const { vsOtbDate } = useDateContext()
+  const { vsOtbDate, otbDates } = useDateContext()
   const { fcstDate, fcstDates } = useFcstDateContext()
   const { data: pickupData, loading: pickupLoading, otbDate } = usePickupData()
 
@@ -1012,6 +1012,7 @@ export default function DashboardPage() {
         onClose={() => setGmReportOpen(false)}
         hotelId={hotelId}
         otbDate={otbDate}
+        otbDates={otbDates ?? []}
         lyData={lyData}
         lyLoading={lyLoading}
         forecastRows={forecastRows}
