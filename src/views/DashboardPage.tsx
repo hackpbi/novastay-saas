@@ -1012,6 +1012,10 @@ export default function DashboardPage() {
         onClose={() => setGmReportOpen(false)}
         hotelId={hotelId}
         otbDate={otbDate}
+        lyData={lyData}
+        lyLoading={lyLoading}
+        forecastRows={forecastRows}
+        budgetRows={budgetRows}
       />
     </div>
   )

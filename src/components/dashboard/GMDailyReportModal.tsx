@@ -5,12 +5,20 @@ import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import Chart from 'chart.js/auto'
 import { supabase } from '@/lib/supabase'
+import DatePicker from '@/components/DatePicker'
+import type { LyPacingRow } from '@/hooks/useLyPacing'
+import type { ForecastMonthlyRow } from '@/hooks/useForecastMonthly'
+import type { BudgetMonthlyRow } from '@/hooks/useBudgetMonthly'
 
 interface GMDailyReportModalProps {
   open:    boolean
   onClose: () => void
   hotelId: string
   otbDate: string   // 'YYYY-MM-DD'
+  lyData?:    LyPacingRow[]   // DashboardPage useLyPacing 결과 재활용 (섹션 D)
+  lyLoading?: boolean
+  forecastRows?: ForecastMonthlyRow[]   // DashboardPage useForecastMonthly 결과 재활용 (섹션 D)
+  budgetRows?:   BudgetMonthlyRow[]     // DashboardPage useBudgetMonthly 결과 재활용 (섹션 D)
 }
 
 // 다크/라이트 무관 — 리포트는 항상 라이트 고정 색상
@@ -171,6 +179,9 @@ const badgeStyle = (dir: string): React.CSSProperties => {
   if (dir === 'dn') return { background: C.redBadgeBg, color: C.redBadgeFg, fontSize: 9, padding: '1px 5px', borderRadius: 3, fontWeight: 500, whiteSpace: 'nowrap' }
   return { background: C.cardBg, color: C.textSecondary, fontSize: 9, padding: '1px 5px', borderRadius: 3, fontWeight: 500, whiteSpace: 'nowrap', border: `0.5px solid ${C.border}` }
 }
+// 어카운트 행 월별(볼드 없음) / 합계열·합계행(볼드) 색상
+const accColor = (n: number): React.CSSProperties => ({ color: n > 0 ? C.textPrimary : n < 0 ? C.red : C.textMuted, fontWeight: 400 })
+const sumColor = (n: number): React.CSSProperties => ({ color: n > 0 ? C.mint : n < 0 ? C.red : C.textMuted, fontWeight: 500 })
 
 const isWeekendLabel = (l: string) => /금|토/.test(l)
 
@@ -222,8 +233,8 @@ const calcMonthSummary = (rows: any[], roomCount: number, year: number, month: n
   return { puOcc: Math.round((otbOcc - vsOcc) * 10) / 10, puRn, puAdr: otbAdr - vsAdr, puRevM: Math.round(puRev / 1000000), segMap }
 }
 
-// 세그 칩 — segmentation 소분류별 pu_nights (seg_name 표시, 0 제외, 절대값 내림차순)
-const buildSegChips = (rows: any[]): { name: string; pu: number }[] => {
+// 세그 칩 — segmentation 소분류별 pu_nights (seg_name 표시, 0 제외, order_index 오름차순)
+const buildSegChips = (rows: any[], orderMap: Record<string, number>): { seg: string; name: string; pu: number }[] => {
   const map: Record<string, { name: string; pu: number }> = {}
   rows.forEach((r: any) => {
     const key = r.segmentation
@@ -231,7 +242,10 @@ const buildSegChips = (rows: any[]): { name: string; pu: number }[] => {
     if (!map[key]) map[key] = { name: r.seg_name ?? r.segmentation, pu: 0 }
     map[key].pu += r.pu_nights ?? 0
   })
-  return Object.values(map).filter(({ pu }) => pu !== 0).sort((a, b) => Math.abs(b.pu) - Math.abs(a.pu))
+  return Object.entries(map)
+    .filter(([, v]) => v.pu !== 0)
+    .sort((a, b) => (orderMap[a[0]] ?? 999) - (orderMap[b[0]] ?? 999))
+    .map(([seg, { name, pu }]) => ({ seg, name, pu }))
 }
 
 const buildAccountRows = (m0: any[], m1: any[], m2: any[]): AccountRow[] => {
@@ -257,6 +271,89 @@ const buildAccountRows = (m0: any[], m1: any[], m2: any[]): AccountRow[] => {
   return filtered
 }
 
+// ── 섹션 C — 이벤트 일정 (타입·헬퍼·카드 렌더; 데이터는 컴포넌트에서 DB fetch) ──
+interface EventDate { date: string; day: string; otbOcc: number | null; occColor: string; barRate: number | null; adr: number | null; puNights: number | null; lyOcc: number | null }
+interface EventGroup { name: string; isHoliday: boolean; dates: EventDate[] }
+
+const eventOccColor = (otbOcc: number | null, lyOcc: number | null): string => {
+  if (otbOcc === null) return C.textMuted
+  if (lyOcc !== null && otbOcc >= lyOcc) return '#2a78d6'   // LY 이상 → 파랑
+  if (otbOcc >= 80) return '#2a78d6'
+  if (otbOcc >= 60) return '#eda100'
+  return '#e24b4a'
+}
+const extractGroupName = (event: string): string => { const m = event.match(/\(([^)]+)\)/); return m ? m[1].trim() : '' }
+const mmdd = (date: string): string => { const [, m, d] = date.split('-'); return `${parseInt(m)}/${parseInt(d)}` }
+const isFriSat = (day: string) => day === '금' || day === '토'
+const periodLabel = (dates: EventDate[]): string =>
+  dates.length === 1 ? `${mmdd(dates[0].date)} ${dates[0].day}` : `${mmdd(dates[0].date)} ~ ${mmdd(dates[dates.length - 1].date)}`
+const puColor = (n: number | null) => (n == null ? C.textMuted : n > 0 ? C.mint : n < 0 ? C.red : C.textMuted)
+const puText = (n: number | null) => (n == null ? '-' : n > 0 ? `+${n}실` : n < 0 ? `${n}실` : '±0실')
+const holidayBadge: React.CSSProperties = { fontSize: 9, background: '#faeeda', color: '#854f0b', padding: '1px 5px', borderRadius: 3, marginLeft: 4, fontWeight: 500 }
+
+const renderEventCard = (ev: EventGroup) => {
+  const evTh: React.CSSProperties = { fontSize: 9, color: C.textMuted, fontWeight: 500, padding: '0 4px 5px 0', borderBottom: `0.5px solid ${C.border}` }
+  return (
+    <div key={ev.name} style={{ background: C.cardBg, borderRadius: 8, padding: '10px 14px', breakInside: 'avoid', marginBottom: 8 }}>
+      {/* 헤더 — 이벤트명 + 공휴일 배지 */}
+      <div style={{ marginBottom: 8, paddingBottom: 6, borderBottom: `0.5px solid ${C.border}` }}>
+        <span style={{ fontSize: 11, fontWeight: 500, color: C.textPrimary }}>{ev.name}</span>
+        {ev.isHoliday && <span style={{ fontSize: 8, background: '#faeeda', color: '#854f0b', padding: '1px 4px', borderRadius: 3, marginLeft: 3, fontWeight: 500 }}>공휴일</span>}
+      </div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, tableLayout: 'fixed' }}>
+        <colgroup>
+          <col style={{ width: '42px' }} />
+          <col style={{ width: 'auto' }} />
+          <col style={{ width: '34px' }} />
+          <col style={{ width: '34px' }} />
+          <col style={{ width: '36px' }} />
+          <col style={{ width: '36px' }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th style={{ ...evTh, textAlign: 'left' }}>일자</th>
+            <th style={{ ...evTh, textAlign: 'left' }}>OCC%</th>
+            <th style={{ ...evTh, textAlign: 'right' }}>ADR</th>
+            <th style={{ ...evTh, textAlign: 'right' }}>BAR</th>
+            <th style={{ ...evTh, textAlign: 'right' }}>픽업</th>
+            <th style={{ ...evTh, textAlign: 'right', paddingRight: 0 }}>LY OCC</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ev.dates.map((d, i) => (
+            <tr key={d.date} style={{ borderBottom: i < ev.dates.length - 1 ? `0.5px solid ${C.border}` : 'none' }}>
+              <td style={{ padding: '4px 4px 4px 0' }}>
+                <span style={{ fontSize: 10, fontWeight: 500, color: C.textPrimary }}>{mmdd(d.date)}</span>
+                <span style={{ fontSize: 8, marginLeft: 2, color: isFriSat(d.day) ? '#e24b4a' : C.textMuted }}>{d.day}</span>
+              </td>
+              <td style={{ padding: '4px 4px 4px 0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <div style={{ width: 36, height: 4, background: C.border, borderRadius: 2, overflow: 'hidden', flexShrink: 0 }}>
+                    <div style={{ width: `${Math.min(d.otbOcc ?? 0, 100)}%`, height: '100%', background: d.occColor, borderRadius: 2 }} />
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: d.occColor }}>{d.otbOcc !== null ? `${d.otbOcc}%` : '-'}</span>
+                </div>
+              </td>
+              <td style={{ padding: '4px 4px 4px 0', textAlign: 'right' }}>
+                <span style={{ fontSize: 10, color: C.textSecondary }}>{d.adr !== null ? `${Math.round(d.adr / 1000)}k` : '-'}</span>
+              </td>
+              <td style={{ padding: '4px 4px 4px 0', textAlign: 'right' }}>
+                <span style={{ fontSize: 10, fontWeight: 500, color: C.textPrimary }}>{d.barRate !== null ? `${Math.round(d.barRate / 1000)}k` : '-'}</span>
+              </td>
+              <td style={{ padding: '4px 4px 4px 0', textAlign: 'right' }}>
+                <span style={{ fontSize: 10, fontWeight: 500, color: puColor(d.puNights) }}>{puText(d.puNights)}</span>
+              </td>
+              <td style={{ padding: '4px 0', textAlign: 'right' }}>
+                <span style={{ fontSize: 10, color: C.textSecondary }}>{d.lyOcc !== null ? `${d.lyOcc}%` : '-'}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 // ── 소형 표현 컴포넌트 ──────────────────────────────────────────────────────────
 function KpiMini({ label, value, dir }: { label: string; value: string; dir: string }) {
   return (
@@ -273,16 +370,26 @@ const TXT3 = C.textMuted
 const BORDER = C.border
 const BG_ELEV = C.cardBg
 
-export default function GMDailyReportModal({ open, onClose, hotelId, otbDate }: GMDailyReportModalProps) {
+export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, lyData: lyPacingData, lyLoading, forecastRows, budgetRows }: GMDailyReportModalProps) {
   const [printModalOpen, setPrintModalOpen] = useState(false)
   const [compact, setCompact] = useState(false)
   const chartRef  = useRef<HTMLCanvasElement>(null)
   const chartInst = useRef<Chart | null>(null)
 
+  // ── 기준일/vs 로컬 관리 (모달 내부 DatePicker로 독립 변경) ──
+  const [localOtbDate, setLocalOtbDate] = useState(otbDate)
+  const [localVsDate, setLocalVsDate]   = useState(() => (otbDate ? getYesterday(otbDate) : ''))
+  useEffect(() => {
+    if (open) {
+      setLocalOtbDate(otbDate)
+      setLocalVsDate(otbDate ? getYesterday(otbDate) : '')
+    }
+  }, [open, otbDate])
+
   // ── 어제 날짜(KST) + 월 분기 ──
-  const yesterday   = otbDate ? getYesterday(otbDate) : ''
-  const isSameMonth = otbDate.slice(0, 7) === yesterday.slice(0, 7)
-  const threeMonths = getThreeMonths(otbDate || '2000-01-01')   // 당월 포함 3개월
+  const yesterday   = localOtbDate ? getYesterday(localOtbDate) : ''
+  const isSameMonth = localOtbDate.slice(0, 7) === yesterday.slice(0, 7)
+  const threeMonths = getThreeMonths(localOtbDate || '2000-01-01')   // 당월 포함 3개월
 
   // room_count (m03_hotel_details)
   const { data: hotelDetail } = useQuery({
@@ -300,12 +407,12 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate }: 
 
   // 어제 실적 — 같은 달: a02_otb_daily(update_date=otbDate), 다른 달(매월1일): a01_actual_daily
   const { data: yesterdayData = [], isLoading: yesterdayLoading } = useQuery({
-    queryKey: ['gm_yesterday', hotelId, otbDate, yesterday, isSameMonth],
+    queryKey: ['gm_yesterday', hotelId, localOtbDate, yesterday, isSameMonth],
     queryFn: async () => {
       if (isSameMonth) {
         const { data, error } = await (supabase as any)
           .from('a02_otb_daily').select('nights, room_revenue')
-          .eq('hotel_id', hotelId).eq('update_date', otbDate).eq('business_date', yesterday)
+          .eq('hotel_id', hotelId).eq('update_date', localOtbDate).eq('business_date', yesterday)
         if (error) { console.error('[GMReport] yesterday(otb) error:', error); return [] }
         return data ?? []
       }
@@ -315,7 +422,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate }: 
       if (error) { console.error('[GMReport] yesterday(actual) error:', error); return [] }
       return data ?? []
     },
-    enabled: open && !!hotelId && !!otbDate && roomCount > 0,
+    enabled: open && !!hotelId && !!localOtbDate && roomCount > 0,
     staleTime: 5 * 60 * 1000,
   })
 
@@ -350,15 +457,39 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate }: 
   // 3개월 Pick-up (get_account_pickup_data × 3) — 섹션 A/B 공유. p_vs_date=어제(픽업=otb-vs)
   const mkPickupFn = (year: number, month: number) => async () => {
     const { data, error } = await (supabase as any).rpc('get_account_pickup_data', {
-      p_hotel_id: hotelId, p_otb_date: otbDate, p_vs_date: yesterday, p_year: year, p_month: month, p_segmentation: null,
+      p_hotel_id: hotelId, p_otb_date: localOtbDate, p_vs_date: localVsDate, p_year: year, p_month: month, p_segmentation: null,
     })
     if (error) { console.error('[GMReport] get_account_pickup_data error:', error); return [] }
     return data ?? []
   }
-  const pickupEnabled = open && !!hotelId && !!otbDate && !!yesterday
-  const pickupQ0 = useQuery({ queryKey: ['gm_pickup_month', hotelId, otbDate, yesterday, threeMonths[0].year, threeMonths[0].month], queryFn: mkPickupFn(threeMonths[0].year, threeMonths[0].month), enabled: pickupEnabled, staleTime: 5 * 60 * 1000 })
-  const pickupQ1 = useQuery({ queryKey: ['gm_pickup_month', hotelId, otbDate, yesterday, threeMonths[1].year, threeMonths[1].month], queryFn: mkPickupFn(threeMonths[1].year, threeMonths[1].month), enabled: pickupEnabled, staleTime: 5 * 60 * 1000 })
-  const pickupQ2 = useQuery({ queryKey: ['gm_pickup_month', hotelId, otbDate, yesterday, threeMonths[2].year, threeMonths[2].month], queryFn: mkPickupFn(threeMonths[2].year, threeMonths[2].month), enabled: pickupEnabled, staleTime: 5 * 60 * 1000 })
+  const pickupEnabled = open && !!hotelId && !!localOtbDate && !!localVsDate
+  const pickupQ0 = useQuery({ queryKey: ['gm_pickup_month', hotelId, localOtbDate, localVsDate, threeMonths[0].year, threeMonths[0].month], queryFn: mkPickupFn(threeMonths[0].year, threeMonths[0].month), enabled: pickupEnabled, staleTime: 5 * 60 * 1000 })
+  const pickupQ1 = useQuery({ queryKey: ['gm_pickup_month', hotelId, localOtbDate, localVsDate, threeMonths[1].year, threeMonths[1].month], queryFn: mkPickupFn(threeMonths[1].year, threeMonths[1].month), enabled: pickupEnabled, staleTime: 5 * 60 * 1000 })
+  const pickupQ2 = useQuery({ queryKey: ['gm_pickup_month', hotelId, localOtbDate, localVsDate, threeMonths[2].year, threeMonths[2].month], queryFn: mkPickupFn(threeMonths[2].year, threeMonths[2].month), enabled: pickupEnabled, staleTime: 5 * 60 * 1000 })
+
+  // c05_market_table_schema — order_index (세그 정렬용). 실제 컬럼: segmentation(배열)·name·order_index
+  const { data: schemaData } = useQuery({
+    queryKey: ['gm_c05_schema', hotelId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('c05_market_table_schema').select('segmentation, name, order_index')
+        .eq('hotel_id', hotelId).order('order_index', { ascending: true })
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: open && !!hotelId,
+    staleTime: 10 * 60 * 1000,
+  })
+  // segmentation 코드 / 세그명 → order_index (양쪽 키로 조회 가능)
+  const segOrderMap = useMemo(() => {
+    const map: Record<string, number> = {}
+    ;(schemaData ?? []).forEach((r: any) => {
+      const oi = r.order_index ?? 999
+      if (r.name) map[r.name] = oi
+      if (Array.isArray(r.segmentation)) r.segmentation.forEach((code: string) => { if (code) map[code] = oi })
+    })
+    return map
+  }, [schemaData])
 
   const yesterdayKpi = useMemo(() => {
     const sum = (rows: any[]) => ({
@@ -419,6 +550,176 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate }: 
     return () => { document.getElementById('gm-report-print')?.remove() }
   }, [])
 
+  // ── 섹션 C — 이벤트 일정 DB 연결 (localOtbDate ~ 3개월 후 말일) ──
+  const periodEnd = (() => {
+    const [py, pm] = (localOtbDate || '2000-01-01').split('-').map(Number)
+    const end = new Date(py, pm - 1 + 3, 0)   // 당월 포함 3개월 후 말일
+    return `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`
+  })()
+
+  // 이벤트 캘린더 (c06_calendar) — 괄호( )를 포함한 event만 유효 이벤트로 사용
+  const { data: calendarEvents } = useQuery({
+    queryKey: ['gm_events_calendar', localOtbDate, periodEnd],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('c06_calendar').select('date, day, event, is_holiday, yoy_match')
+        .gte('date', localOtbDate).lte('date', periodEnd)
+        .not('event', 'is', null).order('date', { ascending: true })
+      if (error) { console.error('[GMReport] c06_calendar events error:', error); return [] }
+      // 괄호 안 텍스트가 실제 이벤트명 → 괄호 없는 값(null/빈값/텍스트 "null"/광복절 등)은 제외
+      return (data ?? []).filter((r: any) => r.event && r.event.includes('(') && r.event.includes(')'))
+    },
+    enabled: open && !!localOtbDate,
+    staleTime: 60 * 60 * 1000,
+  })
+  const eventDates: string[]   = (calendarEvents ?? []).map((r: any) => r.date)
+  const lyEventDates: string[] = (calendarEvents ?? []).map((r: any) => r.yoy_match).filter(Boolean)
+
+  // OTB (localOtbDate 기준) — 이벤트 날짜별 OCC/ADR
+  const { data: eventOtbData = [] } = useQuery({
+    queryKey: ['gm_events_otb', hotelId, localOtbDate, eventDates],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('a02_otb_daily').select('business_date, nights, room_revenue')
+        .eq('hotel_id', hotelId).eq('update_date', localOtbDate).in('business_date', eventDates)
+      if (error) { console.error('[GMReport] event otb error:', error); return [] }
+      return data ?? []
+    },
+    enabled: open && !!hotelId && !!localOtbDate && eventDates.length > 0,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // vs OTB (localVsDate 기준) — 전일픽업용
+  const { data: eventVsData = [] } = useQuery({
+    queryKey: ['gm_events_vs', hotelId, localVsDate, eventDates],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('a02_otb_daily').select('business_date, nights')
+        .eq('hotel_id', hotelId).eq('update_date', localVsDate).in('business_date', eventDates)
+      if (error) { console.error('[GMReport] event vs error:', error); return [] }
+      return data ?? []
+    },
+    enabled: open && !!hotelId && !!localVsDate && eventDates.length > 0,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // LY (a01_actual_daily, yoy_match 날짜)
+  const { data: eventLyData = [] } = useQuery({
+    queryKey: ['gm_events_ly', hotelId, lyEventDates],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('a01_actual_daily').select('business_date, nights')
+        .eq('hotel_id', hotelId).in('business_date', lyEventDates)
+      if (error) { console.error('[GMReport] event ly error:', error); return [] }
+      return data ?? []
+    },
+    enabled: open && !!hotelId && lyEventDates.length > 0,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // BAR Rate (s02_rate_detail) — change > single > base 우선순위
+  const { data: eventBarData = [] } = useQuery({
+    queryKey: ['gm_events_bar', hotelId, eventDates],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('s02_rate_detail').select('stay_date, date_type, new_rate')
+        .eq('hotel_id', hotelId).in('stay_date', eventDates)
+        .in('date_type', ['change', 'single', 'base'])
+      if (error) { console.error('[GMReport] event bar error:', error); return [] }
+      return data ?? []
+    },
+    enabled: open && !!hotelId && eventDates.length > 0,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // 이벤트 그룹 가공 (날짜별 집계 → 이벤트명 그룹핑)
+  const eventGroups: EventGroup[] = useMemo(() => {
+    if (!calendarEvents?.length) return []
+    const otbMap: Record<string, { nights: number; revenue: number }> = {}
+    const vsMap:  Record<string, number> = {}
+    const lyMap:  Record<string, number> = {}
+    const barMap: Record<string, number> = {}
+    ;(eventOtbData ?? []).forEach((r: any) => {
+      if (!otbMap[r.business_date]) otbMap[r.business_date] = { nights: 0, revenue: 0 }
+      otbMap[r.business_date].nights  += r.nights ?? 0
+      otbMap[r.business_date].revenue += r.room_revenue ?? 0
+    })
+    ;(eventVsData ?? []).forEach((r: any) => { vsMap[r.business_date] = (vsMap[r.business_date] ?? 0) + (r.nights ?? 0) })
+    ;(eventLyData ?? []).forEach((r: any) => { lyMap[r.business_date] = (lyMap[r.business_date] ?? 0) + (r.nights ?? 0) })
+    const barPriority: Record<string, number> = { change: 3, single: 2, base: 1 }
+    const barRaw: Record<string, { rate: number; priority: number }> = {}
+    ;(eventBarData ?? []).forEach((r: any) => {
+      const p = barPriority[r.date_type] ?? 0
+      if (!barRaw[r.stay_date] || p > barRaw[r.stay_date].priority) barRaw[r.stay_date] = { rate: r.new_rate, priority: p }
+    })
+    Object.entries(barRaw).forEach(([d, v]) => { barMap[d] = v.rate })
+
+    const map = new Map<string, EventGroup>()
+    calendarEvents.forEach((ev: any) => {
+      const name = extractGroupName(ev.event)
+      if (!name) return   // 괄호 안 텍스트 없으면 스킵
+      if (!map.has(name)) map.set(name, { name, isHoliday: false, dates: [] })
+      const g = map.get(name)!
+      if (ev.is_holiday) g.isHoliday = true
+      const otb    = otbMap[ev.date]
+      const otbRn  = otb?.nights ?? 0
+      const otbRev = otb?.revenue ?? 0
+      const vsRn   = vsMap[ev.date] ?? 0
+      const hasLy  = !!ev.yoy_match && lyMap[ev.yoy_match] != null
+      const otbOcc = otb && roomCount > 0 ? Math.round((otbRn / roomCount) * 1000) / 10 : null
+      const lyOcc  = hasLy && roomCount > 0 ? Math.round(((lyMap[ev.yoy_match] ?? 0) / roomCount) * 1000) / 10 : null
+      const adr    = otbRn > 0 ? Math.round(otbRev / otbRn) : null           // raw won (렌더에서 /1000 → k)
+      const barRate = barMap[ev.date] ?? null
+      const puNights = otb ? otbRn - vsRn : null                             // 전일픽업 = OTB - vs OTB
+      g.dates.push({ date: ev.date, day: ev.day, otbOcc, occColor: eventOccColor(otbOcc, lyOcc), adr, barRate, puNights, lyOcc })
+    })
+    map.forEach(g => g.dates.sort((a, b) => a.date.localeCompare(b.date)))
+    return Array.from(map.values())
+  }, [calendarEvents, eventOtbData, eventVsData, eventLyData, eventBarData, roomCount])
+
+  // ── 섹션 D — 월별 OTB 현황 (DashboardPage lyData 재활용, 당월 포함 3개월) ──
+  const monthlyKpi = useMemo(() => {
+    if (!lyPacingData || lyPacingData.length === 0) return []
+    return threeMonths.map(({ year, month }) => {
+      const daysInMonth = new Date(year, month, 0).getDate()
+      const totalAvail  = roomCount * daysInMonth
+      const occ  = (rn: number) => (totalAvail > 0 ? Math.round((rn / totalAvail) * 1000) / 10 : 0)
+      const adr  = (rn: number, rev: number) => (rn > 0 ? Math.round(rev / rn / 1000) : 0)   // 천원(k)
+      const revM = (rev: number) => Math.round(rev / 1000000)                                 // 백만(m)
+
+      const monthRows = lyPacingData.filter((r) => {
+        const [y, m] = r.business_date.split('-').map(Number)
+        return y === year && m === month
+      })
+      const otbRn  = monthRows.reduce((s, r) => s + (r.otb_nights  ?? 0), 0)
+      const otbRev = monthRows.reduce((s, r) => s + (r.otb_revenue ?? 0), 0)
+      const lyRn   = monthRows.reduce((s, r) => s + (r.ly_nights   ?? 0), 0)
+      const lyRev  = monthRows.reduce((s, r) => s + (r.ly_revenue  ?? 0), 0)
+      const otbOcc = occ(otbRn), otbAdr = adr(otbRn, otbRev), otbRevM = revM(otbRev)
+      const lyOcc  = occ(lyRn),  lyAdr  = adr(lyRn, lyRev),   lyRevM  = revM(lyRev)
+
+      // Forecast (forecastRows, month_num 필터)
+      const fcRows = (forecastRows ?? []).filter(r => r.month_num === month)
+      const fcRn   = fcRows.reduce((s, r) => s + (r.forecast_nights  ?? 0), 0)
+      const fcRev  = fcRows.reduce((s, r) => s + (r.forecast_revenue ?? 0), 0)
+      const fcOcc  = occ(fcRn), fcAdr = adr(fcRn, fcRev), fcRevM = revM(fcRev)
+
+      // Budget (budgetRows, month_num 필터)
+      const budRows = (budgetRows ?? []).filter(r => r.month_num === month)
+      const budRn   = budRows.reduce((s, r) => s + (r.budget_nights  ?? 0), 0)
+      const budRev  = budRows.reduce((s, r) => s + (r.budget_revenue ?? 0), 0)
+      const budOcc  = occ(budRn), budAdr = adr(budRn, budRev), budRevM = revM(budRev)
+
+      return {
+        month,
+        otbOcc, otbAdr, otbRevM,
+        diffLyOcc:  Math.round((otbOcc - lyOcc) * 10) / 10, diffLyAdr:  otbAdr - lyAdr, diffLyRevM:  otbRevM - lyRevM,
+        fcOcc, fcAdr, fcRevM,
+        diffBudOcc: Math.round((fcOcc - budOcc) * 10) / 10, diffBudAdr: fcAdr - budAdr, diffBudRevM: fcRevM - budRevM,
+      }
+    })
+  }, [lyPacingData, forecastRows, budgetRows, threeMonths, roomCount])
+
   // 차트 생성/파괴
   useEffect(() => {
     if (!open || !chartRef.current) return
@@ -475,6 +776,78 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate }: 
   const monthLabels = threeMonths.map(t => `${t.month}월`)
   const pv = (n: number, unit: string) => (isPickupLoading ? '…' : n === 0 ? '±0' : `${sign(n)}${unit}`)
 
+  // 섹션 B — 세그별 월/전체 합계 + order_index 정렬 후 좌우 2단 분배
+  const sgn = (n: number) => (n === 0 ? '±0' : sign(n))
+  const segSummaries: Record<string, { m0Total: number; m1Total: number; m2Total: number; total: number }> = {}
+  for (const [seg, rowsArr] of Object.entries(segGroups)) {
+    segSummaries[seg] = {
+      m0Total: rowsArr.reduce((s, r) => s + r.m0, 0),
+      m1Total: rowsArr.reduce((s, r) => s + r.m1, 0),
+      m2Total: rowsArr.reduce((s, r) => s + r.m2, 0),
+      total:   rowsArr.reduce((s, r) => s + r.total, 0),
+    }
+  }
+  const sortedSegs = Object.keys(segGroups).sort((a, b) => (segOrderMap[a] ?? 999) - (segOrderMap[b] ?? 999))
+  const mid = Math.ceil(sortedSegs.length / 2)
+  const leftSegs = sortedSegs.slice(0, mid)
+  const rightSegs = sortedSegs.slice(mid)
+
+  const renderSegCard = (seg: string) => {
+    const allRows = segGroups[seg] ?? []
+    const rows = compact ? allRows.slice(0, 3) : allRows
+    const hidden = compact ? allRows.slice(3) : []
+    const sm = segSummaries[seg]
+    return (
+      <div key={seg} style={{ background: C.cardBg, borderRadius: 8, padding: '10px 14px' }}>
+        <div style={{ marginBottom: 6, paddingBottom: 5, borderBottom: `0.5px solid ${C.border}` }}>
+          <span style={{ fontSize: 10, fontWeight: 500, color: sm.total >= 0 ? C.mint : C.red }}>{seg}</span>
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: '38%' }} />
+            <col style={{ width: '14%' }} />
+            <col style={{ width: '14%' }} />
+            <col style={{ width: '14%' }} />
+            <col style={{ width: '20%' }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th style={{ textAlign: 'left', fontSize: 9, color: C.textMuted, fontWeight: 500, padding: '0 6px 5px 0', borderBottom: `0.5px solid ${C.border}` }}>어카운트</th>
+              <th style={{ textAlign: 'right', fontSize: 9, color: C.textMuted, fontWeight: 500, padding: '0 6px 5px 0', borderBottom: `0.5px solid ${C.border}` }}>{monthLabels[0]}</th>
+              <th style={{ textAlign: 'right', fontSize: 9, color: C.textMuted, fontWeight: 500, padding: '0 6px 5px 0', borderBottom: `0.5px solid ${C.border}` }}>{monthLabels[1]}</th>
+              <th style={{ textAlign: 'right', fontSize: 9, color: C.textMuted, fontWeight: 500, padding: '0 6px 5px 0', borderBottom: `0.5px solid ${C.border}` }}>{monthLabels[2]}</th>
+              <th style={{ textAlign: 'right', fontSize: 9, color: C.textMuted, fontWeight: 500, padding: '0 0 5px 8px', borderBottom: `0.5px solid ${C.border}`, borderLeft: `1.5px solid ${C.borderStrong}` }}>합계</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, ri) => {
+              const bb = ri < rows.length - 1 || hidden.length > 0 ? `0.5px solid ${C.border}` : 'none'
+              return (
+                <tr key={row.account}>
+                  <td style={{ textAlign: 'left', color: C.textPrimary, padding: '4px 6px 4px 0', borderBottom: bb, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.account}</td>
+                  <td style={{ ...accColor(row.m0), textAlign: 'right', padding: '4px 6px 4px 0', borderBottom: bb }}>{sgn(row.m0)}</td>
+                  <td style={{ ...accColor(row.m1), textAlign: 'right', padding: '4px 6px 4px 0', borderBottom: bb }}>{sgn(row.m1)}</td>
+                  <td style={{ ...accColor(row.m2), textAlign: 'right', padding: '4px 6px 4px 0', borderBottom: bb }}>{sgn(row.m2)}</td>
+                  <td style={{ ...sumColor(row.total), textAlign: 'right', padding: '4px 0 4px 8px', borderLeft: `1.5px solid ${C.borderStrong}`, borderBottom: bb }}>{sgn(row.total)}</td>
+                </tr>
+              )
+            })}
+            {hidden.length > 0 && (
+              <tr><td colSpan={5} style={{ fontSize: 10, color: C.textMuted, fontStyle: 'italic', padding: '4px 0' }}>기타 {hidden.length}개</td></tr>
+            )}
+            <tr style={{ background: '#f0efea', borderTop: '0.5px solid #c8c7c0' }}>
+              <td style={{ ...sumColor(sm.total), textAlign: 'left', padding: '4px 6px 4px 8px', fontSize: 10 }}>합계</td>
+              <td style={{ ...sumColor(sm.m0Total), textAlign: 'right', padding: '4px 6px 4px 0', fontSize: 10 }}>{sgn(sm.m0Total)}</td>
+              <td style={{ ...sumColor(sm.m1Total), textAlign: 'right', padding: '4px 6px 4px 0', fontSize: 10 }}>{sgn(sm.m1Total)}</td>
+              <td style={{ ...sumColor(sm.m2Total), textAlign: 'right', padding: '4px 6px 4px 0', fontSize: 10 }}>{sgn(sm.m2Total)}</td>
+              <td style={{ ...sumColor(sm.total), textAlign: 'right', padding: '4px 0 4px 8px', fontSize: 12, borderLeft: '1.5px solid #c8c7c0' }}>{sgn(sm.total)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
   const doPrintAll = () => { setCompact(false); setPrintModalOpen(false); setTimeout(() => window.print(), 50) }
   const doPrintCompact = () => { setCompact(true); setPrintModalOpen(false); setTimeout(() => window.print(), 50) }
 
@@ -498,7 +871,13 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate }: 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
             <span style={{ fontSize: 16, fontWeight: 500, color: TXT }}>GM Daily Report</span>
-            <span style={{ fontSize: 11, color: TXT3 }}>기준일 {otbDate} (어제: {yesterday})</span>
+            <div data-theme="light" style={{ colorScheme: 'light', display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 12 }} onClick={e => e.stopPropagation()}>
+              <span style={{ color: TXT2 }}>기준일</span>
+              <DatePicker label="" value={localOtbDate} onChange={setLocalOtbDate} bare plain fontPx={12} dateColor={TXT} underlineColor="transparent" />
+              <span style={{ color: C.borderStrong, fontSize: 10 }}>|</span>
+              <span style={{ color: TXT3 }}>vs</span>
+              <DatePicker label="" value={localVsDate} onChange={setLocalVsDate} bare plain fontPx={12} dateColor={TXT} underlineColor="transparent" />
+            </div>
           </div>
           <div className="gm-no-print" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button onClick={() => setPrintModalOpen(true)}
@@ -529,7 +908,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate }: 
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 8, alignItems: 'stretch' }}>
             {summaries.map((s, i) => {
-              const chips = buildSegChips(pm[i])
+              const chips = buildSegChips(pm[i], segOrderMap)
               return (
                 <div key={i} style={{ ...card, display: 'flex', flexDirection: 'column' }}>
                   {/* 월 라인 — 월명(좌) + 픽업 R/N(우) */}
@@ -557,52 +936,17 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate }: 
 
         {/* 섹션 B — Pick-up 상세 */}
         <div>
-          <div style={sectionTitle}>Pick-up 상세</div>
-          <div style={{ ...card, padding: '14px 16px' }}>
-            {/* 헤더 행 */}
-            <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr 1fr 1fr 1fr', alignItems: 'center', borderBottom: `0.5px solid ${BORDER}`, paddingBottom: 4 }}>
-              <span style={th}>세그 / 어카운트</span>
-              <span style={{ ...th, textAlign: 'right' }}>{monthLabels[0]}</span>
-              <span style={{ ...th, textAlign: 'right' }}>{monthLabels[1]}</span>
-              <span style={{ ...th, textAlign: 'right' }}>{monthLabels[2]}</span>
-              <span style={{ ...th, textAlign: 'right', borderLeft: `1.5px solid ${C.borderStrong}`, paddingLeft: 10, fontSize: 10, color: C.textPrimary }}>합계</span>
+          <div style={sectionTitle}>Pick-up 상세 (Room Nights 기준)</div>
+          {isPickupLoading ? (
+            <div style={{ ...card, padding: 16, textAlign: 'center', fontSize: 11, color: TXT3 }}>불러오는 중…</div>
+          ) : accountRows.length === 0 ? (
+            <div style={{ ...card, padding: 16, textAlign: 'center', fontSize: 11, color: TXT3 }}>픽업 데이터 없음</div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, alignItems: 'start' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{leftSegs.map(renderSegCard)}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{rightSegs.map(renderSegCard)}</div>
             </div>
-
-            {isPickupLoading ? (
-              <div style={{ padding: 16, textAlign: 'center', fontSize: 11, color: TXT3 }}>불러오는 중…</div>
-            ) : accountRows.length === 0 ? (
-              <div style={{ padding: 16, textAlign: 'center', fontSize: 11, color: TXT3 }}>픽업 데이터 없음</div>
-            ) : Object.entries(segGroups).map(([seg, allRows]) => {
-              const rows = compact ? allRows.slice(0, 3) : allRows
-              const hidden = compact ? allRows.slice(3) : []
-              const segTot = segTotals[seg] ?? 0
-              return (
-                <div key={seg} style={{ marginTop: 8 }}>
-                  {/* 세그 헤더 */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `0.5px solid ${BORDER}`, paddingBottom: 3, marginBottom: 3 }}>
-                    <span style={{ fontSize: 10, fontWeight: 500, color: TXT2 }}>{seg}</span>
-                    <span style={{ fontSize: 10, fontWeight: 500, color: dirColor(dir3(segTot)) }}>합계 {segTot === 0 ? '±0' : sign(segTot)}실</span>
-                  </div>
-                  {/* 어카운트 행 */}
-                  {rows.map((a, ai) => (
-                    <div key={a.account} style={{ display: 'grid', gridTemplateColumns: '140px 1fr 1fr 1fr 1fr', alignItems: 'center', padding: '3px 0', borderBottom: ai < rows.length - 1 || hidden.length > 0 ? `0.5px solid ${BORDER}` : 'none' }}>
-                      <span style={{ fontSize: 11, color: TXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.account}</span>
-                      <span style={{ fontSize: 11, textAlign: 'right', color: dirColor(dir3(a.m0)) }}>{a.m0 === 0 ? '±0' : sign(a.m0)}</span>
-                      <span style={{ fontSize: 11, textAlign: 'right', color: dirColor(dir3(a.m1)) }}>{a.m1 === 0 ? '±0' : sign(a.m1)}</span>
-                      <span style={{ fontSize: 11, textAlign: 'right', color: dirColor(dir3(a.m2)) }}>{a.m2 === 0 ? '±0' : sign(a.m2)}</span>
-                      <span style={{ fontSize: 12, fontWeight: 500, textAlign: 'right', borderLeft: `1.5px solid ${C.borderStrong}`, paddingLeft: 10, color: dirColor(dir3(a.total)) }}>{a.total === 0 ? '±0' : sign(a.total)}</span>
-                    </div>
-                  ))}
-                  {hidden.length > 0 && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr 1fr 1fr 1fr', alignItems: 'center', padding: '3px 0' }}>
-                      <span style={{ fontSize: 10, color: TXT3, fontStyle: 'italic' }}>기타 {hidden.length}개</span>
-                      <span /><span /><span /><span />
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+          )}
         </div>
 
         {/* ── 페이지 구분선 ── */}
@@ -615,46 +959,15 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate }: 
         {/* ══════════ 2페이지 ══════════ */}
         <div className="gm-page-break">
 
-          {/* 섹션 C — 이벤트 일정 */}
-          <div style={{ marginBottom: 18 }}>
-            <div style={sectionTitle}>이벤트 일정</div>
-            <div style={{ ...card, padding: '10px 14px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '76px 1fr 130px 80px 80px', alignItems: 'center', borderBottom: `0.5px solid ${BORDER}`, paddingBottom: 4 }}>
-                <span style={th}>일자</span>
-                <span style={th}>이벤트</span>
-                <span style={th}>OCC%</span>
-                <span style={{ ...th, textAlign: 'right' }}>전일 픽업</span>
-                <span style={{ ...th, textAlign: 'right' }}>LY OCC%</span>
-              </div>
-              {DUMMY_EVENTS.map((ev, i) => {
-                const weekend = ev.day === '금' || ev.day === '토'
-                return (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '76px 1fr 130px 80px 80px', alignItems: 'center', padding: '5px 0', borderBottom: i < DUMMY_EVENTS.length - 1 ? `0.5px solid ${BORDER}` : 'none' }}>
-                    <span style={{ fontSize: 11, fontWeight: 500, color: weekend ? '#e24b4a' : TXT }}>{ev.date} <span style={{ fontSize: 9 }}>({ev.day})</span></span>
-                    <span style={{ fontSize: 11, color: TXT }}>{ev.name}</span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ width: 72, height: 5, borderRadius: 3, background: C.border, overflow: 'hidden' }}>
-                        <span style={{ display: 'block', height: 5, width: `${ev.occ}%`, background: ev.occColor }} />
-                      </span>
-                      <span style={{ fontSize: 10, color: TXT2 }}>{ev.occ}%</span>
-                    </span>
-                    <span style={{ fontSize: 11, fontWeight: 500, textAlign: 'right', color: dirColor(ev.pickupDir) }}>{ev.pickup}</span>
-                    <span style={{ fontSize: 11, textAlign: 'right', color: TXT2 }}>{ev.lyOcc}</span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
           {/* 섹션 D — 월별 OTB 현황 */}
           <div style={{ marginBottom: 18 }}>
-            <div style={sectionTitle}>월별 OTB 현황</div>
+            <div style={sectionTitle}>월별 OTB 현황<span style={{ fontSize: 10, color: C.textMuted, marginLeft: 8, fontWeight: 400 }}>· LY 기준: 전년동월</span></div>
             <div style={{ ...card, padding: '10px 14px' }}>
               {/* 2줄 헤더 */}
               <div style={{ display: 'grid', gridTemplateColumns: '70px repeat(6, 1fr)', borderBottom: `0.5px solid ${BORDER}` }}>
                 <span />
                 <span style={{ ...th, fontSize: 8, gridColumn: 'span 3', textAlign: 'center', color: '#2a78d6', fontWeight: 600 }}>OTB 현황</span>
-                <span style={{ ...th, fontSize: 8, gridColumn: 'span 3', textAlign: 'center', color: '#eda100', fontWeight: 600, borderLeft: `1px solid ${BORDER}` }}>Budget</span>
+                <span style={{ ...th, fontSize: 8, gridColumn: 'span 3', textAlign: 'center', color: '#1d9e75', fontWeight: 600, borderLeft: `1px solid ${BORDER}` }}>Forecast<span style={{ fontSize: 8, color: C.textMuted, fontWeight: 400, marginLeft: 3 }}>(하단: Budget 대비)</span></span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '70px repeat(6, 1fr)', borderBottom: `0.5px solid ${BORDER}`, paddingBottom: 3 }}>
                 <span style={{ ...th, fontSize: 8 }}>구분</span>
@@ -665,22 +978,27 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate }: 
                 <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>ADR(천원)</span>
                 <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>REV(백만)</span>
               </div>
-              {DUMMY_MONTHLY_OTB.map((r, i) => {
+              {lyLoading ? (
+                <div style={{ padding: '10px 4px', fontSize: 10, color: TXT3, textAlign: 'center' }}>월별 데이터 불러오는 중…</div>
+              ) : monthlyKpi.length === 0 ? (
+                <div style={{ padding: '10px 4px', fontSize: 10, color: TXT3, textAlign: 'center' }}>-</div>
+              ) : monthlyKpi.map((r, i) => {
+                const signOcc = (n: number) => (n > 0 ? `+${n}%p` : n < 0 ? `${n}%p` : '±0%p')
                 const cell = (main: string, sub: string, dir: string, bl = false) => (
                   <span style={{ textAlign: 'right', padding: '4px 4px 4px 0', borderLeft: bl ? `1px solid ${BORDER}` : undefined }}>
-                    <span style={{ display: 'block', fontSize: 10, color: TXT, fontWeight: r.isTotal ? 500 : 400 }}>{main}</span>
+                    <span style={{ display: 'block', fontSize: 10, color: TXT, fontWeight: 400 }}>{main}</span>
                     <span style={{ display: 'block', fontSize: 8, color: dirColor(dir) }}>{sub}</span>
                   </span>
                 )
                 return (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '70px repeat(6, 1fr)', alignItems: 'center', borderTop: r.isTotal ? `0.5px solid ${BORDER}` : undefined }}>
-                    <span style={{ fontSize: 10, fontWeight: r.isTotal ? 600 : 500, color: TXT, padding: '4px 6px' }}>{r.month}</span>
-                    {cell(r.otbOcc, r.lyOcc, r.lyOccDir)}
-                    {cell(r.otbAdr, r.lyAdr, r.lyAdrDir)}
-                    {cell(r.otbRev, r.lyRev, r.lyRevDir)}
-                    {cell(r.budOcc, r.budOccDiff, r.budOccDir, true)}
-                    {cell(r.budAdr, r.budAdrDiff, r.budAdrDir)}
-                    {cell(r.budRev, r.budRevDiff, r.budRevDir)}
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '70px repeat(6, 1fr)', alignItems: 'center' }}>
+                    <span style={{ fontSize: 10, fontWeight: 500, color: TXT, padding: '4px 6px' }}>{r.month}월</span>
+                    {cell(`${r.otbOcc}%`, `LY ${signOcc(r.diffLyOcc)}`, dir3(r.diffLyOcc))}
+                    {cell(r.otbAdr.toLocaleString(), `LY ${sign(r.diffLyAdr)}k`, dir3(r.diffLyAdr))}
+                    {cell(r.otbRevM.toLocaleString(), `LY ${sign(r.diffLyRevM)}m`, dir3(r.diffLyRevM))}
+                    {cell(`${r.fcOcc}%`, `Bud ${signOcc(r.diffBudOcc)}`, dir3(r.diffBudOcc), true)}
+                    {cell(r.fcAdr.toLocaleString(), `Bud ${sign(r.diffBudAdr)}k`, dir3(r.diffBudAdr))}
+                    {cell(r.fcRevM.toLocaleString(), `Bud ${sign(r.diffBudRevM)}m`, dir3(r.diffBudRevM))}
                   </div>
                 )
               })}
@@ -689,7 +1007,10 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate }: 
 
           {/* 섹션 E — 어제 실적 */}
           <div style={{ marginBottom: 18 }}>
-            <div style={sectionTitle}>어제 실적</div>
+            <div style={{ ...sectionTitle, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <span>어제 실적</span>
+              <span style={{ fontSize: 10, color: C.textMuted, fontWeight: 400 }}>{yesterday}</span>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
               {yesterdayCards.map(k => (
                 <div key={k.label} style={{ ...card, padding: '10px 12px' }}>
@@ -705,7 +1026,10 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate }: 
 
           {/* 섹션 F — 당일 OTB + 차트 */}
           <div>
-            <div style={sectionTitle}>당일 OTB 현황</div>
+            <div style={{ ...sectionTitle, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <span>당일 OTB 현황</span>
+              <span style={{ fontSize: 10, color: C.textMuted, fontWeight: 400 }}>{localOtbDate}</span>
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                 {DUMMY_TODAY_OTB.map(k => (
@@ -732,6 +1056,20 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate }: 
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* 섹션 C — 이벤트 일정 */}
+          <div style={{ marginBottom: 18 }}>
+            <div style={sectionTitle}>이벤트 일정</div>
+            {!calendarEvents ? (
+              <div style={{ ...card, fontSize: 11, color: TXT3, textAlign: 'center' }}>이벤트 데이터 불러오는 중…</div>
+            ) : eventGroups.length === 0 ? (
+              <div style={{ ...card, fontSize: 11, color: TXT3, textAlign: 'center' }}>해당 기간 이벤트 없음</div>
+            ) : (
+              <div style={{ columnCount: 2, columnGap: 8 }}>
+                {eventGroups.map(renderEventCard)}
+              </div>
+            )}
           </div>
 
         </div>
