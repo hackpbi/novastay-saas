@@ -423,10 +423,10 @@ const createPage3Chart = (
   chartRef.current = new Chart(canvas, {
     type: 'bar',
     data: {
-      labels: kpiRows.map(d => [d.dateLabel, d.day]),   // 2줄: 날짜 + 요일
+      labels: kpiRows.map(d => d.dateLabel),   // 날짜만 (요일은 ticks.callback에서 2줄 처리)
       datasets: [
         { label: 'OCC%', data: kpiRows.map(d => d.occ), backgroundColor: kpiRows.map(d => d.occColor), barPercentage: 0.8, categoryPercentage: 0.9 },
-        { label: 'BAR Rate', data: kpiRows.map(d => d.barRate) as any, yAxisID: 'yBar', backgroundColor: 'transparent', borderColor: 'transparent', borderWidth: 0, barPercentage: 0, categoryPercentage: 0 },
+        { type: 'line', label: 'BAR Rate', data: kpiRows.map(d => d.barRate) as any, yAxisID: 'yBar', borderColor: 'transparent', backgroundColor: 'transparent', pointRadius: 0, borderWidth: 0 },
       ],
     },
     options: {
@@ -445,7 +445,7 @@ const createPage3Chart = (
         },
       },
       scales: {
-        x: { grid: { display: false }, ticks: { align: 'center', textStrokeWidth: 0, font: { size: 8 }, color: (ctx: any) => { const dy = kpiRows[ctx.index]?.day; return (dy === '금' || dy === '토') ? '#e24b4a' : '#898781' }, maxRotation: 0 }, border: { display: false } },
+        x: { grid: { display: false }, ticks: { align: 'center', textStrokeWidth: 0, font: { size: 8 }, maxRotation: 0, callback: (_v: any, index: number) => { const d = kpiRows[index]; return [d.dateLabel, d.day] }, color: (ctx: any) => { const dy = kpiRows[ctx.index]?.day; return (dy === '금' || dy === '토') ? '#e24b4a' : '#898781' } }, border: { display: false } },
         y: { min: 0, max: 100, position: 'left', grid: { color: '#e1e0d9', lineWidth: 0.5 }, ticks: { font: { size: 8 }, color: '#898781', stepSize: 25, callback: (v: any) => v + '%' }, border: { display: false } },
         yBar: { type: 'linear', position: 'right', min: 0, max: 500, grid: { display: false }, ticks: { display: false }, border: { display: false } },
       },
