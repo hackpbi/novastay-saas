@@ -151,27 +151,35 @@ export default function DailyStatusPage() {
     },
   })
 
-  // BAR Rate (당월) — s02_rate_detail BASE/single의 new_rate (Rate Strategy와 동일 소스)
+  // BAR Rate (당월) — s02_rate_detail new_rate (Rate Strategy와 동일 소스)
+  // room_type_code='BASE'만 조회: 대표 BAR 요금 행(룸타입별 rack rate 제외) → 행수 급감(1000행 한도 회피) + 정확도↑
+  // date_type 우선순위: change > single > base (조회 후 우선순위 선택)
   const { data: barRows = [] } = useQuery({
     queryKey: ['ds-bar', hotelId, year, month],
     enabled:  !!hotelId,
     queryFn:  async () => {
       const { data } = await (supabase as any).from('s02_rate_detail')
-        .select('stay_date, new_rate')
-        .eq('hotel_id', hotelId).eq('date_type', 'single')
+        .select('stay_date, new_rate, date_type')
+        .eq('hotel_id', hotelId).eq('room_type_code', 'BASE')
         .gte('stay_date', monthStart).lte('stay_date', monthEnd)
         .order('stay_date', { ascending: true })
-      return (data ?? []) as { stay_date: string; new_rate: number }[]
+      return (data ?? []) as { stay_date: string; new_rate: number; date_type: string }[]
     },
   })
   // otbDate 이전은 null (BAR는 기준일 이후 미래 요금)
   const barData = useMemo<(number | null)[]>(() => {
-    const m: Record<string, number> = {}
-    for (const r of barRows) m[r.stay_date] = r.new_rate
+    // date_type 우선순위: change(0) > single(1) > base(2)
+    const dtPriority: Record<string, number> = { change: 0, single: 1, base: 2 }
+    const m: Record<string, { rate: number; priority: number }> = {}
+    for (const r of barRows) {
+      const p = dtPriority[r.date_type] ?? 99
+      const existing = m[r.stay_date]
+      if (!existing || p < existing.priority) m[r.stay_date] = { rate: r.new_rate, priority: p }
+    }
     return Array.from({ length: days }, (_, i) => {
       const date = `${year}-${pad(month)}-${pad(i + 1)}`
       if (date < otbDate) return null
-      return m[date] ?? null
+      return m[date]?.rate ?? null
     })
   }, [barRows, year, month, days, otbDate])
 
