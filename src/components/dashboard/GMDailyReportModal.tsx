@@ -1215,7 +1215,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
   const th: React.CSSProperties = { fontSize: 9, color: TXT3, fontWeight: 400, padding: '3px 6px' }
 
   const report = (
-    <div id="gm-report-print-root" className="gm-report-modal" style={overlay} onClick={onClose}>
+    <div id="gm-report-print-root" className="gm-report-modal gm-report-modal-wrapper" style={overlay} onClick={onClose}>
       <style>{`
         @media print {
           * {
@@ -1232,9 +1232,30 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
             box-shadow: none !important;
             outline: none !important;
           }
+          /* 모달 오버레이/백드롭 숨김 */
+          body > *:not(.gm-report-modal-wrapper) {
+            display: none !important;
+          }
+          /* 모달 배경 오버레이 제거 */
+          .gm-report-modal-wrapper {
+            position: static !important;
+            background: transparent !important;
+            padding: 0 !important;
+          }
+          /* 인쇄 콘텐츠만 표시 */
+          .gm-report-content {
+            position: static !important;
+            box-shadow: none !important;
+            border: none !important;
+            border-radius: 0 !important;
+            max-height: none !important;
+            overflow: visible !important;
+            width: 100% !important;
+            background: #fff !important;
+          }
         }
       `}</style>
-      <div className="gm-a4" style={a4} onClick={e => e.stopPropagation()}>
+      <div className="gm-a4 gm-report-content" style={a4} onClick={e => e.stopPropagation()}>
 
         {/* ── 헤더 ── */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
