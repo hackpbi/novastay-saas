@@ -7,6 +7,7 @@ import {
   Layers,
   CreditCard,
   Bell,
+  SlidersHorizontal,
   ArrowRight,
   Loader2,
 } from 'lucide-react'
@@ -62,6 +63,13 @@ const BASE_SETUP_ITEMS: SetupItem[] = [
     title:       'Notifications',
     description: '알림, 이메일 템플릿, SMS 설정을 구성합니다.',
     status:      'not-started',
+  },
+  {
+    icon:        <SlidersHorizontal size={22} />,
+    title:       'BAR 추천 설정',
+    description: 'OCC 구간별 기준 BAR 및 D-Day 감쇠율을 관리합니다.',
+    status:      'not-started',
+    href:        '/setup/bar-recommendation',
   },
 ]
 

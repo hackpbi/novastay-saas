@@ -93,6 +93,9 @@ const tdBase: React.CSSProperties = {
   padding: '6px 10px', verticalAlign: 'middle', borderBottom: GRID,
 }
 
+// OTB / PICK-UP 6개 숫자 컬럼 공통 너비 (좌우 그룹 간격 동일화)
+const NUM_COL_MIN = 60
+
 const BORDER_GROUP = '1px solid var(--divider-color)'
 const DOUBLE_GROUP = '1px solid rgba(0,229,160,0.3)'   // 섹션 구분선 (초록)
 
@@ -129,7 +132,7 @@ function DataRow({ row, schema, houRowIds, onSelect, selectedLabel }: {
   const handleSelect = selectable ? () => onSelect!(segCodes, row.name) : undefined
 
   const puTd = (extra: React.CSSProperties): React.CSSProperties => ({
-    ...tdBase, textAlign: 'right', cursor: selectable ? 'pointer' : 'default', background: baseBg, ...extra,
+    ...tdBase, textAlign: 'right', minWidth: NUM_COL_MIN, cursor: selectable ? 'pointer' : 'default', background: baseBg, ...extra,
   })
 
   return (
@@ -149,13 +152,13 @@ function DataRow({ row, schema, houRowIds, onSelect, selectedLabel }: {
           </>
         ) : row.name}
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: DOUBLE_GROUP, background: baseBg }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: DOUBLE_GROUP, background: baseBg }}>
         <FmtNights n={row.otbNights} fontColor={rowColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: GRID, background: baseBg }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, background: baseBg }}>
         <FmtAdr n={row.otbAdr} fontColor={rowColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', borderLeft: GRID, background: baseBg }}>
+      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, background: baseBg }}>
         <FmtRev n={row.otbRevenue} fontColor={rowColor} />
       </td>
       <td className="font-mono" style={puTd({ borderLeft: DOUBLE_GROUP })} onClick={handleSelect}>
@@ -256,12 +259,12 @@ function DataTable({ rows, summary, schema, houRowIds, onSelect, selectedLabel, 
           </tr>
           {/* 2줄: 컬럼명 */}
           <tr>
-            <th style={{ ...thBase, textAlign: 'right', borderLeft: DOUBLE_GROUP, borderBottom: GRID_HEAD }}>R-N</th>
-            <th style={{ ...thBase, textAlign: 'right', borderLeft: GRID, borderBottom: GRID_HEAD }}>ADR</th>
-            <th style={{ ...thBase, textAlign: 'right', borderLeft: GRID, borderBottom: GRID_HEAD }}>REV</th>
-            <th style={{ ...thBase, textAlign: 'right', borderLeft: DOUBLE_GROUP, borderBottom: GRID_HEAD }}>ΔR-N</th>
-            <th style={{ ...thBase, textAlign: 'right', borderLeft: GRID, borderBottom: GRID_HEAD }}>ΔADR</th>
-            <th style={{ ...thBase, textAlign: 'right', borderLeft: GRID, borderBottom: GRID_HEAD }}>ΔREV</th>
+            <th style={{ ...thBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: DOUBLE_GROUP, borderBottom: GRID_HEAD }}>R-N</th>
+            <th style={{ ...thBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, borderBottom: GRID_HEAD }}>ADR</th>
+            <th style={{ ...thBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, borderBottom: GRID_HEAD }}>REV</th>
+            <th style={{ ...thBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: DOUBLE_GROUP, borderBottom: GRID_HEAD }}>ΔR-N</th>
+            <th style={{ ...thBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, borderBottom: GRID_HEAD }}>ΔADR</th>
+            <th style={{ ...thBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, borderBottom: GRID_HEAD }}>ΔREV</th>
           </tr>
         </thead>
 
@@ -419,6 +422,9 @@ export default function SegmentationModal({
       .map(r => ({
         name:    r.account_name,
         diffRn:  r.otb_nights - r.vs_nights,    // 픽업 = 현재OTB - vsOTB
+        diffAdr: r.otb_revenue && r.otb_nights
+          ? Math.round((r.otb_revenue / r.otb_nights) - (r.vs_nights ? r.vs_revenue / r.vs_nights : 0))
+          : 0,
         diffRev: r.otb_revenue - r.vs_revenue,
       }))
       .filter(a => a.diffRn !== 0 || a.diffRev !== 0)
@@ -451,7 +457,7 @@ export default function SegmentationModal({
       />
 
       <div
-        className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-4xl"
+        className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-[1400px]"
         style={{ maxHeight: '88vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
@@ -493,7 +499,7 @@ export default function SegmentationModal({
 
         {/* Body: 좌측 테이블 + 우측 Account Pickup 패널 */}
         <div className="flex-1 flex overflow-hidden" style={{ minHeight: 0 }}>
-          <div className="overflow-y-auto px-6 py-4" style={{ width: 'calc(100% - 220px)', flexShrink: 0 }}>
+          <div className="overflow-y-auto px-6 py-4" style={{ width: 'calc(100% - 300px)', flexShrink: 0 }}>
             {loading ? (
               <Skeleton />
             ) : error ? (
@@ -523,7 +529,7 @@ export default function SegmentationModal({
           </div>
 
           {/* 우측 Account Pickup 패널 */}
-          <div style={{ width: 220, flexShrink: 0, borderLeft: '1px solid var(--divider-color)', display: 'flex', flexDirection: 'column', background: '#0a0a0a', minHeight: 0 }}>
+          <div style={{ width: 300, flexShrink: 0, borderLeft: '1px solid var(--divider-color)', display: 'flex', flexDirection: 'column', background: '#0a0a0a', minHeight: 0 }}>
             <div className="px-3 pt-3 pb-2 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>Account Pickup</div>
               <div style={{ fontSize: 10, color: 'var(--brand-dimmed)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -555,25 +561,41 @@ export default function SegmentationModal({
                 <div style={{ fontSize: 11, color: 'var(--brand-dimmed)', padding: 12 }}>
                   {selectedSeg ? '픽업 데이터가 없습니다.' : ''}
                 </div>
-              ) : accountList.map((a, i) => (
-                <div
-                  key={`${a.name}-${i}`}
-                  className="flex items-center justify-between"
-                  style={{ padding: '6px 12px', borderBottom: '0.5px solid #1a1a1a' }}
-                >
-                  <span style={{ fontSize: 11, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 92 }}>
-                    {a.name}
-                  </span>
-                  <span className="font-mono" style={{ display: 'flex', gap: 6, fontSize: 10, whiteSpace: 'nowrap' }}>
-                    <span style={{ color: a.diffRn >= 0 ? '#00E5A0' : '#E24B4A' }}>
-                      {a.diffRn >= 0 ? '+' : ''}{a.diffRn.toLocaleString('ko-KR')}
-                    </span>
-                    <span style={{ color: a.diffRev >= 0 ? '#00E5A0' : '#E24B4A' }}>
-                      {a.diffRev >= 0 ? '+' : ''}{(a.diffRev / 1_000_000).toFixed(1)}M
-                    </span>
-                  </span>
-                </div>
-              ))}
+              ) : (
+                <>
+                  {/* 리스트 헤더 */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
+                    <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>ACCOUNT</span>
+                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 28, textAlign: 'right' }}>R/N</span>
+                      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 28, textAlign: 'right' }}>ADR</span>
+                      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 36, textAlign: 'right' }}>REV</span>
+                    </div>
+                  </div>
+                  {accountList.map((a, i) => (
+                    <div
+                      key={`${a.name}-${i}`}
+                      className="font-mono"
+                      style={{ padding: '6px 14px', borderBottom: '0.5px solid #1a1a1a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                    >
+                      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 80 }}>
+                        {a.name}
+                      </span>
+                      <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                        <span style={{ fontSize: 11, color: a.diffRn >= 0 ? '#00E5A0' : '#E24B4A', width: 28, textAlign: 'right' }}>
+                          {a.diffRn >= 0 ? '+' : ''}{a.diffRn}
+                        </span>
+                        <span style={{ fontSize: 11, color: a.diffAdr >= 0 ? '#00E5A0' : '#E24B4A', width: 28, textAlign: 'right' }}>
+                          {a.diffAdr >= 0 ? '+' : ''}{Math.abs(a.diffAdr) >= 1000 ? Math.round(a.diffAdr / 1000) + 'k' : a.diffAdr}
+                        </span>
+                        <span style={{ fontSize: 11, color: a.diffRev >= 0 ? '#00E5A0' : '#E24B4A', width: 36, textAlign: 'right' }}>
+                          {a.diffRev >= 0 ? '+' : ''}{(a.diffRev / 1_000_000).toFixed(1)}M
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
           </div>
         </div>

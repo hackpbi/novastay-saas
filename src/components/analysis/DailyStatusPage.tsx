@@ -16,13 +16,6 @@ const MINT = '#00E5A0'
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const pad = (n: number) => String(n).padStart(2, '0')
 
-// otbDate 다음날 (KST 안전) — 당일 stay는 update_date=otbDate+1 스냅샷에 존재
-function addOneDay(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00+09:00')
-  d.setDate(d.getDate() + 1)
-  return d.toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })
-}
-
 interface DailyRow { business_date: string; nights: number; room_revenue: number }
 interface DayAgg   { rn: number[]; rev: number[] }   // index 0 = 1일
 
@@ -99,32 +92,14 @@ export default function DailyStatusPage() {
         return agg
       }
 
-      // 당월 이상 → 전체 OTB (get_pickup_data). otbDate 당일 stay는 다음날 스냅샷으로 보완
-      const nextOtbDate = addOneDay(otbDate)
-      const [otbRes, otbTodayRes] = await Promise.all([
-        (supabase as any).rpc('get_pickup_data', {
-          p_hotel_id: hotelId, p_otb_date: otbDate, p_vs_otb_date: vsOtbDate || otbDate, p_min_date: monthStart,
-        }),
-        (supabase as any).rpc('get_pickup_data', {
-          p_hotel_id: hotelId, p_otb_date: nextOtbDate, p_vs_otb_date: otbDate, p_min_date: monthStart,
-        }),
-      ])
-      for (const r of (otbRes.data ?? []) as { business_date: string; otb_nights: number; otb_revenue: number }[]) {
+      // 당월 이상 → 전체 OTB (get_pickup_data) — 단일 조회
+      const { data } = await (supabase as any).rpc('get_pickup_data', {
+        p_hotel_id: hotelId, p_otb_date: otbDate, p_vs_otb_date: vsOtbDate || otbDate, p_min_date: monthStart,
+      })
+      for (const r of (data ?? []) as { business_date: string; otb_nights: number; otb_revenue: number }[]) {
         if (r.business_date < monthStart || r.business_date > monthEnd) continue
         const d = Number(r.business_date.slice(8, 10))
         if (d >= 1 && d <= days) { agg.rn[d - 1] += r.otb_nights ?? 0; agg.rev[d - 1] += r.otb_revenue ?? 0 }
-      }
-      // otbDate 당일 보완 (해당 월에 otbDate 포함 & 아직 값 없을 때만 다음날 스냅샷 합산)
-      if (otbDate >= monthStart && otbDate <= monthEnd) {
-        const od = Number(otbDate.slice(8, 10))
-        if (agg.rn[od - 1] === 0) {
-          let rn = 0, rev = 0
-          for (const r of (otbTodayRes.data ?? []) as { business_date: string; otb_nights: number; otb_revenue: number }[]) {
-            if (r.business_date !== otbDate) continue
-            rn += r.otb_nights ?? 0; rev += r.otb_revenue ?? 0
-          }
-          if (rn > 0 || rev > 0) { agg.rn[od - 1] = rn; agg.rev[od - 1] = rev }
-        }
       }
       return agg
     },

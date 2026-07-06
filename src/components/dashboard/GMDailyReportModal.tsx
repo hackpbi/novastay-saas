@@ -1215,7 +1215,25 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
   const th: React.CSSProperties = { fontSize: 9, color: TXT3, fontWeight: 400, padding: '3px 6px' }
 
   const report = (
-    <div id="gm-report-print-root" style={overlay} onClick={onClose}>
+    <div id="gm-report-print-root" className="gm-report-modal" style={overlay} onClick={onClose}>
+      <style>{`
+        @media print {
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .gm-report-modal {
+            border: none !important;
+            box-shadow: none !important;
+          }
+          /* 모달 컨테이너 테두리 제거 */
+          [class*="modal"], [class*="Modal"] {
+            border: none !important;
+            box-shadow: none !important;
+            outline: none !important;
+          }
+        }
+      `}</style>
       <div className="gm-a4" style={a4} onClick={e => e.stopPropagation()}>
 
         {/* ── 헤더 ── */}

@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, X, Star } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { fetchForecastSchema } from '@/lib/forecast/schema'
 
@@ -26,15 +25,7 @@ interface DayRow {
 }
 
 const MINT = '#00E5A0'
-const BLUE = '#5B8DEF'
 const DOW  = ['일', '월', '화', '수', '목', '금', '토']
-
-// otbDate 다음날 (KST 안전)
-function addOneDay(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00+09:00')
-  d.setDate(d.getDate() + 1)
-  return d.toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })
-}
 
 const fmtRN  = (v: number) => (v ? Math.round(v).toLocaleString('ko-KR') : '–')
 const fmtADR = (v: number) => (v ? `${Math.round(v / 1000)}k` : '–')
@@ -67,10 +58,8 @@ export default function DailyStatusModal({
     queryFn:  async () => {
       if (isOTB) {
         // OTB: get_pickup_data RPC(검증됨) → 해당 일자 세그×어카운트 필터
-        // otbDate 당일 stay는 update_date=otbDate 스냅샷에 없으므로 다음날 스냅샷 사용
-        const effOtb = targetYMD === otbDate ? addOneDay(otbDate) : otbDate
         const { data, error } = await (supabase as any).rpc('get_pickup_data', {
-          p_hotel_id: hotelId, p_otb_date: effOtb, p_vs_otb_date: otbDate, p_min_date: targetYMD,
+          p_hotel_id: hotelId, p_otb_date: otbDate, p_vs_otb_date: otbDate, p_min_date: targetYMD,
         })
         if (error) return []
         return ((data ?? []) as any[])
@@ -119,11 +108,11 @@ export default function DailyStatusModal({
 
   // 렌더 세그먼트 행 (대분류/소분류)
   const segRows = useMemo(() => {
-    const out: { key: string; name: string; level: 0 | 1; codes: string[] }[] = []
+    const out: { key: string; name: string; level: 0 | 1; codes: string[]; bg?: string; font?: string }[] = []
     for (const node of schema?.nodes ?? []) {
-      out.push({ key: node.id, name: node.name, level: 0, codes: node.segmentationCodes })
+      out.push({ key: node.id, name: node.name, level: 0, codes: node.segmentationCodes, bg: node.bgDarkColor, font: node.fontDarkColor })
       for (const child of node.children) {
-        out.push({ key: child.id, name: child.name, level: 1, codes: child.segmentationCodes })
+        out.push({ key: child.id, name: child.name, level: 1, codes: child.segmentationCodes, bg: child.bgDarkColor, font: child.fontDarkColor })
       }
     }
     return out
@@ -166,21 +155,36 @@ export default function DailyStatusModal({
 
       <div style={{ position: 'relative', width: 720, maxWidth: '96vw', maxHeight: '88vh', background: '#141414', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 14, display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
         {/* ── 헤더 ── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
-          <span style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>
-            {month}월 {day}일 <span style={{ color: dow === 0 || dow === 6 ? '#E24B4A' : '#888' }}>({DOW[dow]})</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '13px 16px 10px', borderBottom: '1px solid #1e1e1e' }}>
+          {/* ‹ 이전 */}
+          <button onClick={() => onDayChange(day - 1)} disabled={day <= 1} aria-label="이전 날짜"
+            style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', color: day <= 1 ? '#333' : '#aaa', width: 26, height: 26, borderRadius: 5, cursor: day <= 1 ? 'default' : 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
+
+          {/* 날짜 */}
+          <span style={{ fontSize: 15, fontWeight: 500, color: '#fff' }}>
+            {month}월 {day}일{' '}
+            <span style={{ color: '#aaa', fontWeight: 400 }}>({DOW[dow]})</span>
           </span>
-          <span style={badge(isOTB)}>{isOTB ? 'OTB' : 'Actual'}</span>
-          {eventName && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '2px 8px', borderRadius: 6, background: '#2a1f00', color: '#f0a500', border: '1px solid #3a2e00' }}>
-              <Star size={11} /> {eventName}
+
+          {/* › 다음 */}
+          <button onClick={() => onDayChange(day + 1)} disabled={day >= lastDay} aria-label="다음 날짜"
+            style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', color: day >= lastDay ? '#333' : '#aaa', width: 26, height: 26, borderRadius: 5, cursor: day >= lastDay ? 'default' : 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
+
+          {/* OTB/Actual 뱃지 */}
+          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, fontWeight: 500, ...(isOTB ? { background: '#0d1a2e', color: '#5B8DEF', border: '1px solid #1e3a5a' } : { background: '#0d2a1f', color: '#00E5A0', border: '1px solid #0d3a28' }) }}>
+            {isOTB ? 'OTB' : 'Actual'}
+          </span>
+
+          {/* 이벤트 뱃지 — null 제거 */}
+          {eventName && eventName !== 'null' && eventName.trim() !== '' && (
+            <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: '#2a1f00', color: '#f0a500', border: '1px solid #3a2e00' }}>
+              ★ {eventName}
             </span>
           )}
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <button onClick={() => onDayChange(day - 1)} disabled={day <= 1} style={navBtn(day <= 1)} aria-label="이전 날짜"><ChevronLeft size={16} /></button>
-            <button onClick={() => onDayChange(day + 1)} disabled={day >= lastDay} style={navBtn(day >= lastDay)} aria-label="다음 날짜"><ChevronRight size={16} /></button>
-            <button onClick={onClose} aria-label="닫기" style={{ ...navBtn(false), marginLeft: 4 }}><X size={16} /></button>
-          </div>
+
+          {/* ✕ 닫기 */}
+          <button onClick={onClose} aria-label="닫기"
+            style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#555', fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>×</button>
         </div>
 
         {/* ── 본문 좌우 분할 ── */}
@@ -200,9 +204,23 @@ export default function DailyStatusModal({
                   const sel = selected?.key === row.key
                   return (
                     <tr key={row.key} onClick={() => toggle(row)}
-                      style={{ cursor: 'pointer', background: sel ? '#0d2010' : 'transparent', borderBottom: '0.5px solid rgba(255,255,255,0.04)' }}>
-                      <td style={{ padding: row.level === 0 ? '4px 8px' : '4px 8px 4px 22px', fontSize: row.level === 0 ? 12 : 11, fontWeight: row.level === 0 ? 500 : 400, color: sel ? MINT : row.level === 0 ? '#ccc' : '#999', whiteSpace: 'nowrap' }}>
-                        {row.level === 0 ? row.name : `∟ ${row.name}`}
+                      style={{
+                        cursor: 'pointer',
+                        background: row.level === 0
+                          ? (sel ? (row.bg ?? '#0d2a1f') : (row.bg ?? '#1a1a1a'))   // 대분류: bg_dark_color 항상 적용
+                          : (sel ? 'rgba(0,229,160,0.08)' : 'transparent'),          // 소분류: 선택 시 민트 하이라이트
+                        borderBottom: row.level === 0 ? '1px solid rgba(255,255,255,0.04)' : '1px solid rgba(255,255,255,0.03)',
+                      }}>
+                      <td style={{
+                        padding: row.level === 0 ? '6px 10px' : '5px 10px 5px 28px',
+                        fontSize: 12,
+                        fontWeight: row.level === 0 ? 600 : 400,
+                        color: row.level === 0
+                          ? (sel ? MINT : (row.font ?? '#ccc'))
+                          : (sel ? MINT : '#888'),
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {row.level === 0 ? row.name : (<><span style={{ color: '#333', marginRight: 6 }}>∟</span>{row.name}</>)}
                       </td>
                       <td style={{ ...td, color: '#ccc' }}>{fmtRN(a.rn)}</td>
                       <td style={{ ...td, color: '#888' }}>{fmtADR(a.adr)}</td>
@@ -276,14 +294,3 @@ export default function DailyStatusModal({
     </div>
   )
 }
-
-const badge = (otb: boolean): React.CSSProperties =>
-  otb
-    ? { fontSize: 11, padding: '2px 8px', borderRadius: 6, background: '#0d1a2e', color: BLUE, border: '1px solid #1e3a5a' }
-    : { fontSize: 11, padding: '2px 8px', borderRadius: 6, background: '#0d2a1f', color: MINT, border: '1px solid #0d3a28' }
-
-const navBtn = (disabled: boolean): React.CSSProperties => ({
-  display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 6,
-  background: 'transparent', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
-  color: disabled ? '#444' : '#aaa',
-})
