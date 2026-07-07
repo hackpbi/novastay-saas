@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { FmtVal } from '@/utils/FmtVal'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
 import { useActualMonthly } from '@/hooks/useActualMonthly'
 import { useOtbData } from '@/hooks/useOtbData'
@@ -312,13 +313,13 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
 
         {/* Actual / OTB — schema fontColor */}
         <td style={{ ...td, color: rowColor }}>{dash(a.n > 0, fmtInt(a.n))}</td>
-        <td style={{ ...td, color: rowColor }}>{dash(a.n > 0, fmtAdrK(aAdr))}</td>
-        <td style={{ ...td, color: rowColor }}>{dash(a.n > 0, fmtRevM(a.r))}</td>
+        <td style={{ ...td, color: rowColor }}>{dash(a.n > 0, <FmtVal val={fmtAdrK(aAdr)} numSize={11} />)}</td>
+        <td style={{ ...td, color: rowColor }}>{dash(a.n > 0, <FmtVal val={fmtRevM(a.r)} numSize={11} />)}</td>
 
         {/* Budget / LY — 0.5 흐림 */}
         <td style={{ ...td, color: 'rgba(255,255,255,0.5)', boxShadow: cmpSep }}>{dash(c.n > 0, fmtInt(c.n))}</td>
-        <td style={{ ...td, color: 'rgba(255,255,255,0.5)' }}>{dash(c.n > 0, fmtAdrK(cAdr))}</td>
-        <td style={{ ...td, color: 'rgba(255,255,255,0.5)' }}>{dash(c.n > 0, fmtRevM(c.r))}</td>
+        <td style={{ ...td, color: 'rgba(255,255,255,0.5)' }}>{dash(c.n > 0, <FmtVal val={fmtAdrK(cAdr)} numSize={11} />)}</td>
+        <td style={{ ...td, color: 'rgba(255,255,255,0.5)' }}>{dash(c.n > 0, <FmtVal val={fmtRevM(c.r)} numSize={11} />)}</td>
 
         {/* GAP — 양수 schema, 음수 red */}
         <td style={{ ...td, color: gapColor(a.n - c.n, rowColor), boxShadow: gapSep }}>{dash(a.n > 0 || c.n > 0, fmtSignInt(a.n - c.n))}</td>
@@ -416,14 +417,14 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
                 >
                   <td style={{ ...td, textAlign: 'left', color: '#fff', fontWeight: 700, borderTop: '1px solid rgba(0,229,160,0.4)' }}>TOTAL</td>
                   <td style={{ ...td, color: '#fff', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtInt(tA.n)}</td>
-                  <td style={{ ...td, color: '#fff', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtAdrK(tAAdr)}</td>
-                  <td style={{ ...td, color: '#fff', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtRevM(tA.r)}</td>
+                  <td style={{ ...td, color: '#fff', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}><FmtVal val={fmtAdrK(tAAdr)} numSize={11} /></td>
+                  <td style={{ ...td, color: '#fff', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}><FmtVal val={fmtRevM(tA.r)} numSize={11} /></td>
                   <td style={{ ...td, color: 'rgba(255,255,255,0.6)', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)', boxShadow: cmpSep }}>{fmtInt(tC.n)}</td>
-                  <td style={{ ...td, color: 'rgba(255,255,255,0.6)', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtAdrK(tCAdr)}</td>
-                  <td style={{ ...td, color: 'rgba(255,255,255,0.6)', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtRevM(tC.r)}</td>
+                  <td style={{ ...td, color: 'rgba(255,255,255,0.6)', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}><FmtVal val={fmtAdrK(tCAdr)} numSize={11} /></td>
+                  <td style={{ ...td, color: 'rgba(255,255,255,0.6)', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}><FmtVal val={fmtRevM(tC.r)} numSize={11} /></td>
                   <td style={{ ...td, color: tA.n - tC.n >= 0 ? '#00E5A0' : NEG, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)', boxShadow: gapSep }}>{fmtSignInt(tA.n - tC.n)}</td>
-                  <td style={{ ...td, color: tAAdr - tCAdr >= 0 ? '#00E5A0' : NEG, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtSignAdrK(tAAdr - tCAdr)}</td>
-                  <td style={{ ...td, color: tA.r - tC.r >= 0 ? '#00E5A0' : NEG, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtSignRevM(tA.r - tC.r)}</td>
+                  <td style={{ ...td, color: tAAdr - tCAdr >= 0 ? '#00E5A0' : NEG, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}><FmtVal val={fmtSignAdrK(tAAdr - tCAdr)} numSize={11} /></td>
+                  <td style={{ ...td, color: tA.r - tC.r >= 0 ? '#00E5A0' : NEG, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}><FmtVal val={fmtSignRevM(tA.r - tC.r)} numSize={11} /></td>
                 </tr>
 
                 {/* OCC / REVPAR */}
@@ -462,8 +463,8 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
                         <span style={{ fontSize: 9, color: acc.diffRn >= 0 ? '#00E5A0' : '#FF6B6B' }}>
                           {acc.diffRn >= 0 ? '+' : ''}{acc.diffRn} R/N
                         </span>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: acc.diffRev >= 0 ? '#00E5A0' : '#FF6B6B' }}>
-                          {acc.diffRev >= 0 ? '+' : ''}{(acc.diffRev / 1_000_000).toFixed(1)}M
+                        <span style={{ fontWeight: 600, color: acc.diffRev >= 0 ? '#00E5A0' : '#FF6B6B' }}>
+                          <FmtVal val={`${acc.diffRev >= 0 ? '+' : ''}${(acc.diffRev / 1_000_000).toFixed(1)}M`} numSize={11} />
                         </span>
                       </div>
                     </div>

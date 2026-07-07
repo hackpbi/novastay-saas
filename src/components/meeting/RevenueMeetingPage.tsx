@@ -1084,7 +1084,7 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
                   {a.rn > 0 ? '+' : ''}{a.rn}
                 </span>
                 <span style={{ color: '#555', minWidth: 50, textAlign: 'right' }}>
-                  {Math.round(a.adr / 1000)}K
+                  <FmtVal val={`${Math.round(a.adr / 1000)}K`} numSize={11} />
                 </span>
               </div>
             ))}

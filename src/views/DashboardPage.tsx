@@ -24,6 +24,7 @@ import GMDailyReportModal from '@/components/dashboard/GMDailyReportModal'
 import { useForecastMonthly, type ForecastMonthlyRow } from '@/hooks/useForecastMonthly'
 import { useBudgetMonthly, type BudgetMonthlyRow } from '@/hooks/useBudgetMonthly'
 import { supabase } from '@/lib/supabase'
+import { FmtVal } from '@/utils/FmtVal'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -209,9 +210,9 @@ function MetricRow({ label, value, metric, subValue, tooltip, yoyOverride, yoyLo
         <div className="flex flex-col" title={tooltip}>
           <span
             className="font-mono font-bold leading-none"
-            style={{ fontSize: 26, color: 'var(--color-text-primary)', cursor: tooltip ? 'help' : 'default' }}
+            style={{ color: 'var(--color-text-primary)', cursor: tooltip ? 'help' : 'default' }}
           >
-            {value}
+            <FmtVal val={value} numSize={26} />
           </span>
           {subValue && (
             <span className="text-[10px] text-brand-dimmed mt-0.5">{subValue}</span>
@@ -414,13 +415,13 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
           {/* FCST 행 */}
           <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)' }}>FCST</div>
           <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}>{fmtFcOcc(forecast?.occ)}</div>
-          <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}>{fmtFcAdr(forecast?.adr)}</div>
-          <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}>{fmtFcRevenue(forecast?.revenue)}</div>
+          <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}><FmtVal val={fmtFcAdr(forecast?.adr)} numSize={14} /></div>
+          <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}><FmtVal val={fmtFcRevenue(forecast?.revenue)} numSize={14} /></div>
           {/* BUDGET 행 */}
           <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)' }}>BUDGET</div>
           <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}>{fmtFcOcc(budget?.occ)}</div>
-          <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}>{fmtFcAdr(budget?.adr)}</div>
-          <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}>{fmtFcRevenue(budget?.revenue)}</div>
+          <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}><FmtVal val={fmtFcAdr(budget?.adr)} numSize={14} /></div>
+          <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}><FmtVal val={fmtFcRevenue(budget?.revenue)} numSize={14} /></div>
           {/* 달성 행 */}
           {(['달성', achievementOcc, achievementAdr, achievementRev] as const).map((val, i) => {
             const borderTop = '1px solid var(--color-border-default)'

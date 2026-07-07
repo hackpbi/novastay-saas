@@ -10,7 +10,7 @@ export function FmtVal({ val, numSize = 16 }: { val: string; numSize?: number })
   if (!match) return <span style={{ fontSize: numSize }}>{val}</span>
   return (
     <span style={{ fontSize: numSize }}>
-      {match[1]}<span style={{ fontSize: unitSize }}>{match[2]}</span>
+      {match[1]}<span style={{ fontSize: unitSize, marginLeft: 2 }}>{match[2]}</span>
     </span>
   )
 }

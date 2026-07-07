@@ -9,6 +9,7 @@ import DatePicker from '@/components/DatePicker'
 import type { LyPacingRow } from '@/hooks/useLyPacing'
 import type { ForecastMonthlyRow } from '@/hooks/useForecastMonthly'
 import type { BudgetMonthlyRow } from '@/hooks/useBudgetMonthly'
+import { FmtVal } from '@/utils/FmtVal'
 
 interface GMDailyReportModalProps {
   open:    boolean
@@ -325,10 +326,10 @@ const renderEventCard = (ev: EventGroup) => {
                 </div>
               </td>
               <td style={{ padding: '2px 4px 2px 0', textAlign: 'right' }}>
-                <span style={{ fontSize: 10, color: C.textSecondary }}>{d.adr !== null ? `${Math.round(d.adr / 1000)}k` : '-'}</span>
+                <span style={{ fontSize: 10, color: C.textSecondary }}>{d.adr !== null ? <FmtVal val={`${Math.round(d.adr / 1000)}k`} numSize={10} /> : '-'}</span>
               </td>
               <td style={{ padding: '2px 4px 2px 0', textAlign: 'right' }}>
-                <span style={{ fontSize: 10, fontWeight: 500, color: C.textPrimary }}>{d.barRate !== null ? `${Math.round(d.barRate / 1000)}k` : '-'}</span>
+                <span style={{ fontSize: 10, fontWeight: 500, color: C.textPrimary }}>{d.barRate !== null ? <FmtVal val={`${Math.round(d.barRate / 1000)}k`} numSize={10} /> : '-'}</span>
               </td>
               <td style={{ padding: '2px 4px 2px 0', textAlign: 'right' }}>
                 <span style={{ fontSize: 10, fontWeight: 500, color: puColor(d.puNights) }}>{puText(d.puNights)}</span>
@@ -349,7 +350,7 @@ function KpiMini({ label, value, dir }: { label: string; value: string; dir: str
   return (
     <div style={{ padding: '5px 6px', textAlign: 'center' }}>
       <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: 13, fontWeight: 500, color: dirColor(dir) }}>{value}</div>
+      <div style={{ fontSize: 13, fontWeight: 500, color: dirColor(dir) }}><FmtVal val={value} numSize={13} /></div>
     </div>
   )
 }
@@ -1370,7 +1371,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                 ].map(({ name, val, diff, unit }, idx, arr) => (
                   <div key={name} style={idx === arr.length - 1 ? { flex: 'none', marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' } : { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
                     <span style={{ fontSize: 9, color: C.textMuted, marginBottom: 4 }}>{name}</span>
-                    <span style={{ fontSize: 18, fontWeight: 500, color: C.textPrimary, lineHeight: 1.1, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{val}</span>
+                    <span style={{ fontSize: 18, fontWeight: 500, color: C.textPrimary, lineHeight: 1.1, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><FmtVal val={val} numSize={18} /></span>
                     {diff !== null ? (
                       <span style={{ ...badgeStyle(diff > 0 ? 'up' : diff < 0 ? 'dn' : 'neu'), height: 18, lineHeight: '16px', whiteSpace: 'nowrap' }}>LY {diff > 0 ? `+${diff}${unit}` : `${diff}${unit}`}</span>
                     ) : (
@@ -1398,7 +1399,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                 ].map(({ name, val, diff, unit, color }) => (
                   <div key={name} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
                     <span style={{ fontSize: 9, color: C.textMuted, marginBottom: 4 }}>{name}</span>
-                    <span style={{ fontSize: 18, fontWeight: 500, color, lineHeight: 1.1, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{val}</span>
+                    <span style={{ fontSize: 18, fontWeight: 500, color, lineHeight: 1.1, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><FmtVal val={val} numSize={18} /></span>
                     {diff !== null ? (
                       <span style={{ ...badgeStyle(diff > 0 ? 'up' : diff < 0 ? 'dn' : 'neu'), height: 18, lineHeight: '16px', whiteSpace: 'nowrap' }}>LY {diff > 0 ? `+${diff}${unit}` : `${diff}${unit}`}</span>
                     ) : (
@@ -1430,9 +1431,9 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                     <span style={{ color: C.textMuted, fontSize: 10 }}>OCC</span>
                     <span style={{ fontWeight: 500, color: C.textPrimary }}>{mtdKpi.occ}%</span>
                     <span style={{ color: C.textMuted, fontSize: 10 }}>ADR</span>
-                    <span style={{ fontWeight: 500, color: C.textPrimary }}>{mtdKpi.adr}k</span>
+                    <span style={{ fontWeight: 500, color: C.textPrimary }}><FmtVal val={`${mtdKpi.adr}k`} numSize={11} /></span>
                     <span style={{ color: C.textMuted, fontSize: 10 }}>REV</span>
-                    <span style={{ fontWeight: 500, color: C.textPrimary }}>{mtdKpi.rev}m</span>
+                    <span style={{ fontWeight: 500, color: C.textPrimary }}><FmtVal val={`${mtdKpi.rev}m`} numSize={11} /></span>
                   </div>
                 </div>
               )}
@@ -1468,14 +1469,14 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                   <tr style={{ borderTop: `0.5px solid ${C.border}` }}>
                     <td style={{ fontSize: 8, color: C.textMuted, padding: '3px 2px' }}>ADR</td>
                     {chartKpi.map(d => (
-                      <td key={d.date} style={{ textAlign: 'center', padding: '3px 2px', fontSize: 9, color: C.textSecondary, fontWeight: d.isToday ? 500 : 400, background: d.isToday ? '#f0f4ff' : d.isPast ? '#fafaf8' : 'transparent', borderBottom: `0.5px solid ${C.border}` }}>{d.adr > 0 ? `${d.adr}k` : '-'}</td>
+                      <td key={d.date} style={{ textAlign: 'center', padding: '3px 2px', fontSize: 9, color: C.textSecondary, fontWeight: d.isToday ? 500 : 400, background: d.isToday ? '#f0f4ff' : d.isPast ? '#fafaf8' : 'transparent', borderBottom: `0.5px solid ${C.border}` }}>{d.adr > 0 ? <FmtVal val={`${d.adr}k`} numSize={9} /> : '-'}</td>
                     ))}
                   </tr>
                   {/* BAR 행 */}
                   <tr>
                     <td style={{ fontSize: 8, color: C.textMuted, padding: '3px 2px' }}>BAR</td>
                     {chartKpi.map(d => (
-                      <td key={d.date} style={{ textAlign: 'center', padding: '3px 2px', fontSize: 9, color: C.textPrimary, fontWeight: 500, background: d.isToday ? '#f0f4ff' : d.isPast ? '#fafaf8' : 'transparent', borderBottom: `0.5px solid ${C.border}` }}>{d.barRate !== null ? `${d.barRate}k` : '-'}</td>
+                      <td key={d.date} style={{ textAlign: 'center', padding: '3px 2px', fontSize: 9, color: C.textPrimary, fontWeight: 500, background: d.isToday ? '#f0f4ff' : d.isPast ? '#fafaf8' : 'transparent', borderBottom: `0.5px solid ${C.border}` }}>{d.barRate !== null ? <FmtVal val={`${d.barRate}k`} numSize={9} /> : '-'}</td>
                     ))}
                   </tr>
                   {/* LY 행 */}

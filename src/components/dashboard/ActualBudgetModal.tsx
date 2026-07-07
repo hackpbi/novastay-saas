@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useDateContext } from '@/contexts/DateContext'
+import { FmtVal } from '@/utils/FmtVal'
 import ActualBudgetDetailModal from './ActualBudgetDetailModal'
 
 interface Props {
@@ -290,11 +291,11 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount }:
       <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 3, fontSize: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span style={{ color: '#555' }}>예산</span>
-          <span style={{ color: d.value - d.budget >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 500 }}>{fmtSignedM(d.value - d.budget)}</span>
+          <span style={{ color: d.value - d.budget >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 500 }}><FmtVal val={fmtSignedM(d.value - d.budget)} numSize={10} /></span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span style={{ color: '#555' }}>전년</span>
-          <span style={{ color: d.value - d.ly >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 500 }}>{fmtSignedM(d.value - d.ly)}</span>
+          <span style={{ color: d.value - d.ly >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 500 }}><FmtVal val={fmtSignedM(d.value - d.ly)} numSize={10} /></span>
         </div>
       </div>
     </div>
@@ -415,10 +416,10 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount }:
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', textAlign: 'right' }}>
                     <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>YTD 예산 달성</div>
                     <div style={{ color: (rangeKpi ? rangeKpi.bDiff : ytd.excess) >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 600 }}>
-                      <span style={{ fontSize: 34 }}>{fmtSignedM(rangeKpi ? rangeKpi.bDiff : ytd.excess)}</span>
+                      <FmtVal val={fmtSignedM(rangeKpi ? rangeKpi.bDiff : ytd.excess)} numSize={34} />
                       <span style={{ fontSize: 11, color: '#555', fontWeight: 400, marginLeft: 5 }}>예산 대비</span>
                     </div>
-                    <div style={{ fontSize: 10, color: '#555', marginTop: 3 }}>실적 {fmtM(rangeKpi ? rangeKpi.actSum : ytd.value)} / 예산 {fmtM(rangeKpi ? rangeKpi.budSum : ytd.budget)}</div>
+                    <div style={{ fontSize: 10, color: '#555', marginTop: 3 }}>실적 <FmtVal val={fmtM(rangeKpi ? rangeKpi.actSum : ytd.value)} numSize={10} /> / 예산 <FmtVal val={fmtM(rangeKpi ? rangeKpi.budSum : ytd.budget)} numSize={10} /></div>
                   </div>
                 </div>
                 <div
@@ -435,10 +436,10 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount }:
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', textAlign: 'right' }}>
                     <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>YTD 전년 대비 성장</div>
                     <div style={{ color: (rangeKpi ? rangeKpi.lDiff : ytd.value - ytd.ly) >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 600 }}>
-                      <span style={{ fontSize: 34 }}>{fmtSignedM(rangeKpi ? rangeKpi.lDiff : ytd.value - ytd.ly)}</span>
+                      <FmtVal val={fmtSignedM(rangeKpi ? rangeKpi.lDiff : ytd.value - ytd.ly)} numSize={34} />
                       <span style={{ fontSize: 11, color: '#555', fontWeight: 400, marginLeft: 5 }}>전년 대비</span>
                     </div>
-                    <div style={{ fontSize: 10, color: '#555', marginTop: 3 }}>실적 {fmtM(rangeKpi ? rangeKpi.actSum : ytd.value)} / 전년 {fmtM(rangeKpi ? rangeKpi.lySum : ytd.ly)}</div>
+                    <div style={{ fontSize: 10, color: '#555', marginTop: 3 }}>실적 <FmtVal val={fmtM(rangeKpi ? rangeKpi.actSum : ytd.value)} numSize={10} /> / 전년 <FmtVal val={fmtM(rangeKpi ? rangeKpi.lySum : ytd.ly)} numSize={10} /></div>
                   </div>
                 </div>
               </div>
