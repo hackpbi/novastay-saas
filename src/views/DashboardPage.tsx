@@ -426,7 +426,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
             const borderTop = '1px solid var(--color-border-default)'
             const pt = '7px'
             if (i === 0) return (
-              <div key="달성" style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)', borderTop, paddingTop: pt }}>달성</div>
+              <div key="달성" style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)', borderTop, paddingTop: pt }}>ACHIEVEMENT</div>
             )
             const pct = val as number | null
             const clickable = pct !== null && !!onAchievementClick
@@ -729,7 +729,7 @@ export default function DashboardPage() {
       <div className="mb-6">
         <div className="flex items-center justify-between mb-1" style={{ gap: 12 }}>
           <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text-primary)', margin: 0 }}>
-            대시보드
+            Dashboard
           </h1>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <button
@@ -753,7 +753,7 @@ export default function DashboardPage() {
                 whiteSpace: 'nowrap',
               }}
             >
-              GM Daily Report
+              Daily Report
             </button>
           </div>
         </div>

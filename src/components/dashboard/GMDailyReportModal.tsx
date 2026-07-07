@@ -473,6 +473,11 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
   const isSameMonth = localOtbDate.slice(0, 7) === yesterday.slice(0, 7)
   const threeMonths = getThreeMonths(localOtbDate || '2000-01-01')   // 당월 포함 3개월
 
+  // ── MTD 기간 (당월 1일 ~ 전일) ──
+  const [mtdY, mtdM] = (localOtbDate || '2000-01-01').split('-').map(Number)
+  const mtdStart = `${mtdY}-${String(mtdM).padStart(2, '0')}-01`
+  const mtdEnd   = yesterday   // 기존 yesterday 재사용
+
   // room_count (m03_hotel_details)
   const { data: hotelDetail } = useQuery({
     queryKey: ['gm_m03_hotel_details', hotelId],
@@ -486,6 +491,55 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
     staleTime: 10 * 60 * 1000,
   })
   const roomCount = hotelDetail?.room_count ?? 0
+
+  // ── MTD 실적 (a02_otb_daily: 당월 1일 ~ 전일, update_date=business_date 당일 스냅샷) ──
+  const { data: mtdOtbData } = useQuery({
+    queryKey: ['gm_mtd_otb', hotelId, mtdStart, mtdEnd],
+    queryFn: async () => {
+      if (!mtdStart || !mtdEnd || mtdStart > mtdEnd) return []
+      // business_date/update_date 모두 MTD 범위로 제한 후, 프론트에서 update_date === business_date(당일 스냅샷)만 사용
+      const { data, error } = await (supabase as any)
+        .from('a02_otb_daily')
+        .select('business_date, update_date, nights, room_revenue')
+        .eq('hotel_id', hotelId)
+        .gte('business_date', mtdStart)
+        .lte('business_date', mtdEnd)
+        .gte('update_date', mtdStart)
+        .lte('update_date', mtdEnd)
+      if (error) { console.error('[GMReport] mtd otb error:', error); return [] }
+      return (data ?? []).filter((r: any) => r.update_date === r.business_date)
+    },
+    enabled: open && !!hotelId && !!mtdStart && !!mtdEnd && mtdStart <= mtdEnd,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const mtdKpi = useMemo(() => {
+    // ── DEBUG ──
+    console.log('[GMReport MTD] mtdStart=', mtdStart, 'mtdEnd=', mtdEnd,
+      'rows=', mtdOtbData?.length ?? 'undefined', 'roomCount=', roomCount, mtdOtbData)
+
+    if (!mtdOtbData?.length) return null
+
+    const totalRn  = mtdOtbData.reduce((s: number, r: any) => s + (r.nights ?? 0), 0)
+    const totalRev = mtdOtbData.reduce((s: number, r: any) => s + (r.room_revenue ?? 0), 0)
+
+    // 기간 일수 × roomCount
+    const [sy, sm, sd] = mtdStart.split('-').map(Number)
+    const [ey, em, ed] = mtdEnd.split('-').map(Number)
+    const days = Math.round((new Date(ey, em - 1, ed).getTime() - new Date(sy, sm - 1, sd).getTime()) / 86400000) + 1
+    const totalAvail = days * roomCount
+
+    const occ = totalAvail > 0 ? Math.round((totalRn / totalAvail) * 1000) / 10 : 0
+    const adr = totalRn > 0 ? Math.round(totalRev / totalRn / 1000) : 0
+    const rev = Math.round(totalRev / 1000000)
+
+    const periodLabel = `${sm}/${sd}~${em}/${ed}`
+
+    // ── DEBUG ──
+    console.log('[GMReport MTD] computed →', { totalRn, totalRev, days, totalAvail, occ, adr, rev, periodLabel })
+
+    return { occ, adr, rev, periodLabel }
+  }, [mtdOtbData, mtdStart, mtdEnd, roomCount])
 
   // 어제 실적 — 같은 달: a02_otb_daily(update_date=otbDate), 다른 달(매월1일): a01_actual_daily
   const { data: yesterdayData = [], isLoading: yesterdayLoading } = useQuery({
@@ -1366,7 +1420,23 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
 
           {/* 7일 OTB 차트 */}
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: C.textPrimary, marginBottom: 10 }}>OTB 현황 (7일)</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+              <span style={{ fontSize: 13, fontWeight: 500, color: C.textPrimary }}>OTB 현황 (7일)</span>
+              {/* MTD 실적 요약 (당월 1일 ~ 전일) */}
+              {mtdKpi && (
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, fontSize: 11 }}>
+                  <span style={{ color: C.textMuted, fontSize: 10 }}>{mtdKpi.periodLabel}</span>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
+                    <span style={{ color: C.textMuted, fontSize: 10 }}>OCC</span>
+                    <span style={{ fontWeight: 500, color: C.textPrimary }}>{mtdKpi.occ}%</span>
+                    <span style={{ color: C.textMuted, fontSize: 10 }}>ADR</span>
+                    <span style={{ fontWeight: 500, color: C.textPrimary }}>{mtdKpi.adr}k</span>
+                    <span style={{ color: C.textMuted, fontSize: 10 }}>REV</span>
+                    <span style={{ fontWeight: 500, color: C.textPrimary }}>{mtdKpi.rev}m</span>
+                  </div>
+                </div>
+              )}
+            </div>
             <div style={{ background: C.cardBg, borderRadius: 8, padding: '14px 16px' }}>
               {/* 막대 차트 + KPI 테이블 — 단일 table로 컬럼 공유 */}
               <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 9 }}>
