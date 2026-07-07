@@ -12,10 +12,41 @@ interface Props {
   roomCount: number
 }
 
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const MONTH_NAMES = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월']
 const pad2 = (n: number) => String(n).padStart(2, '0')
 const fmtM = (v: number) => `${(v / 1_000_000).toFixed(1)}M`
 const fmtSignedM = (v: number) => `${v >= 0 ? '+' : '-'}${Math.abs(v / 1_000_000).toFixed(1)}M`
+
+// ── 기간 선택 (YTD 카드 공유) 색상 토큰 ──────────────────────────────────────────
+const C = {
+  border:        'rgba(255,255,255,0.08)',
+  borderStrong:  'rgba(255,255,255,0.25)',
+  borderSuccess: 'rgba(0,229,160,0.5)',
+  bgSuccess:     'rgba(0,229,160,0.12)',
+  fillSuccess:   '#00E5A0',
+  textSuccess:   '#00E5A0',
+  textPrimary:   '#eee',
+  textSecondary: '#888',
+  textMuted:     '#555',
+  cardBg:        '#0f0f0f',
+  surface:       '#141414',
+}
+
+// 선택 월 Set → 연속 구간 라벨 (예: "1월~3월, 5월~6월 합계" / "4월" / "1월, 3월, 5월 합계")
+const formatMonthRangeLabel = (selected: Set<number>): string => {
+  if (selected.size === 0) return '기간 선택'
+  const sorted = [...selected].sort((a, b) => a - b)
+  const groups: number[][] = []
+  let group: number[] = [sorted[0]]
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i] === sorted[i - 1] + 1) group.push(sorted[i])
+    else { groups.push(group); group = [sorted[i]] }
+  }
+  groups.push(group)
+  const parts = groups.map(g => g.length === 1 ? MONTH_NAMES[g[0]] : `${MONTH_NAMES[g[0]]}~${MONTH_NAMES[g[g.length - 1]]}`)
+  const label = parts.join(', ')
+  return selected.size === 1 ? label : `${label} 합계`
+}
 
 // ── 원형 게이지 (SVG) ──────────────────────────────────────────────────────────
 function Gauge({ pct, color, size = 56, stroke = 5, big = false }: { pct: number | null; color: string; size?: number; stroke?: number; big?: boolean }) {
@@ -39,6 +70,11 @@ function Gauge({ pct, color, size = 56, stroke = 5, big = false }: { pct: number
 export default function ActualBudgetModal({ open, onClose, hotelId, roomCount }: Props) {
   const { otbDate, vsOtbDate, otbDates } = useDateContext()
   const [detailMonth, setDetailMonth] = useState<{ key: string; label: string; isOtb: boolean; isYtd?: boolean; ytdToMonth?: number; defaultMode?: 'budget' | 'ly' } | null>(null)
+
+  // ── 기간 선택 (공유 버튼 + 체크박스 멀티선택) ────────────────────────────────────
+  const [selectedMonths, setSelectedMonths] = useState<Set<number>>(new Set())   // confirmed (baseYear 0~11)
+  const [pendingMonths,  setPendingMonths]  = useState<Set<number>>(new Set())   // pending (Done 전)
+  const [rangeOpen,      setRangeOpen]      = useState(false)
   const baseYear = otbDate ? new Date(otbDate + 'T00:00:00').getFullYear() : new Date().getFullYear()
   const curYM    = otbDate ? otbDate.slice(0, 7) : ''   // 'YYYY-MM' (현재월 경계)
   const minOtbDate = otbDates?.[otbDates.length - 1] ?? ''
@@ -51,6 +87,25 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount }:
     document.body.style.overflow = 'hidden'
     return () => { window.removeEventListener('keydown', h); document.body.style.overflow = '' }
   }, [open, onClose])
+
+  // 모달 열릴 때 otbDate 기준 전월(당월 이전)까지 자동 선택
+  useEffect(() => {
+    if (!open) return
+    const otbM = otbDate ? new Date(otbDate + 'T00:00:00').getMonth() : 0   // 0-based
+    const auto = new Set(Array.from({ length: otbM }, (_, i) => i))          // 0 ~ otbM-1 (1월 이전이면 빈 Set)
+    setSelectedMonths(auto)
+    setPendingMonths(auto)
+  }, [open, otbDate])
+
+  // 드롭다운 외부 클릭 시 닫힘 (드롭다운 내부 클릭은 유지 — 멀티선택 보존)
+  useEffect(() => {
+    if (!rangeOpen) return
+    const onDown = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('[data-ab-range]')) setRangeOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [rangeOpen])
 
   // 표시 월: baseYear 1~12 (12) + baseYear+1 1~6 (6) = 18
   const months = useMemo(() => {
@@ -176,6 +231,29 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount }:
     }
   }, [monthData, curYM])
 
+  // ── baseYear 월별 배열(0~11) — 기간 합계 계산용 ─────────────────────────────────
+  const { monthlyActual, monthlyBudget, monthlyLY } = useMemo(() => {
+    const a = new Array(12).fill(0), b = new Array(12).fill(0), l = new Array(12).fill(0)
+    for (const d of monthData) {
+      if (d.year !== baseYear) continue
+      a[d.month - 1] = d.value; b[d.month - 1] = d.budget; l[d.month - 1] = d.ly
+    }
+    return { monthlyActual: a, monthlyBudget: b, monthlyLY: l }
+  }, [monthData, baseYear])
+
+  // 선택 월 합계 (won 단위 유지, fmtSignedM/fmtM으로 표시)
+  const rangeKpi = useMemo(() => {
+    if (selectedMonths.size === 0) return null
+    let actSum = 0, budSum = 0, lySum = 0
+    selectedMonths.forEach(i => {
+      actSum += monthlyActual[i] ?? 0
+      budSum += monthlyBudget[i] ?? 0
+      lySum  += monthlyLY[i] ?? 0
+    })
+    const rangeLabel = formatMonthRangeLabel(selectedMonths)
+    return { actSum, budSum, lySum, bDiff: actSum - budSum, lDiff: actSum - lySum, rangeLabel, count: selectedMonths.size }
+  }, [selectedMonths, monthlyActual, monthlyBudget, monthlyLY])
+
   if (!open) return null
 
   const gaugeColor = (d: { isOtb: boolean; ach: number | null }) =>
@@ -187,16 +265,19 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount }:
   const MonthCell = (d: typeof monthData[number]) => {
     const isCurrent = !!curYM && d.ym === curYM
     const isPast    = !!curYM && d.ym < curYM
+    const monthIdx  = d.month - 1
+    const isSel     = d.year === baseYear && selectedMonths.has(monthIdx)
+    const restColor = isSel ? C.borderSuccess : isCurrent ? 'rgba(100,160,255,0.5)' : 'rgba(255,255,255,0.08)'
     const badge = isPast
-      ? <span style={{ fontSize: 8, padding: '2px 6px', borderRadius: 8, background: 'rgba(0,229,160,0.12)', color: '#00E5A0', fontWeight: 600 }}>Actual</span>
+      ? <span style={{ fontSize: 8, padding: '2px 6px', borderRadius: 8, background: 'rgba(0,229,160,0.12)', color: '#00E5A0', fontWeight: 600 }}>실적</span>
       : <span style={{ fontSize: 8, padding: '2px 6px', borderRadius: 8, background: 'rgba(100,160,255,0.12)', color: '#7EA8FF', fontWeight: 600 }}>OTB</span>
     return (
     <div
       key={d.ym}
       onClick={() => setDetailMonth({ key: d.ym, label: `${MONTH_NAMES[d.month - 1]} ${d.year}`, isOtb: !isPast })}
       onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)' }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = isCurrent ? 'rgba(100,160,255,0.5)' : 'rgba(255,255,255,0.08)' }}
-      style={{ background: '#0f0f0f', border: isCurrent ? '1px solid rgba(100,160,255,0.5)' : '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '12px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+      onMouseLeave={e => { e.currentTarget.style.borderColor = restColor }}
+      style={{ background: isSel ? C.bgSuccess : '#0f0f0f', border: isSel ? `1.5px solid ${C.borderSuccess}` : isCurrent ? '1px solid rgba(100,160,255,0.5)' : '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '12px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
       <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
           <span style={{ fontSize: 11, color: '#888', fontWeight: 500 }}>{MONTH_NAMES[d.month - 1]}</span>
@@ -208,11 +289,11 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount }:
       <div style={{ width: '100%', height: 0.5, background: 'rgba(255,255,255,0.08)' }} />
       <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 3, fontSize: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ color: '#555' }}>Budget</span>
+          <span style={{ color: '#555' }}>예산</span>
           <span style={{ color: d.value - d.budget >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 500 }}>{fmtSignedM(d.value - d.budget)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ color: '#555' }}>Last Year</span>
+          <span style={{ color: '#555' }}>전년</span>
           <span style={{ color: d.value - d.ly >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 500 }}>{fmtSignedM(d.value - d.ly)}</span>
         </div>
       </div>
@@ -232,7 +313,7 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount }:
       >
         {/* 헤더 */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid #1a1a1a', flexShrink: 0 }}>
-          <span style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>Actual vs Budget vs LY</span>
+          <span style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>실적 vs 예산 vs 전년</span>
           <button onClick={onClose} aria-label="닫기" style={{ background: 'transparent', border: 'none', color: '#555', fontSize: 18, cursor: 'pointer' }}>✕</button>
         </div>
 
@@ -242,6 +323,82 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount }:
             <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: 13 }}>불러오는 중…</div>
           ) : (
             <>
+              {/* 공유 기간 선택 버튼 (YTD 카드 위, 우측 정렬) */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10, position: 'relative' }} data-ab-range>
+                <button
+                  onClick={() => { setPendingMonths(new Set(selectedMonths)); setRangeOpen(v => !v) }}
+                  style={{
+                    fontSize: 11, padding: '4px 12px', borderRadius: 5, cursor: 'pointer',
+                    border: `0.5px solid ${selectedMonths.size > 0 ? C.borderSuccess : C.border}`,
+                    background: selectedMonths.size > 0 ? C.bgSuccess : C.cardBg,
+                    color: selectedMonths.size > 0 ? C.textSuccess : C.textSecondary,
+                    display: 'flex', alignItems: 'center', gap: 5,
+                  }}
+                >
+                  📅
+                  <span>{formatMonthRangeLabel(selectedMonths)}</span>
+                  ▾
+                </button>
+
+                {rangeOpen && (
+                  <div style={{
+                    position: 'absolute', top: 'calc(100% + 4px)', right: 0,
+                    background: C.surface, border: `0.5px solid ${C.border}`,
+                    borderRadius: 8, minWidth: 180, zIndex: 9999,
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+                    display: 'flex', flexDirection: 'column',
+                  }}>
+                    <div style={{ padding: 6, maxHeight: 240, overflowY: 'auto' }}>
+                      <div style={{ fontSize: 9, color: C.textMuted, padding: '2px 6px 4px', fontWeight: 500 }}>월 선택 (복수 가능)</div>
+                      {Array.from({ length: 12 }, (_, i) => {
+                        const isChecked = pendingMonths.has(i)
+                        return (
+                          <div
+                            key={i}
+                            onClick={() => {
+                              const next = new Set(pendingMonths)
+                              if (next.has(i)) next.delete(i); else next.add(i)
+                              setPendingMonths(next)
+                            }}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 8,
+                              padding: '5px 8px', borderRadius: 5, cursor: 'pointer', fontSize: 11,
+                              color: isChecked ? C.textPrimary : C.textSecondary,
+                              background: isChecked ? C.bgSuccess : 'transparent',
+                            }}
+                          >
+                            <div style={{
+                              width: 14, height: 14, borderRadius: 3, flexShrink: 0,
+                              border: `1.5px solid ${isChecked ? C.borderSuccess : C.borderStrong}`,
+                              background: isChecked ? C.fillSuccess : 'transparent',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
+                              {isChecked && <span style={{ color: '#0a0a0a', fontSize: 9, lineHeight: 1 }}>✓</span>}
+                            </div>
+                            <span>{MONTH_NAMES[i]}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 4, padding: 8, borderTop: `0.5px solid ${C.border}` }}>
+                      <button
+                        onClick={() => { setPendingMonths(new Set()); setSelectedMonths(new Set()); setRangeOpen(false) }}
+                        style={{ flex: 1, fontSize: 10, padding: '5px 0', borderRadius: 4, cursor: 'pointer', border: `0.5px solid ${C.border}`, background: 'transparent', color: C.textSecondary }}
+                      >초기화</button>
+                      <button
+                        onClick={() => { const all = new Set(Array.from({ length: 12 }, (_, i) => i)); setPendingMonths(all); setSelectedMonths(all); setRangeOpen(false) }}
+                        style={{ flex: 1, fontSize: 10, padding: '5px 0', borderRadius: 4, cursor: 'pointer', border: `0.5px solid ${C.border}`, background: 'transparent', color: C.textSecondary }}
+                      >전체</button>
+                      <button
+                        onClick={() => { setSelectedMonths(new Set(pendingMonths)); setRangeOpen(false) }}
+                        style={{ flex: 1, fontSize: 10, padding: '5px 0', borderRadius: 4, cursor: 'pointer', border: `0.5px solid ${C.borderSuccess}`, background: C.bgSuccess, color: C.textSuccess, fontWeight: 500 }}
+                      >완료 ✓</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* 상단 요약 카드 2개 */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
                 <div
@@ -249,14 +406,19 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount }:
                   onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)' }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)' }}
                   style={{ background: '#0f0f0f', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 16, display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer' }}>
-                  <Gauge pct={ytd.ach} color={ytd.ach != null && ytd.ach >= 100 ? '#00E5A0' : '#FF6B6B'} size={76} stroke={6} big />
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <Gauge pct={ytd.ach} color={ytd.ach != null && ytd.ach >= 100 ? '#00E5A0' : '#FF6B6B'} size={76} stroke={6} big />
+                    {rangeKpi && (
+                      <div style={{ textAlign: 'center', fontSize: 10, color: C.textSuccess, fontWeight: 500, marginTop: 4 }}>{rangeKpi.rangeLabel}</div>
+                    )}
+                  </div>
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', textAlign: 'right' }}>
-                    <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>YTD Budget Achievement</div>
-                    <div style={{ color: ytd.excess >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 600 }}>
-                      <span style={{ fontSize: 34 }}>{fmtSignedM(ytd.excess)}</span>
-                      <span style={{ fontSize: 11, color: '#555', fontWeight: 400, marginLeft: 5 }}>vs budget</span>
+                    <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>YTD 예산 달성</div>
+                    <div style={{ color: (rangeKpi ? rangeKpi.bDiff : ytd.excess) >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 600 }}>
+                      <span style={{ fontSize: 34 }}>{fmtSignedM(rangeKpi ? rangeKpi.bDiff : ytd.excess)}</span>
+                      <span style={{ fontSize: 11, color: '#555', fontWeight: 400, marginLeft: 5 }}>예산 대비</span>
                     </div>
-                    <div style={{ fontSize: 10, color: '#555', marginTop: 3 }}>Actual {fmtM(ytd.value)} / Budget {fmtM(ytd.budget)}</div>
+                    <div style={{ fontSize: 10, color: '#555', marginTop: 3 }}>실적 {fmtM(rangeKpi ? rangeKpi.actSum : ytd.value)} / 예산 {fmtM(rangeKpi ? rangeKpi.budSum : ytd.budget)}</div>
                   </div>
                 </div>
                 <div
@@ -264,14 +426,19 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount }:
                   onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)' }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)' }}
                   style={{ background: '#0f0f0f', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 16, display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer' }}>
-                  <Gauge pct={ytd.growth != null ? 100 + ytd.growth : null} color={ytd.growth != null && ytd.growth >= 0 ? '#00E5A0' : '#E24B4A'} size={76} stroke={6} big />
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <Gauge pct={ytd.growth != null ? 100 + ytd.growth : null} color={ytd.growth != null && ytd.growth >= 0 ? '#00E5A0' : '#E24B4A'} size={76} stroke={6} big />
+                    {rangeKpi && (
+                      <div style={{ textAlign: 'center', fontSize: 10, color: C.textSuccess, fontWeight: 500, marginTop: 4 }}>{rangeKpi.rangeLabel}</div>
+                    )}
+                  </div>
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', textAlign: 'right' }}>
-                    <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>YTD Growth vs LY</div>
-                    <div style={{ color: (ytd.value - ytd.ly) >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 600 }}>
-                      <span style={{ fontSize: 34 }}>{fmtSignedM(ytd.value - ytd.ly)}</span>
-                      <span style={{ fontSize: 11, color: '#555', fontWeight: 400, marginLeft: 5 }}>vs LY</span>
+                    <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>YTD 전년 대비 성장</div>
+                    <div style={{ color: (rangeKpi ? rangeKpi.lDiff : ytd.value - ytd.ly) >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 600 }}>
+                      <span style={{ fontSize: 34 }}>{fmtSignedM(rangeKpi ? rangeKpi.lDiff : ytd.value - ytd.ly)}</span>
+                      <span style={{ fontSize: 11, color: '#555', fontWeight: 400, marginLeft: 5 }}>전년 대비</span>
                     </div>
-                    <div style={{ fontSize: 10, color: '#555', marginTop: 3 }}>Actual {fmtM(ytd.value)} / LY {fmtM(ytd.ly)}</div>
+                    <div style={{ fontSize: 10, color: '#555', marginTop: 3 }}>실적 {fmtM(rangeKpi ? rangeKpi.actSum : ytd.value)} / 전년 {fmtM(rangeKpi ? rangeKpi.lySum : ytd.ly)}</div>
                   </div>
                 </div>
               </div>
