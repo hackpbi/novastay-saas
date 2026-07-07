@@ -760,15 +760,15 @@ export default function DashboardPage() {
           <div className="h-5 w-80 rounded animate-pulse" style={{ background: 'var(--color-bg-tertiary)' }} />
         ) : (
           <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-            오늘 ({otbDate}) 기준{' '}
+            {otbDate}{' '}
             {pickupDays > 0 ? (
               <span style={{ color: 'var(--color-accent-primary)' }}>
-                <span style={{ fontSize: '1.5em', fontWeight: 700 }}>{pickupDays}</span>일간
+                <span style={{ fontSize: '1.5em', fontWeight: 700 }}>{pickupDays}</span>일
               </span>
             ) : (
               <span style={{ color: 'var(--color-accent-primary)' }}>당일</span>
             )}
-            {' '}6개월 실적은 총{' '}
+            {' '}픽업, 총{' '}
             <button
               onClick={() => setMonthlyPickupSegOpen(true)}
               title="월별 픽업 추이 보기"
@@ -792,7 +792,7 @@ export default function DashboardPage() {
             >
               {(() => { const { num, unit } = formatPuParts(totalPuRevenue, 'currency'); return <><span style={{ fontSize: '1.5em' }}>{num}</span>{unit}</> })()}
             </button>
-            {' '}픽업 되었습니다.
+            {' '}[{months[0].year}.{String(months[0].month).padStart(2, '0')}~{months[months.length - 1].year}.{String(months[months.length - 1].month).padStart(2, '0')}]
           </p>
         )}
       </div>

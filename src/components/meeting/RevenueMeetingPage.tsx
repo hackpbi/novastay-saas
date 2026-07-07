@@ -5,12 +5,16 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { PickupRow } from '@/hooks/usePickupData'
 import { useMarketSchema } from '@/hooks/useMarketSchema'
+import { useBudgetMonthly, type BudgetMonthlyRow } from '@/hooks/useBudgetMonthly'
+import { useForecastMonthly, type ForecastMonthlyRow } from '@/hooks/useForecastMonthly'
+import { useLatestConfirmedBudgetDate } from '@/hooks/useLatestConfirmedBudgetDate'
+import { useFcstDateContext } from '@/contexts/FcstDateContext'
 import DatePicker from '@/components/DatePicker'
+import { FmtVal } from '@/utils/FmtVal'
 import SegmentDetailModal from './SegmentDetailModal'
 import MeetingPickupBlock, { type SegGroup } from '@/components/meeting/MeetingPickupBlock'
 import MarketPickupDayModal from '@/components/market-pickup/MarketPickupDayModal'
 import {
-  getDummyMonthlySummary,
   getDummySectionExtras,
   monthKeyLabel,
 } from './dummyMeetingData'
@@ -27,7 +31,18 @@ type Directive = {
   content:    string
   assignee:   string | null
   date:       string   // 'YYYY-MM-DD'
+  status:     '진행중' | '연장' | '보류' | '완료'
   created_at: string
+}
+
+const DIRECTIVE_STATUS = ['진행중', '연장', '보류', '완료'] as const
+type DirectiveStatus = typeof DIRECTIVE_STATUS[number]
+
+const DIRECTIVE_STATUS_COLOR: Record<DirectiveStatus, string> = {
+  '진행중': '#5B8DEF',
+  '연장':   '#F5A623',
+  '보류':   '#888888',
+  '완료':   '#00E5A0',
 }
 
 // ── 디자인 토큰 ──────────────────────────────────────────────────────────────────
@@ -64,6 +79,81 @@ const signPct = (v: number) => `${v > 0 ? '+' : ''}${v}%p`
 const dColor  = (v: number) => (v > 0 ? MINT : v < 0 ? RED : TXT3)
 const fmtAdr  = (v: number) => `${Math.round(v / 1000)}K`
 const fmtRevM = (v: number) => `${(v / 1_000_000).toFixed(0)}M`
+
+// KPI 프로그레스 바 — OTB가 목표(Budget/LY) 대비 몇 % 달성인지 (최대 100)
+function barPct(otbVal: number, refVal: number): number {
+  if (refVal <= 0) return 0
+  return Math.min(Math.round((otbVal / refVal) * 100), 100)
+}
+
+// ── KPI 카드 (OTB 값 + FCST 박스 + vs Budget/LY 프로그레스 바) ─────────────────────
+function KpiCard({
+  label, mainVal, fcstVal, fcstVsBudStr, fcstVsBudPos,
+  budStr, lyStr, vsBudDiffStr, vsBudBarPct, vsBudPos,
+  vsLyDiffStr, vsLyBarPct, vsLyPos,
+}: {
+  label:         string
+  mainVal:       string
+  fcstVal:       string
+  fcstVsBudStr:  string
+  fcstVsBudPos:  boolean
+  budStr:        string
+  lyStr:         string
+  vsBudDiffStr:  string
+  vsBudBarPct:   number
+  vsBudPos:      boolean
+  vsLyDiffStr:   string
+  vsLyBarPct:    number
+  vsLyPos:       boolean
+}) {
+  return (
+    <div style={{ background: CARD, borderRadius: 10, padding: 14, border: '1px solid #1e1e1e' }}>
+      {/* 상단: OTB 값 + FCST 박스 */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 10, color: '#666', marginBottom: 4 }}>{label}</div>
+          <div style={{ fontWeight: 500 }}><FmtVal val={mainVal} numSize={22} /></div>
+        </div>
+        <div style={{ background: '#0f0f0f', border: '1px solid #2a2a2a', borderRadius: 7, padding: '6px 10px', minWidth: 82, textAlign: 'right', flexShrink: 0 }}>
+          <div style={{ fontSize: 9, color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>FCST</div>
+          <div style={{ fontWeight: 500, color: '#F5A623', marginBottom: 2 }}><FmtVal val={fcstVal} numSize={14} /></div>
+          <div style={{ color: fcstVsBudPos ? MINT : RED }}><FmtVal val={fcstVsBudStr} numSize={10} /></div>
+        </div>
+      </div>
+
+      {/* 구분선 */}
+      <div style={{ height: 1, background: '#1e1e1e', marginBottom: 9 }} />
+
+      {/* vs Budget */}
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ fontSize: 10, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ color: '#555' }}>Budget</span>
+          <span style={{ color: '#888', fontWeight: 500 }}><FmtVal val={budStr} numSize={10} /></span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ flex: 1, height: 5, background: '#222', borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${vsBudBarPct}%`, background: vsBudPos ? MINT : RED, borderRadius: 3 }} />
+          </div>
+          <span style={{ fontWeight: 600, color: vsBudPos ? MINT : RED, whiteSpace: 'nowrap', minWidth: 42, textAlign: 'right' }}><FmtVal val={vsBudDiffStr} numSize={10} /></span>
+        </div>
+      </div>
+
+      {/* vs LY (전년 마감) */}
+      <div>
+        <div style={{ fontSize: 10, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ color: '#555' }}>LY</span>
+          <span style={{ color: '#888', fontWeight: 500 }}><FmtVal val={lyStr} numSize={10} /></span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ flex: 1, height: 5, background: '#222', borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${vsLyBarPct}%`, background: vsLyPos ? MINT : RED, borderRadius: 3 }} />
+          </div>
+          <span style={{ fontWeight: 600, color: vsLyPos ? MINT : RED, whiteSpace: 'nowrap', minWidth: 42, textAlign: 'right' }}><FmtVal val={vsLyDiffStr} numSize={10} /></span>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // 특정 세그먼트(codes)의 어카운트별 픽업 집계 — R/N 절대값 내림차순 상위 8개
 function getAccountSummary(segCodes: string[], rows: PickupRow[], year: number, month: number) {
@@ -132,12 +222,12 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
   )
   const [addAssignee, setAddAssignee] = useState('')
 
-  const summary = getDummyMonthlySummary(monthKey)
   const extras  = getDummySectionExtras(monthKey)
 
   // ── 지시사항 (c11_meeting_directives) ─────────────────────────────────────────
   const { data: directives = [], refetch: refetchDirectives } = useQuery<Directive[]>({
     queryKey: ['meeting-directives', hotelId, monthKey],
+    enabled: !!hotelId && !!monthKey,   // hotelId 빈값 시 실행 안 함 (400 방지)
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const { data, error } = await (supabase as any)
@@ -169,6 +259,40 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
     if (error) { console.error(error); return }
     refetchDirectives()
   }
+
+  async function updateDirectiveStatus(id: string, status: DirectiveStatus) {
+    const { error } = await (supabase as any)
+      .from('c11_meeting_directives')
+      .update({ status })
+      .eq('id', id)
+    if (error) { console.error('[updateDirectiveStatus] error:', error); return }
+    refetchDirectives()
+  }
+
+  // ── 헤더 지시사항 캐러셀 (완료 제외, 2개씩 3초 순환) ──────────────────────────────
+  const [carouselIdx, setCarouselIdx] = useState(0)
+  const [showDoneDirectives, setShowDoneDirectives] = useState(false)   // more 모달: 완료 표시 토글
+
+  const activeDirectives = useMemo(
+    () => directives.filter(d => d.status !== '완료'),
+    [directives],
+  )
+
+  useEffect(() => {
+    if (activeDirectives.length <= 2) return
+    const timer = setInterval(() => {
+      setCarouselIdx(i => (i + 1) % activeDirectives.length)
+    }, 3000)
+    return () => clearInterval(timer)
+  }, [activeDirectives.length])
+
+  // more 모달 목록 필터 (완료 기본 숨김 + 내용/담당자 검색 + 날짜)
+  const filteredDirectives = directives.filter(d => {
+    if (d.status === '완료' && !showDoneDirectives) return false
+    if (searchText && !d.content.toLowerCase().includes(searchText.toLowerCase()) && !(d.assignee ?? '').toLowerCase().includes(searchText.toLowerCase())) return false
+    if (searchDate && d.date !== searchDate) return false
+    return true
+  })
 
   // ── Market Pick-up 임베드 (MarketPickupPage 패턴 재사용) ──────────────────────
   // 사용 가능한 OTB 스냅샷 날짜 목록 (get_otb_dates RPC — AppLayout과 동일 패턴)
@@ -265,28 +389,100 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
 
   const [dayModal, setDayModal] = useState<{ year: number; month: number; day: number; defaultTab: 'pickup' | 'otb' } | null>(null)
 
-  // 요약 카드 정의
-  const cards: { label: string; main: string; vsBudget: React.ReactNode; vsLy: React.ReactNode }[] = [
-    {
-      label: 'OCC', main: `${summary.occ.value}%`,
-      vsBudget: <span style={{ color: dColor(summary.occ.vsBudget) }}>{signPct(summary.occ.vsBudget)}</span>,
-      vsLy:     <span style={{ color: dColor(summary.occ.vsLy) }}>{signPct(summary.occ.vsLy)}</span>,
+  // ── KPI 카드 데이터 (OTB=pickupRows / Budget·FCST=기존 RPC / LY=전년 마감 a01) ──
+  const daysInMonth = new Date(mpYear, mpMonth0 + 1, 0).getDate()
+  const avail = roomCount * daysInMonth
+
+  // OTB — pickupRows 당월 합산
+  const otbMonthly = useMemo(() => {
+    const rows = pickupRows.filter(r => {
+      const d = new Date(r.business_date)
+      return d.getFullYear() === mpYear && d.getMonth() === mpMonth0
+    })
+    const rn  = rows.reduce((s, r) => s + (r.otb_nights ?? 0), 0)
+    const rev = rows.reduce((s, r) => s + (r.otb_revenue ?? 0), 0)
+    return { rn, rev, adr: rn > 0 ? Math.round(rev / rn) : 0, occ: avail > 0 ? Math.round((rn / avail) * 1000) / 10 : 0 }
+  }, [pickupRows, mpYear, mpMonth0, avail])
+
+  // Budget — get_budget_monthly (최신 확정본)
+  const { data: budgetDate = null } = useLatestConfirmedBudgetDate(hotelId || undefined)
+  const budgetRows = (useBudgetMonthly({ hotelId: hotelId || undefined, year: mpYear, updateDate: budgetDate }).data ?? []) as BudgetMonthlyRow[]
+  const budgetAgg = useMemo(() => {
+    const rows = budgetRows.filter(r => Number(r.month_num) === mpMonth1)   // month_num이 문자열로 올 수 있어 숫자 비교
+    const rn  = rows.reduce((s, r) => s + (r.budget_nights ?? 0), 0)
+    const rev = rows.reduce((s, r) => s + (r.budget_revenue ?? 0), 0)
+    return { has: rows.length > 0, rn, rev, adr: rn > 0 ? Math.round(rev / rn) : 0, occ: avail > 0 ? Math.round((rn / avail) * 1000) / 10 : 0 }
+  }, [budgetRows, mpMonth1, avail])
+
+  // FCST — get_forecast_monthly (fcstDate 컨텍스트)
+  const { fcstDate } = useFcstDateContext()
+  const fcstRows = (useForecastMonthly({ hotelId: hotelId || undefined, year: mpYear, updateDate: fcstDate || null }).data ?? []) as ForecastMonthlyRow[]
+  const fcstAgg = useMemo(() => {
+    const rows = fcstRows.filter(r => Number(r.month_num) === mpMonth1)   // month_num이 문자열로 올 수 있어 숫자 비교
+    const rn  = rows.reduce((s, r) => s + (r.forecast_nights ?? 0), 0)
+    const rev = rows.reduce((s, r) => s + (r.forecast_revenue ?? 0), 0)
+    return { has: rows.length > 0, rn, rev, adr: rn > 0 ? Math.round(rev / rn) : 0, occ: avail > 0 ? Math.round((rn / avail) * 1000) / 10 : 0 }
+  }, [fcstRows, mpMonth1, avail])
+
+  // LY(전년 마감) — a01_actual_daily 전년 동월
+  const lyDaysInMonth = new Date(mpYear - 1, mpMonth0 + 1, 0).getDate()
+  const { data: lyRows = [] } = useQuery({
+    queryKey: ['meeting-kpi-ly', hotelId, mpYear, mpMonth1],
+    enabled: !!hotelId,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const start = `${mpYear - 1}-${String(mpMonth1).padStart(2, '0')}-01`
+      const end   = `${mpYear - 1}-${String(mpMonth1).padStart(2, '0')}-${String(lyDaysInMonth).padStart(2, '0')}`
+      const { data, error } = await (supabase as any).from('a01_actual_daily')
+        .select('nights, room_revenue').eq('hotel_id', hotelId)
+        .gte('business_date', start).lte('business_date', end)
+      if (error) { console.error('[meeting-kpi-ly] error:', error); return [] }
+      return (data ?? []) as { nights: number; room_revenue: number }[]
     },
-    {
-      label: 'R·N', main: summary.rn.value.toLocaleString('ko-KR'),
-      vsBudget: <span style={{ color: dColor(summary.rn.vsBudget) }}>{signNum(summary.rn.vsBudget)}</span>,
-      vsLy:     <span style={{ color: dColor(summary.rn.vsLy) }}>{signNum(summary.rn.vsLy)}</span>,
-    },
-    {
-      label: 'ADR', main: `${Math.round(summary.adr.value / 1000)}K`,
-      vsBudget: <span style={{ color: dColor(summary.adr.vsBudget) }}>{signK(summary.adr.vsBudget)}</span>,
-      vsLy:     <span style={{ color: dColor(summary.adr.vsLy) }}>{signK(summary.adr.vsLy)}</span>,
-    },
-    {
-      label: 'REV', main: `${(summary.rev.value / 1_000_000).toFixed(1)}M`,
-      vsBudget: <span style={{ color: dColor(summary.rev.vsBudget) }}>{signM(summary.rev.vsBudget)}</span>,
-      vsLy:     <span style={{ color: dColor(summary.rev.vsLy) }}>{signM(summary.rev.vsLy)}</span>,
-    },
+  })
+  const lyAgg = useMemo(() => {
+    const rn  = lyRows.reduce((s, r) => s + (r.nights ?? 0), 0)
+    const rev = lyRows.reduce((s, r) => s + (r.room_revenue ?? 0), 0)
+    const lyAvail = roomCount * lyDaysInMonth
+    return { has: lyRows.length > 0, rn, rev, adr: rn > 0 ? Math.round(rev / rn) : 0, occ: lyAvail > 0 ? Math.round((rn / lyAvail) * 1000) / 10 : 0 }
+  }, [lyRows, roomCount, lyDaysInMonth])
+
+  // ── DEBUG: KPI 최종 상태 ──
+  useEffect(() => {
+    if (!hotelId) return
+    console.log('[KPI Final]', {
+      budgetAgg,
+      fcstAgg,
+      lyAgg,
+      otbMonthly,
+      budgetRowsLen: (budgetRows ?? []).length,
+      fcstRowsLen: (fcstRows ?? []).length,
+      lyRowsLen: (lyRows ?? []).length,
+    })
+  }, [hotelId, budgetAgg, fcstAgg, lyAgg, otbMonthly])
+
+  // ── DEBUG: OTB 픽업 데이터 ──
+  useEffect(() => {
+    if (!hotelId) return
+    const m0 = mpMonth1 - 1
+    const filtered = pickupRows.filter(r => {
+      const d = new Date(r.business_date)
+      return d.getFullYear() === mpYear && d.getMonth() === m0
+    })
+    console.log('[OTB Debug] pickupRows 전체:', pickupRows.length, '/ 해당월:', filtered.length, '/ mpYear:', mpYear, '/ mpMonth0:', m0)
+  }, [hotelId, pickupRows, mpYear, mpMonth1])
+
+  // 지표별 포맷 정의
+  const kpiSgn = (v: number) => (v > 0 ? '+' : '')
+  const kpiMetrics = [
+    { label: 'OCC', otb: otbMonthly.occ, fcst: fcstAgg.occ, bud: budgetAgg.occ, ly: lyAgg.occ,
+      fmt: (v: number) => `${v}%`,                                 fmtDiff: (v: number) => `${kpiSgn(v)}${Math.round(v * 10) / 10}%p` },
+    { label: 'R·N', otb: otbMonthly.rn,  fcst: fcstAgg.rn,  bud: budgetAgg.rn,  ly: lyAgg.rn,
+      fmt: (v: number) => Math.round(v).toLocaleString('ko-KR'),   fmtDiff: (v: number) => `${kpiSgn(v)}${Math.round(v).toLocaleString('ko-KR')}` },
+    { label: 'ADR', otb: otbMonthly.adr, fcst: fcstAgg.adr, bud: budgetAgg.adr, ly: lyAgg.adr,
+      fmt: (v: number) => `${Math.round(v / 1000)}K`,              fmtDiff: (v: number) => `${kpiSgn(v)}${Math.round(v / 1000)}K` },
+    { label: 'REV', otb: otbMonthly.rev, fcst: fcstAgg.rev, bud: budgetAgg.rev, ly: lyAgg.rev,
+      fmt: (v: number) => `${(v / 1_000_000).toFixed(1)}M`,        fmtDiff: (v: number) => `${kpiSgn(v)}${(v / 1_000_000).toFixed(1)}M` },
   ]
 
   return (
@@ -325,30 +521,57 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
 
         {/* 헤더 우측: 지시사항 섹션 */}
         <div style={{ marginLeft: 'auto', minWidth: 280, maxWidth: 400, marginTop: 4 }}>
-          <div style={{ fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 5, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            {/* 좌: 라벨 */}
             <span>지시사항</span>
-            <button
-              onClick={() => setInlineOpen(v => !v)}
-              style={{ fontSize: 10, color: '#888', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', borderBottom: '1px dashed #333', padding: 0 }}
-            >
-              + 추가
-            </button>
-            <button
-              onClick={() => setDirModalOpen(true)}
-              style={{ fontSize: 10, color: MINT, border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', borderBottom: '1px dashed rgba(0,229,160,0.4)', padding: 0, marginLeft: 'auto' }}
-            >
-              more
-            </button>
+            {/* 우: 버튼 그룹 나란히 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button
+                onClick={() => { console.log('[directive] + 추가 클릭, inlineOpen:', inlineOpen); setInlineOpen(v => !v) }}
+                style={{ fontSize: 10, color: '#888', border: '1px solid #2a2a2a', background: inlineOpen ? '#1a1a1a' : 'transparent', borderRadius: 4, padding: '1px 7px', cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                + 추가
+              </button>
+              <button
+                onClick={() => setDirModalOpen(true)}
+                style={{ fontSize: 10, color: MINT, border: '1px solid rgba(0,229,160,0.3)', background: 'transparent', borderRadius: 4, padding: '1px 7px', cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                more
+              </button>
+            </div>
           </div>
 
-          {/* 최신 2개 미리보기 */}
-          {directives.slice(0, 2).map(d => (
-            <div key={d.id} style={{ fontSize: 11, color: '#ccc', padding: '3px 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              · {d.content}
+          {/* 캐러셀 카드 — 완료 제외 항목 2개씩 순환 */}
+          {activeDirectives.length === 0 ? (
+            <div style={{ border: '1px solid #1e1e1e', borderRadius: 7, padding: '7px 10px', background: CARD, fontSize: 11, color: '#444' }}>
+              등록된 지시사항이 없습니다
             </div>
-          ))}
-          {directives.length === 0 && (
-            <div style={{ fontSize: 11, color: '#444', padding: '3px 0' }}>등록된 지시사항이 없습니다</div>
+          ) : (
+            <div style={{ border: '1px solid #1e1e1e', borderRadius: 7, padding: '7px 10px', background: CARD, minHeight: 52 }}>
+              {[0, 1].map(offset => {
+                if (offset >= activeDirectives.length) return null   // 활성 1개면 중복 렌더 방지
+                const d = activeDirectives[(carouselIdx + offset) % activeDirectives.length]
+                if (!d) return null
+                return (
+                  <div key={d.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 7,
+                    padding: '3px 0', fontSize: 11, color: '#ccc', overflow: 'hidden',
+                    borderBottom: offset === 0 ? '1px solid #1a1a1a' : 'none',
+                  }}>
+                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: DIRECTIVE_STATUS_COLOR[d.status], flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{d.content}</span>
+                    <span style={{
+                      fontSize: 9, padding: '1px 5px', borderRadius: 3, whiteSpace: 'nowrap', flexShrink: 0,
+                      color: DIRECTIVE_STATUS_COLOR[d.status],
+                      background: `${DIRECTIVE_STATUS_COLOR[d.status]}1a`,
+                      border: `1px solid ${DIRECTIVE_STATUS_COLOR[d.status]}44`,
+                    }}>
+                      {d.status}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
           )}
 
           {/* 인라인 입력창 */}
@@ -407,9 +630,10 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
                   style={{ fontSize: 11, padding: '4px 12px', borderRadius: 5, border: 'none', background: '#1a1a1a', color: '#666', cursor: 'pointer', fontFamily: 'inherit' }}
                 >취소</button>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     if (!inlineContent.trim()) return
-                    addDirective(inlineContent, inlineDate, inlineAssignee)
+                    console.log('[directive] 저장 시도:', { inlineContent, inlineDate, inlineAssignee, hotelId, monthKey })
+                    await addDirective(inlineContent, inlineDate, inlineAssignee)
                     setInlineContent('')
                     setInlineAssignee('')
                     setInlineOpen(false)
@@ -450,16 +674,22 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
               {(searchText || searchDate) && (
                 <button onClick={() => { setSearchText(''); setSearchDate('') }} style={{ fontSize: 10, color: '#555', background: 'none', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>초기화</button>
               )}
+              <button
+                onClick={() => setShowDoneDirectives(v => !v)}
+                style={{
+                  fontSize: 10, color: showDoneDirectives ? MINT : '#555',
+                  border: `1px solid ${showDoneDirectives ? 'rgba(0,229,160,0.3)' : '#2a2a2a'}`,
+                  background: 'transparent', borderRadius: 5, padding: '4px 8px',
+                  cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                }}
+              >
+                {showDoneDirectives ? '완료 숨기기' : '완료 표시'}
+              </button>
             </div>
 
             {/* 목록 */}
             <div style={{ padding: '10px 16px', overflowY: 'auto', flex: 1 }}>
-              {directives
-                .filter(d =>
-                  (!searchText || d.content.toLowerCase().includes(searchText.toLowerCase()) || (d.assignee ?? '').toLowerCase().includes(searchText.toLowerCase()))
-                  && (!searchDate || d.date === searchDate)
-                )
-                .map(d => (
+              {filteredDirectives.map(d => (
                   <div key={d.id} style={{ padding: '8px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 12, color: '#ccc', marginBottom: 4 }}>{d.content}</div>
@@ -471,19 +701,36 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
                         </>}
                       </div>
                     </div>
-                    <button
-                      onClick={() => deleteDirective(d.id)}
-                      style={{ fontSize: 11, color: '#333', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', borderRadius: 3, flexShrink: 0, marginTop: 2 }}
-                      onMouseEnter={e => { e.currentTarget.style.color = '#E24B4A'; e.currentTarget.style.background = '#1a0f0f' }}
-                      onMouseLeave={e => { e.currentTarget.style.color = '#333'; e.currentTarget.style.background = 'none' }}
-                    >✕</button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                      {/* 상태 버튼 — 클릭 시 다음 상태로 순환 */}
+                      <button
+                        onClick={() => {
+                          const cur = DIRECTIVE_STATUS.indexOf(d.status)
+                          const next = DIRECTIVE_STATUS[(cur + 1) % DIRECTIVE_STATUS.length]
+                          updateDirectiveStatus(d.id, next)
+                        }}
+                        style={{
+                          fontSize: 10, padding: '2px 7px', borderRadius: 4,
+                          border: `1px solid ${DIRECTIVE_STATUS_COLOR[d.status]}`,
+                          color: DIRECTIVE_STATUS_COLOR[d.status],
+                          background: `${DIRECTIVE_STATUS_COLOR[d.status]}1a`,
+                          cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {d.status}
+                      </button>
+                      {/* 삭제 버튼 */}
+                      <button
+                        onClick={() => deleteDirective(d.id)}
+                        style={{ fontSize: 11, color: '#333', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', borderRadius: 3, flexShrink: 0 }}
+                        onMouseEnter={e => { e.currentTarget.style.color = '#E24B4A'; e.currentTarget.style.background = '#1a0f0f' }}
+                        onMouseLeave={e => { e.currentTarget.style.color = '#333'; e.currentTarget.style.background = 'none' }}
+                      >✕</button>
+                    </div>
                   </div>
                 ))
               }
-              {directives.filter(d =>
-                (!searchText || d.content.toLowerCase().includes(searchText.toLowerCase()) || (d.assignee ?? '').toLowerCase().includes(searchText.toLowerCase()))
-                && (!searchDate || d.date === searchDate)
-              ).length === 0 && (
+              {filteredDirectives.length === 0 && (
                 <div style={{ fontSize: 12, color: '#444', textAlign: 'center', padding: '24px 0' }}>검색 결과가 없습니다</div>
               )}
             </div>
@@ -611,17 +858,23 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
 
       {/* ② 월간 요약 KPI */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
-        {cards.map(c => (
-          <div key={c.label} style={{ background: CARD, borderRadius: 10, padding: 14 }}>
-            <div style={{ fontSize: 12, color: TXT3 }}>{c.label}</div>
-            <div style={{ fontSize: 20, fontWeight: 500, color: '#fff', margin: '4px 0 6px' }}>{c.main}</div>
-            <div style={{ fontSize: 12, display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: TXT3 }}>vs Budget</span>{c.vsBudget}
-            </div>
-            <div style={{ fontSize: 12, display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
-              <span style={{ color: TXT3 }}>vs LY</span>{c.vsLy}
-            </div>
-          </div>
+        {kpiMetrics.map(m => (
+          <KpiCard
+            key={m.label}
+            label={m.label}
+            mainVal={m.fmt(m.otb)}
+            fcstVal={fcstAgg.has ? m.fmt(m.fcst) : '—'}
+            fcstVsBudStr={fcstAgg.has && budgetAgg.has ? `vs Bud ${m.fmtDiff(m.fcst - m.bud)}` : '—'}
+            fcstVsBudPos={m.fcst - m.bud >= 0}
+            budStr={budgetAgg.has ? m.fmt(m.bud) : '—'}
+            lyStr={lyAgg.has ? m.fmt(m.ly) : '—'}
+            vsBudDiffStr={budgetAgg.has ? m.fmtDiff(m.otb - m.bud) : '—'}
+            vsBudBarPct={barPct(m.otb, m.bud)}
+            vsBudPos={m.otb - m.bud >= 0}
+            vsLyDiffStr={lyAgg.has ? m.fmtDiff(m.otb - m.ly) : '—'}
+            vsLyBarPct={barPct(m.otb, m.ly)}
+            vsLyPos={m.otb - m.ly >= 0}
+          />
         ))}
       </div>
 
@@ -697,7 +950,7 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
             ].map(k => (
               <div key={k.label} style={{ background: '#0f0f0f', borderRadius: 6, padding: '7px 8px', textAlign: 'center' }}>
                 <div style={{ fontSize: 9, color: '#555', marginBottom: 2 }}>{k.label}</div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: k.color }}>{k.val}</div>
+                <div style={{ fontWeight: 500, color: k.color }}><FmtVal val={k.val} numSize={14} /></div>
                 <div style={{ fontSize: 9, color: '#555', marginTop: 1 }}>{k.lyVal}</div>
               </div>
             ))}
@@ -746,7 +999,7 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
           ].map((k, i) => (
             <div key={i} style={{ background: '#0f0f0f', borderRadius: 6, padding: '8px 10px', textAlign: 'center' }}>
               <div style={{ fontSize: 9, color: '#555', marginBottom: 2 }}>{k.label}</div>
-              <div style={{ fontSize: 15, fontWeight: 500, color: k.color }}>{k.val}</div>
+              <div style={{ fontWeight: 500, color: k.color }}><FmtVal val={k.val} numSize={15} /></div>
             </div>
           ))}
         </div>

@@ -7,6 +7,7 @@ import type { MarketSchemaRow } from '@/hooks/useMarketSchema'
 import { buildSegTable, type SegTableRow } from '@/utils/segmentationTable'
 import { WEEKDAY_KR } from '@/utils/pickupPageUtils'
 import { getDayColor } from '@/utils/dateUtils'
+import { FmtVal } from '@/utils/FmtVal'
 import DatePicker from '@/components/DatePicker'
 
 // 날짜 문자열 직접 파싱 (KST 이슈 없음)
@@ -282,12 +283,12 @@ export default function MarketPickupDayModal({
                       </td>
                       {tab === 'pickup' ? (<>
                         <td style={{ padding: '5px 12px', textAlign: 'right', color: numColor(r.puNights, r) }}>{fmtPuRn(r.puNights)}</td>
-                        <td style={{ padding: '5px 12px', textAlign: 'right', color: numColor(r.puAdr, r) }}>{fmtPuAdr(r.puAdr, adrValid)}</td>
-                        <td style={{ padding: '5px 12px', textAlign: 'right', color: numColor(r.puRevenue, r) }}>{fmtPuRev(r.puRevenue)}</td>
+                        <td style={{ padding: '5px 12px', textAlign: 'right', color: numColor(r.puAdr, r) }}><FmtVal val={fmtPuAdr(r.puAdr, adrValid)} numSize={11} /></td>
+                        <td style={{ padding: '5px 12px', textAlign: 'right', color: numColor(r.puRevenue, r) }}><FmtVal val={fmtPuRev(r.puRevenue)} numSize={11} /></td>
                       </>) : (<>
                         <td style={{ padding: '5px 12px', textAlign: 'right', color: otbNumColor(r) }}>{fmtOtbRn(r.otbNights)}</td>
-                        <td style={{ padding: '5px 12px', textAlign: 'right', color: otbNumColor(r) }}>{fmtOtbAdr(r.otbAdr)}</td>
-                        <td style={{ padding: '5px 12px', textAlign: 'right', color: otbNumColor(r) }}>{fmtOtbRev(r.otbRevenue)}</td>
+                        <td style={{ padding: '5px 12px', textAlign: 'right', color: otbNumColor(r) }}><FmtVal val={fmtOtbAdr(r.otbAdr)} numSize={11} /></td>
+                        <td style={{ padding: '5px 12px', textAlign: 'right', color: otbNumColor(r) }}><FmtVal val={fmtOtbRev(r.otbRevenue)} numSize={11} /></td>
                       </>)}
                     </tr>
                   )
@@ -300,11 +301,11 @@ export default function MarketPickupDayModal({
                   {tab === 'pickup' ? (<>
                     <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: puColor(summary.puNights), borderTop: '1px solid rgba(0,229,160,0.5)' }}>{fmtPuRn(summary.puNights)}</td>
                     <td style={{ padding: '7px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.25)', borderTop: '1px solid rgba(0,229,160,0.5)' }}>—</td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: puColor(summary.puRevenue), borderTop: '1px solid rgba(0,229,160,0.5)' }}>{fmtPuRev(summary.puRevenue)}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: puColor(summary.puRevenue), borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtPuRev(summary.puRevenue)} numSize={11} /></td>
                   </>) : (<>
                     <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}>{fmtOtbRn(summary.totalNights)}</td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}>{fmtOtbAdr(summary.totalAdr)}</td>
-                    <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}>{fmtOtbRev(summary.totalRevenue)}</td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtOtbAdr(summary.totalAdr)} numSize={11} /></td>
+                    <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtOtbRev(summary.totalRevenue)} numSize={11} /></td>
                   </>)}
                 </tr>
                 {/* OCC 행 */}
@@ -320,9 +321,9 @@ export default function MarketPickupDayModal({
                 <tr>
                   <td style={{ padding: '6px 12px', fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>Rev.PAR</td>
                   <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: tab === 'pickup' ? revparPuColor : 'var(--color-text-primary)' }}>
-                    {tab === 'pickup'
+                    <FmtVal numSize={11} val={tab === 'pickup'
                       ? `${summary.puRevenue >= 0 ? '+' : ''}${Math.round(summary.puRevenue / (roomCount || 1) / 1000)}k`
-                      : `${Math.round(summary.revpar / 1000)}k`}
+                      : `${Math.round(summary.revpar / 1000)}k`} />
                   </td>
                 </tr>
               </tfoot>
@@ -366,12 +367,12 @@ export default function MarketPickupDayModal({
                             <td style={{ padding: '6px 12px', color: 'rgba(255,255,255,0.75)' }}>{a.name}</td>
                             {tab === 'pickup' ? (<>
                               <td style={{ padding: '6px 12px', textAlign: 'right', color: accNumColor(a.puNights) }}>{fmtPuRn(a.puNights)}</td>
-                              <td style={{ padding: '6px 12px', textAlign: 'right', color: accNumColor(a.puAdr) }}>{fmtPuAdr(a.puAdr, a.otbNights > 0 && a.vsNights > 0)}</td>
-                              <td style={{ padding: '6px 12px', textAlign: 'right', color: accNumColor(a.puRevenue) }}>{fmtPuRev(a.puRevenue)}</td>
+                              <td style={{ padding: '6px 12px', textAlign: 'right', color: accNumColor(a.puAdr) }}><FmtVal val={fmtPuAdr(a.puAdr, a.otbNights > 0 && a.vsNights > 0)} numSize={11} /></td>
+                              <td style={{ padding: '6px 12px', textAlign: 'right', color: accNumColor(a.puRevenue) }}><FmtVal val={fmtPuRev(a.puRevenue)} numSize={11} /></td>
                             </>) : (<>
                               <td style={{ padding: '6px 12px', textAlign: 'right', color: accOtbColor(a.otbNights) }}>{fmtOtbRn(a.otbNights)}</td>
-                              <td style={{ padding: '6px 12px', textAlign: 'right', color: accOtbColor(a.otbNights) }}>{fmtOtbAdr(a.otbAdr)}</td>
-                              <td style={{ padding: '6px 12px', textAlign: 'right', color: accOtbColor(a.otbNights) }}>{fmtOtbRev(a.otbRevenue)}</td>
+                              <td style={{ padding: '6px 12px', textAlign: 'right', color: accOtbColor(a.otbNights) }}><FmtVal val={fmtOtbAdr(a.otbAdr)} numSize={11} /></td>
+                              <td style={{ padding: '6px 12px', textAlign: 'right', color: accOtbColor(a.otbNights) }}><FmtVal val={fmtOtbRev(a.otbRevenue)} numSize={11} /></td>
                             </>)}
                           </tr>
                         ))}
@@ -382,11 +383,11 @@ export default function MarketPickupDayModal({
                           {tab === 'pickup' ? (<>
                             <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: puColor(accTotal.puNights), borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtPuRn(accTotal.puNights)}</td>
                             <td style={{ padding: '7px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.25)', borderTop: '1px solid rgba(0,229,160,0.4)' }}>—</td>
-                            <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: puColor(accTotal.puRevenue), borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtPuRev(accTotal.puRevenue)}</td>
+                            <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: puColor(accTotal.puRevenue), borderTop: '1px solid rgba(0,229,160,0.4)' }}><FmtVal val={fmtPuRev(accTotal.puRevenue)} numSize={11} /></td>
                           </>) : (<>
                             <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtOtbRn(accTotal.otbNights)}</td>
-                            <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtOtbAdr(accTotalOtbAdr)}</td>
-                            <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtOtbRev(accTotal.otbRevenue)}</td>
+                            <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.4)' }}><FmtVal val={fmtOtbAdr(accTotalOtbAdr)} numSize={11} /></td>
+                            <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.4)' }}><FmtVal val={fmtOtbRev(accTotal.otbRevenue)} numSize={11} /></td>
                           </>)}
                         </tr>
                       </tfoot>
