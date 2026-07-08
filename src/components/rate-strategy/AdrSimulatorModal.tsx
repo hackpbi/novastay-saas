@@ -780,33 +780,50 @@ export default function AdrSimulatorModal({
           {/* 본문 (고정 상단 + 잔여 객실타입 현황이 하단 채움) */}
           <div ref={scrollBodyRef} className="flex-1 flex flex-col" style={{ minHeight: 0, overflowY: 'auto' }}>
             <div>
-              {/* ① 오늘 추천 BAR (get_bar_recommendation, 데이터 있을 때만) */}
-              {barRec && (() => {
-                const dir = barRec.direction
-                const dirColor = dir === 'up' ? MINT : dir === 'dn' ? RED : TXT3
-                return (
-                  <div style={{ margin: '10px 14px 8px', background: BG_CARD, border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: '8px 10px' }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: TXT, marginBottom: 6 }}>오늘 추천 BAR</div>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                      <span style={{ fontSize: 20, fontWeight: 700, color: dirColor }}>{Math.round(barRec.rec_bar / 1000)}K</span>
-                      <span style={{ fontSize: 11, fontWeight: 500, color: dirColor }}>{barRec.delta_pct > 0 ? '+' : ''}{barRec.delta_pct}%</span>
-                      <span style={{ marginLeft: 'auto', fontSize: 11, color: TXT3 }}>현재 {Math.round(barRec.cur_bar / 1000)}K</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-                      <span style={{ fontSize: 11, color: TXT3 }}>BAR</span>
-                      <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-                        <input type="number" className="fc-spin-hide" value={Math.round(barRaw / 1000)} onChange={e => setBarRaw(Math.max(0, (Number(e.target.value) || 0) * 1000))}
-                          style={{ background: BG_INPUT, border: `0.5px solid ${BORDER_ACCENT}`, borderRadius: 6, color: MINT, fontSize: 14, fontWeight: 500, width: 60, textAlign: 'right', padding: '3px 22px 3px 7px', outline: 'none' }} />
-                        <span style={{ position: 'absolute', right: 7, fontSize: 11, color: TXT3, pointerEvents: 'none' }}>K</span>
-                      </div>
-                      <button onClick={() => setBarRaw(barRec.rec_bar)}
-                        style={{ fontSize: 10, fontWeight: 500, padding: '3px 10px', borderRadius: 5, whiteSpace: 'nowrap', background: MINT, color: '#0a0a0a', border: 'none', cursor: 'pointer' }}>
-                        추천값 적용
-                      </button>
+              {/* ①+③ 통합: BAR RATE + 추천 + 현재/예상 전망 */}
+              <div style={{ margin: '10px 14px 8px', background: BG_CARD, border: `0.5px solid ${BORDER}`, borderRadius: 8, overflow: 'hidden' }}>
+                {/* 상단: BAR RATE + OTB 요약 */}
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, padding: '8px 12px 2px' }}>
+                  <span style={{ fontSize: 22, fontWeight: 500, color: TXT }}>BAR RATE</span>
+                  <span style={{ fontSize: 12, color: TXT3, whiteSpace: 'nowrap' }}>OTB : OCC {calc.curOcc}% · ADR {fmtADR(calc.curAdr)} · REV {fmtREV(calc.curRev)}</span>
+                </div>
+                {/* 중간: 현재 BAR → 입력 → 추천 badge → 적용 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 12px 10px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 28, color: TXT3, lineHeight: 1 }}>{Math.round(effBase / 1000)}K</span>
+                  <span style={{ fontSize: 18, color: TXT3 }}>→</span>
+                  <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                    <input type="number" className="fc-spin-hide" value={Math.round(barRaw / 1000)} onChange={e => setBarRaw(Math.max(0, (Number(e.target.value) || 0) * 1000))}
+                      style={{ background: BG_INPUT, border: `0.5px solid ${BORDER_ACCENT}`, borderRadius: 6, color: MINT, fontSize: 32, fontWeight: 500, width: 100, textAlign: 'right', padding: '2px 28px 2px 8px', outline: 'none', lineHeight: 1.1 }} />
+                    <span style={{ position: 'absolute', right: 9, fontSize: 13, color: TXT3, pointerEvents: 'none' }}>K</span>
+                  </div>
+                  {barRec && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, fontWeight: 500, padding: '2px 9px', borderRadius: 20, whiteSpace: 'nowrap', background: SUCCESS_BG, border: `0.5px solid ${SUCCESS_BD}`, color: barRec.direction === 'up' ? POS : barRec.direction === 'dn' ? RED : TXT3 }}>추천 {barRec.delta_pct > 0 ? '+' : ''}{barRec.delta_pct}%</span>
+                  )}
+                  {barRec && (
+                    <button onClick={() => setBarRaw(barRec.rec_bar)}
+                      style={{ fontSize: 11, fontWeight: 500, padding: '4px 12px', borderRadius: 6, whiteSpace: 'nowrap', background: MINT, color: '#0a0a0a', border: 'none', cursor: 'pointer' }}>적용</button>
+                  )}
+                </div>
+                {/* 하단: 현재 전망 vs 예상 전망 */}
+                <div style={{ display: 'flex', borderTop: `0.5px solid ${BORDER}` }}>
+                  <div style={{ flex: 1, padding: '8px 12px' }}>
+                    <div style={{ fontSize: 9, color: TXT3, marginBottom: 4 }}>현재 전망</div>
+                    <div style={{ display: 'flex', gap: 14 }}>
+                      {([['OCC', `${calc.curOcc}%`], ['ADR', fmtADR(calc.curAdr)], ['REV', fmtREV(calc.curRev)]] as const).map(([l, v]) => (
+                        <div key={l}><div style={{ fontSize: 9, color: TXT3 }}>{l}</div><div style={{ fontSize: 13, fontWeight: 600, color: TXT }}>{v}</div></div>
+                      ))}
                     </div>
                   </div>
-                )
-              })()}
+                  <div style={{ flex: 1, padding: '8px 12px', borderLeft: `0.5px solid ${BORDER}` }}>
+                    <div style={{ fontSize: 9, color: MINT, marginBottom: 4 }}>예상 전망</div>
+                    <div style={{ display: 'flex', gap: 14 }}>
+                      {([['OCC', `${calc.simOcc}%`], ['ADR', fmtADR(calc.simAdr)], ['REV', fmtREV(calc.simRev)]] as const).map(([l, v]) => (
+                        <div key={l}><div style={{ fontSize: 9, color: TXT3 }}>{l}</div><div style={{ fontSize: 13, fontWeight: 600, color: MINT }}>{v}</div></div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
               {/* ② 왜 올려야 하나? — 픽업 추이 (get_pickup_trend, 데이터 있을 때만) */}
               {pickupTrend && (() => {
                 const occ = (rn: number) => effTotal > 0 ? Math.round(rn / effTotal * 100 * 10) / 10 : 0
@@ -847,53 +864,30 @@ export default function AdrSimulatorModal({
                   </div>
                 )
               })()}
-              {/* ③ 올리면 어떻게 되지? — OTB vs 시뮬 비교 + 슬라이더(이동) */}
-              <div style={{ margin: '10px 14px 8px', background: BG_CARD, border: `0.5px solid ${BORDER}`, borderRadius: 8, overflow: 'hidden' }}>
-                <div style={{ padding: '8px 10px 4px', fontSize: 11, fontWeight: 600, color: TXT }}>올리면 어떻게 되지?</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '52px 1fr 1fr 1fr', columnGap: 6, rowGap: 3, padding: '0 10px 8px', fontSize: 11, alignItems: 'center' }}>
-                  <span />
-                  <span style={{ fontSize: 9, color: TXT3, textAlign: 'right' }}>OCC</span>
-                  <span style={{ fontSize: 9, color: TXT3, textAlign: 'right' }}>ADR</span>
-                  <span style={{ fontSize: 9, color: TXT3, textAlign: 'right' }}>REV</span>
-                  <span style={{ color: TXT3 }}>현재 OTB</span>
-                  <span style={{ textAlign: 'right', color: TXT }}>{calc.curOcc}%</span>
-                  <span style={{ textAlign: 'right', color: TXT }}>{fmtADR(calc.curAdr)}</span>
-                  <span style={{ textAlign: 'right', color: TXT }}>{fmtREV(calc.curRev)}</span>
-                  <span style={{ color: MINT }}>시뮬</span>
-                  <span style={{ textAlign: 'right', color: TXT }}>{calc.simOcc}%</span>
-                  <span style={{ textAlign: 'right', color: MINT, fontWeight: 600 }}>{fmtADR(calc.simAdr)}{calc.gapAdr > 0 ? ' ▲' : calc.gapAdr < 0 ? ' ▼' : ''}</span>
-                  <span style={{ textAlign: 'right', color: MINT, fontWeight: 600 }}>{fmtREV(calc.simRev)}{calc.gapRev > 0 ? ' ▲' : calc.gapRev < 0 ? ' ▼' : ''}</span>
+              {/* 채널 슬라이더 (OTA/Direct/Commission) — 유지 */}
+              <div style={{ display: 'flex', gap: 5, margin: '0 14px 8px' }}>
+                <div style={chanBox}>
+                  <div style={{ fontSize: 9, color: TXT3, marginBottom: 2 }}>OTA</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <input type="range" min={0} max={100} step={1} value={otaPct} onChange={e => setOtaPct(Number(e.target.value))}
+                      style={{ flex: 1, minWidth: 0, width: '100%', accentColor: MINT, cursor: 'pointer' }} />
+                    <span style={{ fontSize: 10, color: TXT, minWidth: 22, textAlign: 'right' }}>{otaPct}%</span>
+                  </div>
                 </div>
-                {(calc.gapAdr !== 0 || calc.gapRev !== 0) && (
-                  <div style={{ padding: '0 10px 8px', fontSize: 10, color: TXT3, textAlign: 'right' }}>
-                    ADR {fmtGap(calc.gapAdr, 'adr')} · REV {fmtGap(calc.gapRev, 'rev')}
+                <div style={chanBox}>
+                  <div style={{ fontSize: 9, color: TXT3, marginBottom: 2 }}>Direct</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <input type="range" min={0} max={100} step={1} value={100 - otaPct} disabled
+                      style={{ flex: 1, minWidth: 0, width: '100%', accentColor: MINT, opacity: 0.5, cursor: 'not-allowed' }} />
+                    <span style={{ fontSize: 10, color: TXT, minWidth: 22, textAlign: 'right' }}>{100 - otaPct}%</span>
                   </div>
-                )}
-                {/* 채널 슬라이더 3개 (③ 아래로 이동) */}
-                <div style={{ display: 'flex', gap: 5, padding: '7px 10px', borderTop: `0.5px solid ${BORDER}` }}>
-                  <div style={chanBox}>
-                    <div style={{ fontSize: 9, color: TXT3, marginBottom: 2 }}>OTA</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                      <input type="range" min={0} max={100} step={1} value={otaPct} onChange={e => setOtaPct(Number(e.target.value))}
-                        style={{ flex: 1, minWidth: 0, width: '100%', accentColor: MINT, cursor: 'pointer' }} />
-                      <span style={{ fontSize: 10, color: TXT, minWidth: 22, textAlign: 'right' }}>{otaPct}%</span>
-                    </div>
-                  </div>
-                  <div style={chanBox}>
-                    <div style={{ fontSize: 9, color: TXT3, marginBottom: 2 }}>Direct</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                      <input type="range" min={0} max={100} step={1} value={100 - otaPct} disabled
-                        style={{ flex: 1, minWidth: 0, width: '100%', accentColor: MINT, opacity: 0.5, cursor: 'not-allowed' }} />
-                      <span style={{ fontSize: 10, color: TXT, minWidth: 22, textAlign: 'right' }}>{100 - otaPct}%</span>
-                    </div>
-                  </div>
-                  <div style={chanBox}>
-                    <div style={{ fontSize: 9, color: TXT3, marginBottom: 2 }}>Commission</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                      <input type="range" min={0} max={40} step={1} value={otaFeePct} onChange={e => setOtaFeePct(Number(e.target.value))}
-                        style={{ flex: 1, minWidth: 0, width: '100%', accentColor: MINT, cursor: 'pointer' }} />
-                      <span style={{ fontSize: 10, color: TXT, minWidth: 22, textAlign: 'right' }}>{otaFeePct}%</span>
-                    </div>
+                </div>
+                <div style={chanBox}>
+                  <div style={{ fontSize: 9, color: TXT3, marginBottom: 2 }}>Commission</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <input type="range" min={0} max={40} step={1} value={otaFeePct} onChange={e => setOtaFeePct(Number(e.target.value))}
+                      style={{ flex: 1, minWidth: 0, width: '100%', accentColor: MINT, cursor: 'pointer' }} />
+                    <span style={{ fontSize: 10, color: TXT, minWidth: 22, textAlign: 'right' }}>{otaFeePct}%</span>
                   </div>
                 </div>
               </div>
