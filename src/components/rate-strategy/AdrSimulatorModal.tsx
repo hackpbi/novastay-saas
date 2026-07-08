@@ -820,15 +820,19 @@ export default function AdrSimulatorModal({
                       style={{ background: BG_INPUT, border: `0.5px solid ${BORDER_ACCENT}`, borderRadius: 6, color: MINT, fontSize: 22, fontWeight: 500, width: 84, textAlign: 'right', padding: '2px 24px 2px 8px', outline: 'none', lineHeight: 1.1 }} />
                     <span style={{ position: 'absolute', right: 8, fontSize: 16, color: TXT3, pointerEvents: 'none' }}>K</span>
                   </div>
-                  {barRec && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, fontWeight: 500, padding: '2px 9px', borderRadius: 20, whiteSpace: 'nowrap', background: SUCCESS_BG, border: `0.5px solid ${SUCCESS_BD}`, color: barRec.direction === 'up' ? POS : barRec.direction === 'dn' ? RED : TXT3 }}>추천 {barRec.delta_pct > 0 ? '+' : ''}{barRec.delta_pct}%</span>
-                  )}
-                  {barRec && (
-                    <button onClick={() => setBarRaw(barRec.rec_bar)}
-                      style={{ fontSize: 11, fontWeight: 500, padding: '4px 12px', borderRadius: 6, whiteSpace: 'nowrap', background: MINT, color: '#0a0a0a', border: 'none', cursor: 'pointer' }}>적용</button>
-                  )}
+                  {barRec && (() => {
+                    const st = barRec.direction === 'up'
+                      ? { bg: SUCCESS_BG, bd: SUCCESS_BD, fg: POS }
+                      : barRec.direction === 'dn'
+                      ? { bg: 'rgba(226,75,74,0.10)', bd: 'rgba(226,75,74,0.30)', fg: RED }
+                      : { bg: BG_INPUT, bd: BORDER, fg: TXT3 }
+                    return (
+                      <button onClick={() => setBarRaw(barRec.rec_bar)}
+                        style={{ fontSize: 11, fontWeight: 500, padding: '4px 10px', borderRadius: 6, whiteSpace: 'nowrap', background: st.bg, border: `0.5px solid ${st.bd}`, color: st.fg, cursor: 'pointer' }}>추천 : {Math.round(barRec.rec_bar / 1000)}K</button>
+                    )
+                  })()}
                   <button onClick={handleBarSave} disabled={barSaving}
-                    style={{ fontSize: 11, fontWeight: 500, padding: '4px 12px', borderRadius: 6, whiteSpace: 'nowrap', background: BG_INPUT, border: `0.5px solid ${BORDER_ACCENT}`, color: MINT, cursor: barSaving ? 'not-allowed' : 'pointer', opacity: barSaving ? 0.5 : 1 }}>{barSaving ? '저장 중…' : '저장'}</button>
+                    style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 500, padding: '4px 12px', borderRadius: 6, whiteSpace: 'nowrap', background: BG_INPUT, border: `0.5px solid ${BORDER_ACCENT}`, color: MINT, cursor: barSaving ? 'not-allowed' : 'pointer', opacity: barSaving ? 0.5 : 1 }}>{barSaving ? '저장 중…' : '저장'}</button>
                 </div>
                 {/* 하단: 현재 전망 vs 예상 전망 */}
                 <div style={{ display: 'flex', borderTop: `0.5px solid ${BORDER}` }}>
