@@ -166,7 +166,7 @@ export default function MonthlyPickupSegTotalModal({
     }
     // 매칭 그룹의 계정 rows → 계정 단위 6개월 합계 (계정명 중복 제거)
     const seen = new Set<string>()
-    const out: { name: string; diffRn: number; diffRev: number }[] = []
+    const out: { name: string; diffRn: number; diffAdr: number; diffRev: number }[] = []
     for (const g of accountGroups) {
       if (!segNames.has(g.segmentationName)) continue
       for (const row of g.rows) {
@@ -175,6 +175,7 @@ export default function MonthlyPickupSegTotalModal({
         out.push({
           name:    row.account_name,
           diffRn:  row.totalPickup.pickupNights,
+          diffAdr: Math.round(row.totalPickup.pickupAdr),
           diffRev: row.totalPickup.pickupRevenue,
         })
       }
@@ -205,6 +206,9 @@ export default function MonthlyPickupSegTotalModal({
   const startLabel = monthKeys.length > 0 ? formatYYYYMM(monthKeys[0]) : ''
   const endLabel   = monthKeys.length > 0 ? formatYYYYMM(monthKeys[monthKeys.length - 1]) : ''
 
+  const totalRn  = accountList.reduce((s, a) => s + a.diffRn,  0)
+  const totalRev = accountList.reduce((s, a) => s + a.diffRev, 0)
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center p-4" style={{ paddingTop: 80 }}>
       <div
@@ -215,7 +219,7 @@ export default function MonthlyPickupSegTotalModal({
 
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col"
-        style={{ width: 900, maxWidth: '92vw', maxHeight: '79vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
+        style={{ width: 1100, maxWidth: '92vw', maxHeight: '79vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
         <div className="px-6 pt-1 pb-1 shrink-0" style={{ borderBottom: `1px solid ${BORDER.split(' ').pop()}` }}>
@@ -356,7 +360,7 @@ export default function MonthlyPickupSegTotalModal({
         </div>
 
         {/* 우측 Account Pickup 패널 */}
-        <div style={{ width: 220, flexShrink: 0, borderLeft: '0.5px solid rgba(0,229,160,0.2)', display: 'flex', flexDirection: 'column', background: '#0a0a0a' }}>
+        <div style={{ width: 420, flexShrink: 0, borderLeft: '0.5px solid rgba(0,229,160,0.2)', display: 'flex', flexDirection: 'column', background: '#0a0a0a' }}>
           <div style={{ padding: '10px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>Account Pickup</div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
@@ -378,27 +382,54 @@ export default function MonthlyPickupSegTotalModal({
               Account 보기 →
             </button>
           </div>
+          {/* 컬럼 헤더 */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+            <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', flex: 1 }}>ACCOUNT</span>
+            <div style={{ display: 'flex', gap: 0, flexShrink: 0 }}>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 48, textAlign: 'right' }}>R/N</span>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 60, textAlign: 'right' }}>ADR</span>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 64, textAlign: 'right' }}>REV</span>
+            </div>
+          </div>
           <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
             {accountList.length === 0 ? (
               <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', padding: 12 }}>
                 {selectedSeg ? '픽업 데이터가 없습니다.' : ''}
               </div>
             ) : accountList.map((a, i) => (
-              <div key={`${a.name}-${i}`} style={{ padding: '6px 12px', borderBottom: '0.5px solid #1a1a1a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 100 }}>
+              <div key={`${a.name}-${i}`} style={{ padding: '6px 14px', borderBottom: '0.5px solid #1a1a1a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>
                   {a.name}
                 </span>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <div style={{ fontSize: 11, color: a.diffRn >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 500 }}>
-                    {a.diffRn >= 0 ? '+' : ''}{a.diffRn.toLocaleString('ko-KR')} R/N
-                  </div>
-                  <div style={{ fontSize: 10, color: a.diffRev >= 0 ? '#00E5A0' : '#E24B4A' }}>
-                    {a.diffRev >= 0 ? '+' : ''}{(a.diffRev / 1_000_000).toFixed(1)}M
-                  </div>
+                <div style={{ display: 'flex', flexShrink: 0 }}>
+                  <span style={{ fontSize: 11, color: a.diffRn > 0 ? '#00E5A0' : a.diffRn < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 48, textAlign: 'right' }}>
+                    {a.diffRn === 0 ? '—' : (a.diffRn > 0 ? '+' : '') + a.diffRn}
+                  </span>
+                  <span style={{ fontSize: 11, color: a.diffAdr > 0 ? '#00E5A0' : a.diffAdr < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 60, textAlign: 'right' }}>
+                    {a.diffAdr === 0 ? '—' : (a.diffAdr > 0 ? '+' : '') + (Math.abs(a.diffAdr) >= 1000 ? Math.round(a.diffAdr / 1000) + 'k' : a.diffAdr)}
+                  </span>
+                  <span style={{ fontSize: 11, color: a.diffRev > 0 ? '#00E5A0' : a.diffRev < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 64, textAlign: 'right' }}>
+                    {a.diffRev === 0 ? '—' : (a.diffRev > 0 ? '+' : '') + (a.diffRev / 1_000_000).toFixed(1) + 'M'}
+                  </span>
                 </div>
               </div>
             ))}
           </div>
+          {/* 합계 */}
+          {accountList.length > 0 && (
+            <div style={{ padding: '7px 14px', borderTop: '1px solid rgba(0,229,160,0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', flex: 1 }}>Total</span>
+              <div style={{ display: 'flex', flexShrink: 0 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: totalRn > 0 ? '#00E5A0' : totalRn < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 48, textAlign: 'right' }}>
+                  {totalRn === 0 ? '—' : (totalRn > 0 ? '+' : '') + totalRn}
+                </span>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', width: 60, textAlign: 'right' }}>—</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: totalRev > 0 ? '#00E5A0' : totalRev < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 64, textAlign: 'right' }}>
+                  {totalRev === 0 ? '—' : (totalRev > 0 ? '+' : '') + (totalRev / 1_000_000).toFixed(1) + 'M'}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
         </div>
 
