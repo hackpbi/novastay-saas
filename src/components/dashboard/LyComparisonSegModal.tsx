@@ -9,6 +9,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 import DatePicker from '@/components/DatePicker'
 import { useMarketSchema } from '@/hooks/useMarketSchema'
 import { useLyPacing, type LyPacingMode } from '@/hooks/useLyPacing'
+import { useAccountPickupData } from '@/hooks/useAccountPickupData'
 import {
   buildLyComparisonSegTable,
 } from '@/utils/lyComparisonSegTable'
@@ -93,13 +94,14 @@ function FmtGapRevpar({ n, fontColor }: { n: number; fontColor?: string }) {
 
 // ─── Cell group components ─────────────────────────────────────────────────────
 
-function MonthCells({ m, clickable, onGapClick, bg, gapColor, gapBold }: {
+function MonthCells({ m, clickable, onGapClick, bg, gapColor, gapBold, isSelected }: {
   m: LyComparisonMonthly
   clickable: boolean
   onGapClick?: () => void
   bg?: string
   gapColor?: string
   gapBold?: boolean
+  isSelected?: boolean
 }) {
   const cursor = clickable ? 'pointer' : 'default'
   const c: React.CSSProperties = { ...tdBase, textAlign: 'right', background: bg }
@@ -115,7 +117,7 @@ function MonthCells({ m, clickable, onGapClick, bg, gapColor, gapBold }: {
       <td className="font-mono" style={c}><FmtAdr n={m.ly.adr} /></td>
       <td className="font-mono" style={{ ...c, borderRight: DOUBLE }}><FmtRevenue n={m.ly.revenue} /></td>
       {/* GAP */}
-      <td className="font-mono" style={g} onClick={onGapClick}><FmtGapNights n={m.gap.nights} fontColor={gapColor} /></td>
+      <td className="font-mono" style={{ ...g, ...(isSelected ? { borderLeft: '3px solid #00E5A0' } : {}) }} onClick={onGapClick}><FmtGapNights n={m.gap.nights} fontColor={gapColor} /></td>
       <td className="font-mono" style={g} onClick={onGapClick}><FmtGapAdr n={m.gap.adr} fontColor={gapColor} /></td>
       <td className="font-mono" style={g} onClick={onGapClick}><FmtGapRevenue n={m.gap.revenue} fontColor={gapColor} /></td>
     </>
@@ -169,6 +171,8 @@ export default function LyComparisonSegModal({
   const { data: lyPacing, loading: lyLoading }           = useLyPacing(mode)
   const lyMatchUpdateDate = lyPacing?.[0]?.ly_match_update_date ?? null
   const [currentMonthIndex, setCurrentMonthIndex]        = useState(0)
+  // 우측 Account 증감 패널: 선택된 세그먼트
+  const [selectedSeg, setSelectedSeg] = useState<{ label: string; codes: string[] } | null>(null)
 
   const loading = schemaLoading || lyLoading
 
@@ -214,9 +218,39 @@ export default function LyComparisonSegModal({
     return () => window.removeEventListener('keydown', handler)
   }, [open, onClose])
 
+  const currentMonthKey = monthKeys[currentMonthIndex] ?? ''
+  const lyYear  = currentMonthKey ? parseInt(currentMonthKey.slice(0, 4)) : new Date().getFullYear()
+  const lyMonth = currentMonthKey ? parseInt(currentMonthKey.slice(5, 7)) : new Date().getMonth() + 1
+
+  // 우측 Account 증감 패널 데이터 (현재 OTB vs 작년 OTB) — otb_*/ly_*를 함께 반환하는 RPC
+  const { data: accountPickupRows = [] } = useAccountPickupData({
+    hotelId:     currentHotel?.id ?? '',
+    otbDate:     otbDate ?? '',
+    vsDate:      otbDate ?? '',   // LY 비교라 vs는 동일 날짜 사용
+    year:        lyYear,
+    month:       lyMonth,
+    segFilter:   null,
+    isPastMonth: false,           // OTB·LY 동시 반환(get_account_pickup_data) — actual 아님
+  })
+
+  const accountList = useMemo(() => {
+    if (!selectedSeg) return []
+    return (accountPickupRows as Array<{ account_name: string; segmentation: string; otb_nights: number; ly_nights: number; otb_revenue: number; ly_revenue: number }>)
+      .filter(r => selectedSeg.codes.includes(r.segmentation))
+      .map(r => ({
+        name:    r.account_name,
+        diffRn:  (r.otb_nights ?? 0)  - (r.ly_nights ?? 0),
+        diffAdr: r.otb_nights > 0 && r.ly_nights > 0
+          ? Math.round(r.otb_revenue / r.otb_nights) - Math.round(r.ly_revenue / r.ly_nights)
+          : 0,
+        diffRev: (r.otb_revenue ?? 0) - (r.ly_revenue ?? 0),
+      }))
+      .filter(a => a.diffRn !== 0 || a.diffRev !== 0)
+      .sort((a, b) => b.diffRn - a.diffRn)
+  }, [selectedSeg, accountPickupRows])
+
   if (!open) return null
 
-  const currentMonthKey = monthKeys[currentMonthIndex] ?? ''
   const sumMonth        = summary.monthly[currentMonthKey]
 
   const sumTd: React.CSSProperties = {
@@ -235,7 +269,7 @@ export default function LyComparisonSegModal({
       <div className="absolute inset-0 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose} />
 
       <div
-        className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-5xl"
+        className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-[1400px]"
         style={{ maxHeight: '88vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
@@ -264,6 +298,17 @@ export default function LyComparisonSegModal({
 
           {/* Right: mode toggle + close */}
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => selectedSeg
+                ? onAccountDrillDown?.(selectedSeg.codes, currentMonthKey, selectedSeg.label)
+                : onAccountDrillDown?.([], currentMonthKey, '')
+              }
+              style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', background: 'transparent', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#00E5A0'; e.currentTarget.style.color = '#00E5A0' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.color = 'rgba(255,255,255,0.5)' }}
+            >
+              전체 어카운트 보기
+            </button>
             <div style={{ display: 'inline-flex', borderRadius: 999, border: '1px solid rgba(255,255,255,0.12)' }}>
               {(['v1', 'v2'] as LyPacingMode[]).map((m, i) => (
                 <div
@@ -327,8 +372,9 @@ export default function LyComparisonSegModal({
           </div>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto">
+        {/* Body: 좌측 테이블 + 우측 Account 증감 패널 */}
+        <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        <div className="flex-1 overflow-y-auto" style={{ minWidth: 0 }}>
           {loading ? (
             <Skeleton />
           ) : monthKeys.length === 0 ? (
@@ -376,24 +422,35 @@ export default function LyComparisonSegModal({
                     const isHou    = houRowIds.has(row.id)
                     const clickable = !!onAccountDrillDown && !isHou && row.segmentationCodes.length > 0
                     const m        = row.monthly[currentMonthKey] ?? ZERO_MONTHLY
+                    // 우측 패널용: 대분류 행만 클릭 가능 / 선택 시 행 하이라이트
+                    const segSelectable = !row.indent && row.segmentationCodes.length > 0
+                    const isSelected    = selectedSeg?.label === row.name
+                    const baseBg        = isSelected ? 'rgba(0,229,160,0.06)' : rowBg
 
                     return (
                       <tr
                         key={row.id}
                         style={{ borderBottom: BORDER, color: rowColor, fontWeight: row.isBold ? 600 : 400 }}
-                        onMouseEnter={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${rowBg}` })}
-                        onMouseLeave={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = rowBg })}
+                        onMouseEnter={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = `linear-gradient(var(--overlay-hover), var(--overlay-hover)), ${baseBg}` })}
+                        onMouseLeave={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = baseBg })}
                       >
-                        <td style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: DOUBLE, background: rowBg }}>
+                        <td
+                          onClick={segSelectable ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes }) : undefined}
+                          style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: DOUBLE, background: baseBg, cursor: segSelectable ? 'pointer' : 'default' }}
+                        >
                           {row.indent ? <><span style={{ color: 'var(--brand-dimmed)' }}>└ </span>{row.name}</> : row.name}
                         </td>
                         <MonthCells
                           m={m}
                           clickable={clickable}
-                          bg={rowBg}
+                          isSelected={isSelected}
+                          bg={baseBg}
                           gapColor={rowColor}
                           gapBold={row.isBold}
-                          onGapClick={clickable ? () => onAccountDrillDown!(row.segmentationCodes, currentMonthKey, row.name) : undefined}
+                          onGapClick={clickable ? () => {
+                            setSelectedSeg({ label: row.name, codes: row.segmentationCodes })
+                            onAccountDrillDown!(row.segmentationCodes, currentMonthKey, row.name)
+                          } : undefined}
                         />
                       </tr>
                     )
@@ -448,6 +505,67 @@ export default function LyComparisonSegModal({
               </table>
             </div>
           )}
+        </div>
+
+        {/* 우측 Account 증감 패널 */}
+        <div style={{ width: 320, flexShrink: 0, borderLeft: '1px solid rgba(0,229,160,0.2)', display: 'flex', flexDirection: 'column', background: '#0a0a0a' }}>
+          <div style={{ padding: '10px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>Account 증감</div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
+              {selectedSeg ? `${selectedSeg.label} · vs LY` : '세그먼트를 클릭하세요'}
+            </div>
+          </div>
+          {/* 컬럼 헤더 */}
+          <div style={{ display: 'flex', padding: '5px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+            <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', flex: 1 }}>ACCOUNT</span>
+            <div style={{ display: 'flex', flexShrink: 0 }}>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 40, textAlign: 'right' }}>R/N</span>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 52, textAlign: 'right' }}>ADR</span>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 56, textAlign: 'right' }}>REV</span>
+            </div>
+          </div>
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
+            {!selectedSeg ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 6, color: 'rgba(255,255,255,0.2)', fontSize: 11 }}>
+                <span style={{ fontSize: 18 }}>👆</span>
+                <span>세그먼트를 클릭하세요</span>
+              </div>
+            ) : accountList.length === 0 ? (
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', padding: 12 }}>데이터가 없습니다.</div>
+            ) : accountList.map((a, i) => (
+              <div key={`${a.name}-${i}`} style={{ padding: '6px 14px', borderBottom: '0.5px solid #1a1a1a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>
+                  {a.name}
+                </span>
+                <div style={{ display: 'flex', flexShrink: 0 }}>
+                  <span style={{ fontSize: 11, color: a.diffRn > 0 ? '#00E5A0' : a.diffRn < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 40, textAlign: 'right' }}>
+                    {a.diffRn === 0 ? '—' : (a.diffRn > 0 ? '+' : '') + a.diffRn}
+                  </span>
+                  <span style={{ fontSize: 11, color: a.diffAdr > 0 ? '#00E5A0' : a.diffAdr < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 52, textAlign: 'right' }}>
+                    {a.diffAdr === 0 ? '—' : (a.diffAdr > 0 ? '+' : '') + (Math.abs(a.diffAdr) >= 1000 ? Math.round(a.diffAdr / 1000) + 'k' : a.diffAdr)}
+                  </span>
+                  <span style={{ fontSize: 11, color: a.diffRev > 0 ? '#00E5A0' : a.diffRev < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 56, textAlign: 'right' }}>
+                    {a.diffRev === 0 ? '—' : (a.diffRev > 0 ? '+' : '') + (a.diffRev / 1_000_000).toFixed(1) + 'M'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+          {accountList.length > 0 && (
+            <div style={{ padding: '7px 14px', borderTop: '1px solid rgba(0,229,160,0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', flex: 1 }}>Total</span>
+              <div style={{ display: 'flex', flexShrink: 0 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: accountList.reduce((s, a) => s + a.diffRn, 0) > 0 ? '#00E5A0' : '#E24B4A', width: 40, textAlign: 'right' }}>
+                  {(accountList.reduce((s, a) => s + a.diffRn, 0) > 0 ? '+' : '') + accountList.reduce((s, a) => s + a.diffRn, 0)}
+                </span>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', width: 52, textAlign: 'right' }}>—</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: accountList.reduce((s, a) => s + a.diffRev, 0) > 0 ? '#00E5A0' : '#E24B4A', width: 56, textAlign: 'right' }}>
+                  {(accountList.reduce((s, a) => s + a.diffRev, 0) > 0 ? '+' : '') + (accountList.reduce((s, a) => s + a.diffRev, 0) / 1_000_000).toFixed(1) + 'M'}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
         </div>
 
         {/* Footer */}
