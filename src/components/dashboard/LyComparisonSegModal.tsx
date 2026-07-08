@@ -449,7 +449,6 @@ export default function LyComparisonSegModal({
                           gapBold={row.isBold}
                           onGapClick={clickable ? () => {
                             setSelectedSeg({ label: row.name, codes: row.segmentationCodes })
-                            onAccountDrillDown!(row.segmentationCodes, currentMonthKey, row.name)
                           } : undefined}
                         />
                       </tr>
