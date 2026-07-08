@@ -275,7 +275,6 @@ export default function LyComparisonSegModal({
           : 0,
         valRev: (r.otb_revenue ?? 0) - (r.ly_revenue ?? 0),
       }))
-      .filter(a => a.valRn !== 0 || a.valRev !== 0)
       .sort((a, b) => b.valRn - a.valRn)
   }, [selectedSeg, accountPickupRows])
 
