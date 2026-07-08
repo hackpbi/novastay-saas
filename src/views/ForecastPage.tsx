@@ -222,15 +222,16 @@ export default function ForecastPage() {
     return edits
   }
 
-  function buildAllSaveEdits(): SaveEdit[] {
+  function buildAllSaveEdits(ev: EditedValues): SaveEdit[] {
     const edits: SaveEdit[] = []
     for (const day of data) {
       for (const [code, value] of Object.entries(day.values)) {
+        const edited = ev.get(`${day.business_date}::${code}`)   // 화면 수정값(editedValues) 우선 적용
         edits.push({
           business_date: day.business_date,
           segmentation:  code,
-          rn:  safeNum(value.rn,  0),
-          adr: safeNum(value.adr, 0),
+          rn:  safeNum(edited?.rn  ?? value.rn,  0),
+          adr: safeNum(edited?.adr ?? value.adr, 0),
         })
       }
     }
@@ -247,7 +248,7 @@ export default function ForecastPage() {
       )) return
       setSaving(true)
       try {
-        const edits = buildAllSaveEdits()
+        const edits = buildAllSaveEdits(editedValues)
         if (edits.length === 0) { alert('저장할 데이터가 없습니다.'); return }
         const updateDate = otbDate || todayLocalYMD()
         const result     = await saveForecastEdits(hotelId, updateDate, edits)
