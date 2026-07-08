@@ -167,6 +167,9 @@ export default function MonthlyPickupSegModal({
       .map(r => ({
         name:    r.account_name,
         diffRn:  r.otb_nights - r.vs_nights,    // 픽업 = 현재OTB - vsOTB
+        diffAdr: r.otb_nights > 0
+          ? Math.round(r.otb_revenue / r.otb_nights) - (r.vs_nights > 0 ? Math.round(r.vs_revenue / r.vs_nights) : 0)
+          : 0,
         diffRev: r.otb_revenue - r.vs_revenue,
       }))
       .filter(a => a.diffRn !== 0 || a.diffRev !== 0)
@@ -205,6 +208,9 @@ export default function MonthlyPickupSegModal({
   const endLabel   = monthKeys.length > 0 ? formatYYYYMM(monthKeys[monthKeys.length - 1]) : ''
   const colCount   = 1 + visibleMonths.length * 3
 
+  const totalRn  = accountList.reduce((s, a) => s + a.diffRn,  0)
+  const totalRev = accountList.reduce((s, a) => s + a.diffRev, 0)
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center p-4" style={{ paddingTop: 80 }}>
       <div
@@ -214,7 +220,7 @@ export default function MonthlyPickupSegModal({
       />
 
       <div
-        className="relative rounded-2xl overflow-hidden flex flex-col w-[96vw] max-w-[1400px]"
+        className="relative rounded-2xl overflow-hidden flex flex-col w-[96vw] max-w-[1440px]"
         style={{ maxHeight: '88vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
@@ -271,7 +277,7 @@ export default function MonthlyPickupSegModal({
                   cursor: 'pointer',
                 }}
               >
-                Account View →
+                전체 어카운트 픽업
               </button>
               <button
                 onClick={onClose}
@@ -308,7 +314,7 @@ export default function MonthlyPickupSegModal({
 
         {/* Body: 좌측 테이블 + 우측 Account Pickup 패널 */}
         <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
-        <div style={{ width: 'calc(100% - 220px)', flexShrink: 0, overflowX: 'auto', overflowY: 'auto' }}>
+        <div style={{ width: 'calc(100% - 340px)', flexShrink: 0, overflowX: 'auto', overflowY: 'auto' }}>
           {loading ? (
             <Skeleton cols={colCount} />
           ) : rows.length === 0 || monthKeys.length === 0 ? (
@@ -409,28 +415,21 @@ export default function MonthlyPickupSegModal({
         </div>
 
         {/* 우측 Account Pickup 패널 */}
-        <div style={{ width: 220, flexShrink: 0, borderLeft: BORDER, display: 'flex', flexDirection: 'column', background: '#0a0a0a', overflowY: 'auto' }}>
+        <div style={{ width: 340, flexShrink: 0, borderLeft: BORDER, display: 'flex', flexDirection: 'column', background: '#0a0a0a', overflowY: 'auto' }}>
           <div className="px-3 pt-3 pb-2 shrink-0" style={{ borderBottom: BORDER }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>Account Pickup</div>
             <div style={{ fontSize: 10, color: 'var(--brand-dimmed)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {selectedSeg ? `${selectedSeg.label} · ${selectedSeg.monthKey} · 픽업 R/N 기준` : '세그먼트를 클릭하세요'}
             </div>
-            <button
-              onClick={() => selectedSeg && onPickupCellClick?.(selectedSeg.codes, selectedSeg.monthKey || null, selectedSeg.label)}
-              disabled={!selectedSeg}
-              style={{
-                fontSize: 10,
-                padding: '3px 8px',
-                borderRadius: 6,
-                border: '1px solid rgba(255,255,255,0.15)',
-                background: 'transparent',
-                color: selectedSeg ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)',
-                cursor: selectedSeg ? 'pointer' : 'default',
-                marginTop: 4,
-              }}
-            >
-              Account 보기 →
-            </button>
+          </div>
+          {/* 컬럼 헤더 */}
+          <div style={{ display: 'flex', padding: '5px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+            <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', flex: 1 }}>ACCOUNT</span>
+            <div style={{ display: 'flex', flexShrink: 0 }}>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 40, textAlign: 'right' }}>R/N</span>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 52, textAlign: 'right' }}>ADR</span>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 56, textAlign: 'right' }}>REV</span>
+            </div>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'thin' }}>
             {accountList.length === 0 ? (
@@ -440,22 +439,37 @@ export default function MonthlyPickupSegModal({
             ) : accountList.map((a, i) => (
               <div
                 key={`${a.name}-${i}`}
-                className="flex items-center justify-between"
-                style={{ padding: '6px 12px', borderBottom: '0.5px solid #1a1a1a' }}
+                style={{ padding: '6px 14px', borderBottom: '0.5px solid #1a1a1a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
               >
-                <span style={{ fontSize: 11, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 92 }}>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>
                   {a.name}
                 </span>
-                <span className="font-mono" style={{ display: 'flex', gap: 6, fontSize: 10, whiteSpace: 'nowrap' }}>
-                  <span style={{ color: a.diffRn >= 0 ? '#00E5A0' : '#E24B4A' }}>
-                    {a.diffRn >= 0 ? '+' : ''}{a.diffRn.toLocaleString('ko-KR')}
+                <div style={{ display: 'flex', flexShrink: 0 }}>
+                  <span style={{ fontSize: 11, color: a.diffRn > 0 ? '#00E5A0' : a.diffRn < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 40, textAlign: 'right' }}>
+                    {a.diffRn === 0 ? '—' : (a.diffRn > 0 ? '+' : '') + a.diffRn}
                   </span>
-                  <span style={{ color: a.diffRev >= 0 ? '#00E5A0' : '#E24B4A' }}>
-                    {a.diffRev >= 0 ? '+' : ''}{(a.diffRev / 1_000_000).toFixed(1)}M
+                  <span style={{ fontSize: 11, color: a.diffAdr > 0 ? '#00E5A0' : a.diffAdr < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 52, textAlign: 'right' }}>
+                    {a.diffAdr === 0 ? '—' : (a.diffAdr > 0 ? '+' : '') + (Math.abs(a.diffAdr) >= 1000 ? Math.round(a.diffAdr / 1000) + 'k' : a.diffAdr)}
                   </span>
-                </span>
+                  <span style={{ fontSize: 11, color: a.diffRev > 0 ? '#00E5A0' : a.diffRev < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 56, textAlign: 'right' }}>
+                    {a.diffRev === 0 ? '—' : (a.diffRev > 0 ? '+' : '') + (a.diffRev / 1_000_000).toFixed(1) + 'M'}
+                  </span>
+                </div>
               </div>
             ))}
+          </div>
+          {/* 합계 */}
+          <div style={{ padding: '7px 14px', borderTop: '1px solid rgba(0,229,160,0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', flex: 1 }}>Total</span>
+            <div style={{ display: 'flex', flexShrink: 0 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: totalRn > 0 ? '#00E5A0' : totalRn < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 40, textAlign: 'right' }}>
+                {totalRn === 0 ? '—' : (totalRn > 0 ? '+' : '') + totalRn}
+              </span>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', width: 52, textAlign: 'right' }}>—</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: totalRev > 0 ? '#00E5A0' : totalRev < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 56, textAlign: 'right' }}>
+                {totalRev === 0 ? '—' : (totalRev > 0 ? '+' : '') + (totalRev / 1_000_000).toFixed(1) + 'M'}
+              </span>
+            </div>
           </div>
         </div>
         </div>
