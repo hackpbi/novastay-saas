@@ -113,7 +113,7 @@ export default function AdrSimulatorModal({
   const [barRaw,    setBarRaw]    = useState(baseBarRate)   // 원단위 저장 (표시는 K)
   const [otaPct,    setOtaPct]    = useState(60)
   const [otaFeePct, setOtaFeePct] = useState(13.5)
-  const [showFcstPanel, setShowFcstPanel] = useState(false)
+  const [showFcstPanel, setShowFcstPanel] = useState(true)   // 우측 Forecast 패널 always-on(기본 열림)
   const [showRoomPanel, setShowRoomPanel] = useState(false)
   const [editedFcst, setEditedFcst] = useState<Record<string, { rn: number; adr: number }>>({})
   const [fcstSaving, setFcstSaving] = useState(false)
@@ -717,7 +717,7 @@ export default function AdrSimulatorModal({
         .fc-spin-hide { -moz-appearance: textfield; }`}</style>
       <div className="absolute inset-0 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.7)' }} onClick={onClose} />
       {/* 래퍼 — 좌측 Simulation + 우측 Forecast 편집 패널 */}
-      <div className="relative rounded-2xl overflow-hidden flex flex-row w-full" style={{ maxWidth: 440 + (showRoomPanel ? 200 : 0) + (showFcstPanel ? 700 : 0), transition: 'max-width 0.2s ease', border: `0.5px solid ${BORDER}`, height: '80vh', boxShadow: 'var(--shadow-elevated)' }}>
+      <div className="relative rounded-2xl overflow-hidden flex flex-row w-full" style={{ maxWidth: (showFcstPanel ? 1120 : 400) + (showRoomPanel ? 200 : 0), transition: 'max-width 0.2s ease', border: `0.5px solid ${BORDER}`, height: '80vh', boxShadow: 'var(--shadow-elevated)' }}>
         {/* ───────── 객실타입 패널 (세로탭 왼쪽, 슬라이드인) ───────── */}
         {showRoomPanel && (
           <div style={{ width: 200, flexShrink: 0, background: BG_BODY, borderRight: `0.5px solid ${BORDER}`, display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'slideInLeft 0.15s ease' }}>
@@ -761,7 +761,7 @@ export default function AdrSimulatorModal({
         </div>
 
         {/* ───────── 좌측: Simulation ───────── */}
-        <div className="flex flex-col" style={{ flex: '0 0 auto', width: 400, background: BG_BODY, height: '100%', overflow: 'hidden' }}>
+        <div className="flex flex-col" style={{ flex: '0 0 auto', width: 360, background: BG_BODY, height: '100%', overflow: 'hidden' }}>
           {/* Header */}
           <div className="shrink-0" style={{ display: 'flex', alignItems: 'center', padding: '10px 14px', borderBottom: `0.5px solid ${BORDER}`, position: 'relative' }}>
             {/* 날짜 네비 — 정중앙 */}
@@ -899,51 +899,7 @@ export default function AdrSimulatorModal({
               </div>
             </div>
 
-            {/* 세그먼트별 예상 ADR + 전체 적용 시 예상 (KPI 아래 divider) */}
-            {segExpectedList.length > 0 && (
-              <div style={{ margin: '0 14px 10px', paddingTop: 10, borderTop: '1px solid #1f1f1f', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {/* 세그먼트별 예상 ADR */}
-                <div style={{ background: '#111', border: '1px solid #1f1f1f', borderRadius: 8, overflow: 'hidden' }}>
-                  <div style={{ padding: '7px 14px', color: '#888', fontSize: 11, borderBottom: '1px solid #1f1f1f' }}>세그먼트별 예상 ADR</div>
-                  {segExpectedList.map((s, i) => {
-                    const isMint   = s.expected >= s.currentAdr
-                    const adrColor = isMint ? '#00E5A0' : '#E24B4A'
-                    const applied  = !!appliedSegs[s.code]
-                    return (
-                      <div key={s.code} style={{ display: 'flex', alignItems: 'center', padding: '6px 14px', gap: 10, borderBottom: i < segExpectedList.length - 1 ? '1px solid #1a1a1a' : 'none' }}>
-                        <span style={{ color: '#ccc', fontSize: 12, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
-                        <span style={{ color: adrColor, fontSize: 13, fontWeight: 600 }}>{Math.round(s.expected / 1000)}K</span>
-                        <button onClick={() => applyExpected(s.code, s.expected)}
-                          style={{ borderRadius: 4, padding: '2px 8px', fontSize: 10, cursor: 'pointer', flexShrink: 0,
-                            background: isMint ? '#0a2e1f' : '#2e0a0a', border: `1px solid ${adrColor}`, color: adrColor }}>
-                          {applied ? '✓' : '적용'}
-                        </button>
-                      </div>
-                    )
-                  })}
-                </div>
-                {/* 전체 적용 시 예상 */}
-                {previewAfterApply && (
-                  <div style={{ background: '#0d1f17', border: '1px solid rgba(0,229,160,0.19)', borderRadius: 8, padding: '7px 14px' }}>
-                    <div style={{ color: '#888', fontSize: 10, marginBottom: 8 }}>전체 적용 시 예상</div>
-                    <div style={{ display: 'flex', gap: 24 }}>
-                      {([
-                        ['OCC', `${previewAfterApply.occ.toFixed(1)}%`],
-                        ['ADR', `${Math.round(previewAfterApply.adr / 1000)}K`],
-                        ['REV', `${(previewAfterApply.rev / 1e6).toFixed(1)}M`],
-                      ] as const).map(([label, val]) => (
-                        <div key={label}>
-                          <div style={{ color: '#666', fontSize: 10 }}>{label}</div>
-                          <div style={{ color: '#00E5A0', fontSize: 14, fontWeight: 700 }}>{val}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* 픽업 급증 — 요금 인상 추천 (전체 적용 시 예상 아래, divider) */}
+            {/* 픽업 급증 — 요금 인상 추천 (③ 아래, divider) */}
             <div style={{ flex: 1, minHeight: 0, margin: '0 14px 10px', paddingTop: 10, borderTop: '1px solid #1f1f1f', display: 'flex', flexDirection: 'column' }}>
               <div style={{ flex: 1, minHeight: 0, background: '#111', border: '1px solid rgba(0,229,160,0.12)', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 {/* 헤더행: 제목 + 컨트롤 + 조회 */}
@@ -1010,7 +966,56 @@ export default function AdrSimulatorModal({
 
         {/* ───────── 우측: Forecast 편집 패널 ───────── */}
         {showFcstPanel && (
-          <div style={{ width: 700, flex: '0 0 auto', borderLeft: `0.5px solid ${BORDER}`, background: BG_CARD, height: '100%', display: 'flex', flexDirection: 'column', overflowX: 'hidden', animation: 'slideInRight 0.15s ease' }}>
+          <div style={{ flex: 1, minWidth: 0, borderLeft: `0.5px solid ${BORDER}`, background: BG_CARD, height: '100%', display: 'flex', flexDirection: 'column', overflowX: 'hidden', animation: 'slideInRight 0.15s ease' }}>
+            {/* Forecast 수정 헤더 — 제목 + 날짜 + 현재 BAR */}
+            <div className="shrink-0" style={{ padding: '8px 14px', borderBottom: `0.5px solid ${BORDER}`, display: 'flex', alignItems: 'baseline', gap: 8, background: BG_CARD }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: TXT }}>Forecast 수정</span>
+              <span style={{ fontSize: 11, color: TXT3 }}>{formatDate(date)}</span>
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: TXT3 }}>BAR {Math.round(barRaw / 1000)}K</span>
+            </div>
+            {/* 세그먼트별 예상 ADR + 전체 적용 시 예상 (좌측 → 우측 이동) */}
+            {segExpectedList.length > 0 && (
+              <div className="shrink-0" style={{ margin: '10px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {/* 세그먼트별 예상 ADR */}
+                <div style={{ background: '#111', border: '1px solid #1f1f1f', borderRadius: 8, overflow: 'hidden' }}>
+                  <div style={{ padding: '7px 14px', color: '#888', fontSize: 11, borderBottom: '1px solid #1f1f1f' }}>세그먼트별 예상 ADR</div>
+                  {segExpectedList.map((s, i) => {
+                    const isMint   = s.expected >= s.currentAdr
+                    const adrColor = isMint ? '#00E5A0' : '#E24B4A'
+                    const applied  = !!appliedSegs[s.code]
+                    return (
+                      <div key={s.code} style={{ display: 'flex', alignItems: 'center', padding: '6px 14px', gap: 10, borderBottom: i < segExpectedList.length - 1 ? '1px solid #1a1a1a' : 'none' }}>
+                        <span style={{ color: '#ccc', fontSize: 12, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                        <span style={{ color: adrColor, fontSize: 13, fontWeight: 600 }}>{Math.round(s.expected / 1000)}K</span>
+                        <button onClick={() => applyExpected(s.code, s.expected)}
+                          style={{ borderRadius: 4, padding: '2px 8px', fontSize: 10, cursor: 'pointer', flexShrink: 0,
+                            background: isMint ? '#0a2e1f' : '#2e0a0a', border: `1px solid ${adrColor}`, color: adrColor }}>
+                          {applied ? '✓' : '적용'}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+                {/* 전체 적용 시 예상 */}
+                {previewAfterApply && (
+                  <div style={{ background: '#0d1f17', border: '1px solid rgba(0,229,160,0.19)', borderRadius: 8, padding: '7px 14px' }}>
+                    <div style={{ color: '#888', fontSize: 10, marginBottom: 8 }}>전체 적용 시 예상</div>
+                    <div style={{ display: 'flex', gap: 24 }}>
+                      {([
+                        ['OCC', `${previewAfterApply.occ.toFixed(1)}%`],
+                        ['ADR', `${Math.round(previewAfterApply.adr / 1000)}K`],
+                        ['REV', `${(previewAfterApply.rev / 1e6).toFixed(1)}M`],
+                      ] as const).map(([label, val]) => (
+                        <div key={label}>
+                          <div style={{ color: '#666', fontSize: 10 }}>{label}</div>
+                          <div style={{ color: '#00E5A0', fontSize: 14, fontWeight: 700 }}>{val}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             {/* 모드 선택 + 항목 + 액션 — 단일 툴바 */}
             <div className="shrink-0" style={{ padding: '7px 14px', borderBottom: `0.5px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: 8, background: BG_CARD }}>
               {/* 모드 커스텀 드롭다운 */}
