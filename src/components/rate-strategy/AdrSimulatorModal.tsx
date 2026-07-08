@@ -129,9 +129,6 @@ export default function AdrSimulatorModal({
   const [appliedSegs, setAppliedSegs] = useState<Set<string>>(new Set())   // 예상 ADR 적용된 세그 코드
   const [hoverExpCode, setHoverExpCode] = useState<string | null>(null)   // 예상 ADR 셀 호버 중인 세그
   // 픽업 급증 — 요금 인상 추천
-  const [pickupThreshold,   setPickupThreshold]   = useState(20)     // 픽업 증가 기준 %
-  const [pickupMult,        setPickupMult]        = useState(0.5)    // 계수
-  const [pickupCap,         setPickupCap]         = useState(30)     // 상한 %
   const [selectedPickupIdx, setSelectedPickupIdx] = useState<number | null>(null)
   const [pickupToast,       setPickupToast]       = useState<string | null>(null)
   const scrollBodyRef   = useRef<HTMLDivElement>(null)                       // 좌측 본문 스크롤 컨테이너
@@ -208,7 +205,7 @@ export default function AdrSimulatorModal({
   const pickupOtbDate = new Date(Date.now() - 86400000).toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })          // 어제
   const pickupVsDate  = new Date(Date.now() - 30 * 86400000).toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })     // 30일 전
   const pickupMinDate = monthYM ? `${monthYM}-01` : ''                                                                 // 조회 월 1일
-  const { data: pickupRows = [], refetch: refetchPickup } = useQuery({
+  const { data: pickupRows = [] } = useQuery({
     queryKey: ['adr_pickup', hotelId, pickupOtbDate, pickupVsDate, pickupMinDate],
     enabled: isOpen && !!hotelId && !!pickupOtbDate && !!pickupVsDate && !!pickupMinDate,
     queryFn: async () => {
@@ -237,8 +234,8 @@ export default function AdrSimulatorModal({
       return (data ?? []) as { stay_date: string; new_rate: number }[]
     },
   })
-  // stay_date별 픽업 급증 + 추천 BAR (pickupPct 내림차순, 조회 월·미래 일자, BAR 존재분)
-  const pickupList = useMemo(() => {
+  // stay_date별 후보 (조회 월·미래 일자, BAR 존재분) — OCC/현BAR/1일전·1달전 집계
+  const pickupCandidates = useMemo(() => {
     const agg: Record<string, { otb: number; vs: number }> = {}
     for (const r of pickupRows) {
       const a = agg[r.business_date] ?? (agg[r.business_date] = { otb: 0, vs: 0 })
@@ -251,17 +248,33 @@ export default function AdrSimulatorModal({
       const p1 = v.otb, p30 = v.vs                                             // 1일전(현재)/1달전 OTB R/N
       const pickupPct = p30 > 0 ? Math.round((p1 - p30) / p30 * 100) : 0
       const occ  = effTotal > 0 ? Math.round((p1 / effTotal) * 100) : 0
-      const barK = Math.round((barMap[d] ?? 0) / 1000)
-      const rawIncrease    = pickupPct / 100 * pickupMult
-      const actualIncrease = Math.min(rawIncrease, pickupCap / 100)
-      const capped         = rawIncrease > pickupCap / 100
-      const recBarK        = Math.round(barK * (1 + actualIncrease) / 5) * 5   // 5K 단위 반올림
-      return { date: d, occ, barK, p1, p30, pickupPct, recBarK, capped, incPct: Math.round(actualIncrease * 100) }
+      const bar  = barMap[d] ?? 0
+      const barK = Math.round(bar / 1000)
+      return { date: d, occ, bar, barK, p1, p30, pickupPct }
     })
-      .filter(r => r.pickupPct >= pickupThreshold && r.barK > 0
-        && (!otbDate || r.date >= otbDate) && r.date.slice(0, 7) === monthYM)
+      .filter(r => r.barK > 0 && (!otbDate || r.date >= otbDate) && r.date.slice(0, 7) === monthYM)
       .sort((a, b) => a.date.localeCompare(b.date))
-  }, [pickupRows, barRateRows, effTotal, pickupThreshold, pickupMult, pickupCap, otbDate, monthYM])
+  }, [pickupRows, barRateRows, effTotal, otbDate, monthYM])
+  // 조회 시 각 날짜별 get_bar_recommendation 호출 → direction === 'up' 만 표시 (수동 실행)
+  const { data: pickupList = [], refetch: refetchPickup, isFetching: pickupFetching } = useQuery({
+    queryKey: ['adr_pickup_rec', hotelId, monthYM, otbDate],
+    enabled: false,
+    queryFn: async () => {
+      const out = await Promise.all(pickupCandidates.map(async c => {
+        const { data, error } = await (supabase as any).rpc('get_bar_recommendation', {
+          p_hotel_id:  hotelId,
+          p_stay_date: c.date,
+          p_cur_bar:   c.bar,        // 해당 날짜 BAR (원)
+          p_otb_occ:   c.occ,        // 해당 날짜 OTB OCC%
+        })
+        if (error) throw error
+        const raw = Array.isArray(data) ? data[0] : data
+        if (!raw || raw.direction === 'hold' || raw.rec_bar === raw.cur_bar) return null   // 유지/추천=현재 제외, up·dn만
+        return { ...c, direction: raw.direction as string, rec_bar: raw.rec_bar as number, cur_bar: raw.cur_bar as number, delta_pct: raw.delta_pct as number }
+      }))
+      return out.filter((x): x is NonNullable<typeof x> => x !== null)
+    },
+  })
 
   // 좌측 OTB 실현값 — simDate(date) 기준 monthRows 집계 (우측 Forecast 패널 OTB와 동일 정의)
   const otbForDate = useMemo(() => {
@@ -535,19 +548,14 @@ export default function AdrSimulatorModal({
   }
   const navBtn: React.CSSProperties = { background: 'transparent', border: 'none', color: TXT2, width: 22, height: 22, cursor: 'pointer', fontSize: 16, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }
   const chanBox: React.CSSProperties = { flex: 1, minWidth: 0, background: BG_CARD, border: `0.5px solid ${BORDER}`, borderRadius: 7, padding: '5px 7px' }
-  // 픽업 급증 섹션 컨트롤 스타일
-  const pickupInput: React.CSSProperties = { width: 32, background: '#0a0a0a', border: '1px solid #2a2a2a', color: '#00E5A0', borderRadius: 3, fontSize: 10, textAlign: 'right', padding: '1px 3px', outline: 'none' }
-  const pickupCtrl:  React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 10, color: '#666' }
-  const pickupCols = '58px 34px 42px 30px 62px 1fr'
+  const pickupCols = '1fr 1fr 1fr 1fr'
   // 픽업 추천 행 클릭 → 날짜 이동 + 추천 BAR 자동 입력 + 상단 스크롤 + 토스트
-  const handlePickupRowClick = (idx: number, row: { date: string; recBarK: number }) => {
+  const handlePickupRowClick = (idx: number, row: { date: string }) => {
     setSelectedPickupIdx(idx)
-    pendingRecBarRef.current = { date: row.date, bar: row.recBarK * 1000 }   // sim 로드 후 재적용 보장
-    onDateChange(row.date)
-    setBarRaw(row.recBarK * 1000)
+    onDateChange(row.date)                                            // 날짜 이동 + 행 선택 하이라이트만 (상단 barRaw 변경 없음)
     scrollBodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
     const mmdd = `${row.date.slice(5, 7)}/${row.date.slice(8, 10)}`
-    setPickupToast(`${mmdd} · BAR ${row.recBarK}K 적용됨`)
+    setPickupToast(`${mmdd} 이동됨`)
     setTimeout(() => setPickupToast(null), 1800)
   }
 
@@ -560,10 +568,13 @@ export default function AdrSimulatorModal({
         .from('s02_rate_detail')
         .upsert(
           [{ hotel_id: hotelId, stay_date: date, room_type_code: 'BASE', date_type: 'single', new_rate: barRaw }],
-          { onConflict: 'hotel_id,room_type_code,stay_date,date_type', ignoreDuplicates: false },
+          { onConflict: 'hotel_id,stay_date,room_type_code,date_type', ignoreDuplicates: false },
         )
       if (error) throw error
-      queryClient.invalidateQueries({ queryKey: ['adr_bar_rates', hotelId, monthYM] })
+      await queryClient.invalidateQueries({ queryKey: ['adr_bar_rates', hotelId, monthYM] })   // 최신 BAR 로드까지 대기 → 이후 픽업 재조회 시 p_cur_bar에 반영 보장
+      // 저장된 날짜는 픽업 급증 목록에서 제거 (추천=현재가 되어 더 이상 추천 대상 아님)
+      queryClient.setQueryData(['adr_pickup_rec', hotelId, monthYM, otbDate], (prev) =>
+        Array.isArray(prev) ? prev.filter((item) => item.date !== date) : prev)
       queryClient.invalidateQueries({ queryKey: ['adr_simulator', hotelId, date, fcstUpdateDate] })
       setPickupToast(`BAR ${Math.round(barRaw / 1000)}K 저장됨`)
       setTimeout(() => setPickupToast(null), 1800)
@@ -590,25 +601,18 @@ export default function AdrSimulatorModal({
   // 편집(editedFcst) 우선 → segByDate(forecast) 폴백
   const segFcRn  = (code: string) => editedFcst[code]?.rn  ?? segByDate[code]?.fcRn  ?? 0
   const segFcAdr = (code: string) => editedFcst[code]?.adr ?? segByDate[code]?.fcAdr ?? 0
-  // 세그(code)별 surcharge 프리미엄 — OTB ADR − 현재 BAR(effBase)
-  const getSegPremium = (code: string): number => {
-    const s = segByDate[code]
-    if (!s || s.otbRn <= 0) return 0
-    return Math.round(s.otbRev / s.otbRn) - effBase
-  }
-  // 세그별 예상 ADR (direct/ota만, R/N 증가율로 premium 감쇠) — barRaw/otaFeePct/editedFcst 변화 시 재계산
+  // 세그별 예상 ADR — 추가 예약분(FCST−OTB)을 신규 BAR(net)로 채운다고 가정 → (OTB매출 + 추가분×신BAR net) / FCST R/N
   const getSegExpectedAdr = (code: string, newBar: number): number | null => {
     const ch = channelOf[code]
-    if (ch !== 'direct' && ch !== 'ota') return null
+    if (ch !== 'direct' && ch !== 'ota') return null           // Group 등 제외
     const s = segByDate[code]
     if (!s) return null
-    const premium  = getSegPremium(code)
-    const fcRn     = segFcRn(code)
-    const rnGrowth = s.otbRn > 0 ? fcRn / s.otbRn : 1
-    const decay    = Math.max(0.7, 1 - (rnGrowth - 1) * 0.1)   // 판매량↑ → 평균 surcharge↓ (최대 30% 감쇠)
-    const base     = newBar + premium * decay
-    if (ch === 'ota') return Math.round(base * (1 - otaFeePct / 100))
-    return Math.round(base)
+    const fcRn = segFcRn(code)
+    if (fcRn === 0) return null
+    const addRn = fcRn - s.otbRn                               // 추가 예약 R/N (FCST − OTB)
+    if (addRn <= 0) return null
+    const newBarNet = ch === 'ota' ? newBar * (1 - otaFeePct / 100) : newBar   // OTA는 커미션 차감
+    return Math.round((s.otbRev + addRn * newBarNet) / fcRn)
   }
   // 적용 → 해당 세그 FCST ADR을 예상값으로 set + appliedSegs 등록 (editedFcst 체인 → 좌/우 동기화)
   const applyExpectedAdr = (code: string, expected: number) => {
@@ -813,31 +817,43 @@ export default function AdrSimulatorModal({
               <div style={{ margin: '10px 14px 8px', background: BG_CARD, border: `0.5px solid ${BORDER}`, borderRadius: 8, overflow: 'hidden' }}>
                 {/* 상단: BAR RATE(제목) + OTB 요약(아래 줄) — 2행 */}
                 <div style={{ padding: '10px 14px' }}>
-                  <div style={{ fontSize: 15, fontWeight: 500, color: TXT }}>BAR RATE</div>
+                  <div style={{ fontSize: 15, fontWeight: 500, color: TXT }}>BAR</div>
                   <div style={{ fontSize: 10, color: TXT3, whiteSpace: 'nowrap', marginTop: 2 }}>OTB : OCC {calc.curOcc}% · ADR {fmtADR(calc.curAdr)} · REV {fmtREV(calc.curRev)}</div>
                 </div>
                 {/* 중간: 현재 BAR → 입력 → 추천 badge → 적용/저장 */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '2px 12px 10px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 12px 10px', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 13, color: TXT3, lineHeight: 1, marginRight: 4 }}>{Math.round(effBase / 1000)}K</span>
                   <span style={{ fontSize: 18, color: TXT3, marginRight: 4 }}>→</span>
                   <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginRight: 12 }}>
                     <input type="number" className="fc-spin-hide" value={Math.round(barRaw / 1000)} onChange={e => setBarRaw(Math.max(0, (Number(e.target.value) || 0) * 1000))}
-                      style={{ background: BG_INPUT, border: `0.5px solid ${BORDER_ACCENT}`, borderRadius: 6, color: MINT, fontSize: 19, fontWeight: 500, width: 68, textAlign: 'right', padding: '4px 24px 4px 12px', outline: 'none', lineHeight: 1.1 }} />
+                      style={{ background: BG_INPUT, border: `0.5px solid ${BORDER_ACCENT}`, borderRadius: 6, color: MINT, fontSize: 17, fontWeight: 500, width: 68, textAlign: 'right', padding: '4px 24px 4px 12px', outline: 'none', lineHeight: 1.1 }} />
                     <span style={{ position: 'absolute', right: 8, fontSize: 16, color: TXT3, pointerEvents: 'none' }}>K</span>
                   </div>
-                  {barRec && (() => {
-                    const st = barRec.direction === 'up'
-                      ? { bg: SUCCESS_BG, bd: SUCCESS_BD, fg: POS }
-                      : barRec.direction === 'dn'
-                      ? { bg: 'rgba(226,75,74,0.10)', bd: 'rgba(226,75,74,0.30)', fg: RED }
-                      : { bg: BG_INPUT, bd: BORDER, fg: TXT3 }
+                  {(() => {
+                    const recBar = barRec?.rec_bar ?? 0
+                    const curBar = barRec?.cur_bar ?? 0
+                    const dir = barRec?.direction
+                    // 데이터 없음 → 비활성
+                    if (!barRec) return (
+                      <button disabled
+                        style={{ padding: '4px 12px', borderRadius: 6, border: `1px solid ${BORDER}`, background: BG_INPUT, color: TXT3, fontSize: 12, fontWeight: 600, cursor: 'not-allowed', whiteSpace: 'nowrap', opacity: 0.4 }}>추천 : -</button>
+                    )
+                    // hold 또는 추천=현재 → 현재 유지 (클릭 불가)
+                    if (dir === 'hold' || recBar === curBar) return (
+                      <button
+                        style={{ padding: '4px 12px', borderRadius: 6, border: `1px solid ${BORDER}`, background: BG_INPUT, color: TXT3, fontSize: 12, fontWeight: 600, cursor: 'default', whiteSpace: 'nowrap' }}>현재 유지</button>
+                    )
+                    // up → 민트(accent) / dn(그 외) → 빨강(danger)
+                    const st = dir === 'up'
+                      ? { bg: SUCCESS_BG, bd: SUCCESS_BD, fg: MINT }
+                      : { bg: 'rgba(226,75,74,0.10)', bd: 'rgba(226,75,74,0.30)', fg: RED }
                     return (
-                      <button onClick={() => setBarRaw(barRec.rec_bar)}
-                        style={{ fontSize: 11, fontWeight: 500, padding: '3px 12px', borderRadius: 6, whiteSpace: 'nowrap', background: st.bg, border: `0.5px solid ${st.bd}`, color: st.fg, cursor: 'pointer' }}>추천 : {Math.round(barRec.rec_bar / 1000)}K</button>
+                      <button onClick={() => setBarRaw(recBar)}
+                        style={{ padding: '4px 12px', borderRadius: 6, border: `1px solid ${st.bd}`, background: st.bg, color: st.fg, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>추천 : {Math.round(recBar / 1000)}K</button>
                     )
                   })()}
                   <button onClick={handleBarSave} disabled={barSaving}
-                    style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 500, padding: '3px 12px', borderRadius: 6, whiteSpace: 'nowrap', background: BG_INPUT, border: `0.5px solid ${BORDER_ACCENT}`, color: MINT, cursor: barSaving ? 'not-allowed' : 'pointer', opacity: barSaving ? 0.5 : 1 }}>{barSaving ? '저장 중…' : '저장'}</button>
+                    style={{ padding: '4px 14px', borderRadius: 6, border: 'none', background: '#00E5A0', color: '#0a0a0a', fontSize: 12, fontWeight: 600, cursor: barSaving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', opacity: barSaving ? 0.5 : 1 }}>{barSaving ? '저장 중…' : '저장'}</button>
                 </div>
                 {/* 하단: 현재 전망 vs 예상 전망 */}
                 <div style={{ display: 'flex', borderTop: `0.5px solid ${BORDER}` }}>
@@ -935,10 +951,7 @@ export default function AdrSimulatorModal({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', padding: '8px 14px', borderBottom: '1px solid #1f1f1f', flexShrink: 0 }}>
                   <span style={{ color: '#00E5A0', fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap' }}>픽업 급증</span>
                   <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <label style={pickupCtrl}>픽업<input className="fc-spin-hide" type="number" value={pickupThreshold} onChange={e => setPickupThreshold(Number(e.target.value) || 0)} style={pickupInput} />%↑</label>
-                    <label style={pickupCtrl}>계수<input className="fc-spin-hide" type="number" step={0.1} value={pickupMult} onChange={e => setPickupMult(Number(e.target.value) || 0)} style={pickupInput} /></label>
-                    <label style={pickupCtrl}>상한<input className="fc-spin-hide" type="number" value={pickupCap} onChange={e => setPickupCap(Number(e.target.value) || 0)} style={pickupInput} />%</label>
-                    <button onClick={() => refetchPickup()} style={{ background: '#00E5A0', color: '#0a0a0a', fontWeight: 600, border: 'none', borderRadius: 4, padding: '3px 10px', fontSize: 11, cursor: 'pointer' }}>조회</button>
+                    <button onClick={() => refetchPickup()} disabled={pickupFetching} style={{ background: '#00E5A0', color: '#0a0a0a', fontWeight: 600, border: 'none', borderRadius: 4, padding: '3px 10px', fontSize: 11, cursor: pickupFetching ? 'not-allowed' : 'pointer', opacity: pickupFetching ? 0.5 : 1 }}>{pickupFetching ? '조회 중…' : '조회'}</button>
                   </div>
                 </div>
                 {/* 컬럼 헤더 */}
@@ -946,9 +959,7 @@ export default function AdrSimulatorModal({
                   <span>일자</span>
                   <span style={{ textAlign: 'right' }}>OCC</span>
                   <span style={{ textAlign: 'right' }}>현 BAR</span>
-                  <span style={{ textAlign: 'right' }}>1달전</span>
-                  <span style={{ textAlign: 'right' }}>1일전</span>
-                  <span style={{ textAlign: 'right' }}>추천 BAR</span>
+                  <span style={{ textAlign: 'right' }}>추천</span>
                 </div>
                 {/* 목록 */}
                 <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
@@ -957,6 +968,7 @@ export default function AdrSimulatorModal({
                   ) : pickupList.map((r, idx) => {
                     const selected = selectedPickupIdx === idx
                     const occColor = r.occ >= 80 ? '#00E5A0' : r.occ >= 65 ? '#f59e0b' : '#555'
+                    const dirColor = r.rec_bar > r.cur_bar ? '#00E5A0' : '#E24B4A'   // 추천>현재 인상 민트 / 추천<현재 인하 빨강
                     const wd = new Date(r.date + 'T00:00:00').getDay()
                     const isFriSat = wd === 5 || wd === 6
                     return (
@@ -966,17 +978,12 @@ export default function AdrSimulatorModal({
                         style={{ display: 'grid', gridTemplateColumns: pickupCols, gap: 4, alignItems: 'center', padding: '6px 14px', cursor: 'pointer', fontSize: 11,
                           borderTop: '1px solid #1a1a1a',
                           background: selected ? '#0d1f17' : 'transparent',
-                          borderLeft: `2px solid ${selected ? '#00E5A0' : 'transparent'}` }}>
+                          borderLeft: `2px solid ${selected ? '#00E5A0' : dirColor}` }}>
                         <span style={{ color: isFriSat ? '#E24B4A' : '#ccc', whiteSpace: 'nowrap' }}>{formatDate(r.date)}</span>
                         <span style={{ textAlign: 'right', color: occColor }}>{r.occ}%</span>
                         <span style={{ textAlign: 'right', color: '#888' }}>{r.barK}K</span>
-                        <span style={{ textAlign: 'right', color: '#888' }}>{r.p30}</span>
-                        <span style={{ textAlign: 'right', color: '#ccc', whiteSpace: 'nowrap' }}>{r.p1} <span style={{ color: r.pickupPct >= 0 ? '#00E5A0' : '#E24B4A' }}>({r.pickupPct >= 0 ? '+' : ''}{r.pickupPct}%)</span></span>
-                        <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.15 }}>
-                          <span style={{ color: '#00E5A0', fontSize: 12, fontWeight: 600 }}>{r.recBarK}K</span>
-                          {r.capped
-                            ? <span style={{ background: '#2e1a0a', color: '#f59e0b', fontSize: 9, borderRadius: 3, padding: '1px 4px', whiteSpace: 'nowrap' }}>+{r.incPct}%상한</span>
-                            : <span style={{ color: '#00E5A0', fontSize: 9 }}>+{r.incPct}%</span>}
+                        <span style={{ textAlign: 'right', color: dirColor, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          {r.rec_bar > r.cur_bar ? '▲ 인상 ' : '▼ 인하 '}{r.delta_pct >= 0 ? '+' : ''}{r.delta_pct}%
                         </span>
                       </div>
                     )
@@ -1148,7 +1155,13 @@ export default function AdrSimulatorModal({
                           <td style={{ padding: '2.2px 4px', textAlign: 'right' }}
                             onMouseEnter={() => setHoverExpCode(code)} onMouseLeave={() => setHoverExpCode(null)}>
                             {(() => {
-                              const exp = getSegExpectedAdr(code, barRaw)
+                              if (rn <= 0) return <span style={{ color: TXT3 }}>–</span>
+                              const ch = channelOf[code]
+                              const rnEqOtb = (ch === 'direct' || ch === 'ota') && rn === oRn   // 조건 1·2는 direct/ota 세그만 (Group 등은 아래 getSegExpectedAdr null → '–')
+                              // 조건 2: FCST R/N·ADR 모두 OTB와 동일 → 예상 ADR 미표시(호버 적용 버튼도 미표시)
+                              if (rnEqOtb && Math.round(adr) === Math.round(oAdr)) return <span style={{ color: TXT3 }}>–</span>
+                              // 조건 1: FCST R/N === OTB R/N → 예상 ADR = OTB ADR, 그 외 → 기존 서차지 계산
+                              const exp = rnEqOtb ? Math.round(oAdr) : getSegExpectedAdr(code, barRaw)
                               if (exp === null) return <span style={{ color: TXT3 }}>–</span>
                               const isMint = exp >= adr
                               if (appliedSegs.has(code)) return (

@@ -41,6 +41,8 @@ type ActiveCell = { segCode: string; field: 'rn' | 'adr' } | null
 // 미니 ADR 시뮬레이터 — get_adr_simulator_data RPC 반환 (필요 필드만)
 type AdrSimRoom = { room_type_code: string; booked?: number; avail?: number; surcharge?: number }
 type AdrSimData = { total_rooms?: number; base_bar_rate?: number; rooms?: AdrSimRoom[] }
+// get_bar_recommendation RPC 반환 (필요 필드만)
+type BarRec = { direction: string; rec_bar: number; cur_bar: number; delta_pct?: number }
 
 // 컬럼 폭 (BulkEditModal COL과 동일) — Total 행/세그 행 정렬 일치용 colgroup
 const COL = {
@@ -435,6 +437,9 @@ export function BulkEditModalV2({
   const [barRaw,    setBarRaw]    = useState<number>(0)
   const [otaFeePct, setOtaFeePct] = useState<number>(13.5)
   const [channelMap, setChannelMap] = useState<Record<string, string>>({})   // segCode → 'direct'|'ota'|'other'
+  const [barRec,    setBarRec]    = useState<BarRec | null>(null)   // 오늘 추천 BAR (get_bar_recommendation)
+  const [barSaving, setBarSaving] = useState(false)                // BAR 저장 중 (중복 클릭 방지)
+  const [saveToast, setSaveToast] = useState<string | null>(null)  // 저장 성공 토스트
 
   // 진입 시 해당 일자 기존 편집값으로 초기화
   useEffect(() => {
@@ -480,6 +485,31 @@ export function BulkEditModalV2({
       })
     return () => { cancelled = true }
   }, [isOpen, selectedDate, hotelId])
+
+  // 오늘 추천 BAR — get_bar_recommendation (날짜/시뮬데이터 변경 시 자동 호출, p30/p1은 RPC 내부 자동 조회)
+  useEffect(() => {
+    if (!isOpen || !selectedDate || !hotelId || !simData) { setBarRec(null); return }
+    const curBar = simData.base_bar_rate ?? 0                       // effBase (현재 BAR, 원)
+    if (curBar <= 0) { setBarRec(null); return }
+    const totalRooms = simData.total_rooms ?? 0
+    const booked = (simData.rooms ?? []).reduce((s: number, r: AdrSimRoom) => s + (r.booked ?? 0), 0)
+    const otbOcc = totalRooms > 0 ? Math.round((booked / totalRooms) * 100) : 0   // OTB OCC%
+    let cancelled = false
+    ;(supabase as any)
+      .rpc('get_bar_recommendation', {
+        p_hotel_id:  hotelId,
+        p_stay_date: selectedDate,
+        p_cur_bar:   curBar,
+        p_otb_occ:   otbOcc,
+      })
+      .then(({ data, error }: any) => {
+        if (cancelled) return
+        if (error || !data) { setBarRec(null); return }
+        const raw = Array.isArray(data) ? data[0] : data
+        setBarRec((raw ?? null) as BarRec | null)
+      })
+    return () => { cancelled = true }
+  }, [isOpen, selectedDate, hotelId, simData])
 
   // 세그 채널 분류 (c05.sorting1) — direct/ota 세그별 예상 ADR용
   useEffect(() => {
@@ -678,28 +708,39 @@ export function BulkEditModalV2({
     return total > 0 ? Math.round((otaRn / total) * 100) : 50
   })()
 
-  // 세그(code)별 surcharge 프리미엄 — OTB ADR - 현재 BAR(effBase)
-  const getSegPremium = (code: string): number => {
-    const orig = day?.values[code]
-    if (!orig || orig.otb_rn <= 0) return 0
-    const otbAdr = Math.round(orig.otb_rev / orig.otb_rn)
-    return otbAdr - effBase
+  // BAR 저장 — s02_rate_detail BASE/single upsert (AdrSimulatorModal과 동일)
+  const handleBarSave = async () => {
+    if (!hotelId || !selectedDate || barSaving) return
+    setBarSaving(true)
+    try {
+      const { error } = await (supabase as any)
+        .from('s02_rate_detail')
+        .upsert(
+          [{ hotel_id: hotelId, stay_date: selectedDate, room_type_code: 'BASE', date_type: 'single', new_rate: barRaw }],
+          { onConflict: 'hotel_id,stay_date,room_type_code,date_type', ignoreDuplicates: false },
+        )
+      if (error) throw error
+      setSaveToast(`BAR ${Math.round(barRaw / 1000)}K 저장됨`)
+      setTimeout(() => setSaveToast(null), 1800)
+    } catch (err) {
+      alert(`BAR 저장 실패: ${(err as Error).message}`)
+    } finally {
+      setBarSaving(false)
+    }
   }
 
-  // 세그별 예상 ADR (direct/ota만, R/N 증가율로 premium 감쇠 반영). barRaw/otaFeePct/tempEdits 변화 시 자동 재계산
+  // 세그별 예상 ADR — 추가 예약분(FCST−OTB)을 신규 BAR(net)로 채운다고 가정 → (OTB매출 + 추가분×신BAR net) / FCST R/N
   const getSegExpectedAdr = (code: string, newBar: number): number | null => {
     const channel = channelMap[code]
-    if (channel !== 'direct' && channel !== 'ota') return null
+    if (channel !== 'direct' && channel !== 'ota') return null   // Group 등 제외
     const orig = day?.values[code]
     if (!orig) return null
-    const premium = getSegPremium(code)
     const fcRn = getFcRn(code)   // tempEdits 우선 — FCST RN 변경 시 실시간 반영
-    const rnGrowth = orig.otb_rn > 0 ? fcRn / orig.otb_rn : 1
-    // 판매량이 늘수록 평균 surcharge가 낮아지는 경향 (단순 선형 감쇠, 최대 30%)
-    const decay = Math.max(0.7, 1 - (rnGrowth - 1) * 0.1)
-    const base = newBar + premium * decay
-    if (channel === 'ota') return Math.round(base * (1 - otaFeePct / 100))
-    return Math.round(base)
+    if (fcRn === 0) return null
+    const addRn = fcRn - orig.otb_rn                              // 추가 예약 R/N (FCST − OTB)
+    if (addRn <= 0) return null
+    const newBarNet = channel === 'ota' ? newBar * (1 - otaFeePct / 100) : newBar   // OTA는 커미션 차감
+    return Math.round((orig.otb_rev + addRn * newBarNet) / fcRn)
   }
 
   // 전체 적용 시 예상 — 모든 direct/ota 세그에 예상 ADR을 적용했다고 가정한 합계(현재 BAR 기준)
@@ -966,21 +1007,43 @@ export function BulkEditModalV2({
                   <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginBottom: 8 }}>ADR 시뮬레이터</div>
 
                   {/* BAR Rate 조정 */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>BAR Rate</span>
+                  <style>{`.medit2::-webkit-inner-spin-button,.medit2::-webkit-outer-spin-button{-webkit-appearance:none;display:none;margin:0}`}</style>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>BAR</span>
                     <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>{Math.round(effBase / 1000)}K →</span>
                     <input
                       type="number"
+                      className="medit2"
                       value={Math.round(barRaw / 1000)}
                       onChange={e => setBarRaw((parseInt(e.target.value) || 0) * 1000)}
+                      onWheel={e => e.currentTarget.blur()}
                       style={{
                         width: 50, padding: '2px 5px', fontSize: 11, borderRadius: 4,
                         border: '1px solid rgba(0,229,160,0.4)', background: 'rgba(0,229,160,0.06)',
                         color: '#00E5A0', textAlign: 'center', outline: 'none',
+                        MozAppearance: 'textfield',
                       }}
                     />
-                    <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>K</span>
+                    {/* 추천 버튼 — direction별 색/동작 (AdrSimulatorModal 동일) */}
+                    {(() => {
+                      const recBar = barRec?.rec_bar ?? 0
+                      const curBar = barRec?.cur_bar ?? 0
+                      const dir = barRec?.direction
+                      if (!barRec) return null
+                      if (dir === 'hold' || recBar === curBar) return (
+                        <button style={{ padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: 600, cursor: 'default', whiteSpace: 'nowrap' }}>현재 유지</button>
+                      )
+                      const color = dir === 'up' ? '#00E5A0' : '#E24B4A'
+                      return (
+                        <button onClick={() => setBarRaw(recBar)}
+                          style={{ padding: '2px 8px', borderRadius: 4, border: `1px solid ${color}`, background: 'transparent', color, fontSize: 10, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>추천 : {Math.round(recBar / 1000)}K</button>
+                      )
+                    })()}
+                    {/* 저장 버튼 — s02_rate_detail upsert */}
+                    <button onClick={handleBarSave} disabled={barSaving}
+                      style={{ padding: '2px 10px', borderRadius: 4, border: 'none', background: '#00E5A0', color: '#0a0a0a', fontSize: 10, fontWeight: 600, cursor: barSaving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', opacity: barSaving ? 0.5 : 1 }}>{barSaving ? '저장 중…' : '저장'}</button>
                   </div>
+                  {saveToast && <div style={{ fontSize: 10, color: '#00E5A0', marginBottom: 8 }}>{saveToast}</div>}
 
 
                   {/* 슬라이더 3개 — 라벨/트랙/값 높이 고정으로 세로 정렬 통일 */}
