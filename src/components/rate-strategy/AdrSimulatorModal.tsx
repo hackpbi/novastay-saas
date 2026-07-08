@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { X, Sparkles, Lock, RotateCcw, Save, Columns3 } from 'lucide-react'
+import { X, RotateCcw, Save, Columns3 } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useHotel } from '@/contexts/HotelContext'
@@ -447,6 +447,27 @@ export default function AdrSimulatorModal({
     }
   }, [effTotal, effBooked, effBase, effRooms, barRaw, otaPct, otaFeePct, fcst, otbForDate, sellOverride])
 
+  // ── ① 오늘 추천 BAR — get_bar_recommendation. RPC 미존재 시 에러 격리 → null ──
+  const { data: barRec = null } = useQuery({
+    queryKey: ['adr_bar_rec', hotelId, date, effBase, calc.curOcc],
+    enabled: isOpen && !!hotelId && !!date && effBase > 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('get_bar_recommendation', {
+        p_hotel_id:  hotelId,
+        p_stay_date: date,
+        p_cur_bar:   effBase,          // 현재 BAR (원 단위)
+        p_otb_occ:   calc.curOcc,      // OTB OCC%
+      })
+      if (error) throw error
+      const raw = Array.isArray(data) ? data[0] : data
+      return (raw ?? null) as {
+        direction: string; base_bar: number; rec_bar: number; cur_bar: number; delta_pct: number
+        pickup_pct: number; p1_rn: number; p30_rn: number; otb_date: string; vs_otb_date: string
+        tier_label: string; dday: number; decay_rate: number; real_mult: number; strategy: string; used_mult: number; used_cap: number
+      } | null
+    },
+  })
+
   // Forecast 파생값 (표시용)
   const ach = fcst ? {
     OCC: fcst.occ > 0 ? Math.round((calc.simOcc / fcst.occ) * 100) : 0,
@@ -756,77 +777,36 @@ export default function AdrSimulatorModal({
             </div>
           </div>
 
-          {/* BAR Rate 입력 + Recommended BAR (통합 카드) */}
-          <div className="shrink-0" style={{ margin: '10px 14px 8px', background: BG_CARD, border: `0.5px solid ${BORDER}`, borderRadius: 8, overflow: 'hidden' }}>
-            {/* 줄 1: BAR 입력 + 배지 (rec 제외) */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderBottom: recState?.kind === 'rec' ? `0.5px solid ${BORDER}` : 'none' }}>
-              <span style={{ fontSize: 11, color: TXT3, whiteSpace: 'nowrap' }}>BAR Rate</span>
-              <span style={{ fontSize: 11, color: TXT3, whiteSpace: 'nowrap' }}>{Math.round(effBase / 1000)}K →</span>
-              <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-                <input type="number" className="fc-spin-hide" value={Math.round(barRaw / 1000)} onChange={e => setBarRaw(Math.max(0, (Number(e.target.value) || 0) * 1000))}
-                  style={{ background: BG_INPUT, border: `0.5px solid ${BORDER_ACCENT}`, borderRadius: 6, color: MINT, fontSize: 14, fontWeight: 500, width: 60, textAlign: 'right', padding: '3px 22px 3px 7px', outline: 'none' }} />
-                <span style={{ position: 'absolute', right: 7, fontSize: 11, color: TXT3, pointerEvents: 'none' }}>K</span>
-              </div>
-              {fcst && recState && recState.kind !== 'rec' && (
-                <div style={{ marginLeft: 'auto' }}>
-                  {recState.kind === 'achievable' && (
-                    <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 9px', borderRadius: 20, whiteSpace: 'nowrap', background: SUCCESS_BG, color: POS, border: `0.5px solid ${SUCCESS_BD}` }}>✓ Achievable</span>
-                  )}
-                  {recState.kind === 'review' && (
-                    <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 9px', borderRadius: 20, whiteSpace: 'nowrap', background: 'rgba(245,166,35,0.10)', color: WARN, border: '0.5px solid rgba(245,166,35,0.30)' }}>⚠ FC ADR 재검토</span>
-                  )}
-                  {recState.kind === 'soldout' && (
-                    <span style={{ fontSize: 11, color: TXT3, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Lock size={11} />매진</span>
-                  )}
-                </div>
-              )}
-            </div>
-            {/* 줄 2: Recommended BAR — rec만 */}
-            {recState?.kind === 'rec' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: SUCCESS_BG }}>
-                <Sparkles size={11} style={{ color: POS }} />
-                <span style={{ fontSize: 11, color: POS }}>Recommended BAR</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: POS }}>{Math.round(recState.bar / 1000)}K</span>
-                <button onClick={() => setBarRaw(recState.bar)}
-                  style={{ fontSize: 10, fontWeight: 500, padding: '2px 8px', borderRadius: 5, whiteSpace: 'nowrap', background: POS, color: '#0a0a0a', border: 'none', cursor: 'pointer' }}>
-                  Apply
-                </button>
-                <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 500, color: RED, whiteSpace: 'nowrap' }}>▼ {revGap}K short</span>
-              </div>
-            )}
-          </div>
-
-          {/* 채널 슬라이더 3개 가로 */}
-          <div className="shrink-0" style={{ display: 'flex', gap: 5, padding: '7px 14px', borderBottom: `0.5px solid ${BORDER}`, overflow: 'hidden' }}>
-            <div style={chanBox}>
-              <div style={{ fontSize: 9, color: TXT3, marginBottom: 2 }}>OTA</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <input type="range" min={0} max={100} step={1} value={otaPct} onChange={e => setOtaPct(Number(e.target.value))}
-                  style={{ flex: 1, minWidth: 0, width: '100%', accentColor: MINT, cursor: 'pointer' }} />
-                <span style={{ fontSize: 10, color: TXT, minWidth: 22, textAlign: 'right' }}>{otaPct}%</span>
-              </div>
-            </div>
-            <div style={chanBox}>
-              <div style={{ fontSize: 9, color: TXT3, marginBottom: 2 }}>Direct</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <input type="range" min={0} max={100} step={1} value={100 - otaPct} disabled
-                  style={{ flex: 1, minWidth: 0, width: '100%', accentColor: MINT, opacity: 0.5, cursor: 'not-allowed' }} />
-                <span style={{ fontSize: 10, color: TXT, minWidth: 22, textAlign: 'right' }}>{100 - otaPct}%</span>
-              </div>
-            </div>
-            <div style={chanBox}>
-              <div style={{ fontSize: 9, color: TXT3, marginBottom: 2 }}>Commission</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <input type="range" min={0} max={40} step={1} value={otaFeePct} onChange={e => setOtaFeePct(Number(e.target.value))}
-                  style={{ flex: 1, minWidth: 0, width: '100%', accentColor: MINT, cursor: 'pointer' }} />
-                <span style={{ fontSize: 10, color: TXT, minWidth: 22, textAlign: 'right' }}>{otaFeePct}%</span>
-              </div>
-            </div>
-          </div>
-
           {/* 본문 (고정 상단 + 잔여 객실타입 현황이 하단 채움) */}
           <div ref={scrollBodyRef} className="flex-1 flex flex-col" style={{ minHeight: 0, overflowY: 'auto' }}>
             <div>
+              {/* ① 오늘 추천 BAR (get_bar_recommendation, 데이터 있을 때만) */}
+              {barRec && (() => {
+                const dir = barRec.direction
+                const dirColor = dir === 'up' ? MINT : dir === 'dn' ? RED : TXT3
+                return (
+                  <div style={{ margin: '10px 14px 8px', background: BG_CARD, border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: '8px 10px' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: TXT, marginBottom: 6 }}>오늘 추천 BAR</div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                      <span style={{ fontSize: 20, fontWeight: 700, color: dirColor }}>{Math.round(barRec.rec_bar / 1000)}K</span>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: dirColor }}>{barRec.delta_pct > 0 ? '+' : ''}{barRec.delta_pct}%</span>
+                      <span style={{ marginLeft: 'auto', fontSize: 11, color: TXT3 }}>현재 {Math.round(barRec.cur_bar / 1000)}K</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                      <span style={{ fontSize: 11, color: TXT3 }}>BAR</span>
+                      <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                        <input type="number" className="fc-spin-hide" value={Math.round(barRaw / 1000)} onChange={e => setBarRaw(Math.max(0, (Number(e.target.value) || 0) * 1000))}
+                          style={{ background: BG_INPUT, border: `0.5px solid ${BORDER_ACCENT}`, borderRadius: 6, color: MINT, fontSize: 14, fontWeight: 500, width: 60, textAlign: 'right', padding: '3px 22px 3px 7px', outline: 'none' }} />
+                        <span style={{ position: 'absolute', right: 7, fontSize: 11, color: TXT3, pointerEvents: 'none' }}>K</span>
+                      </div>
+                      <button onClick={() => setBarRaw(barRec.rec_bar)}
+                        style={{ fontSize: 10, fontWeight: 500, padding: '3px 10px', borderRadius: 5, whiteSpace: 'nowrap', background: MINT, color: '#0a0a0a', border: 'none', cursor: 'pointer' }}>
+                        추천값 적용
+                      </button>
+                    </div>
+                  </div>
+                )
+              })()}
               {/* ② 왜 올려야 하나? — 픽업 추이 (get_pickup_trend, 데이터 있을 때만) */}
               {pickupTrend && (() => {
                 const occ = (rn: number) => effTotal > 0 ? Math.round(rn / effTotal * 100 * 10) / 10 : 0
@@ -867,26 +847,56 @@ export default function AdrSimulatorModal({
                   </div>
                 )
               })()}
-              {/* 달성률 바 3개 — Forecast 있을 때만 */}
-              {fcst && ach && (
-                <div style={{ display: 'flex', gap: 5, margin: '0 14px 11.2px' }}>
-                  {(['OCC', 'ADR', 'REV'] as const).map(label => {
-                    const pct = ach[label]
-                    const c  = pct >= 100 ? POS : pct >= 80 ? WARN : RED
-                    return (
-                      <div key={label} style={{ flex: 1, background: BG_CARD, border: `0.5px solid ${BORDER}`, borderRadius: 7, padding: '5px 7px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                          <span style={{ fontSize: 9, color: TXT3 }}>{label}</span>
-                          <span style={{ fontSize: 9, fontWeight: 500, color: c }}>{Math.min(pct, 999)}%</span>
-                        </div>
-                        <div style={{ height: 3, background: BORDER, borderRadius: 2, overflow: 'hidden' }}>
-                          <div style={{ height: 3, borderRadius: 2, width: `${Math.min(pct, 100)}%`, background: c, transition: 'width 0.2s' }} />
-                        </div>
-                      </div>
-                    )
-                  })}
+              {/* ③ 올리면 어떻게 되지? — OTB vs 시뮬 비교 + 슬라이더(이동) */}
+              <div style={{ margin: '10px 14px 8px', background: BG_CARD, border: `0.5px solid ${BORDER}`, borderRadius: 8, overflow: 'hidden' }}>
+                <div style={{ padding: '8px 10px 4px', fontSize: 11, fontWeight: 600, color: TXT }}>올리면 어떻게 되지?</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '52px 1fr 1fr 1fr', columnGap: 6, rowGap: 3, padding: '0 10px 8px', fontSize: 11, alignItems: 'center' }}>
+                  <span />
+                  <span style={{ fontSize: 9, color: TXT3, textAlign: 'right' }}>OCC</span>
+                  <span style={{ fontSize: 9, color: TXT3, textAlign: 'right' }}>ADR</span>
+                  <span style={{ fontSize: 9, color: TXT3, textAlign: 'right' }}>REV</span>
+                  <span style={{ color: TXT3 }}>현재 OTB</span>
+                  <span style={{ textAlign: 'right', color: TXT }}>{calc.curOcc}%</span>
+                  <span style={{ textAlign: 'right', color: TXT }}>{fmtADR(calc.curAdr)}</span>
+                  <span style={{ textAlign: 'right', color: TXT }}>{fmtREV(calc.curRev)}</span>
+                  <span style={{ color: MINT }}>시뮬</span>
+                  <span style={{ textAlign: 'right', color: TXT }}>{calc.simOcc}%</span>
+                  <span style={{ textAlign: 'right', color: MINT, fontWeight: 600 }}>{fmtADR(calc.simAdr)}{calc.gapAdr > 0 ? ' ▲' : calc.gapAdr < 0 ? ' ▼' : ''}</span>
+                  <span style={{ textAlign: 'right', color: MINT, fontWeight: 600 }}>{fmtREV(calc.simRev)}{calc.gapRev > 0 ? ' ▲' : calc.gapRev < 0 ? ' ▼' : ''}</span>
                 </div>
-              )}
+                {(calc.gapAdr !== 0 || calc.gapRev !== 0) && (
+                  <div style={{ padding: '0 10px 8px', fontSize: 10, color: TXT3, textAlign: 'right' }}>
+                    ADR {fmtGap(calc.gapAdr, 'adr')} · REV {fmtGap(calc.gapRev, 'rev')}
+                  </div>
+                )}
+                {/* 채널 슬라이더 3개 (③ 아래로 이동) */}
+                <div style={{ display: 'flex', gap: 5, padding: '7px 10px', borderTop: `0.5px solid ${BORDER}` }}>
+                  <div style={chanBox}>
+                    <div style={{ fontSize: 9, color: TXT3, marginBottom: 2 }}>OTA</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <input type="range" min={0} max={100} step={1} value={otaPct} onChange={e => setOtaPct(Number(e.target.value))}
+                        style={{ flex: 1, minWidth: 0, width: '100%', accentColor: MINT, cursor: 'pointer' }} />
+                      <span style={{ fontSize: 10, color: TXT, minWidth: 22, textAlign: 'right' }}>{otaPct}%</span>
+                    </div>
+                  </div>
+                  <div style={chanBox}>
+                    <div style={{ fontSize: 9, color: TXT3, marginBottom: 2 }}>Direct</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <input type="range" min={0} max={100} step={1} value={100 - otaPct} disabled
+                        style={{ flex: 1, minWidth: 0, width: '100%', accentColor: MINT, opacity: 0.5, cursor: 'not-allowed' }} />
+                      <span style={{ fontSize: 10, color: TXT, minWidth: 22, textAlign: 'right' }}>{100 - otaPct}%</span>
+                    </div>
+                  </div>
+                  <div style={chanBox}>
+                    <div style={{ fontSize: 9, color: TXT3, marginBottom: 2 }}>Commission</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <input type="range" min={0} max={40} step={1} value={otaFeePct} onChange={e => setOtaFeePct(Number(e.target.value))}
+                        style={{ flex: 1, minWidth: 0, width: '100%', accentColor: MINT, cursor: 'pointer' }} />
+                      <span style={{ fontSize: 10, color: TXT, minWidth: 22, textAlign: 'right' }}>{otaFeePct}%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* 세그먼트별 예상 ADR + 전체 적용 시 예상 (KPI 아래 divider) */}
