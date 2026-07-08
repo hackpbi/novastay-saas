@@ -153,6 +153,24 @@ export default function AdrSimulatorModal({
     },
   })
 
+  // ── ② 왜 올려야 하나 — get_pickup_trend (30/14/7/1일전 픽업 추이). RPC 미존재 시 에러 격리 → null ──
+  const { data: pickupTrend = null } = useQuery({
+    queryKey: ['adr_pickup_trend', hotelId, date],
+    enabled: isOpen && !!hotelId && !!date,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('get_pickup_trend', {
+        p_hotel_id:  hotelId,
+        p_stay_date: date,
+      })
+      if (error) throw error
+      const raw = Array.isArray(data) ? data[0] : data
+      return (raw ?? null) as {
+        d30_rn: number; d14_rn: number; d7_rn: number; d1_rn: number
+        d30_date: string; d14_date: string; d7_date: string; d1_date: string
+      } | null
+    },
+  })
+
   // RPC 우선, 미로딩/없음 시 prop 폴백
   const effTotal  = sim?.total_rooms   ?? totalRooms
   const effBase   = sim?.base_bar_rate ?? baseBarRate
@@ -809,6 +827,46 @@ export default function AdrSimulatorModal({
           {/* 본문 (고정 상단 + 잔여 객실타입 현황이 하단 채움) */}
           <div ref={scrollBodyRef} className="flex-1 flex flex-col" style={{ minHeight: 0, overflowY: 'auto' }}>
             <div>
+              {/* ② 왜 올려야 하나? — 픽업 추이 (get_pickup_trend, 데이터 있을 때만) */}
+              {pickupTrend && (() => {
+                const occ = (rn: number) => effTotal > 0 ? Math.round(rn / effTotal * 100 * 10) / 10 : 0
+                const cells = [
+                  { label: '30일전', date: pickupTrend.d30_date, rn: pickupTrend.d30_rn },
+                  { label: '14일전', date: pickupTrend.d14_date, rn: pickupTrend.d14_rn },
+                  { label: '7일전',  date: pickupTrend.d7_date,  rn: pickupTrend.d7_rn },
+                  { label: '어제',   date: pickupTrend.d1_date,  rn: pickupTrend.d1_rn },
+                ]
+                const diffPp = Math.round((occ(pickupTrend.d1_rn) - occ(pickupTrend.d30_rn)) * 10) / 10
+                const d7cancel = occ(pickupTrend.d7_rn) < occ(pickupTrend.d14_rn)
+                return (
+                  <div style={{ margin: '10px 14px 8px', background: BG_CARD, border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: '8px 10px' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: TXT, marginBottom: 6 }}>왜 올려야 하나?</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 5 }}>
+                      {cells.map((c, i) => {
+                        const cOcc = occ(c.rn)
+                        const prev = i > 0 ? occ(cells[i - 1].rn) : null
+                        const up = prev != null && cOcc > prev
+                        const down = prev != null && cOcc < prev
+                        const isYesterday = i === cells.length - 1
+                        const cancel = c.label === '7일전' && d7cancel
+                        return (
+                          <div key={c.label} style={{ background: isYesterday ? SUCCESS_BG : BG_INPUT, border: `0.5px solid ${isYesterday ? SUCCESS_BD : BORDER}`, borderRadius: 6, padding: '5px 4px', textAlign: 'center' }}>
+                            <div style={{ fontSize: 9, color: TXT3 }}>{c.label}</div>
+                            <div style={{ fontSize: 8, color: TXT3 }}>{c.date ? c.date.slice(5) : '-'}</div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: cancel ? RED : up ? POS : down ? RED : TXT }}>
+                              {up ? '▲' : down ? '▼' : ''}{cOcc}%
+                            </div>
+                            <div style={{ fontSize: 9, color: TXT3 }}>{c.rn} R/N</div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: 10, color: diffPp >= 0 ? POS : RED, textAlign: 'right' }}>
+                      30일전 대비 점유율 {diffPp >= 0 ? '+' : ''}{diffPp}%p {diffPp >= 0 ? '↑' : '↓'}
+                    </div>
+                  </div>
+                )
+              })()}
               {/* 달성률 바 3개 — Forecast 있을 때만 */}
               {fcst && ach && (
                 <div style={{ display: 'flex', gap: 5, margin: '0 14px 11.2px' }}>
