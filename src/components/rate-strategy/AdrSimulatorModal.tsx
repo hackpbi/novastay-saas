@@ -117,6 +117,7 @@ export default function AdrSimulatorModal({
   const [showRoomPanel, setShowRoomPanel] = useState(false)
   const [editedFcst, setEditedFcst] = useState<Record<string, { rn: number; adr: number }>>({})
   const [fcstSaving, setFcstSaving] = useState(false)
+  const [barSaving,  setBarSaving]  = useState(false)   // BAR Rate 저장(s02_rate_detail)
   const [editCell, setEditCell] = useState<{ code: string; field: 'rn' | 'adr' } | null>(null)
   const [editMode, setEditMode] = useState<'fcst' | 'otb'>('fcst')   // 일괄 편집 모드
   const [selectedFields, setSelectedFields] = useState<('rn' | 'adr')[]>([])
@@ -549,6 +550,29 @@ export default function AdrSimulatorModal({
     setTimeout(() => setPickupToast(null), 1800)
   }
 
+  // ── BAR Rate 저장 — Rate Strategy와 동일 (s02_rate_detail BASE/single upsert) ──
+  const handleBarSave = async () => {
+    if (!hotelId || !date || barSaving) return
+    setBarSaving(true)
+    try {
+      const { error } = await (supabase as any)
+        .from('s02_rate_detail')
+        .upsert(
+          [{ hotel_id: hotelId, stay_date: date, room_type_code: 'BASE', date_type: 'single', new_rate: barRaw }],
+          { onConflict: 'hotel_id,room_type_code,stay_date,date_type', ignoreDuplicates: false },
+        )
+      if (error) throw error
+      queryClient.invalidateQueries({ queryKey: ['adr_bar_rates', hotelId, monthYM] })
+      queryClient.invalidateQueries({ queryKey: ['adr_simulator', hotelId, date, fcstUpdateDate] })
+      setPickupToast(`BAR ${Math.round(barRaw / 1000)}K 저장됨`)
+      setTimeout(() => setPickupToast(null), 1800)
+    } catch (err) {
+      alert(`BAR 저장 실패: ${(err as Error).message}`)
+    } finally {
+      setBarSaving(false)
+    }
+  }
+
   // ── Forecast 편집 패널 — 입력/저장/초기화 ──
   const segGapColor = (v: number) => (v > 0 ? POS : v < 0 ? RED : TXT3)
   const setEdit = (code: string, field: 'rn' | 'adr', val: number) => setEditedFcst(prev => ({
@@ -782,19 +806,19 @@ export default function AdrSimulatorModal({
             <div>
               {/* ①+③ 통합: BAR RATE + 추천 + 현재/예상 전망 */}
               <div style={{ margin: '10px 14px 8px', background: BG_CARD, border: `0.5px solid ${BORDER}`, borderRadius: 8, overflow: 'hidden' }}>
-                {/* 상단: BAR RATE + OTB 요약 */}
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, padding: '8px 12px 2px' }}>
-                  <span style={{ fontSize: 22, fontWeight: 500, color: TXT }}>BAR RATE</span>
-                  <span style={{ fontSize: 12, color: TXT3, whiteSpace: 'nowrap' }}>OTB : OCC {calc.curOcc}% · ADR {fmtADR(calc.curAdr)} · REV {fmtREV(calc.curRev)}</span>
+                {/* 상단: BAR RATE(제목) + OTB 요약(아래 줄) — 2행 */}
+                <div style={{ padding: '8px 12px 2px' }}>
+                  <div style={{ fontSize: 22, fontWeight: 500, color: TXT }}>BAR RATE</div>
+                  <div style={{ fontSize: 12, color: TXT3, whiteSpace: 'nowrap', marginTop: 2 }}>OTB : OCC {calc.curOcc}% · ADR {fmtADR(calc.curAdr)} · REV {fmtREV(calc.curRev)}</div>
                 </div>
-                {/* 중간: 현재 BAR → 입력 → 추천 badge → 적용 */}
+                {/* 중간: 현재 BAR → 입력 → 추천 badge → 적용/저장 */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 12px 10px', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 28, color: TXT3, lineHeight: 1 }}>{Math.round(effBase / 1000)}K</span>
+                  <span style={{ fontSize: 20, color: TXT3, lineHeight: 1 }}>{Math.round(effBase / 1000)}K</span>
                   <span style={{ fontSize: 18, color: TXT3 }}>→</span>
                   <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
                     <input type="number" className="fc-spin-hide" value={Math.round(barRaw / 1000)} onChange={e => setBarRaw(Math.max(0, (Number(e.target.value) || 0) * 1000))}
-                      style={{ background: BG_INPUT, border: `0.5px solid ${BORDER_ACCENT}`, borderRadius: 6, color: MINT, fontSize: 32, fontWeight: 500, width: 100, textAlign: 'right', padding: '2px 28px 2px 8px', outline: 'none', lineHeight: 1.1 }} />
-                    <span style={{ position: 'absolute', right: 9, fontSize: 13, color: TXT3, pointerEvents: 'none' }}>K</span>
+                      style={{ background: BG_INPUT, border: `0.5px solid ${BORDER_ACCENT}`, borderRadius: 6, color: MINT, fontSize: 22, fontWeight: 500, width: 84, textAlign: 'right', padding: '2px 24px 2px 8px', outline: 'none', lineHeight: 1.1 }} />
+                    <span style={{ position: 'absolute', right: 8, fontSize: 16, color: TXT3, pointerEvents: 'none' }}>K</span>
                   </div>
                   {barRec && (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, fontWeight: 500, padding: '2px 9px', borderRadius: 20, whiteSpace: 'nowrap', background: SUCCESS_BG, border: `0.5px solid ${SUCCESS_BD}`, color: barRec.direction === 'up' ? POS : barRec.direction === 'dn' ? RED : TXT3 }}>추천 {barRec.delta_pct > 0 ? '+' : ''}{barRec.delta_pct}%</span>
@@ -803,6 +827,8 @@ export default function AdrSimulatorModal({
                     <button onClick={() => setBarRaw(barRec.rec_bar)}
                       style={{ fontSize: 11, fontWeight: 500, padding: '4px 12px', borderRadius: 6, whiteSpace: 'nowrap', background: MINT, color: '#0a0a0a', border: 'none', cursor: 'pointer' }}>적용</button>
                   )}
+                  <button onClick={handleBarSave} disabled={barSaving}
+                    style={{ fontSize: 11, fontWeight: 500, padding: '4px 12px', borderRadius: 6, whiteSpace: 'nowrap', background: BG_INPUT, border: `0.5px solid ${BORDER_ACCENT}`, color: MINT, cursor: barSaving ? 'not-allowed' : 'pointer', opacity: barSaving ? 0.5 : 1 }}>{barSaving ? '저장 중…' : '저장'}</button>
                 </div>
                 {/* 하단: 현재 전망 vs 예상 전망 */}
                 <div style={{ display: 'flex', borderTop: `0.5px solid ${BORDER}` }}>
@@ -990,24 +1016,6 @@ export default function AdrSimulatorModal({
                     )
                   })}
                 </div>
-                {/* 전체 적용 시 예상 */}
-                {previewAfterApply && (
-                  <div style={{ background: '#0d1f17', border: '1px solid rgba(0,229,160,0.19)', borderRadius: 8, padding: '7px 14px' }}>
-                    <div style={{ color: '#888', fontSize: 10, marginBottom: 8 }}>전체 적용 시 예상</div>
-                    <div style={{ display: 'flex', gap: 24 }}>
-                      {([
-                        ['OCC', `${previewAfterApply.occ.toFixed(1)}%`],
-                        ['ADR', `${Math.round(previewAfterApply.adr / 1000)}K`],
-                        ['REV', `${(previewAfterApply.rev / 1e6).toFixed(1)}M`],
-                      ] as const).map(([label, val]) => (
-                        <div key={label}>
-                          <div style={{ color: '#666', fontSize: 10 }}>{label}</div>
-                          <div style={{ color: '#00E5A0', fontSize: 14, fontWeight: 700 }}>{val}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             )}
             {/* 모드 선택 + 항목 + 액션 — 단일 툴바 */}
