@@ -58,17 +58,23 @@ function SectionCard({ title, desc, children, footer }: {
   )
 }
 
-function CellInput({ value, onChange, type = 'text', placeholder }: {
+function CellInput({ value, onChange, type = 'text', placeholder, step, min, max }: {
   value:    any
   onChange: (v: string) => void
   type?:    'text' | 'number'
   placeholder?: string
+  step?: string
+  min?:  string
+  max?:  string
 }) {
   return (
     <input
       type={type}
       value={value ?? ''}
       placeholder={placeholder}
+      step={step}
+      min={min}
+      max={max}
       onChange={e => onChange(e.target.value)}
       className={cellCls}
       style={cellStyle}
@@ -196,7 +202,9 @@ export default function BarRecommendationPage() {
     setDecays((decayRes.data ?? []).map((d: any) => ({
       _key: nextKey(), id: d.id, tier_name: d.tier_name ?? '',
       dday_min: d.dday_min ?? '', dday_max: d.dday_max ?? '',
-      up_factor: d.up_factor ?? '', down_factor: d.down_factor ?? '', strategy: d.strategy ?? '',
+      up_factor:   d.up_factor   != null ? Math.round(Number(d.up_factor)   * 10000) / 100 : '',   // DB(0~1) → 화면(%)
+      down_factor: d.down_factor != null ? Math.round(Number(d.down_factor) * 10000) / 100 : '',   // DB(0~1) → 화면(%)
+      strategy: d.strategy ?? '',
     })))
 
     const config = configRes.data
@@ -251,8 +259,8 @@ export default function BarRecommendationPage() {
       hotel_id: hotelId,
       dday_min: numOrNull(d.dday_min),
       dday_max: numOrNull(d.dday_max),
-      up_rate:  Number(d.up_factor) || 0,
-      dn_rate:  Number(d.down_factor) || 0,
+      up_rate:  Math.min(1, Math.max(0, Math.round((Number(d.up_factor) / 100) * 100) / 100)),   // 화면(%) → DB(0~1)
+      dn_rate:  Math.min(1, Math.max(0, Math.round((Number(d.down_factor) / 100) * 100) / 100)),   // 화면(%) → DB(0~1)
       strategy: d.strategy,
     }))
     const { error } = await (supabase as any)
@@ -359,8 +367,8 @@ export default function BarRecommendationPage() {
                 <Th>구간명</Th>
                 <Th w={120}>D-Day 하한</Th>
                 <Th w={120}>D-Day 상한</Th>
-                <Th w={110}>인상 계수</Th>
-                <Th w={110}>인하 계수</Th>
+                <Th w={110}>인상 계수(%)</Th>
+                <Th w={110}>인하 계수(%)</Th>
                 <Th>전략 설명</Th>
                 <Th w={48}>{''}</Th>
               </tr>
@@ -375,8 +383,8 @@ export default function BarRecommendationPage() {
                   <td className="px-2 py-1.5"><CellInput value={d.tier_name}   onChange={v => updDecay(d._key, 'tier_name', v)} placeholder="예: 임박" /></td>
                   <td className="px-2 py-1.5"><CellInput type="number" value={d.dday_min}    onChange={v => updDecay(d._key, 'dday_min', v)} /></td>
                   <td className="px-2 py-1.5"><CellInput type="number" value={d.dday_max}    onChange={v => updDecay(d._key, 'dday_max', v)} /></td>
-                  <td className="px-2 py-1.5"><CellInput type="number" value={d.up_factor}   onChange={v => updDecay(d._key, 'up_factor', v)} /></td>
-                  <td className="px-2 py-1.5"><CellInput type="number" value={d.down_factor} onChange={v => updDecay(d._key, 'down_factor', v)} /></td>
+                  <td className="px-2 py-1.5"><CellInput type="number" step="1" min="0" max="100" value={d.up_factor}   onChange={v => updDecay(d._key, 'up_factor', v)} /></td>
+                  <td className="px-2 py-1.5"><CellInput type="number" step="1" min="0" max="100" value={d.down_factor} onChange={v => updDecay(d._key, 'down_factor', v)} /></td>
                   <td className="px-2 py-1.5"><CellInput value={d.strategy}    onChange={v => updDecay(d._key, 'strategy', v)} placeholder="전략 메모" /></td>
                   <td className="px-2 py-1.5 text-center"><DeleteRowButton onClick={() => delDecay(d._key)} /></td>
                 </tr>
