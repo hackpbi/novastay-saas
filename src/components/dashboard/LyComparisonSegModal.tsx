@@ -115,7 +115,7 @@ function MonthCells({ m, clickable, onGapClick, onOtbClick, onLyClick, bg, gapCo
       <td className="font-mono" style={c} onClick={onOtbClick}><FmtAdr n={m.otb.adr} /></td>
       <td className="font-mono" style={{ ...c, borderRight: DOUBLE }} onClick={onOtbClick}><FmtRevenue n={m.otb.revenue} /></td>
       {/* LY */}
-      <td className="font-mono" style={c} onClick={onLyClick}><FmtNights n={m.ly.nights} /></td>
+      <td className="font-mono" style={{ ...c, borderLeft: otbSelected ? '3px solid #00E5A0' : BORDER }} onClick={onLyClick}><FmtNights n={m.ly.nights} /></td>
       <td className="font-mono" style={c} onClick={onLyClick}><FmtAdr n={m.ly.adr} /></td>
       <td className="font-mono" style={{ ...c, borderRight: DOUBLE }} onClick={onLyClick}><FmtRevenue n={m.ly.revenue} /></td>
       {/* GAP */}
