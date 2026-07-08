@@ -539,7 +539,7 @@ export default function LyComparisonSegModal({
         </div>
 
         {/* 우측 Account 증감 패널 */}
-        <div style={{ width: 320, flexShrink: 0, borderLeft: '1px solid rgba(0,229,160,0.2)', display: 'flex', flexDirection: 'column', background: '#0a0a0a', alignSelf: 'stretch', overflow: 'hidden' }}>
+        <div style={{ width: 320, flexShrink: 0, borderLeft: '1px solid rgba(0,229,160,0.2)', display: 'flex', flexDirection: 'column', background: '#0a0a0a', alignSelf: 'flex-start', maxHeight: '100%', overflow: 'hidden' }}>
           <div style={{ padding: '10px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>Account 증감</div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
