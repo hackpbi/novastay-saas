@@ -128,7 +128,7 @@ export default function MonthlyPickupSegModal({
   const { currentHotel }                                  = useHotel()
   const { otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate } = useDateContext()
   // 우측 패널: 선택된 세그먼트 (대분류 이름 클릭 시 set)
-  const [selectedSeg, setSelectedSeg] = useState<{ label: string; codes: string[]; monthKey: string } | null>(null)
+  const [selectedSeg, setSelectedSeg] = useState<{ label: string; codes: string[]; monthKey: string; activeMonthKey: string } | null>(null)
   const days = otbDate && vsOtbDate
     ? Math.round((new Date(otbDate).getTime() - new Date(vsOtbDate).getTime()) / 86400000)
     : 0
@@ -366,7 +366,7 @@ export default function MonthlyPickupSegModal({
                         onMouseLeave={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = baseBg })}
                       >
                         <td
-                          onClick={segSelectable ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes, monthKey: visibleMonths[0] ?? '' }) : undefined}
+                          onClick={segSelectable ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes, monthKey: visibleMonths[0] ?? '', activeMonthKey: '' }) : undefined}
                           style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: BORDER, color: nameColor, background: baseBg, cursor: segSelectable ? 'pointer' : 'default' }}
                         >
                           {row.indent ? (
@@ -376,9 +376,9 @@ export default function MonthlyPickupSegModal({
                         {visibleMonths.map((mk, idx) => {
                           const cell = row.monthlyPickup[mk] ?? { pickupNights: 0, pickupAdr: 0, pickupRevenue: 0 }
                           const handleClick = clickable
-                            ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes, monthKey: mk })
+                            ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes, monthKey: mk, activeMonthKey: mk })
                             : undefined
-                          return <MonthCells key={mk} cell={cell} clickable={clickable} onClick={handleClick} isLast={idx === visibleMonths.length - 1} fontColor={rowColor} bg={baseBg} selected={selectedSeg?.label === row.name} />
+                          return <MonthCells key={mk} cell={cell} clickable={clickable} onClick={handleClick} isLast={idx === visibleMonths.length - 1} fontColor={rowColor} bg={baseBg} selected={selectedSeg?.label === row.name && selectedSeg?.activeMonthKey === mk} />
                         })}
                       </tr>
                     )
