@@ -300,7 +300,7 @@ export default function LyComparisonSegModal({
 
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-[1400px]"
-        style={{ maxHeight: '88vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
+        style={{ height: '88vh', maxHeight: '88vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 shrink-0" style={{ borderBottom: BORDER }}>
@@ -404,7 +404,7 @@ export default function LyComparisonSegModal({
 
         {/* Body: 좌측 테이블 + 우측 Account 증감 패널 */}
         <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-        <div className="flex-1 overflow-y-auto" style={{ minWidth: 0 }}>
+        <div className="flex-1 overflow-y-auto" style={{ minWidth: 0, minHeight: 0 }}>
           {loading ? (
             <Skeleton />
           ) : monthKeys.length === 0 ? (
