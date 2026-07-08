@@ -509,7 +509,7 @@ export function ForecastAlertModal({
     onEditChange(next)
     await onSave()          // 저장 완료(+재조회)까지 대기
     setLocalFix(new Map())  // localFix 초기화
-    onClose()               // 저장 성공 시 모달 자동 닫기
+    // onClose() 제거 — 저장 후에도 모달은 열린 채로 유지(데이터만 갱신)
   }
 
   if (!isOpen) return null
