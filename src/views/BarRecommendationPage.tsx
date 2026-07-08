@@ -209,8 +209,8 @@ export default function BarRecommendationPage() {
     setDecays((decayRes.data ?? []).map((d: any) => ({
       _key: nextKey(), id: d.id, tier_name: d.tier_name ?? '',
       dday_min: d.dday_min ?? '', dday_max: d.dday_max ?? '',
-      up_factor:   d.up_factor   != null ? Math.round(Number(d.up_factor)   * 10000) / 100 : '',   // DB(0~1) → 화면(%)
-      down_factor: d.down_factor != null ? Math.round(Number(d.down_factor) * 10000) / 100 : '',   // DB(0~1) → 화면(%)
+      up_factor:   d.up_rate != null ? Math.round(Number(d.up_rate) * 10000) / 100 : '',   // DB up_rate(0~1) → 화면(%)
+      down_factor: d.dn_rate != null ? Math.round(Number(d.dn_rate) * 10000) / 100 : '',   // DB dn_rate(0~1) → 화면(%)
       strategy: d.strategy ?? '',
     })))
 
