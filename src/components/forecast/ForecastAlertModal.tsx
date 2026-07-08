@@ -131,6 +131,8 @@ export function ForecastAlertModal({
   // Bulk edit 드롭다운
   const [bulkDropOpen, setBulkDropOpen] = useState(false)
   const bulkDropRef = useRef<HTMLDivElement>(null)
+  // Match OTB 버튼 눌림 효과
+  const [matchOtbPressed, setMatchOtbPressed] = useState(false)
   // Filter 드롭다운
   const [filterDropOpen, setFilterDropOpen] = useState(false)
   const filterDropRef = useRef<HTMLDivElement>(null)
@@ -1145,11 +1147,20 @@ export function ForecastAlertModal({
                   </div>
                   <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.08)' }} />
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                    <button onClick={matchOtb} style={{
-                      padding: '6px 12px', borderRadius: 7,
-                      border: '0.5px solid rgba(255,255,255,0.1)', background: 'transparent',
-                      color: 'rgba(255,255,255,0.4)', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap',
-                    }}>Match OTB</button>
+                    <button
+                      onClick={() => { matchOtb(); setBulkDropOpen(false) }}
+                      onMouseDown={() => setMatchOtbPressed(true)}
+                      onMouseUp={() => setMatchOtbPressed(false)}
+                      onMouseLeave={() => setMatchOtbPressed(false)}
+                      style={{
+                        padding: '6px 12px', borderRadius: 7,
+                        border: '0.5px solid rgba(255,255,255,0.1)', background: 'transparent',
+                        color: 'rgba(255,255,255,0.4)', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap',
+                        opacity: matchOtbPressed ? 0.7 : 1,
+                        transform: matchOtbPressed ? 'scale(0.97)' : 'scale(1)',
+                        transition: 'opacity 0.1s, transform 0.1s',
+                      }}
+                    >Match OTB</button>
                     <button onClick={() => { applyBulk(); setBulkDropOpen(false) }} style={{
                       flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                       padding: '6px 16px', borderRadius: 7, border: 'none',
