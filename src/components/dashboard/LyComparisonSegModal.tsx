@@ -94,11 +94,12 @@ function FmtGapRevpar({ n, fontColor }: { n: number; fontColor?: string }) {
 
 // ─── Cell group components ─────────────────────────────────────────────────────
 
-function MonthCells({ m, clickable, onGapClick, onOtbClick, bg, gapColor, gapBold, otbSelected }: {
+function MonthCells({ m, clickable, onGapClick, onOtbClick, onLyClick, bg, gapColor, gapBold, otbSelected }: {
   m: LyComparisonMonthly
   clickable: boolean
   onGapClick?: () => void
   onOtbClick?: () => void
+  onLyClick?: () => void
   bg?: string
   gapColor?: string
   gapBold?: boolean
@@ -114,9 +115,9 @@ function MonthCells({ m, clickable, onGapClick, onOtbClick, bg, gapColor, gapBol
       <td className="font-mono" style={c} onClick={onOtbClick}><FmtAdr n={m.otb.adr} /></td>
       <td className="font-mono" style={{ ...c, borderRight: DOUBLE }} onClick={onOtbClick}><FmtRevenue n={m.otb.revenue} /></td>
       {/* LY */}
-      <td className="font-mono" style={c} onClick={onOtbClick}><FmtNights n={m.ly.nights} /></td>
-      <td className="font-mono" style={c} onClick={onOtbClick}><FmtAdr n={m.ly.adr} /></td>
-      <td className="font-mono" style={{ ...c, borderRight: DOUBLE }} onClick={onOtbClick}><FmtRevenue n={m.ly.revenue} /></td>
+      <td className="font-mono" style={c} onClick={onLyClick}><FmtNights n={m.ly.nights} /></td>
+      <td className="font-mono" style={c} onClick={onLyClick}><FmtAdr n={m.ly.adr} /></td>
+      <td className="font-mono" style={{ ...c, borderRight: DOUBLE }} onClick={onLyClick}><FmtRevenue n={m.ly.revenue} /></td>
       {/* GAP */}
       <td className="font-mono" style={g} onClick={onGapClick}><FmtGapNights n={m.gap.nights} fontColor={gapColor} /></td>
       <td className="font-mono" style={g} onClick={onGapClick}><FmtGapAdr n={m.gap.adr} fontColor={gapColor} /></td>
@@ -173,7 +174,7 @@ export default function LyComparisonSegModal({
   const lyMatchUpdateDate = lyPacing?.[0]?.ly_match_update_date ?? null
   const [currentMonthIndex, setCurrentMonthIndex]        = useState(0)
   // 우측 Account 증감 패널: 선택된 세그먼트
-  const [selectedSeg, setSelectedSeg] = useState<{ label: string; codes: string[] } | null>(null)
+  const [selectedSeg, setSelectedSeg] = useState<{ label: string; codes: string[]; viewMode: 'otb' | 'ly' | 'gap' } | null>(null)
 
   const loading = schemaLoading || lyLoading
 
@@ -236,18 +237,45 @@ export default function LyComparisonSegModal({
 
   const accountList = useMemo(() => {
     if (!selectedSeg) return []
-    return (accountPickupRows as Array<{ account_name: string; segmentation: string; otb_nights: number; ly_nights: number; otb_revenue: number; ly_revenue: number }>)
+    const filtered = (accountPickupRows as Array<{ account_name: string; segmentation: string; otb_nights: number; ly_nights: number; otb_revenue: number; ly_revenue: number }>)
       .filter(r => selectedSeg.codes.includes(r.segmentation))
+
+    if (selectedSeg.viewMode === 'otb') {
+      return filtered
+        .map(r => ({
+          name:   r.account_name,
+          valRn:  r.otb_nights ?? 0,
+          valAdr: r.otb_nights > 0 ? Math.round(r.otb_revenue / r.otb_nights) : 0,
+          valRev: r.otb_revenue ?? 0,
+        }))
+        .filter(a => a.valRn !== 0 || a.valRev !== 0)
+        .sort((a, b) => b.valRn - a.valRn)
+    }
+
+    if (selectedSeg.viewMode === 'ly') {
+      return filtered
+        .map(r => ({
+          name:   r.account_name,
+          valRn:  r.ly_nights ?? 0,
+          valAdr: r.ly_nights > 0 ? Math.round(r.ly_revenue / r.ly_nights) : 0,
+          valRev: r.ly_revenue ?? 0,
+        }))
+        .filter(a => a.valRn !== 0 || a.valRev !== 0)
+        .sort((a, b) => b.valRn - a.valRn)
+    }
+
+    // gap (기존 로직)
+    return filtered
       .map(r => ({
-        name:    r.account_name,
-        diffRn:  (r.otb_nights ?? 0)  - (r.ly_nights ?? 0),
-        diffAdr: r.otb_nights > 0 && r.ly_nights > 0
+        name:   r.account_name,
+        valRn:  (r.otb_nights ?? 0) - (r.ly_nights ?? 0),
+        valAdr: r.otb_nights > 0 && r.ly_nights > 0
           ? Math.round(r.otb_revenue / r.otb_nights) - Math.round(r.ly_revenue / r.ly_nights)
           : 0,
-        diffRev: (r.otb_revenue ?? 0) - (r.ly_revenue ?? 0),
+        valRev: (r.otb_revenue ?? 0) - (r.ly_revenue ?? 0),
       }))
-      .filter(a => a.diffRn !== 0 || a.diffRev !== 0)
-      .sort((a, b) => b.diffRn - a.diffRn)
+      .filter(a => a.valRn !== 0 || a.valRev !== 0)
+      .sort((a, b) => b.valRn - a.valRn)
   }, [selectedSeg, accountPickupRows])
 
   if (!open) return null
@@ -436,7 +464,7 @@ export default function LyComparisonSegModal({
                         onMouseLeave={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = baseBg })}
                       >
                         <td
-                          onClick={segSelectable ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes }) : undefined}
+                          onClick={segSelectable ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes, viewMode: 'gap' }) : undefined}
                           style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, borderRight: DOUBLE, background: baseBg, cursor: segSelectable ? 'pointer' : 'default' }}
                         >
                           {row.indent ? <><span style={{ color: 'var(--brand-dimmed)' }}>└ </span>{row.name}</> : row.name}
@@ -448,9 +476,10 @@ export default function LyComparisonSegModal({
                           bg={baseBg}
                           gapColor={rowColor}
                           gapBold={row.isBold}
-                          onOtbClick={segSelectable ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes }) : undefined}
+                          onOtbClick={segSelectable ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes, viewMode: 'otb' }) : undefined}
+                          onLyClick={segSelectable ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes, viewMode: 'ly' }) : undefined}
                           onGapClick={clickable ? () => {
-                            setSelectedSeg({ label: row.name, codes: row.segmentationCodes })
+                            setSelectedSeg({ label: row.name, codes: row.segmentationCodes, viewMode: 'gap' })
                           } : undefined}
                         />
                       </tr>
@@ -513,7 +542,9 @@ export default function LyComparisonSegModal({
           <div style={{ padding: '10px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>Account 증감</div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
-              {selectedSeg ? `${selectedSeg.label} · vs LY` : '세그먼트를 클릭하세요'}
+              {selectedSeg
+                ? `${selectedSeg.label} · ${selectedSeg.viewMode === 'otb' ? '현재 OTB' : selectedSeg.viewMode === 'ly' ? '작년 OTB' : 'vs LY'}`
+                : '세그먼트를 클릭하세요'}
             </div>
           </div>
           {/* 컬럼 헤더 */}
@@ -533,39 +564,47 @@ export default function LyComparisonSegModal({
               </div>
             ) : accountList.length === 0 ? (
               <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', padding: 12 }}>데이터가 없습니다.</div>
-            ) : accountList.map((a, i) => (
+            ) : accountList.map((a, i) => {
+              const isGap = selectedSeg?.viewMode === 'gap'
+              return (
               <div key={`${a.name}-${i}`} style={{ padding: '6px 14px', borderBottom: '0.5px solid #1a1a1a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>
                   {a.name}
                 </span>
                 <div style={{ display: 'flex', flexShrink: 0 }}>
-                  <span style={{ fontSize: 11, color: a.diffRn > 0 ? '#00E5A0' : a.diffRn < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 40, textAlign: 'right' }}>
-                    {a.diffRn === 0 ? '—' : (a.diffRn > 0 ? '+' : '') + a.diffRn}
+                  <span style={{ fontSize: 11, color: isGap ? (a.valRn > 0 ? '#00E5A0' : a.valRn < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)') : '#fff', width: 40, textAlign: 'right' }}>
+                    {a.valRn === 0 ? '—' : (isGap && a.valRn > 0 ? '+' : '') + a.valRn}
                   </span>
-                  <span style={{ fontSize: 11, color: a.diffAdr > 0 ? '#00E5A0' : a.diffAdr < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 52, textAlign: 'right' }}>
-                    {a.diffAdr === 0 ? '—' : (a.diffAdr > 0 ? '+' : '') + (Math.abs(a.diffAdr) >= 1000 ? Math.round(a.diffAdr / 1000) + 'k' : a.diffAdr)}
+                  <span style={{ fontSize: 11, color: isGap ? (a.valAdr > 0 ? '#00E5A0' : a.valAdr < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)') : '#fff', width: 52, textAlign: 'right' }}>
+                    {a.valAdr === 0 ? '—' : (isGap && a.valAdr > 0 ? '+' : '') + (Math.abs(a.valAdr) >= 1000 ? Math.round(a.valAdr / 1000) + 'k' : a.valAdr)}
                   </span>
-                  <span style={{ fontSize: 11, color: a.diffRev > 0 ? '#00E5A0' : a.diffRev < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 56, textAlign: 'right' }}>
-                    {a.diffRev === 0 ? '—' : (a.diffRev > 0 ? '+' : '') + (a.diffRev / 1_000_000).toFixed(1) + 'M'}
+                  <span style={{ fontSize: 11, color: isGap ? (a.valRev > 0 ? '#00E5A0' : a.valRev < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)') : '#fff', width: 56, textAlign: 'right' }}>
+                    {a.valRev === 0 ? '—' : (isGap && a.valRev > 0 ? '+' : '') + (a.valRev / 1_000_000).toFixed(1) + 'M'}
                   </span>
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
-          {accountList.length > 0 && (
+          {accountList.length > 0 && (() => {
+            const isGap    = selectedSeg?.viewMode === 'gap'
+            const totalRn  = accountList.reduce((s, a) => s + a.valRn, 0)
+            const totalRev = accountList.reduce((s, a) => s + a.valRev, 0)
+            return (
             <div style={{ padding: '7px 14px', borderTop: '1px solid rgba(0,229,160,0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
               <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', flex: 1 }}>Total</span>
               <div style={{ display: 'flex', flexShrink: 0 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: accountList.reduce((s, a) => s + a.diffRn, 0) > 0 ? '#00E5A0' : '#E24B4A', width: 40, textAlign: 'right' }}>
-                  {(accountList.reduce((s, a) => s + a.diffRn, 0) > 0 ? '+' : '') + accountList.reduce((s, a) => s + a.diffRn, 0)}
+                <span style={{ fontSize: 11, fontWeight: 600, color: isGap ? (totalRn > 0 ? '#00E5A0' : totalRn < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)') : '#fff', width: 40, textAlign: 'right' }}>
+                  {(isGap && totalRn > 0 ? '+' : '') + totalRn}
                 </span>
                 <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', width: 52, textAlign: 'right' }}>—</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: accountList.reduce((s, a) => s + a.diffRev, 0) > 0 ? '#00E5A0' : '#E24B4A', width: 56, textAlign: 'right' }}>
-                  {(accountList.reduce((s, a) => s + a.diffRev, 0) > 0 ? '+' : '') + (accountList.reduce((s, a) => s + a.diffRev, 0) / 1_000_000).toFixed(1) + 'M'}
+                <span style={{ fontSize: 11, fontWeight: 600, color: isGap ? (totalRev > 0 ? '#00E5A0' : totalRev < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)') : '#fff', width: 56, textAlign: 'right' }}>
+                  {(isGap && totalRev > 0 ? '+' : '') + (totalRev / 1_000_000).toFixed(1) + 'M'}
                 </span>
               </div>
             </div>
-          )}
+            )
+          })()}
         </div>
         </div>
 
