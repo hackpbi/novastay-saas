@@ -403,8 +403,8 @@ export default function LyComparisonSegModal({
         </div>
 
         {/* Body: 좌측 테이블 + 우측 Account 증감 패널 */}
-        <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-        <div className="flex-1 overflow-y-auto" style={{ minWidth: 0, minHeight: 0 }}>
+        <div style={{ display: 'flex', overflow: 'hidden', alignItems: 'stretch' }}>
+        <div className="overflow-y-auto" style={{ minWidth: 0, flex: '1 1 0' }}>
           {loading ? (
             <Skeleton />
           ) : monthKeys.length === 0 ? (
@@ -540,7 +540,7 @@ export default function LyComparisonSegModal({
         </div>
 
         {/* 우측 Account 증감 패널 */}
-        <div style={{ width: 320, flexShrink: 0, borderLeft: '1px solid rgba(0,229,160,0.2)', display: 'flex', flexDirection: 'column', background: '#0a0a0a', height: '100%', overflow: 'hidden' }}>
+        <div style={{ width: 320, flexShrink: 0, borderLeft: '1px solid rgba(0,229,160,0.2)', display: 'flex', flexDirection: 'column', background: '#0a0a0a', alignSelf: 'stretch', overflow: 'hidden' }}>
           <div style={{ padding: '10px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>Account 증감</div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
@@ -558,7 +558,7 @@ export default function LyComparisonSegModal({
               <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 56, textAlign: 'right' }}>REV</span>
             </div>
           </div>
-          <div style={{ flex: '0 1 auto', minHeight: 0, overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
             {!selectedSeg ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 6, color: 'rgba(255,255,255,0.2)', fontSize: 11 }}>
                 <span style={{ fontSize: 18 }}>👆</span>
