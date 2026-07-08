@@ -94,30 +94,31 @@ function FmtGapRevpar({ n, fontColor }: { n: number; fontColor?: string }) {
 
 // ─── Cell group components ─────────────────────────────────────────────────────
 
-function MonthCells({ m, clickable, onGapClick, bg, gapColor, gapBold, isSelected }: {
+function MonthCells({ m, clickable, onGapClick, onOtbClick, bg, gapColor, gapBold, otbSelected }: {
   m: LyComparisonMonthly
   clickable: boolean
   onGapClick?: () => void
+  onOtbClick?: () => void
   bg?: string
   gapColor?: string
   gapBold?: boolean
-  isSelected?: boolean
+  otbSelected?: boolean
 }) {
   const cursor = clickable ? 'pointer' : 'default'
-  const c: React.CSSProperties = { ...tdBase, textAlign: 'right', background: bg }
+  const c: React.CSSProperties = { ...tdBase, textAlign: 'right', background: bg, cursor: onOtbClick ? 'pointer' : 'default' }
   const g: React.CSSProperties = { ...c, cursor, fontWeight: gapBold ? 600 : 400 }
   return (
     <>
       {/* OTB */}
-      <td className="font-mono" style={{ ...c, borderLeft: BORDER }}><FmtNights n={m.otb.nights} /></td>
-      <td className="font-mono" style={c}><FmtAdr n={m.otb.adr} /></td>
-      <td className="font-mono" style={{ ...c, borderRight: DOUBLE }}><FmtRevenue n={m.otb.revenue} /></td>
+      <td className="font-mono" style={{ ...c, borderLeft: otbSelected ? '3px solid #00E5A0' : BORDER }} onClick={onOtbClick}><FmtNights n={m.otb.nights} /></td>
+      <td className="font-mono" style={c} onClick={onOtbClick}><FmtAdr n={m.otb.adr} /></td>
+      <td className="font-mono" style={{ ...c, borderRight: DOUBLE }} onClick={onOtbClick}><FmtRevenue n={m.otb.revenue} /></td>
       {/* LY */}
-      <td className="font-mono" style={c}><FmtNights n={m.ly.nights} /></td>
-      <td className="font-mono" style={c}><FmtAdr n={m.ly.adr} /></td>
-      <td className="font-mono" style={{ ...c, borderRight: DOUBLE }}><FmtRevenue n={m.ly.revenue} /></td>
+      <td className="font-mono" style={c} onClick={onOtbClick}><FmtNights n={m.ly.nights} /></td>
+      <td className="font-mono" style={c} onClick={onOtbClick}><FmtAdr n={m.ly.adr} /></td>
+      <td className="font-mono" style={{ ...c, borderRight: DOUBLE }} onClick={onOtbClick}><FmtRevenue n={m.ly.revenue} /></td>
       {/* GAP */}
-      <td className="font-mono" style={{ ...g, ...(isSelected ? { borderLeft: '3px solid #00E5A0' } : {}) }} onClick={onGapClick}><FmtGapNights n={m.gap.nights} fontColor={gapColor} /></td>
+      <td className="font-mono" style={g} onClick={onGapClick}><FmtGapNights n={m.gap.nights} fontColor={gapColor} /></td>
       <td className="font-mono" style={g} onClick={onGapClick}><FmtGapAdr n={m.gap.adr} fontColor={gapColor} /></td>
       <td className="font-mono" style={g} onClick={onGapClick}><FmtGapRevenue n={m.gap.revenue} fontColor={gapColor} /></td>
     </>
@@ -443,10 +444,11 @@ export default function LyComparisonSegModal({
                         <MonthCells
                           m={m}
                           clickable={clickable}
-                          isSelected={isSelected}
+                          otbSelected={isSelected && !row.indent}
                           bg={baseBg}
                           gapColor={rowColor}
                           gapBold={row.isBold}
+                          onOtbClick={segSelectable ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes }) : undefined}
                           onGapClick={clickable ? () => {
                             setSelectedSeg({ label: row.name, codes: row.segmentationCodes })
                           } : undefined}
