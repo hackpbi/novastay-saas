@@ -266,20 +266,6 @@ export default function MonthlyPickupSegModal({
                 </div>
               )}
               <button
-                onClick={() => onPickupCellClick?.(selectedSeg?.codes ?? [], selectedSeg?.monthKey || null, selectedSeg?.label ?? '')}
-                style={{
-                  fontSize: 11,
-                  padding: '3px 10px',
-                  borderRadius: 6,
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  background: 'transparent',
-                  color: 'rgba(255,255,255,0.5)',
-                  cursor: 'pointer',
-                }}
-              >
-                전체 어카운트 픽업
-              </button>
-              <button
                 onClick={onClose}
                 className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1"
                 aria-label="닫기"
@@ -297,6 +283,21 @@ export default function MonthlyPickupSegModal({
                 {days > 0 ? `${days}일간` : '당일'} 픽업 현황
               </span>
             </div>
+            <div className="flex items-center gap-2 self-stretch">
+            <button
+              onClick={() => onPickupCellClick?.(selectedSeg?.codes ?? [], selectedSeg?.monthKey || null, selectedSeg?.label ?? '')}
+              style={{
+                fontSize: 11,
+                padding: '3px 10px',
+                borderRadius: 6,
+                border: '1px solid rgba(255,255,255,0.2)',
+                background: 'transparent',
+                color: 'rgba(255,255,255,0.5)',
+                cursor: 'pointer',
+              }}
+            >
+              전체 어카운트 픽업
+            </button>
             {/* 월별/합계 토글 (현재 월별) */}
             <div className="flex rounded-md overflow-hidden self-stretch" style={{ border: '1px solid var(--color-border-default)', background: 'var(--color-bg-elevated)' }}>
               <button
@@ -308,6 +309,7 @@ export default function MonthlyPickupSegModal({
                 className="px-2.5 text-xs transition-colors"
                 style={{ background: 'transparent', color: 'var(--color-text-secondary)' }}
               >합계</button>
+            </div>
             </div>
           </div>
         </div>
