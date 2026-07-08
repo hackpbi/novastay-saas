@@ -36,7 +36,7 @@ const numOrNull = (v: any) => (v === '' || v === null || v === undefined ? null 
 
 function SectionCard({ title, desc, children, footer }: {
   title:   string
-  desc:    string
+  desc:    React.ReactNode
   children: React.ReactNode
   footer?:  React.ReactNode
 }) {
@@ -82,6 +82,12 @@ function CellInput({ value, onChange, type = 'text', placeholder, step, min, max
       onBlur={onBlur}
     />
   )
+}
+
+// 숫자만 추출 후 천단위 콤마 포맷
+function formatNumber(val: string): string {
+  const num = val.replace(/[^0-9]/g, '')
+  return num ? Number(num).toLocaleString() : ''
 }
 
 function AddRowButton({ onClick, label }: { onClick: () => void; label: string }) {
@@ -151,6 +157,7 @@ export default function BarRecommendationPage() {
 
   // ── State ─────────────────────────────────────────────────────────────────────
   const [tiers,        setTiers]        = useState<TierRow[]>([])
+  const [minBar,       setMinBar]       = useState<string>('90,000')   // 최소 금액(로컬 state, DB 미연동)
   const [decays,       setDecays]       = useState<DecayRow[]>([])
   const [loadingData,  setLoadingData]  = useState(false)
   const [savingTiers,  setSavingTiers]  = useState(false)
@@ -197,7 +204,7 @@ export default function BarRecommendationPage() {
     setTiers((tierRes.data ?? []).map((t: any) => ({
       _key: nextKey(), id: t.id, tier_name: t.tier_name ?? '',
       occ_min: t.occ_min ?? '', occ_max: t.occ_max ?? '',
-      base_bar: t.base_bar == null ? '' : Number(t.base_bar) / 1000, // DB(원) → 화면(K)
+      base_bar: t.base_bar == null ? '' : Number(t.base_bar).toLocaleString(), // DB(원) 그대로 · 천단위 콤마
     })))
     setDecays((decayRes.data ?? []).map((d: any) => ({
       _key: nextKey(), id: d.id, tier_name: d.tier_name ?? '',
@@ -235,13 +242,20 @@ export default function BarRecommendationPage() {
   //       수정하면 새 행이 생성될 수 있으므로 경계 변경 시에는 기존 행 삭제 후 추가 권장.
   async function saveTiers() {
     if (!hotelId) return
+    // 최소 금액 미만 입력 차단
+    const minBarNum = Number(minBar.replace(/,/g, '')) || 0
+    const hasBelow = tiers.some(t =>
+      t.base_bar !== '' && t.base_bar != null &&
+      Number(String(t.base_bar).replace(/,/g, '')) < minBarNum
+    )
+    if (hasBelow) { showToast(`기준 BAR는 최소 금액(${minBar}원) 이상이어야 합니다.`); return }
     setSavingTiers(true)
     const payload = tiers.map(t => ({
       hotel_id: hotelId,
       label:    t.tier_name,
       occ_min:  numOrNull(t.occ_min),
       occ_max:  numOrNull(t.occ_max),
-      base_bar: t.base_bar === '' || t.base_bar == null ? null : Number(t.base_bar) * 1000, // 단위: K → DB저장 시 ×1000
+      base_bar: t.base_bar === '' || t.base_bar == null ? null : Number(String(t.base_bar).replace(/,/g, '')), // DB 원 단위 그대로 저장(콤마 제거)
     }))
     const { error } = await (supabase as any)
       .from('c07_occ_tier_bar')
@@ -322,7 +336,21 @@ export default function BarRecommendationPage() {
       {/* 섹션 1 — OCC 구간별 기준 BAR */}
       <SectionCard
         title="OCC 구간별 기준 BAR"
-        desc="OCC 점유율 구간에 따른 기준 BAR(K)을 설정합니다."
+        desc={
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+            <span>OCC 점유율 구간에 따른 기준 BAR(원)을 설정합니다.</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', color: 'var(--color-text-secondary)' }}>
+              이하 금액 입력 금지:
+              <input
+                type="text"
+                value={minBar}
+                onChange={e => setMinBar(formatNumber(e.target.value))}
+                style={{ width: 90, textAlign: 'right', padding: '2px 6px', borderRadius: 6, border: '1px solid var(--color-border-default)', background: 'var(--color-bg-elevated)', color: 'var(--color-text-primary)', fontSize: 12 }}
+              />
+              원
+            </span>
+          </span>
+        }
         footer={<SaveButton onClick={saveTiers} saving={savingTiers} disabled={!hotelId} />}>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -331,7 +359,7 @@ export default function BarRecommendationPage() {
                 <Th>구간명</Th>
                 <Th w={140}>OCC 하한(%)</Th>
                 <Th w={140}>OCC 상한(%)</Th>
-                <Th w={140}>기준 BAR(K)</Th>
+                <Th w={140}>기준 BAR(원)</Th>
                 <Th w={48}>{''}</Th>
               </tr>
             </thead>
@@ -345,7 +373,7 @@ export default function BarRecommendationPage() {
                   <td className="px-2 py-1.5"><CellInput value={t.tier_name} onChange={v => updTier(t._key, 'tier_name', v)} placeholder="예: 성수기" /></td>
                   <td className="px-2 py-1.5"><CellInput type="number" value={t.occ_min}  onChange={v => updTier(t._key, 'occ_min', v)} /></td>
                   <td className="px-2 py-1.5"><CellInput type="number" value={t.occ_max}  onChange={v => updTier(t._key, 'occ_max', v)} /></td>
-                  <td className="px-2 py-1.5"><CellInput type="number" value={t.base_bar} onChange={v => updTier(t._key, 'base_bar', v)} /></td>
+                  <td className="px-2 py-1.5"><CellInput type="text" value={t.base_bar} onChange={v => updTier(t._key, 'base_bar', formatNumber(v))} /></td>
                   <td className="px-2 py-1.5 text-center"><DeleteRowButton onClick={() => delTier(t._key)} /></td>
                 </tr>
               ))}
