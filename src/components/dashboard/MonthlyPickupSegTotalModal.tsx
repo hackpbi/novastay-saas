@@ -92,17 +92,18 @@ function Skeleton() {
 
 // ─── Month cell group (전체 합계용) ───────────────────────────────────────────────
 
-function TotalCells({ cell, clickable, onClick, fontColor }: {
+function TotalCells({ cell, clickable, onClick, fontColor, selected }: {
   cell:      MonthlyPickupCell
   clickable: boolean
   onClick?:  () => void
   fontColor?: string
+  selected?: boolean
 }) {
   const cursor = clickable ? 'pointer' : 'default'
   const td: React.CSSProperties = { ...tdBase, textAlign: 'right', cursor }
   return (
     <>
-      <td className="font-mono" style={{ ...td, borderLeft: BORDER, borderRight: BORDER }} onClick={onClick}>
+      <td className="font-mono" style={{ ...td, borderLeft: selected ? '3px solid #00E5A0' : BORDER, borderRight: BORDER }} onClick={onClick}>
         <FmtPickupNights n={cell.pickupNights} fontColor={fontColor} />
       </td>
       <td className="font-mono" style={{ ...td, borderRight: BORDER }} onClick={onClick}>
@@ -344,6 +345,7 @@ export default function MonthlyPickupSegTotalModal({
                         <TotalCells
                           cell={row.totalPickup}
                           clickable={clickable}
+                          selected={selectedSeg?.label === row.name}
                           fontColor={isDark ? row.fontDarkColor ?? undefined : row.fontLightColor ?? undefined}
                           onClick={clickable ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes, monthKey: monthKeys[0] ?? '' }) : undefined}
                         />

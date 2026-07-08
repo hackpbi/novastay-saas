@@ -85,7 +85,7 @@ function Skeleton({ cols }: { cols: number }) {
 
 // ─── Month cell group ──────────────────────────────────────────────────────────
 
-function MonthCells({ cell, clickable, onClick, fontColor, bg, borderTop }: {
+function MonthCells({ cell, clickable, onClick, fontColor, bg, borderTop, selected }: {
   cell:      MonthlyPickupCell
   clickable: boolean
   onClick?:  () => void
@@ -93,12 +93,13 @@ function MonthCells({ cell, clickable, onClick, fontColor, bg, borderTop }: {
   fontColor?: string
   bg?:       string
   borderTop?: string
+  selected?: boolean
 }) {
   const cursor = clickable ? 'pointer' : 'default'
   const td: React.CSSProperties = { ...tdBase, textAlign: 'right', cursor, background: bg, ...(borderTop ? { borderTop } : {}) }
   return (
     <>
-      <td className="font-mono" style={{ ...td, ...MONTH_SEP, borderRight: BORDER }} onClick={onClick}>
+      <td className="font-mono" style={{ ...td, ...MONTH_SEP, ...(selected ? { borderLeft: '3px solid #00E5A0' } : {}), borderRight: BORDER }} onClick={onClick}>
         <FmtPickupNights n={cell.pickupNights} fontColor={fontColor} />
       </td>
       <td className="font-mono" style={{ ...td, borderRight: BORDER }} onClick={onClick}>
@@ -377,7 +378,7 @@ export default function MonthlyPickupSegModal({
                           const handleClick = clickable
                             ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes, monthKey: mk })
                             : undefined
-                          return <MonthCells key={mk} cell={cell} clickable={clickable} onClick={handleClick} isLast={idx === visibleMonths.length - 1} fontColor={rowColor} bg={baseBg} />
+                          return <MonthCells key={mk} cell={cell} clickable={clickable} onClick={handleClick} isLast={idx === visibleMonths.length - 1} fontColor={rowColor} bg={baseBg} selected={selectedSeg?.label === row.name} />
                         })}
                       </tr>
                     )
