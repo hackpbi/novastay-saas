@@ -126,7 +126,8 @@ export default function AdrSimulatorModal({
   const [checkedSegs,  setCheckedSegs]  = useState<string[]>([])   // 체크된 segCode
   const [sellOverride, setSellOverride] = useState<Record<string, number>>({})   // 객실타입별 예상판매 수동값
   const [showOtb, setShowOtb] = useState(false)   // Forecast 패널 OTB 컬럼 표시(기본 숨김)
-  const [appliedSegs, setAppliedSegs] = useState<Record<string, boolean>>({})   // 세그별 예상 ADR '적용' → ✓ 피드백
+  const [appliedSegs, setAppliedSegs] = useState<Set<string>>(new Set())   // 예상 ADR 적용된 세그 코드
+  const [hoverExpCode, setHoverExpCode] = useState<string | null>(null)   // 예상 ADR 셀 호버 중인 세그
   // 픽업 급증 — 요금 인상 추천
   const [pickupThreshold,   setPickupThreshold]   = useState(20)     // 픽업 증가 기준 %
   const [pickupMult,        setPickupMult]        = useState(0.5)    // 계수
@@ -367,7 +368,7 @@ export default function AdrSimulatorModal({
   }, [effBase, date])
 
   // 날짜 변경 시 Forecast 편집값 초기화
-  useEffect(() => { setEditedFcst({}); setEditCell(null); setCheckedSegs([]); setSellOverride({}); setAppliedSegs({}) }, [date])
+  useEffect(() => { setEditedFcst({}); setEditCell(null); setCheckedSegs([]); setSellOverride({}); setAppliedSegs(new Set()); setHoverExpCode(null) }, [date])
 
   // 모드 드롭다운 외부 클릭 닫기
   useEffect(() => {
@@ -609,11 +610,15 @@ export default function AdrSimulatorModal({
     if (ch === 'ota') return Math.round(base * (1 - otaFeePct / 100))
     return Math.round(base)
   }
-  // 적용 → 해당 세그 FCST ADR을 예상값으로 set (editedFcst 체인 → 좌/우 패널 동기화)
-  const applyExpected = (code: string, expected: number) => {
-    setEditedFcst(prev => ({ ...prev, [code]: { rn: prev[code]?.rn ?? segFcRn(code), adr: expected } }))
-    setAppliedSegs(prev => ({ ...prev, [code]: true }))
-    setTimeout(() => setAppliedSegs(prev => ({ ...prev, [code]: false })), 1800)
+  // 적용 → 해당 세그 FCST ADR을 예상값으로 set + appliedSegs 등록 (editedFcst 체인 → 좌/우 동기화)
+  const applyExpectedAdr = (code: string, expected: number) => {
+    setEdit(code, 'adr', expected)
+    setAppliedSegs(prev => { const n = new Set(prev); n.add(code); return n })
+  }
+  // 되돌리기 → 해당 세그 ADR을 원본 FCST ADR로 복원 + appliedSegs 해제
+  const revertExpectedAdr = (code: string) => {
+    setEdit(code, 'adr', fcstByCode[code]?.forecast_adr ?? 0)
+    setAppliedSegs(prev => { const n = new Set(prev); n.delete(code); return n })
   }
   // 렌더용 direct/ota 세그 목록 (R/N > 0)
   const segExpectedList = Object.keys(segByDate)
@@ -807,17 +812,17 @@ export default function AdrSimulatorModal({
               {/* ①+③ 통합: BAR RATE + 추천 + 현재/예상 전망 */}
               <div style={{ margin: '10px 14px 8px', background: BG_CARD, border: `0.5px solid ${BORDER}`, borderRadius: 8, overflow: 'hidden' }}>
                 {/* 상단: BAR RATE(제목) + OTB 요약(아래 줄) — 2행 */}
-                <div style={{ padding: '8px 12px 2px' }}>
-                  <div style={{ fontSize: 22, fontWeight: 500, color: TXT }}>BAR RATE</div>
-                  <div style={{ fontSize: 12, color: TXT3, whiteSpace: 'nowrap', marginTop: 2 }}>OTB : OCC {calc.curOcc}% · ADR {fmtADR(calc.curAdr)} · REV {fmtREV(calc.curRev)}</div>
+                <div style={{ padding: '10px 14px' }}>
+                  <div style={{ fontSize: 15, fontWeight: 500, color: TXT }}>BAR RATE</div>
+                  <div style={{ fontSize: 10, color: TXT3, whiteSpace: 'nowrap', marginTop: 2 }}>OTB : OCC {calc.curOcc}% · ADR {fmtADR(calc.curAdr)} · REV {fmtREV(calc.curRev)}</div>
                 </div>
                 {/* 중간: 현재 BAR → 입력 → 추천 badge → 적용/저장 */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 12px 10px', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 20, color: TXT3, lineHeight: 1 }}>{Math.round(effBase / 1000)}K</span>
-                  <span style={{ fontSize: 18, color: TXT3 }}>→</span>
-                  <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '2px 12px 10px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 13, color: TXT3, lineHeight: 1, marginRight: 4 }}>{Math.round(effBase / 1000)}K</span>
+                  <span style={{ fontSize: 18, color: TXT3, marginRight: 4 }}>→</span>
+                  <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginRight: 12 }}>
                     <input type="number" className="fc-spin-hide" value={Math.round(barRaw / 1000)} onChange={e => setBarRaw(Math.max(0, (Number(e.target.value) || 0) * 1000))}
-                      style={{ background: BG_INPUT, border: `0.5px solid ${BORDER_ACCENT}`, borderRadius: 6, color: MINT, fontSize: 22, fontWeight: 500, width: 84, textAlign: 'right', padding: '2px 24px 2px 8px', outline: 'none', lineHeight: 1.1 }} />
+                      style={{ background: BG_INPUT, border: `0.5px solid ${BORDER_ACCENT}`, borderRadius: 6, color: MINT, fontSize: 19, fontWeight: 500, width: 68, textAlign: 'right', padding: '4px 24px 4px 12px', outline: 'none', lineHeight: 1.1 }} />
                     <span style={{ position: 'absolute', right: 8, fontSize: 16, color: TXT3, pointerEvents: 'none' }}>K</span>
                   </div>
                   {barRec && (() => {
@@ -828,27 +833,27 @@ export default function AdrSimulatorModal({
                       : { bg: BG_INPUT, bd: BORDER, fg: TXT3 }
                     return (
                       <button onClick={() => setBarRaw(barRec.rec_bar)}
-                        style={{ fontSize: 11, fontWeight: 500, padding: '4px 10px', borderRadius: 6, whiteSpace: 'nowrap', background: st.bg, border: `0.5px solid ${st.bd}`, color: st.fg, cursor: 'pointer' }}>추천 : {Math.round(barRec.rec_bar / 1000)}K</button>
+                        style={{ fontSize: 11, fontWeight: 500, padding: '3px 12px', borderRadius: 6, whiteSpace: 'nowrap', background: st.bg, border: `0.5px solid ${st.bd}`, color: st.fg, cursor: 'pointer' }}>추천 : {Math.round(barRec.rec_bar / 1000)}K</button>
                     )
                   })()}
                   <button onClick={handleBarSave} disabled={barSaving}
-                    style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 500, padding: '4px 12px', borderRadius: 6, whiteSpace: 'nowrap', background: BG_INPUT, border: `0.5px solid ${BORDER_ACCENT}`, color: MINT, cursor: barSaving ? 'not-allowed' : 'pointer', opacity: barSaving ? 0.5 : 1 }}>{barSaving ? '저장 중…' : '저장'}</button>
+                    style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 500, padding: '3px 12px', borderRadius: 6, whiteSpace: 'nowrap', background: BG_INPUT, border: `0.5px solid ${BORDER_ACCENT}`, color: MINT, cursor: barSaving ? 'not-allowed' : 'pointer', opacity: barSaving ? 0.5 : 1 }}>{barSaving ? '저장 중…' : '저장'}</button>
                 </div>
                 {/* 하단: 현재 전망 vs 예상 전망 */}
                 <div style={{ display: 'flex', borderTop: `0.5px solid ${BORDER}` }}>
-                  <div style={{ flex: 1, padding: '8px 12px' }}>
-                    <div style={{ fontSize: 9, color: TXT3, marginBottom: 4 }}>현재 전망</div>
-                    <div style={{ display: 'flex', gap: 14 }}>
-                      {([['OCC', `${calc.curOcc}%`], ['ADR', fmtADR(calc.curAdr)], ['REV', fmtREV(calc.curRev)]] as const).map(([l, v]) => (
-                        <div key={l}><div style={{ fontSize: 9, color: TXT3 }}>{l}</div><div style={{ fontSize: 13, fontWeight: 600, color: TXT }}>{v}</div></div>
+                  <div style={{ flex: 1, padding: '8px 12px', paddingRight: 12 }}>
+                    <div style={{ fontSize: 10, color: TXT3, marginBottom: 4 }}>현재 전망</div>
+                    <div style={{ display: 'flex', gap: 14, justifyContent: 'space-between' }}>
+                      {([['OCC', `${fcst?.occ ?? 0}%`], ['ADR', fmtADR(fcst?.adr ?? 0)], ['REV', fmtREV(fcst?.rev ?? 0)]] as const).map(([l, v]) => (
+                        <div key={l}><div style={{ fontSize: 10, color: TXT3 }}>{l}</div><div style={{ fontSize: 14, fontWeight: 600, color: TXT }}>{v}</div></div>
                       ))}
                     </div>
                   </div>
-                  <div style={{ flex: 1, padding: '8px 12px', borderLeft: `0.5px solid ${BORDER}` }}>
-                    <div style={{ fontSize: 9, color: MINT, marginBottom: 4 }}>예상 전망</div>
-                    <div style={{ display: 'flex', gap: 14 }}>
+                  <div style={{ flex: 1, padding: '8px 12px', paddingLeft: 12, borderLeft: `0.5px solid ${BORDER}` }}>
+                    <div style={{ fontSize: 10, color: MINT, marginBottom: 4 }}>예상 전망</div>
+                    <div style={{ display: 'flex', gap: 14, justifyContent: 'space-between' }}>
                       {([['OCC', `${calc.simOcc}%`], ['ADR', fmtADR(calc.simAdr)], ['REV', fmtREV(calc.simRev)]] as const).map(([l, v]) => (
-                        <div key={l}><div style={{ fontSize: 9, color: TXT3 }}>{l}</div><div style={{ fontSize: 13, fontWeight: 600, color: MINT }}>{v}</div></div>
+                        <div key={l}><div style={{ fontSize: 10, color: TXT3 }}>{l}</div><div style={{ fontSize: 14, fontWeight: 600, color: MINT }}>{v}</div></div>
                       ))}
                     </div>
                   </div>
@@ -867,7 +872,7 @@ export default function AdrSimulatorModal({
                 const d7cancel = occ(pickupTrend.d7_rn) < occ(pickupTrend.d14_rn)
                 return (
                   <div style={{ margin: '10px 14px 8px', background: BG_CARD, border: `0.5px solid ${BORDER}`, borderRadius: 8, padding: '8px 10px' }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: TXT, marginBottom: 6 }}>왜 올려야 하나?</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: TXT, marginBottom: 6 }}>픽업 현황</div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 5 }}>
                       {cells.map((c, i) => {
                         const cOcc = occ(c.rn)
@@ -997,31 +1002,6 @@ export default function AdrSimulatorModal({
               <span style={{ fontSize: 11, color: TXT3 }}>{formatDate(date)}</span>
               <span style={{ marginLeft: 'auto', fontSize: 11, color: TXT3 }}>BAR {Math.round(barRaw / 1000)}K</span>
             </div>
-            {/* 세그먼트별 예상 ADR + 전체 적용 시 예상 (좌측 → 우측 이동) */}
-            {segExpectedList.length > 0 && (
-              <div className="shrink-0" style={{ margin: '10px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {/* 세그먼트별 예상 ADR */}
-                <div style={{ background: '#111', border: '1px solid #1f1f1f', borderRadius: 8, overflow: 'hidden' }}>
-                  <div style={{ padding: '7px 14px', color: '#888', fontSize: 11, borderBottom: '1px solid #1f1f1f' }}>세그먼트별 예상 ADR</div>
-                  {segExpectedList.map((s, i) => {
-                    const isMint   = s.expected >= s.currentAdr
-                    const adrColor = isMint ? '#00E5A0' : '#E24B4A'
-                    const applied  = !!appliedSegs[s.code]
-                    return (
-                      <div key={s.code} style={{ display: 'flex', alignItems: 'center', padding: '6px 14px', gap: 10, borderBottom: i < segExpectedList.length - 1 ? '1px solid #1a1a1a' : 'none' }}>
-                        <span style={{ color: '#ccc', fontSize: 12, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
-                        <span style={{ color: adrColor, fontSize: 13, fontWeight: 600 }}>{Math.round(s.expected / 1000)}K</span>
-                        <button onClick={() => applyExpected(s.code, s.expected)}
-                          style={{ borderRadius: 4, padding: '2px 8px', fontSize: 10, cursor: 'pointer', flexShrink: 0,
-                            background: isMint ? '#0a2e1f' : '#2e0a0a', border: `1px solid ${adrColor}`, color: adrColor }}>
-                          {applied ? '✓' : '적용'}
-                        </button>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
             {/* 모드 선택 + 항목 + 액션 — 단일 툴바 */}
             <div className="shrink-0" style={{ padding: '7px 14px', borderBottom: `0.5px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: 8, background: BG_CARD }}>
               {/* 모드 커스텀 드롭다운 */}
@@ -1105,8 +1085,8 @@ export default function AdrSimulatorModal({
               ) : (
                 <table style={{ width: '100%', height: '100%', borderCollapse: 'collapse', fontSize: 10, whiteSpace: 'nowrap', tableLayout: 'fixed' }}>
                   <colgroup>
-                    <col style={{ width: showOtb ? '22%' : '28%' }} />
-                    <col style={{ width: showOtb ? '9%' : '12%' }} /><col style={{ width: showOtb ? '9%' : '12%' }} /><col style={{ width: showOtb ? '10%' : '12%' }} />
+                    <col style={{ width: showOtb ? '20%' : '24%' }} />
+                    <col style={{ width: showOtb ? '9%' : '11%' }} /><col style={{ width: showOtb ? '9%' : '11%' }} /><col style={{ width: showOtb ? '9%' : '11%' }} /><col style={{ width: showOtb ? '10%' : '11%' }} />
                     {showOtb && <><col style={{ width: '9%' }} /><col style={{ width: '9%' }} /><col style={{ width: '10%' }} /></>}
                     <col style={{ width: showOtb ? '9%' : '12%' }} /><col style={{ width: showOtb ? '9%' : '12%' }} /><col style={{ width: showOtb ? '10%' : '12%' }} />
                   </colgroup>
@@ -1120,17 +1100,17 @@ export default function AdrSimulatorModal({
                           세그먼트
                         </span>
                       </th>
-                      <th colSpan={3} style={{ textAlign: 'center', padding: '3.3px 4px', fontWeight: 500, color: PURPLE, borderLeft: `0.5px solid ${BORDER}` }}>FORECAST</th>
+                      <th colSpan={4} style={{ textAlign: 'center', padding: '3.3px 4px', fontWeight: 500, color: PURPLE, borderLeft: `0.5px solid ${BORDER}` }}>FORECAST</th>
                       {showOtb && <th colSpan={3} style={{ textAlign: 'center', padding: '3.3px 4px', fontWeight: 500, borderLeft: `0.5px solid ${BORDER}` }}>OTB</th>}
                       <th colSpan={3} style={{ textAlign: 'center', padding: '3.3px 4px', fontWeight: 500, borderLeft: `0.5px solid ${BORDER}` }}>GAP</th>
                     </tr>
                     <tr style={{ color: TXT3, background: BG_BODY, fontSize: 9 }}>
                       {([
-                        [['R/N', 46], ['ADR', 55], ['REV', 60]],
+                        [['R/N', 46], ['ADR', 55], ['예상ADR', 52], ['REV', 60]],
                         ...(showOtb ? [[['R/N', 46], ['ADR', 55], ['REV', 60]]] : []),
                         [['ΔR/N', 46], ['ΔADR', 60], ['ΔREV', 60]],
                       ] as [string, number][][]).flatMap((g, gi) => g.map(([h, w], ci) => (
-                        <th key={`${gi}-${ci}`} style={{ textAlign: 'right', padding: '2.2px 4px', fontWeight: 400, minWidth: w, borderLeft: ci === 0 ? `0.5px solid ${BORDER}` : undefined }}>{h}</th>
+                        <th key={`${gi}-${ci}`} style={{ textAlign: 'right', padding: '2.2px 4px', fontWeight: 400, minWidth: w, color: h === '예상ADR' ? MINT : undefined, borderLeft: ci === 0 ? `0.5px solid ${BORDER}` : undefined }}>{h}</th>
                       )))}
                     </tr>
                   </thead>
@@ -1138,12 +1118,12 @@ export default function AdrSimulatorModal({
                     {fcstEditRows.map((row, i) => {
                       if (row.kind === 'main') return (
                         <tr key={`m${i}`} style={{ height: 22, background: BG_BODY }}>
-                          <td colSpan={showOtb ? 10 : 7} style={{ padding: '3.3px 8px', fontSize: 9, fontWeight: 600, color: TXT3, textTransform: 'uppercase', letterSpacing: '0.4px', borderTop: `0.5px solid ${BORDER}` }}>{row.name}</td>
+                          <td colSpan={showOtb ? 11 : 8} style={{ padding: '3.3px 8px', fontSize: 9, fontWeight: 600, color: TXT3, textTransform: 'uppercase', letterSpacing: '0.4px', borderTop: `0.5px solid ${BORDER}` }}>{row.name}</td>
                         </tr>
                       )
                       if (row.kind === 'mid') return (
                         <tr key={`d${i}`} style={{ height: 22 }}>
-                          <td colSpan={showOtb ? 10 : 7} style={{ padding: '3.3px 8px', fontWeight: 600, color: TXT2, borderTop: `0.5px solid ${BORDER}` }}>{row.name}</td>
+                          <td colSpan={showOtb ? 11 : 8} style={{ padding: '3.3px 8px', fontWeight: 600, color: TXT2, borderTop: `0.5px solid ${BORDER}` }}>{row.name}</td>
                         </tr>
                       )
                       const code = row.code
@@ -1165,6 +1145,23 @@ export default function AdrSimulatorModal({
                           </td>
                           <td style={{ padding: '2.2px 4px', textAlign: 'right', borderLeft: `0.5px solid ${BORDER}` }}>{editingRn ? editInput(code, 'rn', rn, 34) : editText(code, 'rn', fmtRN(rn))}</td>
                           <td style={{ padding: '2.2px 4px', textAlign: 'right' }}>{editingAdr ? editInput(code, 'adr', adr, 52) : editText(code, 'adr', fmtADR(adr))}</td>
+                          <td style={{ padding: '2.2px 4px', textAlign: 'right' }}
+                            onMouseEnter={() => setHoverExpCode(code)} onMouseLeave={() => setHoverExpCode(null)}>
+                            {(() => {
+                              const exp = getSegExpectedAdr(code, barRaw)
+                              if (exp === null) return <span style={{ color: TXT3 }}>–</span>
+                              const isMint = exp >= adr
+                              if (appliedSegs.has(code)) return (
+                                <button onClick={() => revertExpectedAdr(code)}
+                                  style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, whiteSpace: 'nowrap', cursor: 'pointer', background: 'transparent', border: `0.5px solid ${BORDER}`, color: TXT3 }}>↩ 되돌리기</button>
+                              )
+                              if (hoverExpCode === code) return (
+                                <button onClick={() => applyExpectedAdr(code, exp)}
+                                  style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, whiteSpace: 'nowrap', cursor: 'pointer', background: isMint ? '#0a2e1f' : '#2e0a0a', border: `0.5px solid ${isMint ? MINT : RED}`, color: isMint ? MINT : RED }}>← 적용</button>
+                              )
+                              return <span style={{ color: isMint ? MINT : RED, fontWeight: 600 }}>{Math.round(exp / 1000)}K</span>
+                            })()}
+                          </td>
                           <td style={{ padding: '2.2px 4px', textAlign: 'right', color: PURPLE }}>{fmtREV(getFcstRev(code))}</td>
                           {showOtb && (<>
                             <td style={{ padding: '2.2px 4px', textAlign: 'right', color: TXT2, borderLeft: `0.5px solid ${BORDER}` }}>{fmtRN(oRn)}</td>
@@ -1183,6 +1180,7 @@ export default function AdrSimulatorModal({
                       <td style={{ padding: '4.4px 8px', color: TXT, position: 'sticky', left: 0, background: BG_CARD }}>합계</td>
                       <td style={{ padding: '4.4px 4px', textAlign: 'right', color: PURPLE, borderLeft: `0.5px solid ${BORDER}` }}>{fmtRN(fcstTotalRn)}</td>
                       <td style={{ padding: '4.4px 4px', textAlign: 'right', color: PURPLE }}>{fmtADR(fcstTotalAdr)}</td>
+                      <td style={{ padding: '4.4px 4px', textAlign: 'right', color: TXT3 }}>–</td>
                       <td style={{ padding: '4.4px 4px', textAlign: 'right', color: PURPLE }}>{fmtREV(fcstTotalRev)}</td>
                       {showOtb && (<>
                         <td style={{ padding: '4.4px 4px', textAlign: 'right', color: TXT2, borderLeft: `0.5px solid ${BORDER}` }}>{fmtRN(otbTotalRn)}</td>
@@ -1195,7 +1193,7 @@ export default function AdrSimulatorModal({
                     </tr>
                     <tr style={{ background: BG_CARD, fontSize: 11 }}>
                       <td style={{ padding: '2.2px 8px', color: TXT3, position: 'sticky', left: 0, background: BG_CARD }}>OCC</td>
-                      <td colSpan={3} style={{ padding: '2.2px 4px', textAlign: 'center', color: PURPLE, borderLeft: `0.5px solid ${BORDER}` }}>{fcstTotalOcc}%</td>
+                      <td colSpan={4} style={{ padding: '2.2px 4px', textAlign: 'center', color: PURPLE, borderLeft: `0.5px solid ${BORDER}` }}>{fcstTotalOcc}%</td>
                       {showOtb && <td colSpan={3} style={{ padding: '2.2px 4px', textAlign: 'center', color: TXT2, borderLeft: `0.5px solid ${BORDER}` }}>{otbTotalOcc}%</td>}
                       <td colSpan={3} style={{ padding: '2.2px 4px', textAlign: 'center', color: segGapColor(fcstTotalOcc - otbTotalOcc), borderLeft: `0.5px solid ${BORDER}` }}>{fcstTotalOcc - otbTotalOcc === 0 ? '-' : `${fcstTotalOcc - otbTotalOcc > 0 ? '▲' : '▼'} ${Math.abs(fcstTotalOcc - otbTotalOcc)}%`}</td>
                     </tr>
