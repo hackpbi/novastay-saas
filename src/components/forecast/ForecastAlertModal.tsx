@@ -1155,7 +1155,7 @@ export function ForecastAlertModal({
                       style={{
                         padding: '6px 12px', borderRadius: 7,
                         border: '0.5px solid rgba(255,255,255,0.1)', background: 'transparent',
-                        color: 'rgba(255,255,255,0.4)', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap',
+                        color: '#00E5A0', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap',
                         opacity: matchOtbPressed ? 0.7 : 1,
                         transform: matchOtbPressed ? 'scale(0.97)' : 'scale(1)',
                         transition: 'opacity 0.1s, transform 0.1s',
