@@ -94,7 +94,7 @@ function FmtGapRevpar({ n, fontColor }: { n: number; fontColor?: string }) {
 
 // ─── Cell group components ─────────────────────────────────────────────────────
 
-function MonthCells({ m, clickable, onGapClick, onOtbClick, onLyClick, bg, gapColor, gapBold, otbSelected }: {
+function MonthCells({ m, clickable, onGapClick, onOtbClick, onLyClick, bg, gapColor, gapBold, otbSelected, lySelected }: {
   m: LyComparisonMonthly
   clickable: boolean
   onGapClick?: () => void
@@ -104,6 +104,7 @@ function MonthCells({ m, clickable, onGapClick, onOtbClick, onLyClick, bg, gapCo
   gapColor?: string
   gapBold?: boolean
   otbSelected?: boolean
+  lySelected?: boolean
 }) {
   const cursor = clickable ? 'pointer' : 'default'
   const c: React.CSSProperties = { ...tdBase, textAlign: 'right', background: bg, cursor: onOtbClick ? 'pointer' : 'default' }
@@ -115,7 +116,7 @@ function MonthCells({ m, clickable, onGapClick, onOtbClick, onLyClick, bg, gapCo
       <td className="font-mono" style={c} onClick={onOtbClick}><FmtAdr n={m.otb.adr} /></td>
       <td className="font-mono" style={{ ...c, borderRight: DOUBLE }} onClick={onOtbClick}><FmtRevenue n={m.otb.revenue} /></td>
       {/* LY */}
-      <td className="font-mono" style={{ ...c, borderLeft: otbSelected ? '3px solid #00E5A0' : BORDER }} onClick={onLyClick}><FmtNights n={m.ly.nights} /></td>
+      <td className="font-mono" style={{ ...c, borderLeft: lySelected ? '3px solid #00E5A0' : BORDER }} onClick={onLyClick}><FmtNights n={m.ly.nights} /></td>
       <td className="font-mono" style={c} onClick={onLyClick}><FmtAdr n={m.ly.adr} /></td>
       <td className="font-mono" style={{ ...c, borderRight: DOUBLE }} onClick={onLyClick}><FmtRevenue n={m.ly.revenue} /></td>
       {/* GAP */}
@@ -451,8 +452,8 @@ export default function LyComparisonSegModal({
                     const isHou    = houRowIds.has(row.id)
                     const clickable = !!onAccountDrillDown && !isHou && row.segmentationCodes.length > 0
                     const m        = row.monthly[currentMonthKey] ?? ZERO_MONTHLY
-                    // 우측 패널용: 대분류 행만 클릭 가능 / 선택 시 행 하이라이트
-                    const segSelectable = !row.indent && row.segmentationCodes.length > 0
+                    // 우측 패널용: 세그 코드 있는 행 클릭 가능(소분류 포함) / 선택 시 행 하이라이트
+                    const segSelectable = row.segmentationCodes.length > 0
                     const isSelected    = selectedSeg?.label === row.name
                     const baseBg        = isSelected ? 'rgba(0,229,160,0.06)' : rowBg
 
@@ -472,7 +473,8 @@ export default function LyComparisonSegModal({
                         <MonthCells
                           m={m}
                           clickable={clickable}
-                          otbSelected={isSelected && !row.indent}
+                          otbSelected={selectedSeg?.label === row.name && selectedSeg?.viewMode === 'otb'}
+                          lySelected={selectedSeg?.label === row.name && selectedSeg?.viewMode === 'ly'}
                           bg={baseBg}
                           gapColor={rowColor}
                           gapBold={row.isBold}
