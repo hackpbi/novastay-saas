@@ -3,13 +3,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X, ChevronLeft, ChevronRight } from 'lucide-react'
-import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import DatePicker from '@/components/DatePicker'
 import { useMarketSchema } from '@/hooks/useMarketSchema'
 import { useLyPacing, type LyPacingMode } from '@/hooks/useLyPacing'
-import { useAccountPickupData } from '@/hooks/useAccountPickupData'
 import {
   buildLyComparisonSegTable,
 } from '@/utils/lyComparisonSegTable'
@@ -164,7 +162,6 @@ export default function LyComparisonSegModal({
   initialMonthKey?:    string
   onAccountDrillDown?: (segCodes: string[], monthKey: string, label: string) => void
 }) {
-  const { currentHotel }                                 = useHotel()
   const { otbDate, otbDates, setOtbDate }                = useDateContext()
   const { theme }                                        = useTheme()
   const isDark                                           = theme === 'dark'
@@ -222,61 +219,45 @@ export default function LyComparisonSegModal({
   }, [open, onClose])
 
   const currentMonthKey = monthKeys[currentMonthIndex] ?? ''
-  const lyYear  = currentMonthKey ? parseInt(currentMonthKey.slice(0, 4)) : new Date().getFullYear()
-  const lyMonth = currentMonthKey ? parseInt(currentMonthKey.slice(5, 7)) : new Date().getMonth() + 1
 
-  // 우측 Account 증감 패널 데이터 (현재 OTB vs 작년 OTB) — otb_*/ly_*를 함께 반환하는 RPC
-  const { data: accountPickupRows = [] } = useAccountPickupData({
-    hotelId:     currentHotel?.id ?? '',
-    otbDate:     otbDate ?? '',
-    vsDate:      otbDate ?? '',   // LY 비교라 vs는 동일 날짜 사용
-    year:        lyYear,
-    month:       lyMonth,
-    segFilter:   null,
-    isPastMonth: false,           // OTB·LY 동시 반환(get_account_pickup_data) — actual 아님
-  })
-
+  // 우측 Account 증감 패널 데이터 — 좌측 테이블과 동일 소스(lyPacing)를 어카운트 단위로 집계
   const accountList = useMemo(() => {
     if (!selectedSeg) return []
-    const filtered = (accountPickupRows as Array<{ account_name: string; segmentation: string; otb_nights: number; ly_nights: number; otb_revenue: number; ly_revenue: number }>)
-      .filter(r => selectedSeg.codes.includes(r.segmentation))
 
-    if (selectedSeg.viewMode === 'otb') {
-      return filtered
-        .map(r => ({
-          name:   r.account_name,
-          valRn:  r.otb_nights ?? 0,
-          valAdr: r.otb_nights > 0 ? Math.round(r.otb_revenue / r.otb_nights) : 0,
-          valRev: r.otb_revenue ?? 0,
-        }))
-        .filter(a => a.valRn !== 0 || a.valRev !== 0)
-        .sort((a, b) => b.valRn - a.valRn)
+    const filtered = lyPacing.filter(r =>
+      r.business_date.slice(0, 7) === currentMonthKey &&
+      selectedSeg.codes.includes(r.segmentation)
+    )
+
+    // account_name별 집계
+    const accMap: Record<string, { otbRn: number; otbRev: number; lyRn: number; lyRev: number }> = {}
+    for (const r of filtered) {
+      const k = r.account_name ?? '(없음)'
+      if (!accMap[k]) accMap[k] = { otbRn: 0, otbRev: 0, lyRn: 0, lyRev: 0 }
+      accMap[k].otbRn  += r.otb_nights  ?? 0
+      accMap[k].otbRev += r.otb_revenue ?? 0
+      accMap[k].lyRn   += r.ly_nights   ?? 0
+      accMap[k].lyRev  += r.ly_revenue  ?? 0
     }
 
-    if (selectedSeg.viewMode === 'ly') {
-      return filtered
-        .map(r => ({
-          name:   r.account_name,
-          valRn:  r.ly_nights ?? 0,
-          valAdr: r.ly_nights > 0 ? Math.round(r.ly_revenue / r.ly_nights) : 0,
-          valRev: r.ly_revenue ?? 0,
-        }))
-        .filter(a => a.valRn !== 0 || a.valRev !== 0)
-        .sort((a, b) => b.valRn - a.valRn)
-    }
+    const viewMode = selectedSeg.viewMode
 
-    // gap (기존 로직)
-    return filtered
-      .map(r => ({
-        name:   r.account_name,
-        valRn:  (r.otb_nights ?? 0) - (r.ly_nights ?? 0),
-        valAdr: r.otb_nights > 0 && r.ly_nights > 0
-          ? Math.round(r.otb_revenue / r.otb_nights) - Math.round(r.ly_revenue / r.ly_nights)
-          : 0,
-        valRev: (r.otb_revenue ?? 0) - (r.ly_revenue ?? 0),
-      }))
-      .sort((a, b) => b.valRn - a.valRn)
-  }, [selectedSeg, accountPickupRows])
+    return Object.entries(accMap).map(([name, v]) => {
+      const valRn  = viewMode === 'otb' ? v.otbRn
+                   : viewMode === 'ly'  ? v.lyRn
+                   : v.otbRn - v.lyRn   // gap
+      const valAdr = viewMode === 'otb' ? (v.otbRn > 0 ? Math.round(v.otbRev / v.otbRn) : 0)
+                   : viewMode === 'ly'  ? (v.lyRn  > 0 ? Math.round(v.lyRev  / v.lyRn)  : 0)
+                   : (v.otbRn > 0 && v.lyRn > 0
+                       ? Math.round(v.otbRev / v.otbRn) - Math.round(v.lyRev / v.lyRn)
+                       : 0)
+      const valRev = viewMode === 'otb' ? v.otbRev
+                   : viewMode === 'ly'  ? v.lyRev
+                   : v.otbRev - v.lyRev  // gap
+      return { name, valRn, valAdr, valRev }
+    })
+    .sort((a, b) => b.valRn - a.valRn)
+  }, [selectedSeg, lyPacing, currentMonthKey])
 
   if (!open) return null
 
