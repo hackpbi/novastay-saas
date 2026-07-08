@@ -252,6 +252,24 @@ export default function MonthlyPickupSegTotalModal({
                 {days > 0 ? `${days}일간` : '당일'} 픽업 현황
               </span>
             </div>
+            <div className="flex items-center gap-2 self-stretch">
+            <button
+              onClick={() => onPickupCellClick?.(selectedSeg?.codes ?? [], null, selectedSeg?.label ?? '')}
+              style={{
+                fontSize: 11,
+                padding: '3px 10px',
+                borderRadius: 6,
+                border: '1px solid rgba(255,255,255,0.2)',
+                background: 'transparent',
+                color: 'rgba(255,255,255,0.5)',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#00E5A0'; e.currentTarget.style.color = '#00E5A0' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.color = 'rgba(255,255,255,0.5)' }}
+            >
+              전체 어카운트 픽업
+            </button>
             {/* 월별/합계 토글 (현재 합계) */}
             <div className="flex rounded-md overflow-hidden self-stretch" style={{ border: '1px solid var(--color-border-default)', background: 'var(--color-bg-elevated)' }}>
               <button
@@ -263,6 +281,7 @@ export default function MonthlyPickupSegTotalModal({
                 className="px-2.5 text-xs transition-colors"
                 style={{ background: 'var(--color-accent-primary)', color: '#0A0A0A' }}
               >합계</button>
+            </div>
             </div>
           </div>
         </div>
@@ -366,21 +385,6 @@ export default function MonthlyPickupSegTotalModal({
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
               {selectedSeg ? `${selectedSeg.label} · 6개월 합계` : '세그먼트를 클릭하세요'}
             </div>
-            <button
-              onClick={() => onPickupCellClick?.(selectedSeg?.codes ?? [], null, selectedSeg?.label ?? '전체')}
-              style={{
-                fontSize: 10,
-                padding: '3px 8px',
-                borderRadius: 6,
-                border: '1px solid rgba(255,255,255,0.15)',
-                background: 'transparent',
-                color: 'rgba(255,255,255,0.6)',
-                cursor: 'pointer',
-                marginTop: 4,
-              }}
-            >
-              Account 보기 →
-            </button>
           </div>
           {/* 컬럼 헤더 */}
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
