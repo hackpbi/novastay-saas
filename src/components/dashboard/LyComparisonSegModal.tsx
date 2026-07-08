@@ -299,7 +299,7 @@ export default function LyComparisonSegModal({
 
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-[1400px]"
-        style={{ height: '88vh', maxHeight: '88vh', overflow: 'hidden', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
+        style={{ maxHeight: '88vh', overflow: 'hidden', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 shrink-0" style={{ borderBottom: BORDER }}>
@@ -402,7 +402,7 @@ export default function LyComparisonSegModal({
         </div>
 
         {/* Body: 좌측 테이블 + 우측 Account 증감 패널 */}
-        <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden', alignItems: 'stretch' }}>
+        <div style={{ display: 'flex', overflow: 'hidden' }}>
         <div className="overflow-y-auto" style={{ minWidth: 0, flex: '1 1 0', minHeight: 0 }}>
           {loading ? (
             <Skeleton />
@@ -539,7 +539,7 @@ export default function LyComparisonSegModal({
         </div>
 
         {/* 우측 Account 증감 패널 */}
-        <div style={{ width: 320, flexShrink: 0, borderLeft: '1px solid rgba(0,229,160,0.2)', display: 'flex', flexDirection: 'column', background: '#0a0a0a', alignSelf: 'stretch', overflow: 'hidden' }}>
+        <div style={{ width: 320, flexShrink: 0, borderLeft: '1px solid rgba(0,229,160,0.2)', display: 'flex', flexDirection: 'column', background: '#0a0a0a', alignSelf: 'flex-start', maxHeight: 'calc(88vh - 120px)', overflow: 'hidden' }}>
           <div style={{ padding: '10px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>Account 증감</div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
