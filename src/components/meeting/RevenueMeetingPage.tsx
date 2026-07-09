@@ -780,6 +780,27 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
           availableDates={otbDates.filter(d => d < meetingOtbDate)}
         />
 
+        {/* 세그먼트 상세 보기 버튼 — 오른쪽 끝 */}
+        <button
+          onClick={() => setSegOpen(true)}
+          style={{
+            marginLeft: 'auto',
+            fontSize: 11,
+            padding: '4px 10px',
+            borderRadius: 6,
+            background: 'transparent',
+            border: '1px solid rgba(0,229,160,0.4)',
+            color: MINT,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+          }}
+        >
+          ⊞ 세그먼트 상세 보기
+        </button>
+
       </div>
 
       {/* ② 월간 요약 KPI */}
@@ -908,12 +929,6 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
           <div style={{ fontSize: 12, color: TXT3, display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ color: MINT, fontSize: 14 }}>↗</span> 전망 (Forecast vs Budget)
           </div>
-          <button onClick={() => setSegOpen(true)} style={{
-            fontSize: 11, padding: '4px 10px', borderRadius: 6,
-            background: '#0f2a1e', border: '1px solid #1a3a28', color: MINT, cursor: 'pointer',
-          }}>
-            세그먼트 상세 보기
-          </button>
         </div>
         {/* 상단 KPI 4칸 */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 12 }}>
