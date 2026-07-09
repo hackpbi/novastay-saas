@@ -188,11 +188,11 @@ function getPrevOtbDate(otbDates: string[], currentOtbDate: string): string {
 type LyBadge = { text: string; dir: 'up' | 'dn' | 'neu' }
 const fmtLyOcc = (diff: number | null): LyBadge => {
   if (diff === null) return { text: '-', dir: 'neu' }
-  return { text: `LY ${diff > 0 ? '+' : ''}${diff}%p`, dir: diff > 0 ? 'up' : diff < 0 ? 'dn' : 'neu' }
+  return { text: `전년비 ${diff > 0 ? '+' : ''}${diff}%p`, dir: diff > 0 ? 'up' : diff < 0 ? 'dn' : 'neu' }
 }
 const fmtLyNum = (diff: number | null, unit: string): LyBadge => {
   if (diff === null) return { text: '-', dir: 'neu' }
-  return { text: `LY ${diff > 0 ? '+' : ''}${diff.toLocaleString()}${unit}`, dir: diff > 0 ? 'up' : diff < 0 ? 'dn' : 'neu' }
+  return { text: `전년비 ${diff > 0 ? '+' : ''}${diff.toLocaleString()}${unit}`, dir: diff > 0 ? 'up' : diff < 0 ? 'dn' : 'neu' }
 }
 
 // ── 3개월 Pick-up (섹션 A/B) ──
@@ -1373,7 +1373,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                     <span style={{ fontSize: 9, color: C.textMuted, marginBottom: 4 }}>{name}</span>
                     <span style={{ fontSize: 18, fontWeight: 500, color: C.textPrimary, lineHeight: 1.1, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><FmtVal val={val} numSize={18} /></span>
                     {diff !== null ? (
-                      <span style={{ ...badgeStyle(diff > 0 ? 'up' : diff < 0 ? 'dn' : 'neu'), height: 18, lineHeight: '16px', whiteSpace: 'nowrap' }}>LY {diff > 0 ? `+${diff}${unit}` : `${diff}${unit}`}</span>
+                      <span style={{ ...badgeStyle(diff > 0 ? 'up' : diff < 0 ? 'dn' : 'neu'), height: 18, lineHeight: '16px', whiteSpace: 'nowrap' }}>전년비 {diff > 0 ? `+${diff}${unit}` : `${diff}${unit}`}</span>
                     ) : (
                       <div style={{ height: 18 }} />
                     )}
@@ -1401,7 +1401,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                     <span style={{ fontSize: 9, color: C.textMuted, marginBottom: 4 }}>{name}</span>
                     <span style={{ fontSize: 18, fontWeight: 500, color, lineHeight: 1.1, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><FmtVal val={val} numSize={18} /></span>
                     {diff !== null ? (
-                      <span style={{ ...badgeStyle(diff > 0 ? 'up' : diff < 0 ? 'dn' : 'neu'), height: 18, lineHeight: '16px', whiteSpace: 'nowrap' }}>LY {diff > 0 ? `+${diff}${unit}` : `${diff}${unit}`}</span>
+                      <span style={{ ...badgeStyle(diff > 0 ? 'up' : diff < 0 ? 'dn' : 'neu'), height: 18, lineHeight: '16px', whiteSpace: 'nowrap' }}>전년비 {diff > 0 ? `+${diff}${unit}` : `${diff}${unit}`}</span>
                     ) : (
                       <div style={{ height: 18 }} />
                     )}
