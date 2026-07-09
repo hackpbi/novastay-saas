@@ -63,6 +63,7 @@ export default function MarketPickupMonthBlock({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const chartRef  = useRef<any>(null)
   const tooltipId = `market-pickup-tooltip-${monthKey}`   // 카드별 고유 (body append)
+  const badgeTipId = `pickup-badge-tooltip-${monthKey}`   // Picked up 칩 어카운트 툴팁 (body append)
   const [panelOpen, setPanelOpen] = useState(false)
   const [allDaysOpen, setAllDaysOpen] = useState(false)
 
@@ -83,6 +84,7 @@ export default function MarketPickupMonthBlock({
 
   // 언마운트 시 툴팁 DOM 제거 (메모리 누수 방지)
   useEffect(() => () => { document.getElementById(tooltipId)?.remove() }, [tooltipId])
+  useEffect(() => () => { document.getElementById(badgeTipId)?.remove() }, [badgeTipId])
 
   const activeSegs = useMemo(
     () => groups.flatMap(g => g.segs).filter(s => selected.has(s.id)),
@@ -111,6 +113,65 @@ export default function MarketPickupMonthBlock({
 
   // Picked up 칩: 선택된 세그 중 픽업이 0이 아닌 소분류
   const pickedSegs = groups.flatMap(g => g.segs).filter(s => selected.has(s.id) && segTotal(s) !== 0)
+
+  // ── Picked up 칩 hover: 세그별 어카운트 픽업 집계 (R/N=pu_nights 합산, ADR=OTB 매출/박수) ──
+  const accountPickupBySegId = useMemo(() => {
+    const byCode = new Map<string, Map<string, { rn: number; otbR: number; otbN: number }>>()
+    for (const r of pickupRows) {
+      if (!inMonth(r.business_date, year, month1)) continue
+      let accMap = byCode.get(r.segmentation)
+      if (!accMap) { accMap = new Map(); byCode.set(r.segmentation, accMap) }
+      const cur = accMap.get(r.account_name) ?? { rn: 0, otbR: 0, otbN: 0 }
+      cur.rn   += r.pu_nights ?? 0
+      cur.otbR += r.otb_revenue ?? 0
+      cur.otbN += r.otb_nights ?? 0
+      accMap.set(r.account_name, cur)
+    }
+    const result: Record<string, { account_name: string; rn: number; adr: number }[]> = {}
+    for (const seg of activeSegs) {
+      const merged = new Map<string, { rn: number; otbR: number; otbN: number }>()
+      for (const code of seg.codes) {
+        const accMap = byCode.get(code)
+        if (!accMap) continue
+        for (const [acc, v] of accMap) {
+          const cur = merged.get(acc) ?? { rn: 0, otbR: 0, otbN: 0 }
+          cur.rn += v.rn; cur.otbR += v.otbR; cur.otbN += v.otbN
+          merged.set(acc, cur)
+        }
+      }
+      result[seg.id] = [...merged.entries()]
+        .map(([account_name, v]) => ({ account_name, rn: v.rn, adr: v.otbN > 0 ? v.otbR / v.otbN : 0 }))
+        .filter(a => a.rn !== 0)
+        .sort((a, b) => Math.abs(b.rn) - Math.abs(a.rn))
+    }
+    return result
+  }, [pickupRows, activeSegs, year, month1])
+
+  const handleBadgeMouseEnter = (e: React.MouseEvent, segId: string, segName: string) => {
+    const accounts = accountPickupBySegId[segId] ?? []
+    if (!accounts.length) return
+    document.getElementById(badgeTipId)?.remove()
+    const tip = document.createElement('div')
+    tip.id = badgeTipId
+    tip.style.cssText = 'position:fixed; background:#1a1a1a; border:1px solid #2a2a2a; border-radius:8px; padding:10px 14px; z-index:99999; min-width:200px; box-shadow:0 4px 20px rgba(0,0,0,0.5); pointer-events:none; font-family:sans-serif;'
+    tip.innerHTML =
+      `<div style="font-size:10px;color:#555;margin-bottom:8px;">${segName} — 어카운트별 픽업</div>` +
+      accounts.map(a =>
+        `<div style="display:flex;justify-content:space-between;gap:16px;font-size:11px;margin-bottom:4px;">` +
+          `<span style="color:#aaa;">${a.account_name}</span>` +
+          `<span style="color:${a.rn > 0 ? '#00E5A0' : '#E24B4A'};font-weight:600;">${a.rn > 0 ? '+' : ''}${a.rn}</span>` +
+          `<span style="color:#555;">${Math.round(a.adr / 1000)}k</span>` +
+        `</div>`,
+      ).join('')
+    tip.style.left = e.clientX + 12 + 'px'
+    tip.style.top  = e.clientY + 12 + 'px'
+    document.body.appendChild(tip)
+  }
+  const handleBadgeMouseMove = (e: React.MouseEvent) => {
+    const tip = document.getElementById(badgeTipId)
+    if (tip) { tip.style.left = e.clientX + 12 + 'px'; tip.style.top = e.clientY + 12 + 'px' }
+  }
+  const handleBadgeMouseLeave = () => { document.getElementById(badgeTipId)?.remove() }
 
   // 선택 세그 기준 컬럼 합산 헬퍼 (코드 → 값 Map 빌드 후 그룹/세그 합)
   const sumByCol = (col: keyof PickupRow) => {
@@ -453,9 +514,13 @@ export default function MarketPickupMonthBlock({
               const st = segTotal(seg)
               const pos = st > 0
               return (
-                <span key={seg.id} style={{
+                <span key={seg.id}
+                  onMouseEnter={(e) => handleBadgeMouseEnter(e, seg.id, seg.name)}
+                  onMouseMove={handleBadgeMouseMove}
+                  onMouseLeave={handleBadgeMouseLeave}
+                  style={{
                   display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, padding: '2px 8px', borderRadius: 6, whiteSpace: 'nowrap',
-                  border: `1px solid ${pos ? 'rgba(0,229,160,0.3)' : 'rgba(226,75,74,0.3)'}`, color: pos ? '#00E5A0' : '#E24B4A',
+                  border: `1px solid ${pos ? 'rgba(0,229,160,0.3)' : 'rgba(226,75,74,0.3)'}`, color: pos ? '#00E5A0' : '#E24B4A', cursor: 'default',
                 }}>
                   <span style={{ width: 7, height: 7, borderRadius: 2, background: seg.color }} />
                   {seg.name} {pos ? `+${st}` : st}
