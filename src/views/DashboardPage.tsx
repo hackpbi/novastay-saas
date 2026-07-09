@@ -760,7 +760,7 @@ export default function DashboardPage() {
         {pickupLoading ? (
           <div className="h-5 w-80 rounded animate-pulse" style={{ background: 'var(--color-bg-tertiary)' }} />
         ) : (
-          <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+          <p className="text-sm" style={{ color: 'var(--color-text-secondary)', letterSpacing: '0.04em' }}>
             [{(() => { const [, mm, dd] = otbDate.split('-'); return `${Number(mm)}/${Number(dd)}` })()}{' '}
             {pickupDays > 0 ? (
               <span style={{ color: 'var(--color-accent-primary)' }}>
