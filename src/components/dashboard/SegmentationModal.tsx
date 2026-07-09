@@ -252,7 +252,7 @@ function DataTable({ rows, summary, schema, houRowIds, onSelect, selectedLabel, 
           )}
           {/* 1줄: 섹션 헤더 */}
           <tr>
-            <th rowSpan={2} style={{ ...thBase, textAlign: 'left', borderBottom: GRID_HEAD, verticalAlign: 'middle' }}>SEGMENTATION</th>
+            <th rowSpan={2} style={{ ...thBase, textAlign: 'left', borderBottom: GRID_HEAD, verticalAlign: 'middle' }}>세그먼트</th>
             <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: DOUBLE_GROUP, height: 42, verticalAlign: 'middle' }}>
               <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>현재 OTB</div>
             </th>
@@ -262,12 +262,12 @@ function DataTable({ rows, summary, schema, houRowIds, onSelect, selectedLabel, 
           </tr>
           {/* 2줄: 컬럼명 */}
           <tr>
-            <th style={{ ...thBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: DOUBLE_GROUP, borderBottom: GRID_HEAD }}>R-N</th>
-            <th style={{ ...thBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, borderBottom: GRID_HEAD }}>ADR</th>
-            <th style={{ ...thBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, borderBottom: GRID_HEAD }}>REV</th>
-            <th style={{ ...thBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: DOUBLE_GROUP, borderBottom: GRID_HEAD }}>ΔR-N</th>
-            <th style={{ ...thBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, borderBottom: GRID_HEAD }}>ΔADR</th>
-            <th style={{ ...thBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, borderBottom: GRID_HEAD }}>ΔREV</th>
+            <th style={{ ...thBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: DOUBLE_GROUP, borderBottom: GRID_HEAD }}>객실</th>
+            <th style={{ ...thBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, borderBottom: GRID_HEAD }}>객단가</th>
+            <th style={{ ...thBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, borderBottom: GRID_HEAD }}>매출</th>
+            <th style={{ ...thBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: DOUBLE_GROUP, borderBottom: GRID_HEAD }}>Δ객실</th>
+            <th style={{ ...thBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, borderBottom: GRID_HEAD }}>Δ객단가</th>
+            <th style={{ ...thBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, borderBottom: GRID_HEAD }}>Δ매출</th>
           </tr>
         </thead>
 
@@ -308,7 +308,7 @@ function DataTable({ rows, summary, schema, houRowIds, onSelect, selectedLabel, 
             </td>
           </tr>
           <tr style={{ borderTop: GRID }}>
-            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '8px 12px', borderBottom: GRID, background: '#111111' }}>OCC</td>
+            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '8px 12px', borderBottom: GRID, background: '#111111' }}>점유율</td>
             <td colSpan={3} className="font-mono" style={{ ...footCell, color: 'var(--color-text-primary)', borderLeft: DOUBLE_GROUP }}>
               {otbOcc.toFixed(1)}%
             </td>
@@ -476,7 +476,7 @@ export default function SegmentationModal({
         {/* Header */}
         <div className="px-6 py-3 shrink-0 flex items-center gap-3" style={{ borderBottom: '1px solid var(--divider-color)' }}>
           <h2 className="text-base font-semibold shrink-0" style={{ color: 'var(--color-text-primary)' }}>
-            Pick-Up Status By Segmentation
+            세그먼트별 픽업
           </h2>
           <div className="flex items-center gap-2">
             <DatePicker
@@ -497,7 +497,7 @@ export default function SegmentationModal({
             <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>
               {day !== undefined
                 ? `${curYear}년 ${curMonth}월 ${day}일`
-                : `${days === 0 ? '당일' : `${days}일간`} 픽업 현황 입니다.`}
+                : `${days === 0 ? '당일' : `${days}일간`} 픽업`}
             </span>
           </div>
           <div className="ml-auto">
@@ -576,7 +576,7 @@ export default function SegmentationModal({
                 <>
                   {/* 리스트 헤더 */}
                   <div style={{ display: 'flex', alignItems: 'center', padding: '5px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
-                    <span className="font-mono" style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', flex: 1 }}>ACCOUNT</span>
+                    <span className="font-mono" style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', flex: 1 }}>어카운트</span>
                     <div style={{ display: 'flex', flexShrink: 0 }}>
                       <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 52, textAlign: 'right' }}>R/N</span>
                       <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 56, textAlign: 'right' }}>ADR</span>
