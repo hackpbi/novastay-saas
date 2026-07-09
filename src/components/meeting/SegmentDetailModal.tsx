@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -58,11 +59,11 @@ function aggByCodes(codes: string[], map: CodeMap): Cell {
 
 const th: React.CSSProperties = {
   fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em',
-  color: TXT3, padding: '6px 10px', background: '#131313', whiteSpace: 'nowrap',
+  color: TXT3, padding: '6px 4px', background: '#131313', whiteSpace: 'nowrap',
   position: 'sticky', top: 0, textAlign: 'right',
 }
 const td: React.CSSProperties = {
-  fontSize: 11, padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap',
+  fontSize: 11, padding: '6px 4px', textAlign: 'right', whiteSpace: 'nowrap',
   borderBottom: BORDER_SUBTLE,
 }
 
@@ -260,8 +261,9 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
     </th>
   )
 
-  return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: BG, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+  return createPortal(
+    <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ width: '80%', maxWidth: 1200, height: '85vh', background: BG, borderRadius: 10, border: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* 헤더 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: BORDER_SUBTLE, flexShrink: 0 }}>
         <div>
@@ -298,7 +300,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
         <table style={{ minWidth: 980, borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
           <thead>
             <tr>
-              <th rowSpan={2} style={{ ...th, textAlign: 'left', position: 'sticky', left: 0, width: 170, minWidth: 170, zIndex: 2 }}>SEGMENTATION</th>
+              <th rowSpan={2} style={{ ...th, padding: '6px 8px', textAlign: 'left', position: 'sticky', left: 0, width: 170, minWidth: 170, zIndex: 2 }}>SEGMENTATION</th>
               {groupTh('OTB')}
               {groupTh('FCST')}
               {groupTh('BUDGET')}
@@ -320,7 +322,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
               const otb = otbOf(r), fcst = fcstOf(r), budget = budgetOf(r), ly = lyOf(r)
               return (
                 <tr key={r.id} style={{ background: rowBg }}>
-                  <td style={{ ...td, textAlign: 'left', position: 'sticky', left: 0, background: r.isBold ? BOLD_BG : BG, fontWeight: r.isBold ? 700 : 400, color: nameColor, minWidth: 170 }}>
+                  <td style={{ ...td, padding: '6px 8px', textAlign: 'left', position: 'sticky', left: 0, background: r.isBold ? BOLD_BG : BG, fontWeight: r.isBold ? 700 : 400, color: nameColor, minWidth: 170 }}>
                     {r.indent ? <><span style={{ color: '#555', marginRight: 4 }}>└</span>{r.name}</> : r.name}
                   </td>
                   {groupCells(otb,    undefined, r.isBold)}
@@ -333,7 +335,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
             })}
             {/* 합계 (HOU 제외) */}
             <tr style={{ background: '#111' }}>
-              <td style={{ ...td, textAlign: 'left', position: 'sticky', left: 0, background: '#111', fontWeight: 700, color: '#fff', borderTop: '1px solid rgba(255,255,255,0.1)' }}>합계 (HOU 제외)</td>
+              <td style={{ ...td, padding: '6px 8px', textAlign: 'left', position: 'sticky', left: 0, background: '#111', fontWeight: 700, color: '#fff', borderTop: '1px solid rgba(255,255,255,0.1)' }}>합계 (HOU 제외)</td>
               {[totOtb, totFcst, totBudget, totLy].map((c, i) => (
                 <GroupTotal key={i} c={c} />
               ))}
@@ -350,7 +352,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
             </tr>
             {/* OCC */}
             <tr style={{ background: '#111' }}>
-              <td style={{ ...td, textAlign: 'left', position: 'sticky', left: 0, background: '#111', fontWeight: 600, color: TXT3 }}>OCC</td>
+              <td style={{ ...td, padding: '6px 8px', textAlign: 'left', position: 'sticky', left: 0, background: '#111', fontWeight: 600, color: TXT3 }}>OCC</td>
               <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: MINT, fontWeight: 600 }}>{occOf(totOtb.rn)}</td>
               <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: MINT, fontWeight: 600 }}>{occOf(totFcst.rn)}</td>
               <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: TXT3, fontWeight: 600 }}>{occOf(totBudget.rn)}</td>
@@ -359,7 +361,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
             </tr>
             {/* Rev.PAR */}
             <tr style={{ background: '#111' }}>
-              <td style={{ ...td, textAlign: 'left', position: 'sticky', left: 0, background: '#111', fontWeight: 600, color: TXT3 }}>Rev.PAR</td>
+              <td style={{ ...td, padding: '6px 8px', textAlign: 'left', position: 'sticky', left: 0, background: '#111', fontWeight: 600, color: TXT3 }}>Rev.PAR</td>
               <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: '#fff', fontWeight: 600 }}>{revparOf(totOtb.rev)}</td>
               <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: '#fff', fontWeight: 600 }}>{revparOf(totFcst.rev)}</td>
               <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: TXT3, fontWeight: 600 }}>{revparOf(totBudget.rev)}</td>
@@ -369,7 +371,9 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
           </tbody>
         </table>
       </div>
-    </div>
+      </div>
+    </div>,
+    document.body,
   )
 }
 
