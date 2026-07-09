@@ -152,13 +152,13 @@ function DataRow({ row, schema, houRowIds, onSelect, selectedLabel }: {
           </>
         ) : row.name}
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: DOUBLE_GROUP, background: baseBg }}>
+      <td className="font-mono" onClick={handleSelect} style={{ ...tdBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: isSelected ? '3px solid #00E5A0' : DOUBLE_GROUP, background: baseBg, cursor: selectable ? 'pointer' : 'default' }}>
         <FmtNights n={row.otbNights} fontColor={rowColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, background: baseBg }}>
+      <td className="font-mono" onClick={handleSelect} style={{ ...tdBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, background: baseBg, cursor: selectable ? 'pointer' : 'default' }}>
         <FmtAdr n={row.otbAdr} fontColor={rowColor} />
       </td>
-      <td className="font-mono" style={{ ...tdBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, background: baseBg }}>
+      <td className="font-mono" onClick={handleSelect} style={{ ...tdBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, background: baseBg, cursor: selectable ? 'pointer' : 'default' }}>
         <FmtRev n={row.otbRevenue} fontColor={rowColor} />
       </td>
       <td className="font-mono" style={puTd({ borderLeft: DOUBLE_GROUP })} onClick={handleSelect}>
@@ -457,7 +457,7 @@ export default function SegmentationModal({
       />
 
       <div
-        className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-[1400px]"
+        className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-[1200px]"
         style={{ maxHeight: '88vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
