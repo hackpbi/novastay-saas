@@ -23,10 +23,10 @@ function FmtNights({ n, fontColor }: { n: number; fontColor?: string }) {
   return n === 0 ? <Dash fontColor={fontColor} /> : <span style={{ color: fontColor }}>{n.toLocaleString('ko-KR')}</span>
 }
 function FmtAdr({ n, fontColor }: { n: number; fontColor?: string }) {
-  return n === 0 ? <Dash fontColor={fontColor} /> : <span style={{ color: fontColor }}>{Math.round(n / 1000)}k</span>
+  return n === 0 ? <Dash fontColor={fontColor} /> : <span style={{ color: fontColor }}>{Math.round(n / 1000)}<span style={{ fontSize: '0.7em', marginLeft: 1 }}>k</span></span>
 }
 function FmtRev({ n, fontColor }: { n: number; fontColor?: string }) {
-  return n === 0 ? <Dash fontColor={fontColor} /> : <span style={{ color: fontColor }}>{(n / 1_000_000).toFixed(1)}M</span>
+  return n === 0 ? <Dash fontColor={fontColor} /> : <span style={{ color: fontColor }}>{(n / 1_000_000).toFixed(1)}<span style={{ fontSize: '0.7em', marginLeft: 1 }}>M</span></span>
 }
 // Pickup(Δ) — 양수 fontColor(없으면 흰색), 음수 red, 0/Dash fontColor
 function DeltaNights({ v, fontColor }: { v: number; fontColor?: string }) {
@@ -597,10 +597,14 @@ export default function SegmentationModal({
                           {isOtb ? (a.diffRn === 0 ? '—' : a.diffRn) : `${a.diffRn >= 0 ? '+' : ''}${a.diffRn}`}
                         </span>
                         <span className="font-mono" style={{ fontSize: 11, color: isOtb ? (a.diffAdr < 0 ? '#E24B4A' : '#fff') : (a.diffAdr >= 0 ? '#00E5A0' : '#E24B4A'), width: 56, textAlign: 'right' }}>
-                          {isOtb ? (a.diffAdr === 0 ? '—' : Math.round(a.diffAdr / 1000) + 'k') : (a.diffAdr === 0 ? '—' : (a.diffAdr > 0 ? '+' : '') + Math.round(a.diffAdr / 1000) + 'k')}
+                          {isOtb
+                            ? (a.diffAdr === 0 ? '—' : <>{Math.round(a.diffAdr / 1000)}<span style={{ fontSize: '0.7em', marginLeft: 1 }}>k</span></>)
+                            : (a.diffAdr === 0 ? '—' : <>{(a.diffAdr > 0 ? '+' : '') + Math.round(a.diffAdr / 1000)}<span style={{ fontSize: '0.7em', marginLeft: 1 }}>k</span></>)}
                         </span>
                         <span className="font-mono" style={{ fontSize: 11, color: isOtb ? (a.diffRev < 0 ? '#E24B4A' : '#fff') : (a.diffRev >= 0 ? '#00E5A0' : '#E24B4A'), width: 60, textAlign: 'right' }}>
-                          {isOtb ? (a.diffRev === 0 ? '—' : (a.diffRev / 1_000_000).toFixed(1) + 'M') : `${a.diffRev >= 0 ? '+' : ''}${(a.diffRev / 1_000_000).toFixed(1)}M`}
+                          {isOtb
+                            ? (a.diffRev === 0 ? '—' : <>{(a.diffRev / 1_000_000).toFixed(1)}<span style={{ fontSize: '0.7em', marginLeft: 1 }}>M</span></>)
+                            : (a.diffRev === 0 ? '—' : <>{(a.diffRev >= 0 ? '+' : '') + (a.diffRev / 1_000_000).toFixed(1)}<span style={{ fontSize: '0.7em', marginLeft: 1 }}>M</span></>)}
                         </span>
                       </div>
                     </div>
