@@ -8,6 +8,7 @@ import { useForecastMonthly } from '@/hooks/useForecastMonthly'
 import { useBudgetMonthly } from '@/hooks/useBudgetMonthly'
 import { useFcstDateContext } from '@/contexts/FcstDateContext'
 import { useLatestConfirmedBudgetDate } from '@/hooks/useLatestConfirmedBudgetDate'
+import { useMarketSchema } from '@/hooks/useMarketSchema'
 import type { PickupRow } from '@/hooks/usePickupData'
 import type { SegGroup } from './MeetingPickupBlock'
 import { monthKeyLabel } from './dummyMeetingData'
@@ -65,12 +66,15 @@ const td: React.CSSProperties = {
   borderBottom: BORDER_SUBTLE,
 }
 
-export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, pickupRows, roomCount, groups }: SegmentDetailModalProps) {
+export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, pickupRows, roomCount }: SegmentDetailModalProps) {
   const [lyMode,    setLyMode]    = useState<LyMode>('match')
   const [gapBase,   setGapBase]   = useState<GapBase>('otb')
   const [gapCompare, setGapCompare] = useState<GapCompare>('budget')
 
   const [year, month] = monthKey.split('-').map(Number)   // month: 1-based
+
+  // 세그먼트 스키마 (자식 없는 단독 main = Comp/House Use 포함) — groups는 자식 있는 main만이라 직접 조회
+  const { data: schema = [] } = useMarketSchema()
 
   // FCST / BUDGET (기존 훅 재사용) — 세그먼트별 월 데이터
   const { fcstDate } = useFcstDateContext()
@@ -158,14 +162,21 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
   }, [lyRows])
 
   // ── 세그먼트 트리 → 평탄화 (부모 bold + 자식 indent, 부모 codes = 자식 union) ──
+  // 자식 있는 main → 부모행 + 자식행 / 자식 없는 단독 main(Comp·House Use) → 단독 bold 행
   const rows = useMemo<SegRow[]>(() => {
+    const mains = schema.filter(s => s.level === 'main' && s.parent_id === null).sort((a, b) => a.order_index - b.order_index)
     const out: SegRow[] = []
-    for (const g of groups) {
-      out.push({ id: g.id, name: g.name, isBold: true, indent: false, codes: g.segs.flatMap(s => s.codes) })
-      for (const s of g.segs) out.push({ id: s.id, name: s.name, isBold: false, indent: true, codes: s.codes })
+    for (const main of mains) {
+      const children = schema.filter(c => c.parent_id === main.id).sort((a, b) => a.order_index - b.order_index)
+      if (children.length > 0) {
+        out.push({ id: main.id, name: main.name, isBold: true, indent: false, codes: children.flatMap(c => c.segmentation ?? []) })
+        for (const c of children) out.push({ id: c.id, name: c.name, isBold: false, indent: true, codes: c.segmentation ?? [] })
+      } else {
+        out.push({ id: main.id, name: main.name, isBold: true, indent: false, codes: main.segmentation ?? [] })
+      }
     }
     return out
-  }, [groups])
+  }, [schema])
 
   // body scroll lock + ESC
   useEffect(() => {
@@ -192,11 +203,12 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
   const compLabel = gapCompare === 'budget' ? 'BUDGET' : 'LY'
   const lyColLabel = lyMode === 'match' ? '전년동기간' : '전년일자'
 
-  // 합계 (HOU 제외) — 부모(자식 합산) 행 제외, leaf(sub)만 합산
+  // 합계 (HOU 제외) — 부모(자식 합산) 행 제외, HOU 세그 제외, leaf(sub)만 합산
   const isParent = (i: number) => rows[i].isBold && !!rows[i + 1]?.indent
+  const isHou = (r: SegRow) => r.codes.includes('HOU')
   const sumGroup = (pick: (r: SegRow) => Cell): Cell => {
     let rn = 0, rev = 0
-    rows.forEach((r, i) => { if (!isParent(i)) { const c = pick(r); rn += c.rn; rev += c.rev } })
+    rows.forEach((r, i) => { if (!isParent(i) && !isHou(r)) { const c = pick(r); rn += c.rn; rev += c.rev } })
     return { rn, rev, adr: rn > 0 ? Math.round(rev / rn) : 0 }
   }
   const totOtb    = sumGroup(otbOf)
@@ -249,9 +261,9 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
   )
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: BG, overflowY: 'auto' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: BG, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* 헤더 */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: BORDER_SUBTLE }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: BORDER_SUBTLE, flexShrink: 0 }}>
         <div>
           <div style={{ fontSize: 20, fontWeight: 600, color: '#fff' }}>세그먼트 상세 — {monthKeyLabel(monthKey)}</div>
           <div style={{ fontSize: 13, color: TXT3, marginTop: 2 }}>{hotelId}</div>
@@ -265,7 +277,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
       </div>
 
       {/* 컨트롤 바 */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', gap: 16, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', gap: 16, flexWrap: 'wrap', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 11, color: TXT3 }}>LY 기준</span>
           <div style={{ display: 'flex', background: CARD, borderRadius: 999, padding: 2 }}>
@@ -282,7 +294,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
       </div>
 
       {/* 테이블 */}
-      <div style={{ overflowX: 'auto', padding: '0 24px 32px' }}>
+      <div style={{ flex: 1, overflow: 'auto', padding: '0 24px 32px' }}>
         <table style={{ minWidth: 980, borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
           <thead>
             <tr>
