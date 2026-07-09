@@ -1631,7 +1631,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
         {/* ══════════ 3페이지 — OCC & BAR Rate ══════════ */}
         <div className="gm-page-break gm-page3">
           <div style={{ fontSize: 13, fontWeight: 500, color: C.textPrimary, marginBottom: 12 }}>
-            OCC &amp; BAR Rate
+            점유율 및 BAR 요금
             <span style={{ fontSize: 10, color: C.textMuted, marginLeft: 8, fontWeight: 400 }}>· {localOtbDate} ~ D+44</span>
           </div>
           {page3DayGroups.map((days, gi) => (
@@ -1646,7 +1646,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                     <div style={{ width: 10, height: 10, borderRadius: 2, background: '#2a78d6' }} />점유율
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: C.textMuted }}>
-                    <span style={{ fontSize: 8, background: 'rgba(255,255,255,0.8)', color: '#4a4a48', borderRadius: 3, padding: '1px 4px', border: `0.5px solid ${C.border}` }}>150k</span>BAR Rate
+                    <span style={{ fontSize: 8, background: 'rgba(255,255,255,0.8)', color: '#4a4a48', borderRadius: 3, padding: '1px 4px', border: `0.5px solid ${C.border}` }}></span>BAR Rate
                   </div>
                 </div>
               </div>
