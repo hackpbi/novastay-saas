@@ -348,29 +348,19 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
         <div>
           <div style={{ fontSize: 20, fontWeight: 600, color: '#fff' }}>세그먼트 상세 — {monthKeyLabel(monthKey)}</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* 어카운트별 실적 비교 모달 열기 */}
-          <button onClick={() => setAcctOpen(true)} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '7px 14px',
-            borderRadius: 8, border: '0.5px solid rgba(0,229,160,0.4)', background: 'rgba(0,229,160,0.06)',
-            color: MINT, cursor: 'pointer', fontWeight: 500,
-          }}>
-            Accounts
-          </button>
-          {/* 기존 닫기 버튼 */}
-          <button onClick={onClose} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '7px 14px',
-            borderRadius: 8, border: 'none', background: CARD, color: '#ccc', cursor: 'pointer',
-          }}>
-            <X size={16} /> 닫기
-          </button>
-        </div>
+        {/* 기존 닫기 버튼 */}
+        <button onClick={onClose} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '7px 14px',
+          borderRadius: 8, border: 'none', background: CARD, color: '#ccc', cursor: 'pointer',
+        }}>
+          <X size={16} /> 닫기
+        </button>
       </div>
 
       {/* 표 상단 우측 액션 버튼 그룹 */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, padding: '10px 24px 0', flexShrink: 0 }}>
         {/* Accounts */}
-        <button onClick={() => {}} style={btnStyle} onMouseEnter={e => hoverIn(e)} onMouseLeave={e => hoverOut(e)}>
+        <button onClick={() => setAcctOpen(true)} style={btnStyle} onMouseEnter={e => hoverIn(e)} onMouseLeave={e => hoverOut(e)}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 13, height: 13 }}>
             <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
             <circle cx="9" cy="7" r="4" />
