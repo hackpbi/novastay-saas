@@ -1481,7 +1481,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                   </tr>
                   {/* LY 행 */}
                   <tr>
-                    <td style={{ fontSize: 8, color: C.textMuted, padding: '3px 2px' }}>전년대비</td>
+                    <td style={{ fontSize: 8, color: C.textMuted, padding: '3px 2px' }}>전년비</td>
                     {chartKpi.map(d => (
                       <td key={d.date} style={{ textAlign: 'center', padding: '3px 2px', fontSize: 9, color: C.textMuted, background: d.isToday ? '#f0f4ff' : d.isPast ? '#fafaf8' : 'transparent' }}>{d.lyOcc !== null ? `${d.lyOcc}%` : '-'}</td>
                     ))}
