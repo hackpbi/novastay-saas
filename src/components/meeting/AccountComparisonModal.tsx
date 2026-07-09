@@ -256,18 +256,24 @@ export default function AccountComparisonModal({ open, onClose, hotelId, monthKe
       col = yoy > 0 ? MINT : yoy < 0 ? RED : TXT3
     }
     return (
-      <>
-        <td style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center' }}>
-          <div style={{ position: 'relative', width: 140, height: 10, margin: '0 auto' }}>
-            <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.15)' }} />
-            <div style={{
-              position: 'absolute', top: 2, bottom: 2, width: barW, background: col, borderRadius: 2, opacity: 0.85,
-              ...(pos ? { left: '50%' } : { right: '50%' }),
-            }} />
-          </div>
-        </td>
-        <td className="font-mono" style={{ ...td, minWidth: 56, color: col, fontWeight: isNew ? 700 : 500 }}>{label}</td>
-      </>
+      <td style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', width: 200, minWidth: 200, maxWidth: 200 }}>
+        <div style={{ position: 'relative', width: 180, height: 14, margin: '0 auto' }}>
+          {/* 중앙 기준선 */}
+          <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.15)' }} />
+          {/* 바 */}
+          <div style={{
+            position: 'absolute', top: 3, bottom: 3, width: barW, background: col, borderRadius: 2, opacity: 0.85,
+            ...(pos ? { left: '50%' } : { right: '50%' }),
+          }} />
+          {/* 라벨 — 바 방향 끝 바깥 */}
+          <span className="font-mono" style={{
+            position: 'absolute', top: 0, fontSize: 11, color: col, fontWeight: isNew ? 700 : 500, whiteSpace: 'nowrap',
+            ...(pos
+              ? { left: `calc(50% + ${barW}px + 6px)` }
+              : { right: `calc(50% + ${barW}px + 6px)` }),
+          }}>{label}</span>
+        </div>
+      </td>
     )
   }
 
@@ -392,7 +398,10 @@ export default function AccountComparisonModal({ open, onClose, hotelId, monthKe
             <thead>
               <tr>
                 <th rowSpan={2} style={{ ...th, padding: '8px 8px', textAlign: 'left', position: 'sticky', left: 0, width: 180, minWidth: 180, zIndex: 2 }}>ACCOUNT</th>
-                <th colSpan={2} style={{ ...th, textAlign: 'center', boxShadow: GROUP_SHADOW, color: '#fff' }}>YoY %</th>
+                <th rowSpan={2} style={{ ...th, textAlign: 'center', boxShadow: GROUP_SHADOW, color: '#fff', width: 200, minWidth: 200 }}>
+                  <div>YoY %</div>
+                  <div style={{ fontSize: 8, color: TXT3, fontWeight: 400, marginTop: 2 }}>감소 ◄ ► 증가</div>
+                </th>
                 {groupTh('OTB')}
                 <th colSpan={3} style={{ ...th, textAlign: 'center', boxShadow: GROUP_SHADOW, color: '#fff' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
@@ -424,8 +433,6 @@ export default function AccountComparisonModal({ open, onClose, hotelId, monthKe
                 {groupTh('GAP')}
               </tr>
               <tr>
-                <th style={{ ...th, textAlign: 'center', minWidth: 150, boxShadow: GROUP_SHADOW }}>감소 ◄ ► 증가</th>
-                <th style={{ ...th, minWidth: 56 }}>YoY</th>
                 {(['OTB', 'LY', 'GAP'] as const).map(g => (
                   ['R/N', 'ADR', 'REV'].map((s) => (
                     s === 'R/N'
@@ -447,7 +454,7 @@ export default function AccountComparisonModal({ open, onClose, hotelId, monthKe
               ))}
               {sortedRows.length === 0 && (
                 <tr>
-                  <td colSpan={12} style={{ ...td, textAlign: 'center', color: TXT3, padding: '24px 8px' }}>데이터 없음</td>
+                  <td colSpan={11} style={{ ...td, textAlign: 'center', color: TXT3, padding: '24px 8px' }}>데이터 없음</td>
                 </tr>
               )}
               {/* 합계 */}
