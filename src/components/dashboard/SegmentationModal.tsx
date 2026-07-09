@@ -110,12 +110,13 @@ function getSegCodes(row: SegTableRow, schema: MarketSchemaRow[]): string[] {
 
 // ─── DataRow ──────────────────────────────────────────────────────────────────
 
-function DataRow({ row, schema, houRowIds, onSelect, selectedLabel }: {
-  row:            SegTableRow
-  schema:         MarketSchemaRow[]
-  houRowIds:      Set<string>
-  onSelect?:      (segCodes: string[], label: string) => void
-  selectedLabel?: string
+function DataRow({ row, schema, houRowIds, onSelect, selectedLabel, selectedViewMode }: {
+  row:               SegTableRow
+  schema:            MarketSchemaRow[]
+  houRowIds:         Set<string>
+  onSelect?:         (segCodes: string[], label: string, viewMode: 'otb' | 'pickup') => void
+  selectedLabel?:    string
+  selectedViewMode?: 'otb' | 'pickup'
 }) {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
@@ -129,7 +130,8 @@ function DataRow({ row, schema, houRowIds, onSelect, selectedLabel }: {
   const nameSelectable = selectable && !row.indent   // 대분류 이름 셀만 클릭
   const isSelected   = selectable && selectedLabel === row.name
   const baseBg       = isSelected ? 'rgba(0,229,160,0.08)' : rowBg
-  const handleSelect = selectable ? () => onSelect!(segCodes, row.name) : undefined
+  const handleOtbSelect    = selectable ? () => onSelect!(segCodes, row.name, 'otb')    : undefined
+  const handlePickupSelect = selectable ? () => onSelect!(segCodes, row.name, 'pickup') : undefined
 
   const puTd = (extra: React.CSSProperties): React.CSSProperties => ({
     ...tdBase, textAlign: 'right', minWidth: NUM_COL_MIN, cursor: selectable ? 'pointer' : 'default', background: baseBg, ...extra,
@@ -142,7 +144,7 @@ function DataRow({ row, schema, houRowIds, onSelect, selectedLabel }: {
       onMouseLeave={e => e.currentTarget.querySelectorAll('td').forEach(td => { (td as HTMLElement).style.background = baseBg })}
     >
       <td
-        onClick={nameSelectable ? handleSelect : undefined}
+        onClick={nameSelectable ? handlePickupSelect : undefined}
         style={{ ...tdBase, paddingLeft: row.indent ? 28 : 12, minWidth: 140, background: baseBg, color: nameColor, cursor: nameSelectable ? 'pointer' : 'default' }}
       >
         {row.indent ? (
@@ -152,22 +154,22 @@ function DataRow({ row, schema, houRowIds, onSelect, selectedLabel }: {
           </>
         ) : row.name}
       </td>
-      <td className="font-mono" onClick={handleSelect} style={{ ...tdBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: isSelected ? '3px solid #00E5A0' : DOUBLE_GROUP, background: baseBg, cursor: selectable ? 'pointer' : 'default' }}>
+      <td className="font-mono" onClick={handleOtbSelect} style={{ ...tdBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: isSelected && selectedViewMode === 'otb' ? '3px solid #00E5A0' : DOUBLE_GROUP, background: baseBg, cursor: selectable ? 'pointer' : 'default' }}>
         <FmtNights n={row.otbNights} fontColor={rowColor} />
       </td>
-      <td className="font-mono" onClick={handleSelect} style={{ ...tdBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, background: baseBg, cursor: selectable ? 'pointer' : 'default' }}>
+      <td className="font-mono" onClick={handleOtbSelect} style={{ ...tdBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, background: baseBg, cursor: selectable ? 'pointer' : 'default' }}>
         <FmtAdr n={row.otbAdr} fontColor={rowColor} />
       </td>
-      <td className="font-mono" onClick={handleSelect} style={{ ...tdBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, background: baseBg, cursor: selectable ? 'pointer' : 'default' }}>
+      <td className="font-mono" onClick={handleOtbSelect} style={{ ...tdBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, background: baseBg, cursor: selectable ? 'pointer' : 'default' }}>
         <FmtRev n={row.otbRevenue} fontColor={rowColor} />
       </td>
-      <td className="font-mono" style={puTd({ borderLeft: DOUBLE_GROUP })} onClick={handleSelect}>
+      <td className="font-mono" style={puTd({ borderLeft: isSelected && selectedViewMode === 'pickup' ? '3px solid #00E5A0' : DOUBLE_GROUP })} onClick={handlePickupSelect}>
         <DeltaNights v={row.puNights} fontColor={rowColor} />
       </td>
-      <td className="font-mono" style={puTd({ borderLeft: GRID })} onClick={handleSelect}>
+      <td className="font-mono" style={puTd({ borderLeft: GRID })} onClick={handlePickupSelect}>
         <DeltaAdr v={row.puAdr} fontColor={rowColor} />
       </td>
-      <td className="font-mono" style={puTd({ borderLeft: GRID })} onClick={handleSelect}>
+      <td className="font-mono" style={puTd({ borderLeft: GRID })} onClick={handlePickupSelect}>
         <DeltaRev v={row.puRevenue} fontColor={rowColor} />
       </td>
     </tr>
@@ -176,13 +178,14 @@ function DataRow({ row, schema, houRowIds, onSelect, selectedLabel }: {
 
 // ─── DataTable ─────────────────────────────────────────────────────────────────
 
-function DataTable({ rows, summary, schema, houRowIds, onSelect, selectedLabel, year, month, day, roomCount, curYear, curMonth, onPrevMonth, onNextMonth, canPrevMonth, canNextMonth }: {
+function DataTable({ rows, summary, schema, houRowIds, onSelect, selectedLabel, selectedViewMode, year, month, day, roomCount, curYear, curMonth, onPrevMonth, onNextMonth, canPrevMonth, canNextMonth }: {
   rows:               SegTableRow[]
   summary:            SegTableSummary
   schema:             MarketSchemaRow[]
   houRowIds:          Set<string>
-  onSelect?:          (segCodes: string[], label: string) => void
+  onSelect?:          (segCodes: string[], label: string, viewMode: 'otb' | 'pickup') => void
   selectedLabel?:     string
+  selectedViewMode?:  'otb' | 'pickup'
   year:               number
   month:              number
   day?:               number
@@ -277,6 +280,7 @@ function DataTable({ rows, summary, schema, houRowIds, onSelect, selectedLabel, 
               houRowIds={houRowIds}
               onSelect={onSelect}
               selectedLabel={selectedLabel}
+              selectedViewMode={selectedViewMode}
             />
           ))}
         </tbody>
@@ -351,7 +355,7 @@ export default function SegmentationModal({
 
   const [accountModalSeg, setAccountModalSeg] = useState<{ segCodes: string[]; label: string } | null>(null)
   // 우측 Account Pickup 패널: 선택된 세그먼트 (이름/픽업 셀 클릭 시 set)
-  const [selectedSeg, setSelectedSeg] = useState<{ label: string; codes: string[] } | null>(null)
+  const [selectedSeg, setSelectedSeg] = useState<{ label: string; codes: string[]; viewMode: 'otb' | 'pickup' } | null>(null)
   const [curYear,  setCurYear]  = useState(year)
   const [curMonth, setCurMonth] = useState(month)
 
@@ -419,14 +423,21 @@ export default function SegmentationModal({
     if (!selectedSeg) return []
     return (accountPickupRows as Array<{ account_name: string; segmentation: string; otb_nights: number; vs_nights: number; otb_revenue: number; vs_revenue: number }>)
       .filter(r => selectedSeg.codes.includes(r.segmentation))
-      .map(r => ({
-        name:    r.account_name,
-        diffRn:  r.otb_nights - r.vs_nights,    // 픽업 = 현재OTB - vsOTB
-        diffAdr: r.otb_revenue && r.otb_nights
-          ? Math.round((r.otb_revenue / r.otb_nights) - (r.vs_nights ? r.vs_revenue / r.vs_nights : 0))
-          : 0,
-        diffRev: r.otb_revenue - r.vs_revenue,
-      }))
+      .map(r => selectedSeg.viewMode === 'otb'
+        ? {
+            name:    r.account_name,
+            diffRn:  r.otb_nights,                                         // 현재 OTB 실판매
+            diffAdr: r.otb_nights > 0 ? Math.round(r.otb_revenue / r.otb_nights) : 0,
+            diffRev: r.otb_revenue,
+          }
+        : {
+            name:    r.account_name,
+            diffRn:  r.otb_nights - r.vs_nights,    // 픽업 = 현재OTB - vsOTB
+            diffAdr: r.otb_revenue && r.otb_nights
+              ? Math.round((r.otb_revenue / r.otb_nights) - (r.vs_nights ? r.vs_revenue / r.vs_nights : 0))
+              : 0,
+            diffRev: r.otb_revenue - r.vs_revenue,
+          })
       .filter(a => a.diffRn !== 0 || a.diffRev !== 0)
       .sort((a, b) => b.diffRn - a.diffRn)
   }, [selectedSeg, accountPickupRows])
@@ -512,8 +523,9 @@ export default function SegmentationModal({
                 summary={summary}
                 schema={schema}
                 houRowIds={houRowIds}
-                onSelect={(segCodes, label) => setSelectedSeg({ label, codes: segCodes })}
+                onSelect={(segCodes, label, viewMode) => setSelectedSeg({ label, codes: segCodes, viewMode })}
                 selectedLabel={selectedSeg?.label}
+                selectedViewMode={selectedSeg?.viewMode}
                 year={curYear}
                 month={curMonth}
                 day={day}
@@ -533,7 +545,7 @@ export default function SegmentationModal({
             <div className="px-3 pt-3 pb-2 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>Account Pickup</div>
               <div style={{ fontSize: 10, color: 'var(--brand-dimmed)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {selectedSeg ? `${selectedSeg.label} · ${curYear}.${String(curMonth).padStart(2, '0')} · 픽업 R/N 기준` : '세그먼트를 클릭하세요'}
+                {selectedSeg ? `${selectedSeg.label} · ${curYear}.${String(curMonth).padStart(2, '0')} · ${selectedSeg.viewMode === 'otb' ? '현재 OTB' : '픽업 R/N 기준'}` : '세그먼트를 클릭하세요'}
               </div>
               <button
                 onClick={() => {
