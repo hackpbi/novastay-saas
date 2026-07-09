@@ -14,6 +14,7 @@ import type { PickupRow } from '@/hooks/usePickupData'
 import type { SegGroup } from './MeetingPickupBlock'
 import { monthKeyLabel } from './dummyMeetingData'
 import { FmtVal } from '@/utils/FmtVal'
+import AccountComparisonModal from './AccountComparisonModal'
 
 interface SegmentDetailModalProps {
   open:       boolean
@@ -108,6 +109,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
   const gapCmpRef  = useRef<HTMLSpanElement>(null)
   const [gapBasePos, setGapBasePos] = useState<{ x: number; y: number } | null>(null)
   const [gapCmpPos,  setGapCmpPos]  = useState<{ x: number; y: number } | null>(null)
+  const [acctOpen, setAcctOpen] = useState(false)
 
   const handleGapBaseClick = () => {
     if (gapBasePos) { setGapBasePos(null); return }
@@ -346,13 +348,23 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
         <div>
           <div style={{ fontSize: 20, fontWeight: 600, color: '#fff' }}>세그먼트 상세 — {monthKeyLabel(monthKey)}</div>
         </div>
-        {/* 기존 닫기 버튼 */}
-        <button onClick={onClose} style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '7px 14px',
-          borderRadius: 8, border: 'none', background: CARD, color: '#ccc', cursor: 'pointer',
-        }}>
-          <X size={16} /> 닫기
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* 어카운트별 실적 비교 모달 열기 */}
+          <button onClick={() => setAcctOpen(true)} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '7px 14px',
+            borderRadius: 8, border: '0.5px solid rgba(0,229,160,0.4)', background: 'rgba(0,229,160,0.06)',
+            color: MINT, cursor: 'pointer', fontWeight: 500,
+          }}>
+            Accounts
+          </button>
+          {/* 기존 닫기 버튼 */}
+          <button onClick={onClose} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '7px 14px',
+            borderRadius: 8, border: 'none', background: CARD, color: '#ccc', cursor: 'pointer',
+          }}>
+            <X size={16} /> 닫기
+          </button>
+        </div>
       </div>
 
       {/* 표 상단 우측 액션 버튼 그룹 */}
@@ -601,6 +613,16 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
         </table>
       </div>
       </div>
+      {acctOpen && (
+        <AccountComparisonModal
+          open={acctOpen}
+          onClose={() => setAcctOpen(false)}
+          hotelId={hotelId}
+          monthKey={monthKey}
+          pickupRows={pickupRows}
+          roomCount={roomCount}
+        />
+      )}
     </div>,
     document.body,
   )
