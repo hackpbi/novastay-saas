@@ -153,14 +153,14 @@ export default function MarketPickupMonthBlock({
     document.getElementById(badgeTipId)?.remove()
     const tip = document.createElement('div')
     tip.id = badgeTipId
-    tip.style.cssText = 'position:fixed; background:#1a1a1a; border:1px solid #2a2a2a; border-radius:8px; padding:10px 14px; z-index:99999; min-width:200px; box-shadow:0 4px 20px rgba(0,0,0,0.5); pointer-events:none; font-family:sans-serif;'
+    tip.style.cssText = 'position:fixed; background:#f5f5f5; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; z-index:99999; min-width:200px; box-shadow:0 4px 20px rgba(0,0,0,0.5); pointer-events:none; font-family:sans-serif;'
     tip.innerHTML =
-      `<div style="font-size:10px;color:#555;margin-bottom:8px;">${segName} — 어카운트별 픽업</div>` +
+      `<div style="font-size:10px;color:#888;margin-bottom:8px;">${segName} — 어카운트별 픽업</div>` +
       accounts.map(a =>
-        `<div style="display:flex;justify-content:space-between;gap:16px;font-size:11px;margin-bottom:4px;">` +
-          `<span style="color:#aaa;">${a.account_name}</span>` +
-          `<span style="color:${a.rn > 0 ? '#00E5A0' : '#E24B4A'};font-weight:600;">${a.rn > 0 ? '+' : ''}${a.rn}</span>` +
-          `<span style="color:#555;">${Math.round(a.adr / 1000)}k</span>` +
+        `<div style="display:flex;align-items:center;gap:0;margin-bottom:4px;">` +
+          `<span style="flex:1;font-size:11px;color:#333;">${a.account_name}</span>` +
+          `<span style="width:40px;text-align:right;font-size:11px;font-weight:600;color:${a.rn > 0 ? '#00AA70' : '#E24B4A'};">${a.rn > 0 ? '+' : ''}${a.rn}</span>` +
+          `<span style="width:48px;text-align:right;font-size:11px;color:#999;">${Math.round(a.adr / 1000)}k</span>` +
         `</div>`,
       ).join('')
     tip.style.left = e.clientX + 12 + 'px'
