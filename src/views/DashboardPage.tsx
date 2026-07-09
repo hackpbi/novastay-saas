@@ -335,10 +335,10 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
       {/* ── OCC / ADR / REV ── */}
       <div className="px-5 pb-1">
         <MetricRow
-          label="OCC"
+          label="점유율"
           value={occValue}
           metric={occ}
-          subValue={loading ? undefined : `${stats.otbNights.toLocaleString('ko-KR')} nights`}
+          subValue={loading ? undefined : `${stats.otbNights.toLocaleString('ko-KR')} 객실`}
           yoyOverride={{
             value:      yoyStats.varNightsPct !== null ? Math.round(yoyStats.varNightsPct * 10) / 10 : null,
             unit:       '%',
@@ -361,7 +361,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
           }
         />
         <MetricRow
-          label="ADR"
+          label="객단가"
           value={adrValue}
           metric={adr}
           tooltip={loading ? undefined : stats.adr.toLocaleString('ko-KR')}
@@ -379,7 +379,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
           }
         />
         <MetricRow
-          label="REV"
+          label="매출"
           value={revValue}
           metric={rev}
           tooltip={loading ? undefined : stats.rev.toLocaleString('ko-KR')}
@@ -404,21 +404,21 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
       {/* ── Forecasting (FCST / BUDGET / 달성 매트릭스) ── */}
       <div className="mx-4 mt-2 rounded-xl p-3.5" style={{ background: 'var(--forecast-bg)', border: '1px solid var(--forecast-border)' }}>
         <div style={{ fontSize: 10, letterSpacing: '1.5px', fontWeight: 500, color: 'var(--color-accent-primary)', marginBottom: 10, textTransform: 'uppercase' }}>
-          Forecasting
+          목표 및 전망
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '58px 1fr 1fr 1fr', gap: '8px 10px', alignItems: 'center' }}>
           {/* 헤더 */}
           <div />
-          {['OCC', 'ADR', 'REV'].map(h => (
+          {['점유율', '객단가', '매출'].map(h => (
             <div key={h} style={{ fontSize: 9, color: 'var(--brand-dimmed)', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{h}</div>
           ))}
           {/* FCST 행 */}
-          <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)' }}>FCST</div>
+          <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)' }}>전망</div>
           <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}>{fmtFcOcc(forecast?.occ)}</div>
           <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}><FmtVal val={fmtFcAdr(forecast?.adr)} numSize={14} /></div>
           <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}><FmtVal val={fmtFcRevenue(forecast?.revenue)} numSize={14} /></div>
           {/* BUDGET 행 */}
-          <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)' }}>BUDGET</div>
+          <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)' }}>목표</div>
           <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}>{fmtFcOcc(budget?.occ)}</div>
           <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}><FmtVal val={fmtFcAdr(budget?.adr)} numSize={14} /></div>
           <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}><FmtVal val={fmtFcRevenue(budget?.revenue)} numSize={14} /></div>
@@ -427,7 +427,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
             const borderTop = '1px solid var(--color-border-default)'
             const pt = '7px'
             if (i === 0) return (
-              <div key="달성" style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)', borderTop, paddingTop: pt }}>ACHIEVEMENT</div>
+              <div key="달성" style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)', borderTop, paddingTop: pt }}>달성</div>
             )
             const pct = val as number | null
             const clickable = pct !== null && !!onAchievementClick
@@ -470,7 +470,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
           }}
         >
           {pickupNights >= 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
-          P/U {pickupNights >= 0 ? '+' : ''}{pickupNights} rooms
+          픽업 {pickupNights >= 0 ? '+' : ''}{pickupNights} rooms
         </button>
 
         {/* 보조 버튼 컨테이너 — 호버 전 숨김, 호버 시 슬라이드인 */}
@@ -730,7 +730,7 @@ export default function DashboardPage() {
       <div className="mb-6">
         <div className="flex items-center justify-between mb-1" style={{ gap: 12 }}>
           <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text-primary)', margin: 0 }}>
-            Dashboard
+            대시보드
           </h1>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <button
@@ -742,7 +742,7 @@ export default function DashboardPage() {
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
               </svg>
-              Actual vs Budget vs LY
+              월별 현황
             </button>
             <button
               onClick={() => setGmReportOpen(true)}
@@ -753,7 +753,7 @@ export default function DashboardPage() {
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
               </svg>
-              GM Daily Report
+              데일리 리포트
             </button>
           </div>
         </div>
@@ -761,7 +761,7 @@ export default function DashboardPage() {
           <div className="h-5 w-80 rounded animate-pulse" style={{ background: 'var(--color-bg-tertiary)' }} />
         ) : (
           <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-            {otbDate}{' '}
+            [{(() => { const [, mm, dd] = otbDate.split('-'); return `${Number(mm)}/${Number(dd)}` })()}{' '}
             {pickupDays > 0 ? (
               <span style={{ color: 'var(--color-accent-primary)' }}>
                 <span style={{ fontSize: '1.5em', fontWeight: 700 }}>{pickupDays}</span>일
@@ -769,7 +769,7 @@ export default function DashboardPage() {
             ) : (
               <span style={{ color: 'var(--color-accent-primary)' }}>당일</span>
             )}
-            {' '}픽업, 총{' '}
+            {' '}픽업]{' '}객실{' '}
             <button
               onClick={() => setMonthlyPickupSegOpen(true)}
               title="월별 픽업 추이 보기"
@@ -777,23 +777,15 @@ export default function DashboardPage() {
             >
               {(() => { const { num, unit } = formatPuParts(totalPuNights, 'nights'); return <><span style={{ fontSize: '1.5em' }}>{num}</span>{unit}</> })()}
             </button>
-            ,{' '}ADR{' '}
-            <button
-              onClick={() => setMonthlyPickupSegOpen(true)}
-              title="월별 픽업 추이 보기"
-              style={{ color: totalPuAdr >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
-            >
-              {(() => { const { num, unit } = formatPuParts(totalPuAdr, 'currency'); return <><span style={{ fontSize: '1.5em' }}>{num}</span>{unit}</> })()}
-            </button>
-            ,{' '}REV{' '}
+            ,{' '}매출{' '}
             <button
               onClick={() => setMonthlyPickupSegOpen(true)}
               title="월별 픽업 추이 보기"
               style={{ color: totalPuRevenue >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
             >
-              {(() => { const { num, unit } = formatPuParts(totalPuRevenue, 'currency'); return <><span style={{ fontSize: '1.5em' }}>{num}</span>{unit}</> })()}
+              {(() => { const { num } = formatPuParts(totalPuRevenue, 'currency'); return <><span style={{ fontSize: '1.5em' }}>{num}</span>백만 원</> })()}
             </button>
-            {' '}[{months[0].year}.{String(months[0].month).padStart(2, '0')}~{months[months.length - 1].year}.{String(months[months.length - 1].month).padStart(2, '0')}]
+            {' '}[{String(months[0].year).slice(2)}년 {months[0].month}월~{String(months[months.length - 1].year).slice(2)}년 {months[months.length - 1].month}월]
           </p>
         )}
       </div>
