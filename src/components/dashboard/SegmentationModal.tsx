@@ -39,13 +39,13 @@ function DeltaAdr({ v, fontColor }: { v: number; fontColor?: string }) {
   const k = Math.round(v / 1000)
   if (k === 0) return <Dash fontColor={fontColor} />
   const color = k > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
-  return <span style={{ color }}>{k > 0 ? '+' : ''}{k}k</span>
+  return <span style={{ color }}>{k > 0 ? '+' : ''}{k}<span style={{ fontSize: '0.7em', marginLeft: 1 }}>k</span></span>
 }
 function DeltaRev({ v, fontColor }: { v: number; fontColor?: string }) {
   if (v === 0) return <Dash fontColor={fontColor} />
   const m = v / 1_000_000
   const color = m > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
-  return <span style={{ color }}>{m > 0 ? '+' : ''}{m.toFixed(1)}M</span>
+  return <span style={{ color }}>{m > 0 ? '+' : ''}{m.toFixed(1)}<span style={{ fontSize: '0.7em', marginLeft: 1 }}>M</span></span>
 }
 
 // ─── StatCard ──────────────────────────────────────────────────────────────────
