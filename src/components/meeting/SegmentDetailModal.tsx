@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { X } from 'lucide-react'
@@ -13,6 +13,7 @@ import { useMarketSchema } from '@/hooks/useMarketSchema'
 import type { PickupRow } from '@/hooks/usePickupData'
 import type { SegGroup } from './MeetingPickupBlock'
 import { monthKeyLabel } from './dummyMeetingData'
+import { FmtVal } from '@/utils/FmtVal'
 
 interface SegmentDetailModalProps {
   open:       boolean
@@ -34,8 +35,22 @@ const TXT3     = '#888'
 const GROUP_SHADOW = 'inset 1px 0 0 rgba(0,229,160,0.3)'
 const BORDER_SUBTLE = '0.5px solid rgba(255,255,255,0.06)'
 
+// 그룹 교차 배경/색상 (OTB·FCST·BUDGET·LY·GAP) — FCST/LY만 은은한 하이라이트
+const GROUP_BG = { otb: 'transparent', fcst: 'rgba(255,255,255,0.02)', budget: 'transparent', ly: 'rgba(255,255,255,0.02)', gap: 'transparent' } as const
+// sticky 헤더/서브헤더는 반투명이면 스크롤 내용이 비치므로 불투명 합성색(#131313 + 2% white ≈ #181818) 사용
+const GROUP_BG_HEADER = { otb: '#131313', fcst: '#181818', budget: '#131313', ly: '#181818', gap: '#131313' } as const
+const GROUP_COLOR = { otb: '#5B8DEF', fcst: '#F5A623', budget: '#aaaaaa', ly: '#B57EDC', gap: MINT } as const
+
 type Cell = { rn: number; adr: number; rev: number }
-type SegRow = { id: string; name: string; isBold: boolean; indent: boolean; codes: string[] }
+type SegRow = {
+  id: string
+  name: string
+  isBold: boolean
+  indent: boolean
+  codes: string[]
+  bgColor: string | null      // bg_dark_color (null이면 기본값 사용)
+  fontColor: string | null    // font_dark_color (null이면 기본값 사용)
+}
 type CodeMap = Map<string, { rn: number; rev: number }>
 type GapBase    = 'otb' | 'fcst'
 type GapCompare = 'budget' | 'ly'
@@ -67,10 +82,66 @@ const td: React.CSSProperties = {
   borderBottom: BORDER_SUBTLE,
 }
 
+// 헤더 우측 액션 버튼 (UI only — 추후 기능 연결)
+const btnStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px',
+  borderRadius: 6, border: '1px solid #2a2a2a', background: 'transparent',
+  color: '#888', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+  transition: 'all 0.15s',
+}
+const hoverIn = (e: React.MouseEvent<HTMLButtonElement>) => {
+  e.currentTarget.style.borderColor = '#00E5A0'
+  e.currentTarget.style.color = '#00E5A0'
+  e.currentTarget.style.background = 'rgba(0,229,160,0.08)'
+}
+const hoverOut = (e: React.MouseEvent<HTMLButtonElement>) => {
+  e.currentTarget.style.borderColor = '#2a2a2a'
+  e.currentTarget.style.color = '#888'
+  e.currentTarget.style.background = 'transparent'
+}
+
 export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, pickupRows, roomCount }: SegmentDetailModalProps) {
   const [lyMode,    setLyMode]    = useState<LyMode>('match')
   const [gapBase,   setGapBase]   = useState<GapBase>('otb')
   const [gapCompare, setGapCompare] = useState<GapCompare>('budget')
+  const gapBaseRef = useRef<HTMLSpanElement>(null)
+  const gapCmpRef  = useRef<HTMLSpanElement>(null)
+  const [gapBasePos, setGapBasePos] = useState<{ x: number; y: number } | null>(null)
+  const [gapCmpPos,  setGapCmpPos]  = useState<{ x: number; y: number } | null>(null)
+
+  const handleGapBaseClick = () => {
+    if (gapBasePos) { setGapBasePos(null); return }
+    setGapCmpPos(null)
+    const rect = gapBaseRef.current?.getBoundingClientRect()
+    if (rect) setGapBasePos({ x: rect.left, y: rect.bottom + 4 })
+  }
+
+  const handleGapCmpClick = () => {
+    if (gapCmpPos) { setGapCmpPos(null); return }
+    setGapBasePos(null)
+    const rect = gapCmpRef.current?.getBoundingClientRect()
+    if (rect) setGapCmpPos({ x: rect.left, y: rect.bottom + 4 })
+  }
+
+  // GAP 드롭다운 외부 클릭 시 닫힘
+  useEffect(() => {
+    if (!gapBasePos && !gapCmpPos) return
+
+    const handleClick = () => {
+      setGapBasePos(null)
+      setGapCmpPos(null)
+    }
+
+    // 다음 틱에 등록 (현재 클릭 이벤트 무시)
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClick)
+    }, 0)
+
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener('mousedown', handleClick)
+    }
+  }, [gapBasePos, gapCmpPos])
 
   const [year, month] = monthKey.split('-').map(Number)   // month: 1-based
 
@@ -162,18 +233,36 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
     return map
   }, [lyRows])
 
-  // ── 세그먼트 트리 → 평탄화 (부모 bold + 자식 indent, 부모 codes = 자식 union) ──
-  // 자식 있는 main → 부모행 + 자식행 / 자식 없는 단독 main(Comp·House Use) → 단독 bold 행
+  // ── 세그먼트 트리 → 평탄화 (부모 bold + 자식 indent) ──
+  // parent_id === null 최상위 노드 전체(level 무관)를 순회 — Comp/House Use 등 main이 아닌 독립 노드도 포함
+  // (ActualBudgetDetailModal의 orderedSchema 컨벤션과 동일)
   const rows = useMemo<SegRow[]>(() => {
-    const mains = schema.filter(s => s.level === 'main' && s.parent_id === null).sort((a, b) => a.order_index - b.order_index)
+    const topLevel = schema.filter(s => s.parent_id === null).sort((a, b) => a.order_index - b.order_index)
     const out: SegRow[] = []
-    for (const main of mains) {
-      const children = schema.filter(c => c.parent_id === main.id).sort((a, b) => a.order_index - b.order_index)
+    for (const top of topLevel) {
+      const children = top.level === 'main'
+        ? schema.filter(c => c.parent_id === top.id).sort((a, b) => a.order_index - b.order_index)
+        : []
       if (children.length > 0) {
-        out.push({ id: main.id, name: main.name, isBold: true, indent: false, codes: children.flatMap(c => c.segmentation ?? []) })
-        for (const c of children) out.push({ id: c.id, name: c.name, isBold: false, indent: true, codes: c.segmentation ?? [] })
+        out.push({
+          id: top.id, name: top.name, isBold: true, indent: false,
+          codes: children.flatMap(c => c.segmentation ?? []),
+          bgColor: top.bg_dark_color ?? null,
+          fontColor: top.font_dark_color ?? null,
+        })
+        for (const c of children) out.push({
+          id: c.id, name: c.name, isBold: false, indent: true,
+          codes: c.segmentation ?? [],
+          bgColor: null,       // 자식 행은 배경색 없음
+          fontColor: null,     // 자식 행은 폰트색 기본값 사용
+        })
       } else {
-        out.push({ id: main.id, name: main.name, isBold: true, indent: false, codes: main.segmentation ?? [] })
+        out.push({
+          id: top.id, name: top.name, isBold: true, indent: false,
+          codes: top.segmentation ?? [],
+          bgColor: top.bg_dark_color ?? null,
+          fontColor: top.font_dark_color ?? null,
+        })
       }
     }
     return out
@@ -200,9 +289,6 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
   const baseOf   = (r: SegRow): Cell => (gapBase === 'otb' ? otbOf(r) : fcstOf(r))
   const compOf   = (r: SegRow): Cell => (gapCompare === 'budget' ? budgetOf(r) : lyOf(r))
 
-  const baseLabel = gapBase === 'otb' ? 'OTB' : 'FCST'
-  const compLabel = gapCompare === 'budget' ? 'BUDGET' : 'LY'
-  const lyColLabel = lyMode === 'match' ? '전년동기간' : '전년일자'
 
   // 합계 (HOU 제외) — 부모(자식 합산) 행 제외, HOU 세그 제외, leaf(sub)만 합산
   const isParent = (i: number) => rows[i].isBold && !!rows[i + 1]?.indent
@@ -222,20 +308,20 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
   const revparOf = (rev: number) => (avail > 0 ? Math.round(rev / avail).toLocaleString('ko-KR') : '—')
 
   // 그룹 cells 렌더 (R/N, ADR, REV) — 첫 셀에 그룹 구분선
-  const groupCells = (c: Cell, color?: string, bold?: boolean) => (
+  const groupCells = (c: Cell, color?: string, bold?: boolean, bg?: string) => (
     <>
-      <td style={{ ...td, boxShadow: GROUP_SHADOW, color, fontWeight: bold ? 600 : 400 }} className="font-mono">{fmtRn(c.rn)}</td>
-      <td style={{ ...td, color, fontWeight: bold ? 600 : 400 }} className="font-mono">{fmtAdr(c.adr)}</td>
-      <td style={{ ...td, color, fontWeight: bold ? 600 : 400 }} className="font-mono">{fmtRev(c.rev)}</td>
+      <td style={{ ...td, boxShadow: GROUP_SHADOW, color, fontWeight: bold ? 600 : 400, background: bg }} className="font-mono">{fmtRn(c.rn)}</td>
+      <td style={{ ...td, color, fontWeight: bold ? 600 : 400, background: bg }} className="font-mono"><FmtVal val={fmtAdr(c.adr)} numSize={11} /></td>
+      <td style={{ ...td, color, fontWeight: bold ? 600 : 400, background: bg }} className="font-mono"><FmtVal val={fmtRev(c.rev)} numSize={11} /></td>
     </>
   )
-  const gapCells = (b: Cell, cmp: Cell, bold?: boolean) => {
+  const gapCells = (b: Cell, cmp: Cell, bold?: boolean, bg?: string) => {
     const gRn = b.rn - cmp.rn, gAdr = b.adr - cmp.adr, gRev = b.rev - cmp.rev
     return (
       <>
-        <td style={{ ...td, boxShadow: GROUP_SHADOW, color: gapColor(gRn), fontWeight: bold ? 600 : 500 }} className="font-mono">{fmtGapRn(gRn)}</td>
-        <td style={{ ...td, color: gapColor(gAdr), fontWeight: bold ? 600 : 500 }} className="font-mono">{fmtGapAdr(gAdr)}</td>
-        <td style={{ ...td, color: gapColor(gRev), fontWeight: bold ? 600 : 500 }} className="font-mono">{fmtGapRev(gRev)}</td>
+        <td style={{ ...td, boxShadow: GROUP_SHADOW, color: gapColor(gRn), fontWeight: bold ? 600 : 500, background: bg }} className="font-mono">{fmtGapRn(gRn)}</td>
+        <td style={{ ...td, color: gapColor(gAdr), fontWeight: bold ? 600 : 500, background: bg }} className="font-mono"><FmtVal val={fmtGapAdr(gAdr)} numSize={11} /></td>
+        <td style={{ ...td, color: gapColor(gRev), fontWeight: bold ? 600 : 500, background: bg }} className="font-mono"><FmtVal val={fmtGapRev(gRev)} numSize={11} /></td>
       </>
     )
   }
@@ -246,17 +332,8 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
       background: active ? MINT : 'transparent', color: active ? '#0a2018' : TXT3, fontWeight: active ? 600 : 400,
     }}>{children}</button>
   )
-  const Select = <T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: T[] }) => (
-    <select value={value} onChange={e => onChange(e.target.value as T)} style={{
-      fontSize: 11, padding: '3px 6px', borderRadius: 6, background: CARD,
-      border: '0.5px solid rgba(255,255,255,0.15)', color: '#fff', outline: 'none', cursor: 'pointer',
-    }}>
-      {options.map(o => <option key={o} value={o}>{o.toUpperCase()}</option>)}
-    </select>
-  )
-
-  const groupTh = (label: string, sub?: string) => (
-    <th colSpan={3} style={{ ...th, textAlign: 'center', boxShadow: GROUP_SHADOW, color: '#fff' }}>
+  const groupTh = (label: string, sub?: string, bg: string = '#131313', color: string = '#fff') => (
+    <th colSpan={3} style={{ ...th, textAlign: 'center', boxShadow: GROUP_SHADOW, color, background: bg, borderBottom: `2px solid ${color}` }}>
       {label}{sub && <span style={{ color: TXT3, fontWeight: 400 }}> · {sub}</span>}
     </th>
   )
@@ -268,8 +345,8 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 16px', borderBottom: BORDER_SUBTLE, flexShrink: 0 }}>
         <div>
           <div style={{ fontSize: 20, fontWeight: 600, color: '#fff' }}>세그먼트 상세 — {monthKeyLabel(monthKey)}</div>
-          <div style={{ fontSize: 13, color: TXT3, marginTop: 2 }}>{hotelId}</div>
         </div>
+        {/* 기존 닫기 버튼 */}
         <button onClick={onClose} style={{
           display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '7px 14px',
           borderRadius: 8, border: 'none', background: CARD, color: '#ccc', cursor: 'pointer',
@@ -278,21 +355,41 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
         </button>
       </div>
 
-      {/* 컨트롤 바 */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 16px', gap: 16, flexWrap: 'wrap', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 11, color: TXT3 }}>LY 기준</span>
-          <div style={{ display: 'flex', background: CARD, borderRadius: 999, padding: 2 }}>
-            <Pill active={lyMode === 'match'} onClick={() => setLyMode('match')}>전년동기간</Pill>
-            <Pill active={lyMode === 'date'} onClick={() => setLyMode('date')}>전년일자</Pill>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 11, color: TXT3 }}>GAP</span>
-          <Select value={gapBase} onChange={setGapBase} options={['otb', 'fcst']} />
-          <span style={{ fontSize: 11, color: TXT3 }}>vs</span>
-          <Select value={gapCompare} onChange={setGapCompare} options={['budget', 'ly']} />
-        </div>
+      {/* 표 상단 우측 액션 버튼 그룹 */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, padding: '10px 24px 0', flexShrink: 0 }}>
+        {/* Accounts */}
+        <button onClick={() => {}} style={btnStyle} onMouseEnter={e => hoverIn(e)} onMouseLeave={e => hoverOut(e)}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 13, height: 13 }}>
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+          Accounts
+        </button>
+
+        {/* Daily Status */}
+        <button onClick={() => {}} style={btnStyle} onMouseEnter={e => hoverIn(e)} onMouseLeave={e => hoverOut(e)}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 13, height: 13 }}>
+            <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
+          </svg>
+          Daily
+        </button>
+
+        {/* BAR Rate */}
+        <button onClick={() => {}} style={btnStyle} onMouseEnter={e => hoverIn(e)} onMouseLeave={e => hoverOut(e)}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 13, height: 13 }}>
+            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+          </svg>
+          BAR Rate
+        </button>
+
+        {/* PU Required */}
+        <button onClick={() => {}} style={btnStyle} onMouseEnter={e => hoverIn(e)} onMouseLeave={e => hoverOut(e)}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 13, height: 13 }}>
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+          </svg>
+          PU Required
+        </button>
       </div>
 
       {/* 테이블 */}
@@ -301,51 +398,183 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
           <thead>
             <tr>
               <th rowSpan={2} style={{ ...th, padding: '8px 8px', textAlign: 'left', position: 'sticky', left: 0, width: 170, minWidth: 170, zIndex: 2 }}>SEGMENTATION</th>
-              {groupTh('OTB')}
-              {groupTh('FCST')}
-              {groupTh('BUDGET')}
-              {groupTh('LY', lyColLabel)}
-              {groupTh(`GAP`, `${baseLabel} vs ${compLabel}`)}
+              {groupTh('OTB', undefined, GROUP_BG_HEADER.otb, GROUP_COLOR.otb)}
+              {groupTh('FCST', undefined, GROUP_BG_HEADER.fcst, GROUP_COLOR.fcst)}
+              {groupTh('BUDGET', undefined, GROUP_BG_HEADER.budget, GROUP_COLOR.budget)}
+              <th colSpan={3} style={{ ...th, textAlign: 'center', boxShadow: GROUP_SHADOW, color: GROUP_COLOR.ly, background: GROUP_BG_HEADER.ly, borderBottom: `2px solid ${GROUP_COLOR.ly}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                  <span style={{ color: GROUP_COLOR.ly }}>LY</span>
+                  <span style={{ color: '#2a2a2a' }}>·</span>
+                  <span
+                    onClick={() => setLyMode('match')}
+                    style={{
+                      cursor: 'pointer',
+                      color: lyMode === 'match' ? '#00E5A0' : '#444',
+                      fontWeight: lyMode === 'match' ? 600 : 400,
+                      borderBottom: lyMode === 'match' ? '1px solid #00E5A0' : '1px solid transparent',
+                      paddingBottom: 1,
+                      fontSize: 10,
+                    }}
+                  >
+                    YoY Match
+                  </span>
+                  <span style={{ color: '#333' }}>/</span>
+                  <span
+                    onClick={() => setLyMode('date')}
+                    style={{
+                      cursor: 'pointer',
+                      color: lyMode === 'date' ? '#00E5A0' : '#444',
+                      fontWeight: lyMode === 'date' ? 600 : 400,
+                      borderBottom: lyMode === 'date' ? '1px solid #00E5A0' : '1px solid transparent',
+                      paddingBottom: 1,
+                      fontSize: 10,
+                    }}
+                  >
+                    Same Date
+                  </span>
+                </div>
+              </th>
+              <th colSpan={3} style={{ ...th, textAlign: 'center', boxShadow: GROUP_SHADOW, color: GROUP_COLOR.gap, minWidth: 240, borderBottom: `2px solid ${GROUP_COLOR.gap}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                  <span style={{ color: GROUP_COLOR.gap }}>GAP</span>
+                  <span style={{ color: '#2a2a2a' }}>·</span>
+
+                  {/* 기준 — OTB/FCST */}
+                  <span
+                    ref={gapBaseRef}
+                    onClick={handleGapBaseClick}
+                    style={{
+                      cursor: 'pointer', color: '#ccc', fontWeight: 500, fontSize: 10,
+                      borderBottom: '1px solid #555', paddingBottom: 1,
+                    }}
+                  >
+                    {gapBase.toUpperCase()} ▾
+                  </span>
+
+                  <span style={{ color: '#555', fontSize: 9 }}>vs</span>
+
+                  {/* 비교대상 — BUDGET/LY */}
+                  <span
+                    ref={gapCmpRef}
+                    onClick={handleGapCmpClick}
+                    style={{
+                      cursor: 'pointer', color: '#ccc', fontWeight: 500, fontSize: 10,
+                      borderBottom: '1px solid #555', paddingBottom: 1,
+                    }}
+                  >
+                    {gapCompare.toUpperCase()} ▾
+                  </span>
+                </div>
+
+                {/* GAP 기준 드롭다운 — body 포탈 */}
+                {gapBasePos && createPortal(
+                    <div
+                      onClick={e => e.stopPropagation()}
+                      onMouseDown={e => e.stopPropagation()}
+                      style={{
+                      position: 'fixed', top: gapBasePos.y, left: gapBasePos.x, zIndex: 99999,
+                      background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 6,
+                      overflow: 'hidden', minWidth: 80, boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                    }}>
+                      {(['otb', 'fcst'] as const).map(v => (
+                        <div
+                          key={v}
+                          onClick={() => { setGapBase(v); setGapBasePos(null) }}
+                          style={{
+                            padding: '7px 12px', fontSize: 12, cursor: 'pointer',
+                            color: gapBase === v ? '#00E5A0' : '#ccc',
+                            background: gapBase === v ? 'rgba(0,229,160,0.08)' : 'transparent',
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = gapBase === v ? 'rgba(0,229,160,0.08)' : 'transparent')}
+                        >
+                          {v.toUpperCase()}
+                        </div>
+                      ))}
+                    </div>,
+                  document.body
+                )}
+
+                {/* GAP 비교대상 드롭다운 — body 포탈 */}
+                {gapCmpPos && createPortal(
+                    <div
+                      onClick={e => e.stopPropagation()}
+                      onMouseDown={e => e.stopPropagation()}
+                      style={{
+                      position: 'fixed', top: gapCmpPos.y, left: gapCmpPos.x, zIndex: 99999,
+                      background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 6,
+                      overflow: 'hidden', minWidth: 90, boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                    }}>
+                      {(['budget', 'ly'] as const).map(v => (
+                        <div
+                          key={v}
+                          onClick={() => { setGapCompare(v); setGapCmpPos(null) }}
+                          style={{
+                            padding: '7px 12px', fontSize: 12, cursor: 'pointer',
+                            color: gapCompare === v ? '#00E5A0' : '#ccc',
+                            background: gapCompare === v ? 'rgba(0,229,160,0.08)' : 'transparent',
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = gapCompare === v ? 'rgba(0,229,160,0.08)' : 'transparent')}
+                        >
+                          {v.toUpperCase()}
+                        </div>
+                      ))}
+                    </div>,
+                  document.body
+                )}
+              </th>
             </tr>
             <tr>
               {['OTB', 'FCST', 'BUDGET', 'LY', 'GAP'].map(g => (
                 ['R/N', 'ADR', 'REV'].map((s, si) => (
-                  <th key={`${g}-${s}`} style={{ ...th, ...(si === 0 ? { boxShadow: GROUP_SHADOW } : {}) }}>{s}</th>
+                  <th key={`${g}-${s}`} style={{ ...th, width: 80, minWidth: 80, background: GROUP_BG_HEADER[g.toLowerCase() as keyof typeof GROUP_BG_HEADER], ...(si === 0 ? { boxShadow: GROUP_SHADOW } : {}) }}>{s}</th>
                 ))
               ))}
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => {
-              const rowBg = r.isBold ? BOLD_BG : 'transparent'
-              const nameColor = r.indent ? '#999' : '#fff'
+              // 배경: schema bg_dark_color 우선, 없으면 isBold → BOLD_BG, 자식 → 'transparent'
+              const rowBg = r.bgColor ?? (r.isBold ? BOLD_BG : 'transparent')
+              // 이름 색: schema font_dark_color 우선, 없으면 indent → '#999', bold → '#fff'
+              const nameColor = r.fontColor ?? (r.indent ? '#999' : '#fff')
+              // 숫자 셀 색: 부모(bold)는 schema 색상(없으면 흰색), 자식은 회색(#888)
+              const numColor = r.isBold ? (r.fontColor ?? '#fff') : '#888'
+              // 숫자 셀 배경: schema bg_dark_color 우선, 없으면 bold → BOLD_BG, 자식 → undefined(투명)
+              const numBg = r.bgColor ?? (r.isBold ? BOLD_BG : undefined)
               const otb = otbOf(r), fcst = fcstOf(r), budget = budgetOf(r), ly = lyOf(r)
               return (
                 <tr key={r.id} style={{ background: rowBg }}>
-                  <td style={{ ...td, padding: '8px 8px', textAlign: 'left', position: 'sticky', left: 0, background: r.isBold ? BOLD_BG : BG, fontWeight: r.isBold ? 700 : 400, color: nameColor, minWidth: 170 }}>
+                  <td style={{ ...td, padding: '8px 8px', textAlign: 'left', position: 'sticky', left: 0, background: r.bgColor ?? (r.isBold ? BOLD_BG : BG), fontWeight: r.isBold ? 700 : 400, color: nameColor, minWidth: 170 }}>
                     {r.indent ? <><span style={{ color: '#555', marginRight: 4 }}>└</span>{r.name}</> : r.name}
                   </td>
-                  {groupCells(otb,    undefined, r.isBold)}
-                  {groupCells(fcst,   undefined, r.isBold)}
-                  {groupCells(budget, undefined, r.isBold)}
-                  {groupCells(ly,     undefined, r.isBold)}
-                  {gapCells(baseOf(r), compOf(r), r.isBold)}
+                  {groupCells(otb,    numColor, r.isBold, numBg)}
+                  {groupCells(fcst,   numColor, r.isBold, numBg)}
+                  {groupCells(budget, numColor, r.isBold, numBg)}
+                  {groupCells(ly,     numColor, r.isBold, numBg)}
+                  {gapCells(baseOf(r), compOf(r), r.isBold, numBg)}
                 </tr>
               )
             })}
             {/* 합계 (HOU 제외) */}
             <tr style={{ background: '#111' }}>
               <td style={{ ...td, padding: '8px 8px', textAlign: 'left', position: 'sticky', left: 0, background: '#111', fontWeight: 700, color: '#fff', borderTop: '1px solid rgba(255,255,255,0.1)' }}>합계 (HOU 제외)</td>
-              {[totOtb, totFcst, totBudget, totLy].map((c, i) => (
-                <GroupTotal key={i} c={c} />
+              {([
+                { c: totOtb, g: 'otb' as const },
+                { c: totFcst, g: 'fcst' as const },
+                { c: totBudget, g: 'budget' as const },
+                { c: totLy, g: 'ly' as const },
+              ]).map(({ c, g }, i) => (
+                <GroupTotal key={i} c={c} bg={GROUP_BG[g]} color={GROUP_COLOR[g]} />
               ))}
               {(() => {
                 const gRn = totBase.rn - totComp.rn, gAdr = totBase.adr - totComp.adr, gRev = totBase.rev - totComp.rev
                 return (
                   <>
-                    <td style={{ ...td, boxShadow: GROUP_SHADOW, color: gapColor(gRn), fontWeight: 700, borderTop: '1px solid rgba(255,255,255,0.1)' }} className="font-mono">{fmtGapRn(gRn)}</td>
-                    <td style={{ ...td, color: gapColor(gAdr), fontWeight: 700, borderTop: '1px solid rgba(255,255,255,0.1)' }} className="font-mono">{fmtGapAdr(gAdr)}</td>
-                    <td style={{ ...td, color: gapColor(gRev), fontWeight: 700, borderTop: '1px solid rgba(255,255,255,0.1)' }} className="font-mono">{fmtGapRev(gRev)}</td>
+                    <td style={{ ...td, boxShadow: GROUP_SHADOW, background: GROUP_BG.gap, color: gapColor(gRn), fontWeight: 700, borderTop: '1px solid rgba(255,255,255,0.1)' }} className="font-mono">{fmtGapRn(gRn)}</td>
+                    <td style={{ ...td, background: GROUP_BG.gap, color: gapColor(gAdr), fontWeight: 700, borderTop: '1px solid rgba(255,255,255,0.1)' }} className="font-mono"><FmtVal val={fmtGapAdr(gAdr)} numSize={11} /></td>
+                    <td style={{ ...td, background: GROUP_BG.gap, color: gapColor(gRev), fontWeight: 700, borderTop: '1px solid rgba(255,255,255,0.1)' }} className="font-mono"><FmtVal val={fmtGapRev(gRev)} numSize={11} /></td>
                   </>
                 )
               })()}
@@ -353,20 +582,20 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
             {/* OCC */}
             <tr style={{ background: '#111' }}>
               <td style={{ ...td, padding: '8px 8px', textAlign: 'left', position: 'sticky', left: 0, background: '#111', fontWeight: 600, color: TXT3 }}>OCC</td>
-              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: MINT, fontWeight: 600 }}>{occOf(totOtb.rn)}</td>
-              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: MINT, fontWeight: 600 }}>{occOf(totFcst.rn)}</td>
-              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: TXT3, fontWeight: 600 }}>{occOf(totBudget.rn)}</td>
-              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: TXT3, fontWeight: 600 }}>{occOf(totLy.rn)}</td>
-              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: TXT3 }}>—</td>
+              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, background: GROUP_BG.otb, textAlign: 'center', color: GROUP_COLOR.otb, fontWeight: 600 }}>{occOf(totOtb.rn)}</td>
+              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, background: GROUP_BG.fcst, textAlign: 'center', color: GROUP_COLOR.fcst, fontWeight: 600 }}>{occOf(totFcst.rn)}</td>
+              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, background: GROUP_BG.budget, textAlign: 'center', color: GROUP_COLOR.budget, fontWeight: 600 }}>{occOf(totBudget.rn)}</td>
+              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, background: GROUP_BG.ly, textAlign: 'center', color: GROUP_COLOR.ly, fontWeight: 600 }}>{occOf(totLy.rn)}</td>
+              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, background: GROUP_BG.gap, textAlign: 'center', color: '#555' }}>—</td>
             </tr>
             {/* Rev.PAR */}
             <tr style={{ background: '#111' }}>
               <td style={{ ...td, padding: '8px 8px', textAlign: 'left', position: 'sticky', left: 0, background: '#111', fontWeight: 600, color: TXT3 }}>Rev.PAR</td>
-              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: '#fff', fontWeight: 600 }}>{revparOf(totOtb.rev)}</td>
-              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: '#fff', fontWeight: 600 }}>{revparOf(totFcst.rev)}</td>
-              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: TXT3, fontWeight: 600 }}>{revparOf(totBudget.rev)}</td>
-              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: TXT3, fontWeight: 600 }}>{revparOf(totLy.rev)}</td>
-              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: TXT3 }}>—</td>
+              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, background: GROUP_BG.otb, textAlign: 'center', color: GROUP_COLOR.otb, fontWeight: 600 }}>{revparOf(totOtb.rev)}</td>
+              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, background: GROUP_BG.fcst, textAlign: 'center', color: GROUP_COLOR.fcst, fontWeight: 600 }}>{revparOf(totFcst.rev)}</td>
+              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, background: GROUP_BG.budget, textAlign: 'center', color: GROUP_COLOR.budget, fontWeight: 600 }}>{revparOf(totBudget.rev)}</td>
+              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, background: GROUP_BG.ly, textAlign: 'center', color: GROUP_COLOR.ly, fontWeight: 600 }}>{revparOf(totLy.rev)}</td>
+              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, background: GROUP_BG.gap, textAlign: 'center', color: '#555' }}>—</td>
             </tr>
           </tbody>
         </table>
@@ -378,12 +607,12 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
 }
 
 // 합계 행의 그룹 셀 (R/N, ADR, REV)
-function GroupTotal({ c }: { c: Cell }) {
+function GroupTotal({ c, bg, color }: { c: Cell; bg: string; color: string }) {
   return (
     <>
-      <td style={{ ...td, boxShadow: GROUP_SHADOW, fontWeight: 700, color: '#fff', borderTop: '1px solid rgba(255,255,255,0.1)' }} className="font-mono">{fmtRn(c.rn)}</td>
-      <td style={{ ...td, fontWeight: 700, color: '#fff', borderTop: '1px solid rgba(255,255,255,0.1)' }} className="font-mono">{fmtAdr(c.adr)}</td>
-      <td style={{ ...td, fontWeight: 700, color: '#fff', borderTop: '1px solid rgba(255,255,255,0.1)' }} className="font-mono">{fmtRev(c.rev)}</td>
+      <td style={{ ...td, boxShadow: GROUP_SHADOW, background: bg, fontWeight: 700, color, borderTop: '1px solid rgba(255,255,255,0.1)' }} className="font-mono">{fmtRn(c.rn)}</td>
+      <td style={{ ...td, background: bg, fontWeight: 700, color, borderTop: '1px solid rgba(255,255,255,0.1)' }} className="font-mono"><FmtVal val={fmtAdr(c.adr)} numSize={11} /></td>
+      <td style={{ ...td, background: bg, fontWeight: 700, color, borderTop: '1px solid rgba(255,255,255,0.1)' }} className="font-mono"><FmtVal val={fmtRev(c.rev)} numSize={11} /></td>
     </>
   )
 }
