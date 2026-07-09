@@ -230,7 +230,7 @@ export default function ForecastBudgetModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 shrink-0" style={{ borderBottom: BORDER }}>
           <div>
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>FCST vs BUDGET 비교</h2>
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>전망 vs 목표 비교</h2>
             <p className="text-xs mt-0.5" style={{ color: 'var(--brand-dimmed)' }}>{currentHotel?.hotel_name ?? ''}</p>
           </div>
 
@@ -266,21 +266,21 @@ export default function ForecastBudgetModal({
               <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
                 <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                   <tr>
-                    <th style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE }} rowSpan={2}>Segmentation</th>
-                    <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: DOUBLE }}>FCST</th>
-                    <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderRight: DOUBLE }}>BUDGET</th>
-                    <th colSpan={3} style={{ ...thBase, textAlign: 'center' }}>GAP</th>
+                    <th style={{ ...thBase, textAlign: 'left', borderRight: DOUBLE }} rowSpan={2}>세그먼트</th>
+                    <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: BORDER, borderRight: DOUBLE }}>전망</th>
+                    <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderRight: DOUBLE }}>목표</th>
+                    <th colSpan={3} style={{ ...thBase, textAlign: 'center' }}>격차</th>
                   </tr>
                   <tr>
-                    <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>R-N</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ADR</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE, borderBottom: BORDER }}>REV</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>R-N</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ADR</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE, borderBottom: BORDER }}>REV</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔR-N</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔREV</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>객실</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>객단가</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE, borderBottom: BORDER }}>매출</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>객실</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>객단가</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE, borderBottom: BORDER }}>매출</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>Δ객실</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>Δ객단가</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>Δ매출</th>
                   </tr>
                 </thead>
 
@@ -331,7 +331,7 @@ export default function ForecastBudgetModal({
                   )}
                   {/* OCC */}
                   <tr style={{ borderTop: BORDER, background: 'var(--color-bg-secondary)' }}>
-                    <td style={{ ...labelTd, borderRight: DOUBLE }}>OCC</td>
+                    <td style={{ ...labelTd, borderRight: DOUBLE }}>점유율</td>
                     <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER, borderRight: DOUBLE }}>
                       <FmtOcc n={sumMonth?.fcst.occ ?? 0} />
                     </td>
