@@ -542,7 +542,7 @@ export default function SegmentationModal({
           {/* 우측 Account Pickup 패널 */}
           <div style={{ width: 300, flexShrink: 0, borderLeft: '1px solid var(--divider-color)', display: 'flex', flexDirection: 'column', background: '#0a0a0a', minHeight: 0 }}>
             <div className="px-3 pt-3 pb-2 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>Account Pickup</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>어카운트 픽업</div>
               <div style={{ fontSize: 10, color: 'var(--brand-dimmed)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {selectedSeg ? `${selectedSeg.label} · ${curYear}.${String(curMonth).padStart(2, '0')} · ${selectedSeg.viewMode === 'otb' ? '현재 OTB' : '픽업 R/N 기준'}` : '세그먼트를 클릭하세요'}
               </div>
@@ -564,7 +564,7 @@ export default function SegmentationModal({
                   marginTop: 4,
                 }}
               >
-                Account 보기 →
+                전체 어카운트 보기
               </button>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'thin' }}>
@@ -578,9 +578,9 @@ export default function SegmentationModal({
                   <div style={{ display: 'flex', alignItems: 'center', padding: '5px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
                     <span className="font-mono" style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', flex: 1 }}>어카운트</span>
                     <div style={{ display: 'flex', flexShrink: 0 }}>
-                      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 52, textAlign: 'right' }}>R/N</span>
-                      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 56, textAlign: 'right' }}>ADR</span>
-                      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 60, textAlign: 'right' }}>REV</span>
+                      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 52, textAlign: 'right' }}>객실</span>
+                      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 56, textAlign: 'right' }}>객단가</span>
+                      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 60, textAlign: 'right' }}>매출</span>
                     </div>
                   </div>
                   {accountList.map((a, i) => (
