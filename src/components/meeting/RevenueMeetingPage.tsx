@@ -156,26 +156,6 @@ function KpiCard({
 }
 
 // 특정 세그먼트(codes)의 어카운트별 픽업 집계 — R/N 절대값 내림차순 상위 8개
-function getAccountSummary(segCodes: string[], rows: PickupRow[], year: number, month: number) {
-  const map = new Map<string, { rn: number; rev: number }>()
-  for (const r of rows) {
-    const d = new Date(r.business_date)
-    if (d.getFullYear() !== year || d.getMonth() !== month) continue
-    if (!segCodes.includes(r.segmentation)) continue
-    const acct = r.account_name || '기타'
-    const cur = map.get(acct) ?? { rn: 0, rev: 0 }
-    map.set(acct, {
-      rn:  cur.rn  + (r.pu_nights ?? 0),
-      rev: cur.rev + (r.pu_revenue ?? 0),
-    })
-  }
-  return [...map.entries()]
-    .map(([name, v]) => ({ name, rn: v.rn, adr: v.rn > 0 ? Math.round(v.rev / v.rn) : 0 }))
-    .filter(a => a.rn !== 0)
-    .sort((a, b) => Math.abs(b.rn) - Math.abs(a.rn))
-    .slice(0, 8)
-}
-
 export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps) {
   const monthKeys = useMemo(buildMonthKeys, [])
   const [monthKey, setMonthKey] = useState(monthKeys[0])
@@ -200,8 +180,6 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
     total:      number
   } | null>(null)
 
-  // Picked up 세그먼트 칩 hover 툴팁 (어카운트별 픽업)
-  const [hoveredSeg, setHoveredSeg] = useState<{ segId: string; x: number; y: number } | null>(null)
 
   // 지시사항 — 인라인 추가 패널
   const [inlineOpen,     setInlineOpen]     = useState(false)
@@ -992,53 +970,6 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
       {/* 세그먼트 상세 풀스크린 모달 */}
       <SegmentDetailModal open={segOpen} onClose={() => setSegOpen(false)} hotelId={hotelId} monthKey={monthKey} />
 
-      {/* Picked up 칩 hover 툴팁 — 어카운트별 픽업 */}
-      {hoveredSeg && (() => {
-        const seg = pickupSummary?.pickedSegs.find(s => s.id === hoveredSeg.segId)
-        if (!seg) return null
-        const segLeaf = groups.flatMap(g => g.segs).find(s => s.id === hoveredSeg.segId)
-        if (!segLeaf) return null
-        const accounts = getAccountSummary(segLeaf.codes, pickupRows, mpYear, mpMonth0)
-        if (accounts.length === 0) return null
-
-        // 화면 밖으로 나가면 왼쪽으로 정렬
-        const TIP_W = 240
-        const left = Math.max(8, Math.min(hoveredSeg.x, window.innerWidth - TIP_W - 8))
-
-        return (
-          <div
-            style={{
-              position: 'fixed',
-              top: hoveredSeg.y,
-              left,
-              zIndex: 9999,
-              background: '#0a0a0a',
-              border: '0.5px solid rgba(255,255,255,0.1)',
-              borderRadius: 8,
-              padding: '10px 14px',
-              minWidth: 220,
-              maxWidth: TIP_W,
-              boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
-              pointerEvents: 'none',
-            }}
-          >
-            <div style={{ fontSize: 11, color: '#555', marginBottom: 8, borderBottom: '0.5px solid #1e1e1e', paddingBottom: 6 }}>
-              {seg.name} — 어카운트별 픽업
-            </div>
-            {accounts.map(a => (
-              <div key={a.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: '3px 0', fontSize: 11 }}>
-                <span style={{ color: '#888', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
-                <span style={{ color: a.rn >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 500, minWidth: 40, textAlign: 'right' }}>
-                  {a.rn > 0 ? '+' : ''}{a.rn}
-                </span>
-                <span style={{ color: '#555', minWidth: 50, textAlign: 'right' }}>
-                  <FmtVal val={`${Math.round(a.adr / 1000)}K`} numSize={11} />
-                </span>
-              </div>
-            ))}
-          </div>
-        )
-      })()}
     </div>
   )
 }

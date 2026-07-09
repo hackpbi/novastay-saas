@@ -43,6 +43,27 @@ const barLabelPlugin = {
   },
 }
 
+// 어카운트별 픽업 요약 (RevenueMeetingPage에서 이식) — pu_nights/pu_revenue 집계, 상위 8개
+function getAccountSummary(segCodes: string[], rows: PickupRow[], year: number, month: number) {
+  const map = new Map<string, { rn: number; rev: number }>()
+  for (const r of rows) {
+    const d = new Date(r.business_date)
+    if (d.getFullYear() !== year || d.getMonth() !== month) continue
+    if (!segCodes.includes(r.segmentation)) continue
+    const acct = r.account_name || '기타'
+    const cur = map.get(acct) ?? { rn: 0, rev: 0 }
+    map.set(acct, {
+      rn:  cur.rn  + (r.pu_nights ?? 0),
+      rev: cur.rev + (r.pu_revenue ?? 0),
+    })
+  }
+  return [...map.entries()]
+    .map(([name, v]) => ({ name, rn: v.rn, adr: v.rn > 0 ? Math.round(v.rev / v.rn) : 0 }))
+    .filter(a => a.rn !== 0)
+    .sort((a, b) => Math.abs(b.rn) - Math.abs(a.rn))
+    .slice(0, 8)
+}
+
 export default function MeetingPickupBlock({
   year, month, monthKey, pickupRows, groups, selected, onToggleSeg, onBarClick, roomCount, allSegIds, isDayModalOpen, onSummaryChange,
 }: {
@@ -72,6 +93,7 @@ export default function MeetingPickupBlock({
   const tooltipId = `market-pickup-tooltip-${monthKey}`   // 카드별 고유 (body append)
   const [panelOpen, setPanelOpen] = useState(false)
   const [allDaysOpen, setAllDaysOpen] = useState(false)
+  const [hoveredSeg, setHoveredSeg] = useState<{ segId: string; x: number; y: number } | null>(null)
 
   // Pick-up / OTB 차트 토글
   type ChartMode = 'pickup' | 'otb'
@@ -100,6 +122,37 @@ export default function MeetingPickupBlock({
 
   // 언마운트 시 툴팁 DOM 제거 (메모리 누수 방지)
   useEffect(() => () => { document.getElementById(tooltipId)?.remove() }, [tooltipId])
+
+  // Picked up 칩 hover 툴팁 — 어카운트별 픽업 (body append, RevenueMeetingPage에서 이식)
+  useEffect(() => {
+    if (!hoveredSeg) return
+    const seg = groups.flatMap(g => g.segs).find(s => s.id === hoveredSeg.segId)
+    if (!seg) return
+    const accounts = getAccountSummary(seg.codes, pickupRows, year, month)
+    if (accounts.length === 0) return
+
+    const div = document.createElement('div')
+    div.style.cssText = `position:fixed; top:${hoveredSeg.y}px; left:${hoveredSeg.x}px; z-index:9999; background:#0a0a0a; border:0.5px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px 14px; min-width:220px; box-shadow:0 4px 16px rgba(0,0,0,0.5); pointer-events:none; font-family:inherit;`
+
+    const header = document.createElement('div')
+    header.style.cssText = 'font-size:11px; color:#555; margin-bottom:8px; border-bottom:0.5px solid #1e1e1e; padding-bottom:6px;'
+    header.textContent = `${seg.name} — 어카운트별 픽업`
+    div.appendChild(header)
+
+    accounts.forEach(a => {
+      const row = document.createElement('div')
+      row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; gap:16px; padding:3px 0; font-size:11px;'
+      row.innerHTML =
+        `<span style="color:#888; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${a.name}</span>` +
+        `<span style="color:${a.rn >= 0 ? '#00E5A0' : '#E24B4A'}; font-weight:500; min-width:40px; text-align:right;">${a.rn > 0 ? '+' : ''}${a.rn}</span>` +
+        `<span style="color:#555; min-width:50px; text-align:right;">${Math.round(a.adr / 1000)}k</span>`
+      div.appendChild(row)
+    })
+
+    document.body.appendChild(div)
+    return () => { document.body.removeChild(div) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hoveredSeg])
 
   const activeSegs = useMemo(
     () => groups.flatMap(g => g.segs).filter(s => selected.has(s.id)),
@@ -690,11 +743,17 @@ export default function MeetingPickupBlock({
               const st = segTotal(seg)
               const pos = st > 0
               return (
-                <span key={seg.id} style={{
+                <span key={seg.id}
+                  onMouseEnter={e => {
+                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                    setHoveredSeg({ segId: seg.id, x: rect.left, y: rect.bottom + 6 })
+                  }}
+                  onMouseLeave={() => setHoveredSeg(null)}
+                  style={{
                   display: 'inline-flex', alignItems: 'center', gap: 5,
                   fontSize: 11, padding: '2px 8px', borderRadius: 6, whiteSpace: 'nowrap',
                   border: `1px solid ${pos ? 'rgba(0,229,160,0.3)' : 'rgba(226,75,74,0.3)'}`,
-                  color: pos ? '#00E5A0' : '#E24B4A',
+                  color: pos ? '#00E5A0' : '#E24B4A', cursor: 'default',
                 }}>
                   <span style={{ width: 7, height: 7, borderRadius: 2, background: seg.color }} />
                   {seg.name} {pos ? `+${st}` : st}
