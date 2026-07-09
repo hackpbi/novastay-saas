@@ -764,7 +764,7 @@ export default function DashboardPage() {
             [{(() => { const [, mm, dd] = otbDate.split('-'); return `${Number(mm)}/${Number(dd)}` })()}{' '}
             {pickupDays > 0 ? (
               <span style={{ color: 'var(--color-accent-primary)' }}>
-                <span style={{ fontSize: '1.5em', fontWeight: 700 }}>{pickupDays}</span>일
+                {pickupDays}일
               </span>
             ) : (
               <span style={{ color: 'var(--color-accent-primary)' }}>당일</span>
@@ -775,7 +775,7 @@ export default function DashboardPage() {
               title="월별 픽업 추이 보기"
               style={{ color: totalPuNights >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
             >
-              {(() => { const { num, unit } = formatPuParts(totalPuNights, 'nights'); return <><span style={{ fontSize: '1.5em' }}>{num}</span>{unit}</> })()}
+              {(() => { const { num, unit } = formatPuParts(totalPuNights, 'nights'); return <>{num}{unit}</> })()}
             </button>
             ,{' '}매출{' '}
             <button
@@ -783,7 +783,7 @@ export default function DashboardPage() {
               title="월별 픽업 추이 보기"
               style={{ color: totalPuRevenue >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
             >
-              {(() => { const { num } = formatPuParts(totalPuRevenue, 'currency'); return <><span style={{ fontSize: '1.5em' }}>{num}</span>백만 원</> })()}
+              {(() => { const { num } = formatPuParts(totalPuRevenue, 'currency'); return <>{num}백만 원</> })()}
             </button>
             {' '}[{String(months[0].year).slice(2)}년 {months[0].month}월~{String(months[months.length - 1].year).slice(2)}년 {months[months.length - 1].month}월]
           </p>
