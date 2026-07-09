@@ -290,7 +290,7 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount }:
       <div style={{ width: '100%', height: 0.5, background: 'rgba(255,255,255,0.08)' }} />
       <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 3, fontSize: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ color: '#555' }}>예산</span>
+          <span style={{ color: '#555' }}>목표</span>
           <span style={{ color: d.value - d.budget >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 500 }}><FmtVal val={fmtSignedM(d.value - d.budget)} numSize={10} /></span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -314,7 +314,7 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount }:
       >
         {/* 헤더 */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid #1a1a1a', flexShrink: 0 }}>
-          <span style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>실적 vs 예산 vs 전년</span>
+          <span style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>실적 vs 목표 vs 전년</span>
           <button onClick={onClose} aria-label="닫기" style={{ background: 'transparent', border: 'none', color: '#555', fontSize: 18, cursor: 'pointer' }}>✕</button>
         </div>
 
@@ -414,12 +414,12 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount }:
                     )}
                   </div>
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', textAlign: 'right' }}>
-                    <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>YTD 예산 달성</div>
+                    <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>YTD 목표 달성</div>
                     <div style={{ color: (rangeKpi ? rangeKpi.bDiff : ytd.excess) >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 600 }}>
                       <FmtVal val={fmtSignedM(rangeKpi ? rangeKpi.bDiff : ytd.excess)} numSize={34} />
-                      <span style={{ fontSize: 11, color: '#555', fontWeight: 400, marginLeft: 5 }}>예산 대비</span>
+                      <span style={{ fontSize: 11, color: '#555', fontWeight: 400, marginLeft: 5 }}>목표 대비</span>
                     </div>
-                    <div style={{ fontSize: 10, color: '#555', marginTop: 3 }}>실적 <FmtVal val={fmtM(rangeKpi ? rangeKpi.actSum : ytd.value)} numSize={10} /> / 예산 <FmtVal val={fmtM(rangeKpi ? rangeKpi.budSum : ytd.budget)} numSize={10} /></div>
+                    <div style={{ fontSize: 10, color: '#555', marginTop: 3 }}>실적 <FmtVal val={fmtM(rangeKpi ? rangeKpi.actSum : ytd.value)} numSize={10} /> / 목표 <FmtVal val={fmtM(rangeKpi ? rangeKpi.budSum : ytd.budget)} numSize={10} /></div>
                   </div>
                 </div>
                 <div
