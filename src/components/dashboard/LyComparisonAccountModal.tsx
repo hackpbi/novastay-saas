@@ -393,9 +393,9 @@ export default function LyComparisonAccountModal({
                     <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>객실</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>객단가</th>
                     <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE, borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>매출</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>R-N</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>ADR</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE, borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>REV</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>객실</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>객단가</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE, borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>매출</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>Δ객실</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>Δ객단가</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>Δ매출</th>

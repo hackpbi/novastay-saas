@@ -395,7 +395,7 @@ export default function MonthlyPickupSegModal({
                   </tr>
                   {/* OCC */}
                   <tr style={{ borderTop: BORDER }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER, background: '#111111' }}>OCC</td>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER, background: '#111111' }}>점유율</td>
                     {visibleMonths.map(mk => (
                       <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, ...MONTH_SEP, borderRight: BORDER, background: '#111111' }}>
                         <FmtOcc n={summary.monthlyTotals[mk]?.occ ?? 0} />

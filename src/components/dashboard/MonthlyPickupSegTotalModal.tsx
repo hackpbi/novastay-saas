@@ -362,7 +362,7 @@ export default function MonthlyPickupSegTotalModal({
                   </tr>
                   {/* OCC */}
                   <tr style={{ borderTop: BORDER, background: '#111111' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER }}>OCC</td>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER }}>점유율</td>
                     <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '0px 10px', height: 30, verticalAlign: 'middle', fontWeight: 600, borderLeft: BORDER, borderRight: BORDER }}>
                       <FmtOcc n={summary.grandTotal.occ} />
                     </td>
