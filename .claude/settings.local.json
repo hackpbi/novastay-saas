@@ -124,7 +124,19 @@
       "PowerShell(cd \"c:/dev/18_NovaStay_Saas_ver1\"; npx tsc --noEmit -p tsconfig.json 2>&1 | Select-String -Pattern \"RevenueMeeting\" | Select-Object -First 20; \"TSC EXIT: $LASTEXITCODE\")",
       "PowerShell(cd \"c:/dev/18_NovaStay_Saas_ver1\"; npx tsc --noEmit -p tsconfig.json 2>&1 | Select-String -Pattern \"RevenueMeeting\" | Select-Object -First 25; \"TSC EXIT: $LASTEXITCODE\")",
       "PowerShell(cd \"c:/dev/18_NovaStay_Saas_ver1\"; npx tsc --noEmit -p tsconfig.json 2>&1 | Select-Object -First 25; \"TSC EXIT: $LASTEXITCODE\")",
-      "PowerShell($env:NEXT_DIST_DIR='.next-verify'; npm run build)"
+      "PowerShell($env:NEXT_DIST_DIR='.next-verify'; npm run build)",
+      "PowerShell(git push)",
+      "PowerShell(npm install i18next react-i18next i18next-browser-languagedetector 2>&1)",
+      "Skill(claude-api)",
+      "Skill(claude-api:*)",
+      "Bash(rm -f src/app/api/translate/route.ts)",
+      "Bash(rmdir src/app/api/translate)",
+      "Bash(ls src/app/api/translate)",
+      "Bash(mkdir -p \"src/app/\\(app\\)/setup/translations\")",
+      "Bash(git mv *)",
+      "Bash(mv \"src/app/setup/translations/page.tsx\" \"src/app/\\(app\\)/setup/translations/page.tsx\")",
+      "Bash(rmdir \"src/app/setup/translations\" \"src/app/setup\")",
+      "Bash(ls \"src/app/setup\")"
     ],
     "additionalDirectories": [
       "C:\\dev\\18_NovaStay_Saas_ver1\\.next-verify"

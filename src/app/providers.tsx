@@ -1,5 +1,6 @@
 'use client'
 
+import '@/i18n'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { AuthProvider }  from '@/contexts/AuthContext'
 import { HotelProvider } from '@/contexts/HotelContext'

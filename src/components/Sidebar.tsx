@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { useHotel } from '@/contexts/HotelContext'
+import LanguageToggle from '@/components/LanguageToggle'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -313,6 +314,12 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               </span>
             )}
           </div>
+          {/* 우측 빈 영역 — 언어 토글 (접힘 상태 제외) */}
+          {!collapsed && (
+            <div className="ml-auto shrink-0">
+              <LanguageToggle />
+            </div>
+          )}
         </div>
 
         {/* ── 호텔 드롭다운 ── */}
