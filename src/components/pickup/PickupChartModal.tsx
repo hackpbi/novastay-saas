@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useHotel } from '@/contexts/HotelContext'
 import DatePicker from '@/components/DatePicker'
 import { useMarketSchema } from '@/hooks/useMarketSchema'
 import { PickupMonthSummaryModal } from '@/components/market-pickup/PickupMonthSummaryModal'
@@ -14,6 +15,7 @@ import { fmtK, fmtM } from '@/utils/pickupPageUtils'
 const DOW_KR = ['일', '월', '화', '수', '목', '금', '토']
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const LY_EMPTY: (number | null)[] = []   // 전년 OCC 비활성 시 안정적 참조용 빈 배열
 
 export default function PickupChartModal({
   open, onClose, year, month, pickupRows, roomCount,
@@ -33,6 +35,15 @@ export default function PickupChartModal({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const chartRef  = useRef<any>(null)
+  const { currentHotel } = useHotel()
+  const hotelId = currentHotel?.id ?? ''
+  // 전년 토글: lyOn(전년 ON/OFF) + lyPeriod(동기간/동일자) → lyMode 파생
+  const [lyOn,        setLyOn]        = useState(true)
+  const [lyPeriod,    setLyPeriod]    = useState(true)   // true=동기간(period), false=동일자(day)
+  const [showLyFinal, setShowLyFinal] = useState(true)   // 전년마감 실선
+  const [showLyOtb,   setShowLyOtb]   = useState(false)  // 전년OTB 점선
+  const [showPickup,  setShowPickup]  = useState(true)   // 픽업 바/라벨
+  const lyMode: 'none' | 'day' | 'period' = !lyOn ? 'none' : (lyPeriod ? 'period' : 'day')
   const { data: schema = [] } = useMarketSchema()
   const [summaryModalOpen, setSummaryModalOpen] = useState(false)
   const [showOccLabel, setShowOccLabel] = useState(true)
@@ -159,6 +170,72 @@ export default function PickupChartModal({
     return map
   }, [schema, pickupRows, modalYear, modalMonth])
 
+  // ── 전년(LY) OCC 오버레이 — c06 yoy_match + a01_actual_daily (DailyStatusPage 컨벤션) ──
+  const lyPad = (n: number) => String(n).padStart(2, '0')
+  const lyLastDay = new Date(modalYear, modalMonth + 1, 0).getDate()
+  // 전년동기간(period)일 때만 c06 yoy_match 조회
+  const { data: lyCalRows = [] } = useQuery({
+    queryKey: ['pc-ly-cal', modalYear, modalMonth],
+    enabled: open && lyMode === 'period',
+    queryFn: async () => {
+      const start = `${modalYear}-${lyPad(modalMonth + 1)}-01`
+      const end   = `${modalYear}-${lyPad(modalMonth + 1)}-${lyPad(lyLastDay)}`
+      const { data } = await (supabase as any)
+        .from('c06_calendar').select('date, yoy_match').gte('date', start).lte('date', end)
+      return (data ?? []) as { date: string; yoy_match: string | null }[]
+    },
+  })
+  // 일자(1..lastDay) → 전년 매핑 날짜: period=yoy_match(없으면 -1년 fallback), day=단순 -1년
+  const lyDateByDay = useMemo(() => {
+    const byDate = new Map(lyCalRows.map(r => [r.date, r.yoy_match]))
+    const arr: string[] = []
+    for (let d = 1; d <= lyLastDay; d++) {
+      const date   = `${modalYear}-${lyPad(modalMonth + 1)}-${lyPad(d)}`
+      const simple = `${modalYear - 1}-${lyPad(modalMonth + 1)}-${lyPad(d)}`
+      arr.push(lyMode === 'period' ? (byDate.get(date) || simple) : simple)
+    }
+    return arr
+  }, [lyCalRows, modalYear, modalMonth, lyLastDay, lyMode])
+  // 전년 OCC(%) — a01_actual_daily nights / roomCount, 일자 인덱스(0-based) 정렬
+  const { data: lyOccArr } = useQuery({
+    queryKey: ['pc-ly-occ', hotelId, modalYear, modalMonth, lyMode, lyDateByDay.join(',')],
+    enabled: open && lyMode !== 'none' && !!hotelId && lyDateByDay.length > 0,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from('a01_actual_daily').select('business_date, nights')
+        .eq('hotel_id', hotelId).in('business_date', lyDateByDay)
+      const map = new Map<string, number>()
+      for (const r of (data ?? []) as { business_date: string; nights: number }[]) {
+        map.set(r.business_date, (map.get(r.business_date) ?? 0) + (r.nights ?? 0))
+      }
+      return lyDateByDay.map(ly => {
+        const n = map.get(ly)
+        return n != null && roomCount > 0 ? Math.round((n / roomCount) * 100) : null
+      })
+    },
+  })
+  const lyOccData = lyOccArr ?? LY_EMPTY   // 비활성 시 안정적 참조 유지 (차트 useEffect 불필요 재생성 방지)
+  // ── 전년 OTB(%) — get_ly_pacing_data(.ly_nights) / roomCount (작년 OTB pacing, day=v1 / period=v2) ──
+  const { data: lyOtbArr } = useQuery({
+    queryKey: ['pc-ly-otb', hotelId, otbDate, modalYear, modalMonth, lyMode],
+    enabled: open && lyMode !== 'none' && !!hotelId && !!otbDate,
+    queryFn: async () => {
+      const rpc = lyMode === 'day' ? 'get_ly_pacing_data' : 'get_ly_pacing_data_v2'
+      const { data } = await (supabase as any).rpc(rpc, { p_hotel_id: hotelId, p_otb_date: otbDate }).limit(100000)
+      const byDay: Record<number, number> = {}
+      for (const r of (data ?? []) as { business_date: string; ly_nights: number }[]) {
+        const dt = new Date(r.business_date)
+        if (dt.getFullYear() !== modalYear || dt.getMonth() !== modalMonth) continue
+        byDay[dt.getDate()] = (byDay[dt.getDate()] ?? 0) + Number(r.ly_nights ?? 0)
+      }
+      return Array.from({ length: lyLastDay }, (_, i) => {
+        const n = byDay[i + 1]
+        return n != null && roomCount > 0 ? Math.round((n / roomCount) * 100) : null
+      })
+    },
+  })
+  const lyOtbData = lyOtbArr ?? LY_EMPTY
+
   // ESC + scroll lock
   useEffect(() => {
     if (!open) return
@@ -254,23 +331,29 @@ export default function PickupChartModal({
       const pickupLabels = {
         id: 'pickupLabels',
         afterDatasetsDraw(chart: any) {
-          const { ctx } = chart
-          const pickupMeta = chart.getDatasetMeta(1)
-          if (!pickupMeta?.data) return
+          if (!showPickup) return
+          const { ctx, scales } = chart
+          const yPickup = scales.yPickup
+          if (!yPickup) return
+          // 픽업 dataset을 yAxisID로 탐색 (LY 오버레이 유무에 따라 index가 바뀌므로 고정 index 금지)
+          const pIdx = chart.data.datasets.findIndex((d: any) => d.yAxisID === 'yPickup')
+          if (pIdx === -1) return
+          const meta = chart.getDatasetMeta(pIdx)
+          if (!meta?.data) return
           pickupData.forEach((val: number, i: number) => {
-            if (!val || !pickupMeta.data[i]) return
-            const bar = pickupMeta.data[i]
+            if (!val || !meta.data[i]) return
+            const xPos = meta.data[i].x
+            const yTop = yPickup.getPixelForValue(val)   // yPickup 축 기준 → LY 면적 영향 없음
             ctx.save()
             ctx.fillStyle = val > 0 ? '#00E5A0' : '#E24B4A'
             ctx.font = 'bold 10px sans-serif'
             ctx.textAlign = 'center'
             if (val > 0) {
               ctx.textBaseline = 'bottom'
-              ctx.fillText(`+${val}`, bar.x, bar.y - 3)                         // 양수: 바 상단 위
+              ctx.fillText(`+${val}`, xPos, yTop - 3)                          // 양수: 바 상단 위
             } else {
               ctx.textBaseline = 'top'
-              const yBottom = Math.max(bar.y, bar.base ?? bar.y)                // 음수 바 하단(기준선 아래 끝)
-              ctx.fillText(`${val}`, bar.x, yBottom + 3)                        // 음수: 바 하단 아래
+              ctx.fillText(`${val}`, xPos, yTop + 3)                           // 음수: 바 하단 아래
             }
             ctx.restore()
           })
@@ -292,8 +375,69 @@ export default function PickupChartModal({
         },
       }
 
+      // 전년(LY) OCC 틱 마크 — OCC 막대 뒤(beforeDatasetsDraw)에 가로선, lyMode 색상
+      const lyTick = {
+        id: 'lyTick',
+        beforeDatasetsDraw(chart: any) {
+          if (lyMode === 'none') return
+          const { ctx, scales: { yOcc } } = chart
+          const occIdx = chart.data.datasets.findIndex((d: any) => d.type === 'bar' && d.label === 'OCC%')
+          if (occIdx === -1) return
+          const meta = chart.getDatasetMeta(occIdx)   // OCC 막대 meta (x/width 기준)
+          if (!meta.data.length) return
+          const color     = lyMode === 'day' ? 'rgba(245,158,11,0.9)'  : 'rgba(167,139,250,0.9)'   // 전년마감 실선 (황금/보라)
+          const dashColor = lyMode === 'day' ? 'rgba(245,158,11,0.15)' : 'rgba(167,139,250,0.15)'  // 수직 연결 점선(투명)
+          const otbColor  = lyMode === 'day' ? 'rgba(245,158,11,0.65)' : 'rgba(167,139,250,0.65)'  // 전년OTB 점선 가로선
+          const todayMid = new Date(todayYear, todayMonth - 1, todayDate).getTime()   // 오늘 자정(로컬)
+          meta.data.forEach((el: any, i: number) => {
+            if (!el) return
+            const bw = (el.width ?? 10) * 0.85 * 0.30   // 기존 길이의 30% (70% 축소), 중앙 정렬 유지
+            const finalVal = lyOccData[i]
+            const otbVal   = lyOtbData[i]
+            const yFinal = finalVal != null ? yOcc.getPixelForValue(finalVal) : null
+            const yOtb   = otbVal   != null ? yOcc.getPixelForValue(otbVal)   : null
+            ctx.save()
+            // 1) 전년OTB 점선 가로선 (showLyOtb + 값 있을 때만)
+            if (showLyOtb && yOtb != null) {
+              ctx.beginPath()
+              ctx.moveTo(el.x - bw / 2, yOtb)
+              ctx.lineTo(el.x + bw / 2, yOtb)
+              ctx.strokeStyle = otbColor
+              ctx.lineWidth = 1
+              ctx.lineCap = 'round'
+              ctx.setLineDash([3, 3])
+              ctx.stroke()
+              ctx.setLineDash([])
+            }
+            // 2) 전년마감 실선 가로선 (showLyFinal + 값 있을 때만)
+            if (showLyFinal && yFinal != null) {
+              ctx.beginPath()
+              ctx.moveTo(el.x - bw / 2, yFinal)
+              ctx.lineTo(el.x + bw / 2, yFinal)
+              ctx.strokeStyle = color
+              ctx.lineWidth = 2
+              ctx.setLineDash([])
+              ctx.stroke()
+            }
+            // 3) 세로 점선: 전년OTB ↔ 전년마감 (둘 다 표시 + 값 있음 + 오늘 이후 일자만)
+            const isPast = new Date(modalYear, modalMonth, i + 1).getTime() < todayMid
+            if (showLyFinal && showLyOtb && yFinal != null && yOtb != null && !isPast) {
+              ctx.beginPath()
+              ctx.moveTo(el.x, yFinal)
+              ctx.lineTo(el.x, yOtb)
+              ctx.strokeStyle = dashColor
+              ctx.lineWidth = 1
+              ctx.setLineDash([2, 3])
+              ctx.stroke()
+              ctx.setLineDash([])
+            }
+            ctx.restore()
+          })
+        },
+      }
+
       chartRef.current = new Chart(canvasRef.current, {
-        plugins: [pickupBaseline, occLabels, pickupLabels, eventPlugin],
+        plugins: [pickupBaseline, lyTick, occLabels, pickupLabels, eventPlugin],
         data: {
           labels,
           datasets: [
@@ -310,7 +454,7 @@ export default function PickupChartModal({
               barPercentage: 0.9,
               categoryPercentage: 0.9,
             },
-            {
+            ...(showPickup ? [{
               type: 'bar',
               label: 'Pickup',
               data: pickupData,
@@ -323,7 +467,7 @@ export default function PickupChartModal({
               grouped: false,            // OCC 바와 나란히 두지 않고 중앙에 겹치기
               barPercentage: 0.25,
               categoryPercentage: 0.9,
-            },
+            } as any] : []),
           ],
         },
         options: {
@@ -334,14 +478,13 @@ export default function PickupChartModal({
           onClick: (_e: any, els: any[]) => {
             if (!els.length) return
             const i = els[0].index
-            if (dayTotal(i) === 0) return   // 픽업 0인 날 클릭 무시
             setSelectedDay(i + 1)
             setDayModalOpen(true)
           },
           onHover: (e: any, els: any[]) => {
             const cv = e?.native?.target as HTMLCanvasElement | undefined
             if (!cv) return
-            cv.style.cursor = els.length && dayTotal(els[0].index) !== 0 ? 'pointer' : 'default'
+            cv.style.cursor = els.length ? 'pointer' : 'default'
           },
           plugins: {
             legend: { display: false },
@@ -360,23 +503,54 @@ export default function PickupChartModal({
                 if (tooltip.opacity === 0) { el.style.opacity = '0'; return }
                 const i = tooltip.dataPoints?.[0]?.dataIndex
                 if (i == null) { el.style.opacity = '0'; return }
-                const total = dayTotal(i)
-                if (total === 0) { el.style.opacity = '0'; return }   // 픽업 0인 날 숨김
-                const segs = (pickupBySegment[i] ?? []).filter(s => s.rn !== 0)
+                const segs      = (pickupBySegment[i] ?? []).filter(s => s.rn !== 0)
+                const total     = dayTotal(i)
+                const otbOccVal = occData[i]        // OTB OCC%
+                const lyOccVal  = lyOccData[i]      // LY OCC%
+                const hasPickup = total !== 0
+                const hasLy     = lyMode !== 'none' && lyOccVal != null
+                if (!hasPickup && !hasLy) { el.style.opacity = '0'; return }   // 픽업 0 + LY OFF → 숨김
                 const d = daily[i]
                 const title = d ? `${modalMonth + 1}월 ${d.day}일 (${DOW_KR[d.dow]})` : ''
-                const rows = segs.map(s =>
-                  `<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:3px 0;font-size:11px;"><span style="color:rgba(255,255,255,0.6);display:flex;align-items:center;gap:5px;"><span style="width:7px;height:7px;border-radius:2px;background:${s.color};flex-shrink:0;display:inline-block;"></span>${s.segName}</span><span style="font-weight:500;font-variant-numeric:tabular-nums;color:${s.rn < 0 ? '#E24B4A' : 'rgba(255,255,255,0.6)'};">${s.rn > 0 ? '+' : ''}${s.rn}</span></div>`
-                ).join('')
-                const tColor = total < 0 ? '#E24B4A' : '#00E5A0'
-                el.innerHTML = `<div style="font-size:12px;font-weight:500;color:#fff;margin-bottom:8px;border-bottom:0.5px solid rgba(255,255,255,0.08);padding-bottom:6px;">${title}</div>${rows}<div style="height:0.5px;background:rgba(255,255,255,0.08);margin:5px 0;"></div><div style="display:flex;justify-content:space-between;font-size:11px;font-weight:600;"><span style="color:rgba(255,255,255,0.5);">Total</span><span style="color:${tColor};">${total >= 0 ? '+' : ''}${total}</span></div>`
+
+                // Pick-up 섹션 (픽업 있을 때만)
+                let pickupSection = ''
+                if (hasPickup) {
+                  const rows = segs.map(s =>
+                    `<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:3px 0;font-size:11px;"><span style="color:rgba(255,255,255,0.6);display:flex;align-items:center;gap:5px;"><span style="width:7px;height:7px;border-radius:2px;background:${s.color};flex-shrink:0;display:inline-block;"></span>${s.segName}</span><span style="font-weight:500;font-variant-numeric:tabular-nums;color:${s.rn < 0 ? '#E24B4A' : 'rgba(255,255,255,0.6)'};">${s.rn > 0 ? '+' : ''}${s.rn}</span></div>`
+                  ).join('')
+                  const tColor = total < 0 ? '#E24B4A' : '#00E5A0'
+                  pickupSection = `<div style="font-size:10px;color:#555;letter-spacing:0.5px;margin-bottom:5px;">Pick-up</div>${rows}<div style="border-top:0.5px solid rgba(255,255,255,0.08);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-size:11px;font-weight:600;"><span style="color:rgba(255,255,255,0.5);">Total</span><span style="color:${tColor};">${total >= 0 ? '+' : ''}${total}</span></div>`
+                }
+
+                // 점유율 섹션 (OTB OCC 항상 + LY OCC)
+                let occSection = ''
+                const showOcc = otbOccVal != null || hasLy
+                if (showOcc) {
+                  let occRows = ''
+                  if (otbOccVal != null) {
+                    occRows += `<div style="display:flex;justify-content:space-between;gap:24px;margin:3px 0;padding-left:8px;font-size:11px;"><span style="color:#888;">OTB OCC</span><span style="color:#aaa;">${otbOccVal}%</span></div>`
+                  }
+                  if (hasLy) {
+                    const lyLabel = lyMode === 'day' ? 'Same Day LY' : 'Same Period LY'
+                    const lyColor = lyMode === 'day' ? '#F59E0B' : '#A78BFA'
+                    occRows += `<div style="display:flex;justify-content:space-between;gap:24px;margin:3px 0;padding-left:8px;font-size:11px;"><span style="color:#888;">${lyLabel}</span><span style="color:${lyColor};">${lyOccVal}%</span></div>`
+                  }
+                  const occWrap = hasPickup ? 'border-top:0.5px solid rgba(255,255,255,0.08);margin-top:8px;padding-top:8px;' : ''
+                  occSection = `<div style="${occWrap}"><div style="font-size:10px;color:#555;letter-spacing:0.5px;margin-bottom:5px;">점유율</div>${occRows}</div>`
+                }
+
+                el.innerHTML = `<div style="font-size:12px;font-weight:500;color:#fff;margin-bottom:8px;border-bottom:0.5px solid rgba(255,255,255,0.08);padding-bottom:6px;">${title}</div>${pickupSection}${occSection}`
+
                 const rect = chart.canvas.getBoundingClientRect()
-                const x = rect.left + tooltip.caretX + 12
+                const x = rect.left + tooltip.caretX + 14
                 const y = rect.top + tooltip.caretY - 20
-                const tw = el.offsetWidth || 160
+                const tw = el.offsetWidth || 200
+                const th = el.offsetHeight || 140
                 const finalX = x + tw > window.innerWidth - 16 ? x - tw - 24 : x   // 우측 잘림 → 좌측 반전
+                const finalY = y < 8 ? 8 : (y + th > window.innerHeight - 8 ? window.innerHeight - th - 8 : y)   // 상/하 경계 보정
                 el.style.left = `${finalX}px`
-                el.style.top = `${y}px`
+                el.style.top = `${finalY}px`
                 el.style.opacity = '1'
               },
             },
@@ -424,7 +598,7 @@ export default function PickupChartModal({
       chartRef.current?.destroy(); chartRef.current = null
       document.getElementById('pickup-chart-tooltip')?.remove()   // 닫기/월이동 시 잔존 툴팁 제거
     }
-  }, [open, daily, modalMonth, eventMap, pickupBySegment])
+  }, [open, daily, modalMonth, eventMap, pickupBySegment, lyMode, lyOccData, lyOtbData, showPickup, showLyFinal, showLyOtb])
 
   // OCC% 토글 → 차트 라벨만 갱신 (재생성 없이)
   useEffect(() => { showOccLabelRef.current = showOccLabel; chartRef.current?.update('none') }, [showOccLabel])
@@ -435,6 +609,17 @@ export default function PickupChartModal({
   if (!open) return null
 
   const mintVal: React.CSSProperties = { color: '#00E5A0', fontWeight: 500, borderBottom: '1px dashed #00E5A0', paddingBottom: 1, cursor: 'pointer' }
+
+  // 토글 스위치 스타일 (inline, 새 컴포넌트 없이)
+  const trackStyle = (on: boolean, onColor: string, offColor: string): React.CSSProperties => ({
+    position: 'relative', display: 'inline-block', width: 36, height: 20, borderRadius: 20,
+    background: on ? onColor : offColor, border: `1px solid ${on ? onColor : offColor}`,
+    cursor: 'pointer', transition: 'background 0.2s', flexShrink: 0,
+  })
+  const thumbStyle = (on: boolean): React.CSSProperties => ({
+    position: 'absolute', width: 14, height: 14, top: 2, left: on ? 20 : 2,
+    borderRadius: '50%', background: '#fff', transition: 'left 0.2s',
+  })
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -447,43 +632,50 @@ export default function PickupChartModal({
         <div className="flex items-center justify-between px-5 pt-3.5 pb-0.5 shrink-0">
           <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>Daily Pick-Up</h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {/* OCC 바 / 숫자 투명도 슬라이더 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1a1a1a', borderRadius: 8, padding: '4px 10px', border: '1px solid #2a2a2a' }}>
-              <span style={{ fontSize: 10, color: '#555', whiteSpace: 'nowrap' }}>Bar</span>
-              <input
-                type="range" min={0} max={50} step={1}
-                value={Math.round(occOpacity * 100)}
-                onChange={e => {
-                  const val = Number(e.target.value) / 100
-                  setOccOpacity(val); occOpacityRef.current = val
-                  chartRef.current?.update('none')   // scriptable backgroundColor가 ref를 다시 읽음
-                }}
-                style={{ width: 60, accentColor: '#00E5A0', cursor: 'pointer' }}
-              />
-              <span style={{ fontSize: 10, color: '#00E5A0', minWidth: 24 }}>{Math.round(occOpacity * 100)}%</span>
-              <div style={{ width: 1, height: 14, background: '#2a2a2a' }} />
-              <span style={{ fontSize: 10, color: '#555', whiteSpace: 'nowrap' }}>Label</span>
-              <input
-                type="range" min={0} max={100} step={1}
-                value={Math.round(occLabelOpacity * 100)}
-                onChange={e => {
-                  const val = Number(e.target.value) / 100
-                  setOccLabelOpacity(val); occLabelOpacityRef.current = val
-                  chartRef.current?.update('none')
-                }}
-                style={{ width: 60, accentColor: '#00E5A0', cursor: 'pointer' }}
-              />
-              <span style={{ fontSize: 10, color: '#00E5A0', minWidth: 24 }}>{Math.round(occLabelOpacity * 100)}%</span>
+            {/* 전년 + 동기간/동일자 세트 */}
+            <div style={{ display: 'inline-flex', alignItems: 'center', background: '#1a1a1a', borderRadius: 30, padding: '3px 8px', gap: 6, border: '1px solid #2a2a2a' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={trackStyle(lyOn, '#a78bfa', '#2a2a2a')} onClick={() => { const next = !lyOn; setLyOn(next); if (!next) setLyPeriod(true) }}>
+                  <div style={thumbStyle(lyOn)} />
+                </div>
+                <span style={{ fontSize: 11, color: '#666' }}>전년</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: lyOn ? 1 : 0.4, pointerEvents: lyOn ? 'auto' : 'none', transition: 'opacity 0.2s' }}>
+                <div style={trackStyle(lyPeriod, '#a78bfa', '#F59E0B')} onClick={() => setLyPeriod(prev => !prev)}>
+                  <div style={thumbStyle(lyPeriod)} />
+                </div>
+                <span style={{ fontSize: 11, color: lyPeriod ? '#a78bfa' : '#F59E0B', transition: 'color 0.2s' }}>{lyPeriod ? '동기간' : '동일자'}</span>
+              </div>
             </div>
-            {/* OCC% 라벨 토글 */}
-            <span style={{ fontSize: 11, color: '#555' }}>OCC%</span>
-            <div
-              onClick={() => setShowOccLabel(p => !p)}
-              role="switch"
-              aria-checked={showOccLabel}
-              style={{ width: 36, height: 20, borderRadius: 10, background: showOccLabel ? '#00E5A0' : '#333', cursor: 'pointer', position: 'relative', transition: 'background 0.15s', flexShrink: 0 }}
-            >
-              <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#0a0a0a', position: 'absolute', top: 2, left: showOccLabel ? 18 : 2, transition: 'left 0.15s' }} />
+            {/* 구분선 */}
+            <div style={{ width: 1, height: 26, background: '#222', margin: '0 4px' }} />
+            {/* 전년마감 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={trackStyle(showLyFinal, '#a78bfa', '#2a2a2a')} onClick={() => setShowLyFinal(p => !p)}>
+                <div style={thumbStyle(showLyFinal)} />
+              </div>
+              <span style={{ fontSize: 11, color: '#666' }}>전년마감</span>
+            </div>
+            {/* 전년OTB */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={trackStyle(showLyOtb, '#a78bfa', '#2a2a2a')} onClick={() => setShowLyOtb(p => !p)}>
+                <div style={thumbStyle(showLyOtb)} />
+              </div>
+              <span style={{ fontSize: 11, color: '#666' }}>전년OTB</span>
+            </div>
+            {/* 픽업 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={trackStyle(showPickup, '#00E5A0', '#2a2a2a')} onClick={() => setShowPickup(p => !p)}>
+                <div style={thumbStyle(showPickup)} />
+              </div>
+              <span style={{ fontSize: 11, color: '#666' }}>픽업</span>
+            </div>
+            {/* OCC% (기존 showOccLabel 연동) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={trackStyle(showOccLabel, '#5B8DEF', '#2a2a2a')} onClick={() => setShowOccLabel(p => !p)}>
+                <div style={thumbStyle(showOccLabel)} />
+              </div>
+              <span style={{ fontSize: 11, color: '#666' }}>OCC%</span>
             </div>
             <button onClick={onClose} className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1" aria-label="닫기">
               <X size={20} />
@@ -491,9 +683,9 @@ export default function PickupChartModal({
           </div>
         </div>
 
-        {/* 요약문 — 타이틀 바로 아래, 네비 위 (구분선은 요약문 아래) */}
-        <div className="px-5 pt-0 pb-3 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
-          <p className="text-[13px]" style={{ color: 'var(--color-text-secondary)', lineHeight: 1.8 }}>
+        {/* 요약문 + Bar/Label 슬라이더 (같은 행) — 타이틀 바로 아래, 네비 위 (구분선은 아래) */}
+        <div className="px-5 pt-0 pb-3 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <p className="text-[13px]" style={{ color: 'var(--color-text-secondary)', lineHeight: 1.8, margin: 0 }}>
             <span style={{ display: 'inline-flex', verticalAlign: 'middle' }}>
               <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} availableDates={otbDates ?? []} accent bare fontPx={13} plain />
             </span>
@@ -506,6 +698,34 @@ export default function PickupChartModal({
             , ADR <span onClick={() => setSummaryModalOpen(true)} style={mintVal}>{totalPuAdr >= 0 ? '+' : ''}{fmtK(totalPuAdr)}</span>
             , REV <span onClick={() => setSummaryModalOpen(true)} style={mintVal}>{totalPuRev >= 0 ? '+' : ''}{fmtM(totalPuRev)}</span>
           </p>
+          {/* OCC 바 / 숫자 투명도 슬라이더 (헤더에서 이동) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1a1a1a', borderRadius: 8, padding: '4px 10px', border: '1px solid #2a2a2a', flexShrink: 0 }}>
+            <span style={{ fontSize: 10, color: '#555', whiteSpace: 'nowrap' }}>Bar</span>
+            <input
+              type="range" min={0} max={50} step={1}
+              value={Math.round(occOpacity * 100)}
+              onChange={e => {
+                const val = Number(e.target.value) / 100
+                setOccOpacity(val); occOpacityRef.current = val
+                chartRef.current?.update('none')   // scriptable backgroundColor가 ref를 다시 읽음
+              }}
+              style={{ width: 60, accentColor: '#00E5A0', cursor: 'pointer' }}
+            />
+            <span style={{ fontSize: 10, color: '#00E5A0', minWidth: 24 }}>{Math.round(occOpacity * 100)}%</span>
+            <div style={{ width: 1, height: 14, background: '#2a2a2a' }} />
+            <span style={{ fontSize: 10, color: '#555', whiteSpace: 'nowrap' }}>Label</span>
+            <input
+              type="range" min={0} max={100} step={1}
+              value={Math.round(occLabelOpacity * 100)}
+              onChange={e => {
+                const val = Number(e.target.value) / 100
+                setOccLabelOpacity(val); occLabelOpacityRef.current = val
+                chartRef.current?.update('none')
+              }}
+              style={{ width: 60, accentColor: '#00E5A0', cursor: 'pointer' }}
+            />
+            <span style={{ fontSize: 10, color: '#00E5A0', minWidth: 24 }}>{Math.round(occLabelOpacity * 100)}%</span>
+          </div>
         </div>
 
         {/* 월 변경 — 배너 아래, 가운데 정렬 */}
@@ -535,6 +755,39 @@ export default function PickupChartModal({
         {/* 차트 */}
         <div className="px-4 pb-4 pt-1" style={{ flex: 1, minHeight: 0 }}>
           <canvas ref={canvasRef} />
+        </div>
+
+        {/* 차트 하단 범례 (이벤트 도트 행 아래) */}
+        <div className="px-4 pb-3 shrink-0" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20, flexWrap: 'wrap' }}>
+          {/* OTB OCC */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 14, height: 10, background: 'rgba(75,75,85,0.85)', borderRadius: 2 }} />
+            <span style={{ fontSize: 11, color: '#888' }}>OTB OCC</span>
+          </div>
+          {/* Pickup + */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 14, height: 10, background: '#00E5A0', borderRadius: 2 }} />
+            <span style={{ fontSize: 11, color: '#888' }}>Pickup (+)</span>
+          </div>
+          {/* Pickup - */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 14, height: 10, background: '#E24B4A', borderRadius: 2 }} />
+            <span style={{ fontSize: 11, color: '#888' }}>Pickup (−)</span>
+          </div>
+          {/* 전년마감 (실선) — 전년 ON + showLyFinal */}
+          {lyOn && showLyFinal && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 20, height: 0, borderTop: `2.5px solid ${lyMode === 'day' ? 'rgba(245,158,11,0.95)' : 'rgba(167,139,250,0.95)'}`, borderRadius: 2 }} />
+              <span style={{ fontSize: 11, color: '#888' }}>전년마감</span>
+            </div>
+          )}
+          {/* 전년OTB (점선) — 전년 ON + showLyOtb */}
+          {lyOn && showLyOtb && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 20, height: 0, borderTop: `1px dashed ${lyMode === 'day' ? 'rgba(245,158,11,0.7)' : 'rgba(167,139,250,0.7)'}` }} />
+              <span style={{ fontSize: 11, color: '#888' }}>전년OTB</span>
+            </div>
+          )}
         </div>
       </div>
 
