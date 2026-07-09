@@ -544,7 +544,7 @@ export default function SegmentationModal({
             <div className="px-3 pt-3 pb-2 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>어카운트 픽업</div>
               <div style={{ fontSize: 10, color: 'var(--brand-dimmed)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {selectedSeg ? `${selectedSeg.label} · ${curYear}.${String(curMonth).padStart(2, '0')} · ${selectedSeg.viewMode === 'otb' ? '현재 OTB' : '픽업 R/N 기준'}` : '세그먼트를 클릭하세요'}
+                {selectedSeg ? `${selectedSeg.label} · ${curYear}.${String(curMonth).padStart(2, '0')} · ${selectedSeg.viewMode === 'otb' ? '현재 OTB' : '픽업 객실 기준'}` : '세그먼트를 클릭하세요'}
               </div>
               <button
                 onClick={() => {
