@@ -127,7 +127,7 @@ function DataRow({ row, schema, houRowIds, onSelect, selectedLabel }: {
   const segCodes     = getSegCodes(row, schema)
   const selectable   = !!onSelect && !isHou && segCodes.length > 0
   const nameSelectable = selectable && !row.indent   // 대분류 이름 셀만 클릭
-  const isSelected   = nameSelectable && selectedLabel === row.name
+  const isSelected   = selectable && selectedLabel === row.name
   const baseBg       = isSelected ? 'rgba(0,229,160,0.08)' : rowBg
   const handleSelect = selectable ? () => onSelect!(segCodes, row.name) : undefined
 
