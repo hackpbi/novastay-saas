@@ -442,6 +442,8 @@ export default function SegmentationModal({
       .sort((a, b) => b.diffRn - a.diffRn)
   }, [selectedSeg, accountPickupRows])
 
+  const isOtb = selectedSeg?.viewMode === 'otb'
+
   useEffect(() => {
     if (!open) return
     document.body.style.overflow = 'hidden'
@@ -594,14 +596,14 @@ export default function SegmentationModal({
                         {a.name}
                       </span>
                       <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                        <span style={{ fontSize: 11, color: a.diffRn >= 0 ? '#00E5A0' : '#E24B4A', width: 28, textAlign: 'right' }}>
-                          {a.diffRn >= 0 ? '+' : ''}{a.diffRn}
+                        <span className="font-mono" style={{ fontSize: 11, color: isOtb ? (a.diffRn < 0 ? '#E24B4A' : '#fff') : (a.diffRn >= 0 ? '#00E5A0' : '#E24B4A'), width: 28, textAlign: 'right' }}>
+                          {isOtb ? (a.diffRn === 0 ? '—' : a.diffRn) : `${a.diffRn >= 0 ? '+' : ''}${a.diffRn}`}
                         </span>
-                        <span style={{ fontSize: 11, color: a.diffAdr >= 0 ? '#00E5A0' : '#E24B4A', width: 28, textAlign: 'right' }}>
-                          {a.diffAdr >= 0 ? '+' : ''}{Math.abs(a.diffAdr) >= 1000 ? Math.round(a.diffAdr / 1000) + 'k' : a.diffAdr}
+                        <span className="font-mono" style={{ fontSize: 11, color: isOtb ? (a.diffAdr < 0 ? '#E24B4A' : '#fff') : (a.diffAdr >= 0 ? '#00E5A0' : '#E24B4A'), width: 28, textAlign: 'right' }}>
+                          {isOtb ? (a.diffAdr === 0 ? '—' : Math.round(a.diffAdr / 1000) + 'k') : `${a.diffAdr >= 0 ? '+' : ''}${Math.abs(a.diffAdr) >= 1000 ? Math.round(a.diffAdr / 1000) + 'k' : a.diffAdr}`}
                         </span>
-                        <span style={{ fontSize: 11, color: a.diffRev >= 0 ? '#00E5A0' : '#E24B4A', width: 36, textAlign: 'right' }}>
-                          {a.diffRev >= 0 ? '+' : ''}{(a.diffRev / 1_000_000).toFixed(1)}M
+                        <span className="font-mono" style={{ fontSize: 11, color: isOtb ? (a.diffRev < 0 ? '#E24B4A' : '#fff') : (a.diffRev >= 0 ? '#00E5A0' : '#E24B4A'), width: 36, textAlign: 'right' }}>
+                          {isOtb ? (a.diffRev === 0 ? '—' : (a.diffRev / 1_000_000).toFixed(1) + 'M') : `${a.diffRev >= 0 ? '+' : ''}${(a.diffRev / 1_000_000).toFixed(1)}M`}
                         </span>
                       </div>
                     </div>
