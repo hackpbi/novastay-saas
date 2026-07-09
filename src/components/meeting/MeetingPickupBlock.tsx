@@ -682,6 +682,43 @@ export default function MeetingPickupBlock({
           )}
         </div>
 
+        {/* Picked up 요약 (칩 + KPI) — 헤더 우측 (날짜 바에서 이동) */}
+        {pickedSegs.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginLeft: 'auto' }}>
+            <span style={{ fontSize: 10, color: '#555' }}>Picked up</span>
+            {pickedSegs.map(seg => {
+              const st = segTotal(seg)
+              const pos = st > 0
+              return (
+                <span key={seg.id} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  fontSize: 11, padding: '2px 8px', borderRadius: 6, whiteSpace: 'nowrap',
+                  border: `1px solid ${pos ? 'rgba(0,229,160,0.3)' : 'rgba(226,75,74,0.3)'}`,
+                  color: pos ? '#00E5A0' : '#E24B4A',
+                }}>
+                  <span style={{ width: 7, height: 7, borderRadius: 2, background: seg.color }} />
+                  {seg.name} {pos ? `+${st}` : st}
+                </span>
+              )
+            })}
+            <div style={{ width: 1, height: 16, background: '#2a2a2a' }} />
+            <span style={{ fontSize: 11, fontWeight: 600, color: puOcc >= 0 ? '#00E5A0' : '#E24B4A' }}>
+              {puOcc >= 0 ? '+' : ''}{puOcc.toFixed(1)}%
+              <span style={{ fontWeight: 400, color: '#555', marginLeft: 2 }}>
+                ({total >= 0 ? '+' : ''}{total} R/N)
+              </span>
+            </span>
+            <span style={{ color: '#333' }}>·</span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: puAdr >= 0 ? '#00E5A0' : '#E24B4A' }}>
+              {puAdr >= 0 ? '+' : ''}{Math.round(puAdr / 1000)}k
+            </span>
+            <span style={{ color: '#333' }}>·</span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: totalPuRev >= 0 ? '#00E5A0' : '#E24B4A' }}>
+              {totalPuRev >= 0 ? '+' : ''}{(totalPuRev / 1_000_000).toFixed(1)}M
+            </span>
+          </div>
+        )}
+
       </div>
 
       {/* 차트 */}

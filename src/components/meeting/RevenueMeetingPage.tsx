@@ -802,58 +802,6 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
           availableDates={otbDates.filter(d => d < meetingOtbDate)}
         />
 
-        {/* 픽업 요약 — 오른쪽 (MeetingPickupBlock에서 이동) */}
-        {pickupSummary && pickupSummary.pickedSegs.length > 0 && (
-          <>
-            <div style={{ width: 1, height: 16, background: '#2a2a2a' }} />
-
-            {/* Picked up 세그먼트 칩 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 10, color: '#555' }}>Picked up</span>
-              {pickupSummary.pickedSegs.map(seg => {
-                const pos = seg.total > 0
-                return (
-                  <span
-                    key={seg.id}
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 5,
-                      fontSize: 11, padding: '2px 8px', borderRadius: 6, whiteSpace: 'nowrap',
-                      border: `1px solid ${pos ? 'rgba(0,229,160,0.3)' : 'rgba(226,75,74,0.3)'}`,
-                      color: pos ? '#00E5A0' : '#E24B4A',
-                      cursor: 'default', position: 'relative',
-                    }}
-                    onMouseEnter={e => {
-                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                      setHoveredSeg({ segId: seg.id, x: rect.left, y: rect.bottom + 6 })
-                    }}
-                    onMouseLeave={() => setHoveredSeg(null)}
-                  >
-                    <span style={{ width: 7, height: 7, borderRadius: 2, background: seg.color }} />
-                    {seg.name} {pos ? `+${seg.total}` : seg.total}
-                  </span>
-                )
-              })}
-            </div>
-
-            {/* KPI */}
-            <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, fontWeight: 600, marginLeft: 4 }}>
-              <span style={{ color: pickupSummary.puOcc >= 0 ? '#00E5A0' : '#E24B4A' }}>
-                {pickupSummary.puOcc >= 0 ? '+' : ''}{pickupSummary.puOcc.toFixed(1)}%
-                <span style={{ fontWeight: 400, color: '#555', marginLeft: 2 }}>
-                  ({pickupSummary.total >= 0 ? '+' : ''}{pickupSummary.total} R/N)
-                </span>
-              </span>
-              <span style={{ color: '#333' }}>·</span>
-              <span style={{ color: pickupSummary.puAdr >= 0 ? '#00E5A0' : '#E24B4A' }}>
-                {pickupSummary.puAdr >= 0 ? '+' : ''}{Math.round(pickupSummary.puAdr / 1000)}k
-              </span>
-              <span style={{ color: '#333' }}>·</span>
-              <span style={{ color: pickupSummary.totalPuRev >= 0 ? '#00E5A0' : '#E24B4A' }}>
-                {pickupSummary.totalPuRev >= 0 ? '+' : ''}{(pickupSummary.totalPuRev / 1_000_000).toFixed(1)}M
-              </span>
-            </span>
-          </>
-        )}
       </div>
 
       {/* ② 월간 요약 KPI */}
