@@ -294,11 +294,11 @@ const renderEventCard = (ev: EventGroup) => {
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, tableLayout: 'fixed' }}>
         <colgroup>
           <col style={{ width: '42px' }} />
-          <col style={{ width: '120px' }} />
+          <col style={{ width: '90px' }} />
           <col style={{ width: '42px' }} />
           <col style={{ width: '42px' }} />
           <col style={{ width: '44px' }} />
-          <col style={{ width: '60px' }} />
+          <col style={{ width: '72px' }} />
         </colgroup>
         <thead>
           <tr>
