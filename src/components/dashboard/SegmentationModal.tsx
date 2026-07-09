@@ -600,7 +600,7 @@ export default function SegmentationModal({
                           {isOtb ? (a.diffRn === 0 ? '—' : a.diffRn) : `${a.diffRn >= 0 ? '+' : ''}${a.diffRn}`}
                         </span>
                         <span className="font-mono" style={{ fontSize: 11, color: isOtb ? (a.diffAdr < 0 ? '#E24B4A' : '#fff') : (a.diffAdr >= 0 ? '#00E5A0' : '#E24B4A'), width: 56, textAlign: 'right' }}>
-                          {isOtb ? (a.diffAdr === 0 ? '—' : Math.round(a.diffAdr / 1000) + 'k') : `${a.diffAdr >= 0 ? '+' : ''}${Math.abs(a.diffAdr) >= 1000 ? Math.round(a.diffAdr / 1000) + 'k' : a.diffAdr}`}
+                          {isOtb ? (a.diffAdr === 0 ? '—' : Math.round(a.diffAdr / 1000) + 'k') : (a.diffAdr === 0 ? '—' : (a.diffAdr > 0 ? '+' : '') + Math.round(a.diffAdr / 1000) + 'k')}
                         </span>
                         <span className="font-mono" style={{ fontSize: 11, color: isOtb ? (a.diffRev < 0 ? '#E24B4A' : '#fff') : (a.diffRev >= 0 ? '#00E5A0' : '#E24B4A'), width: 60, textAlign: 'right' }}>
                           {isOtb ? (a.diffRev === 0 ? '—' : (a.diffRev / 1_000_000).toFixed(1) + 'M') : `${a.diffRev >= 0 ? '+' : ''}${(a.diffRev / 1_000_000).toFixed(1)}M`}
