@@ -263,7 +263,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
 
   return createPortal(
     <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: '#0a0a0a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: '90%', maxWidth: 1400, height: '85vh', background: BG, borderRadius: 10, border: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ width: '95%', maxWidth: 1600, height: '95vh', background: BG, borderRadius: 10, border: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* 헤더 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: BORDER_SUBTLE, flexShrink: 0 }}>
         <div>
