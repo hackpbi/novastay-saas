@@ -60,7 +60,7 @@ function aggByCodes(codes: string[], map: CodeMap): Cell {
 const th: React.CSSProperties = {
   fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em',
   color: TXT3, padding: '6px 4px', background: '#131313', whiteSpace: 'nowrap',
-  position: 'sticky', top: 0, textAlign: 'right',
+  position: 'sticky', top: 0, textAlign: 'right', zIndex: 1,
 }
 const td: React.CSSProperties = {
   fontSize: 11, padding: '6px 4px', textAlign: 'right', whiteSpace: 'nowrap',
@@ -263,7 +263,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
 
   return createPortal(
     <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: '#0a0a0a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: '95%', maxWidth: 1600, height: '95vh', background: BG, borderRadius: 10, border: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ width: '95%', maxWidth: 1600, height: '100vh', background: BG, borderRadius: 10, border: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* 헤더 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 16px', borderBottom: BORDER_SUBTLE, flexShrink: 0 }}>
         <div>
