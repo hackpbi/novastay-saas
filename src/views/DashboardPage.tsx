@@ -410,7 +410,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
           {/* 헤더 */}
           <div />
           {['점유율', '객단가', '매출'].map(h => (
-            <div key={h} style={{ fontSize: 9, color: 'var(--brand-dimmed)', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{h}</div>
+            <div key={h} style={{ fontSize: 9, color: 'var(--brand-dimmed)', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>{h}</div>
           ))}
           {/* FCST 행 */}
           <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)' }}>전망</div>
