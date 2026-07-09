@@ -578,31 +578,31 @@ export default function SegmentationModal({
               ) : (
                 <>
                   {/* 리스트 헤더 */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
-                    <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>ACCOUNT</span>
-                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 28, textAlign: 'right' }}>R/N</span>
-                      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 28, textAlign: 'right' }}>ADR</span>
-                      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 36, textAlign: 'right' }}>REV</span>
+                  <div style={{ display: 'flex', alignItems: 'center', padding: '5px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
+                    <span className="font-mono" style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', flex: 1 }}>ACCOUNT</span>
+                    <div style={{ display: 'flex', flexShrink: 0 }}>
+                      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 52, textAlign: 'right' }}>R/N</span>
+                      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 56, textAlign: 'right' }}>ADR</span>
+                      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 60, textAlign: 'right' }}>REV</span>
                     </div>
                   </div>
                   {accountList.map((a, i) => (
                     <div
                       key={`${a.name}-${i}`}
                       className="font-mono"
-                      style={{ padding: '6px 14px', borderBottom: '0.5px solid #1a1a1a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                      style={{ padding: '6px 14px', borderBottom: '0.5px solid #1a1a1a', display: 'flex', alignItems: 'center' }}
                     >
-                      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 80 }}>
+                      <span className="font-mono" style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                         {a.name}
                       </span>
-                      <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                        <span className="font-mono" style={{ fontSize: 11, color: isOtb ? (a.diffRn < 0 ? '#E24B4A' : '#fff') : (a.diffRn >= 0 ? '#00E5A0' : '#E24B4A'), width: 28, textAlign: 'right' }}>
+                      <div style={{ display: 'flex', flexShrink: 0 }}>
+                        <span className="font-mono" style={{ fontSize: 11, color: isOtb ? (a.diffRn < 0 ? '#E24B4A' : '#fff') : (a.diffRn >= 0 ? '#00E5A0' : '#E24B4A'), width: 52, textAlign: 'right' }}>
                           {isOtb ? (a.diffRn === 0 ? '—' : a.diffRn) : `${a.diffRn >= 0 ? '+' : ''}${a.diffRn}`}
                         </span>
-                        <span className="font-mono" style={{ fontSize: 11, color: isOtb ? (a.diffAdr < 0 ? '#E24B4A' : '#fff') : (a.diffAdr >= 0 ? '#00E5A0' : '#E24B4A'), width: 28, textAlign: 'right' }}>
+                        <span className="font-mono" style={{ fontSize: 11, color: isOtb ? (a.diffAdr < 0 ? '#E24B4A' : '#fff') : (a.diffAdr >= 0 ? '#00E5A0' : '#E24B4A'), width: 56, textAlign: 'right' }}>
                           {isOtb ? (a.diffAdr === 0 ? '—' : Math.round(a.diffAdr / 1000) + 'k') : `${a.diffAdr >= 0 ? '+' : ''}${Math.abs(a.diffAdr) >= 1000 ? Math.round(a.diffAdr / 1000) + 'k' : a.diffAdr}`}
                         </span>
-                        <span className="font-mono" style={{ fontSize: 11, color: isOtb ? (a.diffRev < 0 ? '#E24B4A' : '#fff') : (a.diffRev >= 0 ? '#00E5A0' : '#E24B4A'), width: 36, textAlign: 'right' }}>
+                        <span className="font-mono" style={{ fontSize: 11, color: isOtb ? (a.diffRev < 0 ? '#E24B4A' : '#fff') : (a.diffRev >= 0 ? '#00E5A0' : '#E24B4A'), width: 60, textAlign: 'right' }}>
                           {isOtb ? (a.diffRev === 0 ? '—' : (a.diffRev / 1_000_000).toFixed(1) + 'M') : `${a.diffRev >= 0 ? '+' : ''}${(a.diffRev / 1_000_000).toFixed(1)}M`}
                         </span>
                       </div>
