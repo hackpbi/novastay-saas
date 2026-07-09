@@ -296,7 +296,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
       </div>
 
       {/* 테이블 */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '0 24px 32px' }}>
+      <div style={{ flex: 1, overflow: 'auto', padding: '14px 24px 32px' }}>
         <table style={{ minWidth: 980, borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
           <thead>
             <tr>
