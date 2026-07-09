@@ -466,7 +466,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
           style={{
             background: 'var(--gradient-cta)',
             boxShadow:  'var(--accent-btn-glow)',
-            color:      '#0A0A0A',
+            color:      pickupNights >= 0 ? '#0A0A0A' : '#E24B4A',
           }}
         >
           {pickupNights >= 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
