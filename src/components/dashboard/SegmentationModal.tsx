@@ -474,19 +474,11 @@ export default function SegmentationModal({
         style={{ maxHeight: '88vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
-        <div className="px-6 py-4 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
-          {/* 1줄: 제목 + 닫기 */}
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-              Pick-Up Status By Segmentation
-            </h2>
-            <button onClick={onClose} className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1" aria-label="닫기">
-              <X size={22} />
-            </button>
-          </div>
-
-          {/* 2줄: OTB + VS OTB DatePicker + 픽업 현황 */}
-          <div className="flex items-center gap-2 mt-1">
+        <div className="px-6 py-3 shrink-0 flex items-center gap-3" style={{ borderBottom: '1px solid var(--divider-color)' }}>
+          <h2 className="text-base font-semibold shrink-0" style={{ color: 'var(--color-text-primary)' }}>
+            Pick-Up Status By Segmentation
+          </h2>
+          <div className="flex items-center gap-2">
             <DatePicker
               label="OTB"
               value={otbDate}
@@ -507,6 +499,11 @@ export default function SegmentationModal({
                 ? `${curYear}년 ${curMonth}월 ${day}일`
                 : `${days === 0 ? '당일' : `${days}일간`} 픽업 현황 입니다.`}
             </span>
+          </div>
+          <div className="ml-auto">
+            <button onClick={onClose} className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1" aria-label="닫기">
+              <X size={22} />
+            </button>
           </div>
         </div>
 
