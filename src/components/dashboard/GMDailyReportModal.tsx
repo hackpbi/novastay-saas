@@ -1563,7 +1563,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
 
         {/* 섹션 A — 3개월 Pick-up */}
         <div style={{ marginBottom: 18 }}>
-          <div style={sectionTitle}>3개월 Pick-up</div>
+          <div style={sectionTitle}>3개월 픽업</div>
           <div style={{ borderLeft: `3px solid ${C.mint}`, background: C.cardBg, borderRadius: '0 4px 4px 0', padding: '8px 12px', fontSize: 12, color: C.textSecondary, marginBottom: 8 }}>
             {isPickupLoading ? '픽업 데이터 불러오는 중…' : (() => {
               const verb = (n: number) => (n >= 0 ? '증가' : '감소')
@@ -1588,7 +1588,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                   </div>
                   {/* KPI 미니박스 — OCC / ADR(k) / REV(m) */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', border: `0.5px solid ${BORDER}`, borderRadius: 4, marginBottom: 8 }}>
-                    <KpiMini label="OCC" value={pv(s.puOcc, '%p')} dir={isPickupLoading ? 'neu' : dir3(s.puOcc)} />
+                    <KpiMini label="점유율" value={pv(s.puOcc, '%p')} dir={isPickupLoading ? 'neu' : dir3(s.puOcc)} />
                     <KpiMini label="객단가" value={pv(s.puAdr, 'k')}  dir={isPickupLoading ? 'neu' : dir3(s.puAdr)} />
                     <KpiMini label="매출" value={pv(s.puRevM, 'm')} dir={isPickupLoading ? 'neu' : dir3(s.puRevM)} />
                   </div>
@@ -1606,7 +1606,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
 
         {/* 섹션 B — Pick-up 상세 */}
         <div>
-          <div style={sectionTitle}>Pick-up 상세 (Room Nights 기준)</div>
+          <div style={sectionTitle}>픽업 상세 (판매실수 기준)</div>
           {isPickupLoading ? (
             <div style={{ ...card, padding: 16, textAlign: 'center', fontSize: 11, color: TXT3 }}>불러오는 중…</div>
           ) : accountRows.length === 0 ? (
