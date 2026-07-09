@@ -1425,7 +1425,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
               <span style={{ fontSize: 13, fontWeight: 500, color: C.textPrimary }}>OTB 현황 (7일)</span>
               {/* MTD 실적 요약 (당월 1일 ~ 전일) */}
               {mtdKpi && (
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, fontSize: 11 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, fontSize: 11, borderBottom: '1px solid rgba(0,0,0,0.15)', paddingBottom: 4 }}>
                   <span style={{ color: C.textMuted, fontSize: 10 }}>{mtdKpi.periodLabel}</span>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
                     <span style={{ color: C.textMuted, fontSize: 10 }}>OCC</span>
