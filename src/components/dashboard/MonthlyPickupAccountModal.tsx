@@ -382,7 +382,7 @@ export default function MonthlyPickupAccountModal({
                 {/* 헤더 2단 */}
                 <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                   <tr>
-                    <th style={{ ...thBase, textAlign: 'left', borderRight: BORDER }} rowSpan={2}>Account</th>
+                    <th style={{ ...thBase, textAlign: 'left', borderRight: BORDER }} rowSpan={2}>어카운트</th>
                     {visiblePageMonths.map(mk => (
                       <th key={mk} colSpan={3} style={{ ...thBase, textAlign: 'center', color: '#00E5A0', ...MONTH_SEP, borderRight: BORDER }}>
                         {formatYYYYMM(mk)}
@@ -391,9 +391,9 @@ export default function MonthlyPickupAccountModal({
                   </tr>
                   <tr>
                     {visiblePageMonths.map(mk => ([
-                      <th key={`${mk}-rn`}  style={{ ...thBase, textAlign: 'right', ...MONTH_SEP, borderBottom: BORDER }}>ΔR-N</th>,
-                      <th key={`${mk}-adr`} style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>,
-                      <th key={`${mk}-rev`} style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>ΔREV</th>,
+                      <th key={`${mk}-rn`}  style={{ ...thBase, textAlign: 'right', ...MONTH_SEP, borderBottom: BORDER }}>Δ객실</th>,
+                      <th key={`${mk}-adr`} style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>Δ객단가</th>,
+                      <th key={`${mk}-rev`} style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>Δ매출</th>,
                     ]))}
                   </tr>
                 </thead>
@@ -469,7 +469,7 @@ export default function MonthlyPickupAccountModal({
                   </tr>
                   {/* OCC */}
                   <tr style={{ borderTop: BORDER }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER, background: '#111111' }}>OCC</td>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER, background: '#111111' }}>점유율</td>
                     {visiblePageMonths.map(mk => (
                       <td key={mk} colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, ...MONTH_SEP, borderRight: BORDER, background: '#111111' }}>
                         <FmtOcc n={summary.monthlyTotals[mk]?.occ ?? 0} />
@@ -494,7 +494,7 @@ export default function MonthlyPickupAccountModal({
         {/* Footer */}
         <div className="flex justify-between px-6 py-3 shrink-0" style={{ borderTop: BORDER }}>
           <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>
-            총 {summary.accountCount} accounts · {summary.groupCount} groups
+            총 {summary.accountCount} 어카운트 · {summary.groupCount} 그룹
           </span>
           <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>ESC로 닫기</span>
         </div>

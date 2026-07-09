@@ -327,10 +327,10 @@ export default function MonthlyPickupAccountTotalModal({
                 {/* 헤더 2단 */}
                 <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                   <tr>
-                    <th style={{ ...thBase, textAlign: 'left', borderRight: BORDER, borderBottom: BORDER }}>Account</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>ΔR-N</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>ΔREV</th>
+                    <th style={{ ...thBase, textAlign: 'left', borderRight: BORDER, borderBottom: BORDER }}>어카운트</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderBottom: BORDER }}>Δ객실</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>Δ객단가</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>Δ매출</th>
                   </tr>
                 </thead>
 
@@ -400,7 +400,7 @@ export default function MonthlyPickupAccountTotalModal({
                   </tr>
                   {/* OCC */}
                   <tr style={{ borderTop: BORDER, background: '#111111' }}>
-                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER }}>OCC</td>
+                    <td style={{ ...tdBase, paddingLeft: 12, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--brand-dimmed)', borderRight: BORDER }}>점유율</td>
                     <td colSpan={3} className="font-mono" style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, borderLeft: BORDER }}>
                       <FmtOcc n={summary.grandTotal.occ} />
                     </td>
@@ -421,7 +421,7 @@ export default function MonthlyPickupAccountTotalModal({
         {/* Footer */}
         <div className="flex justify-between px-6 py-3 shrink-0" style={{ borderTop: BORDER }}>
           <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>
-            총 {summary.accountCount} accounts · {summary.groupCount} groups
+            총 {summary.accountCount} 어카운트 · {summary.groupCount} 그룹
           </span>
           <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>ESC로 닫기</span>
         </div>

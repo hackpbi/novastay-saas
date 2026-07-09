@@ -330,7 +330,7 @@ export default function MonthlyPickupSegModal({
                 {/* 헤더 2단 */}
                 <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                   <tr>
-                    <th style={{ ...thBase, textAlign: 'left', borderRight: BORDER }} rowSpan={2}>Segmentation</th>
+                    <th style={{ ...thBase, textAlign: 'left', borderRight: BORDER }} rowSpan={2}>세그먼트</th>
                     {visibleMonths.map(mk => (
                       <th key={mk} colSpan={3} style={{ ...thBase, textAlign: 'center', color: '#00E5A0', ...MONTH_SEP, borderRight: BORDER }}>
                         {formatYYYYMM(mk)}
@@ -339,9 +339,9 @@ export default function MonthlyPickupSegModal({
                   </tr>
                   <tr>
                     {visibleMonths.map(mk => ([
-                      <th key={`${mk}-rn`}  style={{ ...thBase, textAlign: 'right', ...MONTH_SEP, borderBottom: BORDER }}>ΔR-N</th>,
-                      <th key={`${mk}-adr`} style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>ΔADR</th>,
-                      <th key={`${mk}-rev`} style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>ΔREV</th>,
+                      <th key={`${mk}-rn`}  style={{ ...thBase, textAlign: 'right', ...MONTH_SEP, borderBottom: BORDER }}>Δ객실</th>,
+                      <th key={`${mk}-adr`} style={{ ...thBase, textAlign: 'right', borderBottom: BORDER }}>Δ객단가</th>,
+                      <th key={`${mk}-rev`} style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>Δ매출</th>,
                     ]))}
                   </tr>
                 </thead>
@@ -420,18 +420,18 @@ export default function MonthlyPickupSegModal({
         {/* 우측 Account Pickup 패널 */}
         <div style={{ width: 340, flexShrink: 0, borderLeft: BORDER, display: 'flex', flexDirection: 'column', background: '#0a0a0a', overflowY: 'auto' }}>
           <div className="px-3 pt-3 pb-2 shrink-0" style={{ borderBottom: BORDER }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>Account Pickup</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>어카운트 픽업</div>
             <div style={{ fontSize: 10, color: 'var(--brand-dimmed)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {selectedSeg ? `${selectedSeg.label} · ${selectedSeg.monthKey} · 픽업 R/N 기준` : '세그먼트를 클릭하세요'}
             </div>
           </div>
           {/* 컬럼 헤더 */}
           <div style={{ display: 'flex', padding: '5px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
-            <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', flex: 1 }}>ACCOUNT</span>
+            <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', flex: 1 }}>어카운트</span>
             <div style={{ display: 'flex', flexShrink: 0 }}>
-              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 40, textAlign: 'right' }}>R/N</span>
-              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 52, textAlign: 'right' }}>ADR</span>
-              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 56, textAlign: 'right' }}>REV</span>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 40, textAlign: 'right' }}>객실</span>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 52, textAlign: 'right' }}>객단가</span>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 56, textAlign: 'right' }}>매출</span>
             </div>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'thin' }}>
@@ -463,7 +463,7 @@ export default function MonthlyPickupSegModal({
           </div>
           {/* 합계 */}
           <div style={{ padding: '7px 14px', borderTop: '1px solid rgba(0,229,160,0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', flex: 1 }}>Total</span>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', flex: 1 }}>합계</span>
             <div style={{ display: 'flex', flexShrink: 0 }}>
               <span style={{ fontSize: 11, fontWeight: 600, color: totalRn > 0 ? '#00E5A0' : totalRn < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 40, textAlign: 'right' }}>
                 {totalRn === 0 ? '—' : (totalRn > 0 ? '+' : '') + totalRn}

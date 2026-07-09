@@ -302,10 +302,10 @@ export default function MonthlyPickupSegTotalModal({
                 {/* 헤더 2단 */}
                 <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                   <tr>
-                    <th style={{ ...thBase, textAlign: 'left', borderRight: BORDER, borderBottom: BORDER }}>Segmentation</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderRight: BORDER, borderBottom: BORDER }}>ΔR-N</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>ΔADR</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>ΔREV</th>
+                    <th style={{ ...thBase, textAlign: 'left', borderRight: BORDER, borderBottom: BORDER }}>세그먼트</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderLeft: BORDER, borderRight: BORDER, borderBottom: BORDER }}>Δ객실</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>Δ객단가</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderRight: BORDER, borderBottom: BORDER }}>Δ매출</th>
                   </tr>
                 </thead>
 
@@ -383,18 +383,18 @@ export default function MonthlyPickupSegTotalModal({
         {/* 우측 Account Pickup 패널 */}
         <div style={{ width: 420, flexShrink: 0, borderLeft: '0.5px solid rgba(0,229,160,0.2)', display: 'flex', flexDirection: 'column', background: '#0a0a0a' }}>
           <div style={{ padding: '10px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>Account Pickup</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>어카운트 픽업</div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
               {selectedSeg ? `${selectedSeg.label} · 6개월 합계` : '세그먼트를 클릭하세요'}
             </div>
           </div>
           {/* 컬럼 헤더 */}
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
-            <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', flex: 1 }}>ACCOUNT</span>
+            <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', flex: 1 }}>어카운트</span>
             <div style={{ display: 'flex', gap: 0, flexShrink: 0 }}>
-              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 48, textAlign: 'right' }}>R/N</span>
-              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 60, textAlign: 'right' }}>ADR</span>
-              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 64, textAlign: 'right' }}>REV</span>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 48, textAlign: 'right' }}>객실</span>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 60, textAlign: 'right' }}>객단가</span>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 64, textAlign: 'right' }}>매출</span>
             </div>
           </div>
           <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
@@ -424,7 +424,7 @@ export default function MonthlyPickupSegTotalModal({
           {/* 합계 */}
           {accountList.length > 0 && (
             <div style={{ padding: '7px 14px', borderTop: '1px solid rgba(0,229,160,0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', flex: 1 }}>Total</span>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', flex: 1 }}>합계</span>
               <div style={{ display: 'flex', flexShrink: 0 }}>
                 <span style={{ fontSize: 11, fontWeight: 600, color: totalRn > 0 ? '#00E5A0' : totalRn < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 48, textAlign: 'right' }}>
                   {totalRn === 0 ? '—' : (totalRn > 0 ? '+' : '') + totalRn}

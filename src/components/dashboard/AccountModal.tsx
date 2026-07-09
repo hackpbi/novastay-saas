@@ -240,12 +240,12 @@ function DataTable({ groups, summary, collapsedKeys, onToggle, isSearching, year
             <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderLeft: DOUBLE }}>PICKUP VS OTB</th>
           </tr>
           <tr>
-            <th style={{ ...thBase, textAlign: 'right', borderLeft: DOUBLE, borderBottom: GRID_HEAD }}>R-N</th>
-            <th style={{ ...thBase, textAlign: 'right', borderLeft: GRID, borderBottom: GRID_HEAD }}>ADR</th>
-            <th style={{ ...thBase, textAlign: 'right', borderLeft: GRID, borderBottom: GRID_HEAD }}>REV</th>
-            <th style={{ ...thBase, textAlign: 'right', borderLeft: DOUBLE, borderBottom: GRID_HEAD }}>ΔR-N</th>
-            <th style={{ ...thBase, textAlign: 'right', borderLeft: GRID, borderBottom: GRID_HEAD }}>ΔADR</th>
-            <th style={{ ...thBase, textAlign: 'right', borderLeft: GRID, borderBottom: GRID_HEAD }}>ΔREV</th>
+            <th style={{ ...thBase, textAlign: 'right', borderLeft: DOUBLE, borderBottom: GRID_HEAD }}>객실</th>
+            <th style={{ ...thBase, textAlign: 'right', borderLeft: GRID, borderBottom: GRID_HEAD }}>객단가</th>
+            <th style={{ ...thBase, textAlign: 'right', borderLeft: GRID, borderBottom: GRID_HEAD }}>매출</th>
+            <th style={{ ...thBase, textAlign: 'right', borderLeft: DOUBLE, borderBottom: GRID_HEAD }}>Δ객실</th>
+            <th style={{ ...thBase, textAlign: 'right', borderLeft: GRID, borderBottom: GRID_HEAD }}>Δ객단가</th>
+            <th style={{ ...thBase, textAlign: 'right', borderLeft: GRID, borderBottom: GRID_HEAD }}>Δ매출</th>
           </tr>
         </thead>
 
@@ -311,7 +311,7 @@ function DataTable({ groups, summary, collapsedKeys, onToggle, isSearching, year
             </td>
           </tr>
           <tr style={{ borderTop: GRID }}>
-            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '10px 12px', borderBottom: GRID, background: '#111111' }}>OCC</td>
+            <td style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.07em', color: 'var(--brand-dimmed)', padding: '10px 12px', borderBottom: GRID, background: '#111111' }}>점유율</td>
             <td colSpan={3} className="font-mono" style={{ textAlign: 'right', paddingRight: 12, paddingTop: 10, paddingBottom: 10, fontWeight: 600, color: 'var(--color-text-primary)', borderLeft: DOUBLE, borderBottom: GRID, background: '#111111' }}>
               {otbOcc.toFixed(1)}%
             </td>
@@ -477,7 +477,7 @@ export default function AccountModal({
         <div className="px-6 py-4 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
           {/* 1줄: 제목 + 닫기 (→ Seg로 복귀) */}
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>Pick-Up Status By Accounts</h2>
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>어카운트별 픽업</h2>
             <button
               onClick={() => onBackToSeg ? onBackToSeg(curYear, curMonth) : onClose()}
               className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1 shrink-0"
@@ -543,7 +543,7 @@ export default function AccountModal({
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-3 shrink-0" style={{ borderTop: '1px solid var(--divider-color)' }}>
           <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>
-            총 {displaySummary.accountCount} accounts · {displaySummary.groupCount} groups
+            총 {displaySummary.accountCount} 어카운트 · {displaySummary.groupCount} 그룹
           </span>
           <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>ESC 또는 바깥 클릭으로 닫기</span>
         </div>

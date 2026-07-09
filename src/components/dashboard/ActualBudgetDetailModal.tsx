@@ -373,12 +373,12 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
               <button
                 onClick={() => setCompareMode('budget')}
                 style={{ fontSize: 10, padding: '4px 12px', border: 'none', cursor: 'pointer', background: compareMode === 'budget' ? 'rgba(0,229,160,0.15)' : 'transparent', color: compareMode === 'budget' ? '#00E5A0' : 'rgba(255,255,255,0.4)' }}>
-                vs Budget
+                목표 대비
               </button>
               <button
                 onClick={() => setCompareMode('ly')}
                 style={{ fontSize: 10, padding: '4px 12px', border: 'none', cursor: 'pointer', background: compareMode === 'ly' ? 'rgba(255,200,80,0.15)' : 'transparent', color: compareMode === 'ly' ? '#FFC850' : 'rgba(255,255,255,0.4)' }}>
-                vs Last Year
+                전년 대비
               </button>
             </div>
             <button onClick={onClose} aria-label="닫기" style={{ background: 'transparent', border: 'none', color: '#555', fontSize: 18, cursor: 'pointer' }}>✕</button>
@@ -395,15 +395,15 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
             <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
               <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0a0a0a' }}>
                 <tr>
-                  <th rowSpan={2} style={{ ...thL, verticalAlign: 'bottom' }}>SEGMENT</th>
+                  <th rowSpan={2} style={{ ...thL, verticalAlign: 'bottom' }}>세그먼트</th>
                   <th colSpan={3} style={{ ...th, textAlign: 'center', color: '#9fb8ff', borderBottom: '0.5px solid rgba(255,255,255,0.1)' }}>{actualLabel}</th>
                   <th colSpan={3} style={{ ...th, textAlign: 'center', color: compareMode === 'budget' ? '#00E5A0' : '#FFC850', borderBottom: '0.5px solid rgba(255,255,255,0.1)', boxShadow: cmpSep }}>{compareLabel}</th>
                   <th colSpan={3} style={{ ...th, textAlign: 'center', color: 'rgba(255,255,255,0.55)', borderBottom: '0.5px solid rgba(255,255,255,0.1)', boxShadow: gapSep }}>GAP vs {compareMode === 'budget' ? 'Budget' : 'LY'}</th>
                 </tr>
                 <tr>
-                  <th style={th}>R/N</th><th style={th}>ADR</th><th style={th}>REV</th>
-                  <th style={{ ...th, boxShadow: cmpSep }}>R/N</th><th style={th}>ADR</th><th style={th}>REV</th>
-                  <th style={{ ...th, boxShadow: gapSep }}>ΔR/N</th><th style={th}>ΔADR</th><th style={th}>ΔREV</th>
+                  <th style={th}>객실</th><th style={th}>객단가</th><th style={th}>매출</th>
+                  <th style={{ ...th, boxShadow: cmpSep }}>객실</th><th style={th}>객단가</th><th style={th}>매출</th>
+                  <th style={{ ...th, boxShadow: gapSep }}>Δ객실</th><th style={th}>Δ객단가</th><th style={th}>Δ매출</th>
                 </tr>
               </thead>
               <tbody>
@@ -415,7 +415,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
                   onMouseEnter={e => { e.currentTarget.style.background = 'linear-gradient(var(--overlay-hover), var(--overlay-hover)), #111111' }}
                   onMouseLeave={e => { e.currentTarget.style.background = '#111111' }}
                 >
-                  <td style={{ ...td, textAlign: 'left', color: '#fff', fontWeight: 700, borderTop: '1px solid rgba(0,229,160,0.4)' }}>TOTAL</td>
+                  <td style={{ ...td, textAlign: 'left', color: '#fff', fontWeight: 700, borderTop: '1px solid rgba(0,229,160,0.4)' }}>합계</td>
                   <td style={{ ...td, color: '#fff', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtInt(tA.n)}</td>
                   <td style={{ ...td, color: '#fff', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}><FmtVal val={fmtAdrK(tAAdr)} numSize={11} /></td>
                   <td style={{ ...td, color: '#fff', fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.4)' }}><FmtVal val={fmtRevM(tA.r)} numSize={11} /></td>
@@ -428,7 +428,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
                 </tr>
 
                 {/* OCC / REVPAR */}
-                {metricRow('OCC', `${occA.toFixed(1)}%`, `${occC.toFixed(1)}%`, `${occA - occC >= 0 ? '+' : ''}${(occA - occC).toFixed(1)}%p`, occA - occC >= 0)}
+                {metricRow('점유율', `${occA.toFixed(1)}%`, `${occC.toFixed(1)}%`, `${occA - occC >= 0 ? '+' : ''}${(occA - occC).toFixed(1)}%p`, occA - occC >= 0)}
                 {metricRow('RevPAR', fmtInt(rpA), fmtInt(rpC), fmtSignInt(rpA - rpC), rpA - rpC >= 0)}
               </tbody>
             </table>
@@ -440,7 +440,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
             <div style={{ width: 280, flexShrink: 0, maxHeight: 'calc(90vh - 60px)', borderLeft: '1px solid rgba(0,229,160,0.2)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               <div style={{ padding: '10px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: '#FFC850' }}>
-                  {selectedSeg ? `${selectedSeg.label} — Account Variance` : 'Account Variance'}
+                  {selectedSeg ? `${selectedSeg.label} — 어카운트 증감` : '어카운트 증감'}
                 </div>
                 <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
                   vs Last Year · {monthLabel}
