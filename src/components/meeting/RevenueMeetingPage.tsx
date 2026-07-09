@@ -983,7 +983,7 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
       />
 
       {/* 세그먼트 상세 풀스크린 모달 */}
-      <SegmentDetailModal open={segOpen} onClose={() => setSegOpen(false)} hotelId={hotelId} monthKey={monthKey} />
+      <SegmentDetailModal open={segOpen} onClose={() => setSegOpen(false)} hotelId={hotelId} monthKey={monthKey} pickupRows={pickupRows} roomCount={roomCount} groups={groups} />
 
     </div>
   )

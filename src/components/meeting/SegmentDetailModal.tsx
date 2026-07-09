@@ -1,18 +1,25 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { X } from 'lucide-react'
-import {
-  getDummySegmentTable,
-  monthKeyLabel,
-  type DummySegmentRow,
-} from './dummyMeetingData'
+import { supabase } from '@/lib/supabase'
+import { useForecastMonthly } from '@/hooks/useForecastMonthly'
+import { useBudgetMonthly } from '@/hooks/useBudgetMonthly'
+import { useFcstDateContext } from '@/contexts/FcstDateContext'
+import { useLatestConfirmedBudgetDate } from '@/hooks/useLatestConfirmedBudgetDate'
+import type { PickupRow } from '@/hooks/usePickupData'
+import type { SegGroup } from './MeetingPickupBlock'
+import { monthKeyLabel } from './dummyMeetingData'
 
 interface SegmentDetailModalProps {
-  open:     boolean
-  onClose:  () => void
-  hotelId:  string
-  monthKey: string   // 'YYYY-MM'
+  open:       boolean
+  onClose:    () => void
+  hotelId:    string
+  monthKey:   string   // 'YYYY-MM'
+  pickupRows: PickupRow[]
+  roomCount:  number
+  groups:     SegGroup[]
 }
 
 // ── 디자인 토큰 ──────────────────────────────────────────────────────────────────
@@ -26,6 +33,8 @@ const GROUP_SHADOW = 'inset 1px 0 0 rgba(0,229,160,0.3)'
 const BORDER_SUBTLE = '0.5px solid rgba(255,255,255,0.06)'
 
 type Cell = { rn: number; adr: number; rev: number }
+type SegRow = { id: string; name: string; isBold: boolean; indent: boolean; codes: string[] }
+type CodeMap = Map<string, { rn: number; rev: number }>
 type GapBase    = 'otb' | 'fcst'
 type GapCompare = 'budget' | 'ly'
 type LyMode     = 'match' | 'date'
@@ -39,6 +48,13 @@ const fmtGapAdr = (v: number) => (v === 0 ? '-' : `${v > 0 ? '+' : ''}${Math.rou
 const fmtGapRev = (v: number) => (v === 0 ? '-' : `${v > 0 ? '+' : ''}${(v / 1_000_000).toFixed(1)}M`)
 const gapColor  = (v: number) => (v > 0 ? MINT : v < 0 ? RED : TXT3)
 
+// 세그먼트 코드 목록으로 각 데이터소스에서 합산
+function aggByCodes(codes: string[], map: CodeMap): Cell {
+  let rn = 0, rev = 0
+  for (const c of codes) { const v = map.get(c); if (v) { rn += v.rn; rev += v.rev } }
+  return { rn, adr: rn > 0 ? Math.round(rev / rn) : 0, rev }
+}
+
 const th: React.CSSProperties = {
   fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em',
   color: TXT3, padding: '6px 10px', background: '#131313', whiteSpace: 'nowrap',
@@ -49,10 +65,107 @@ const td: React.CSSProperties = {
   borderBottom: BORDER_SUBTLE,
 }
 
-export default function SegmentDetailModal({ open, onClose, hotelId, monthKey }: SegmentDetailModalProps) {
+export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, pickupRows, roomCount, groups }: SegmentDetailModalProps) {
   const [lyMode,    setLyMode]    = useState<LyMode>('match')
   const [gapBase,   setGapBase]   = useState<GapBase>('otb')
   const [gapCompare, setGapCompare] = useState<GapCompare>('budget')
+
+  const [year, month] = monthKey.split('-').map(Number)   // month: 1-based
+
+  // FCST / BUDGET (기존 훅 재사용) — 세그먼트별 월 데이터
+  const { fcstDate } = useFcstDateContext()
+  const { data: budgetDate = null } = useLatestConfirmedBudgetDate(hotelId || undefined)
+  const { data: fcstRows = [] }   = useForecastMonthly({ hotelId, year, updateDate: fcstDate })
+  const { data: budgetRows = [] } = useBudgetMonthly({ hotelId, year, updateDate: budgetDate })
+
+  // LY (a01_actual_daily) — lyMode: date=전년동일자(-1년) / match=전년동기간(c06 yoy_match)
+  const { data: lyRows = [] } = useQuery({
+    queryKey: ['seg-detail-ly', hotelId, monthKey, lyMode],
+    enabled: !!hotelId && !!monthKey && open,
+    staleTime: 30 * 60 * 1000,
+    queryFn: async () => {
+      if (lyMode === 'date') {
+        const lyYear = year - 1
+        const start = `${lyYear}-${String(month).padStart(2, '0')}-01`
+        const end   = `${lyYear}-${String(month).padStart(2, '0')}-31`
+        const { data, error } = await (supabase as any)
+          .from('a01_actual_daily')
+          .select('segmentation, nights, room_revenue')
+          .eq('hotel_id', hotelId)
+          .gte('business_date', start).lte('business_date', end)
+        if (error) throw error
+        return (data ?? []) as any[]
+      }
+      // match: c06_calendar.yoy_match → a01_actual_daily
+      const calStart = `${year}-${String(month).padStart(2, '0')}-01`
+      const calEnd   = `${year}-${String(month).padStart(2, '0')}-31`
+      const { data: calRows, error: calErr } = await (supabase as any)
+        .from('c06_calendar')
+        .select('date, yoy_match')
+        .gte('date', calStart).lte('date', calEnd)
+      if (calErr) throw calErr
+      const lyDates = (calRows ?? []).map((r: any) => r.yoy_match).filter(Boolean) as string[]
+      if (lyDates.length === 0) return [] as any[]
+      const { data, error } = await (supabase as any)
+        .from('a01_actual_daily')
+        .select('segmentation, nights, room_revenue')
+        .eq('hotel_id', hotelId)
+        .in('business_date', lyDates)
+      if (error) throw error
+      return (data ?? []) as any[]
+    },
+  })
+
+  // ── 세그먼트 코드별 집계 Map ─────────────────────────────────────────────────────
+  const otbByCode = useMemo<CodeMap>(() => {
+    const map: CodeMap = new Map()
+    for (const r of pickupRows) {
+      const d = new Date(r.business_date)
+      if (d.getFullYear() !== year || d.getMonth() !== month - 1) continue
+      const cur = map.get(r.segmentation) ?? { rn: 0, rev: 0 }
+      map.set(r.segmentation, { rn: cur.rn + (r.otb_nights ?? 0), rev: cur.rev + (r.otb_revenue ?? 0) })
+    }
+    return map
+  }, [pickupRows, year, month])
+
+  const fcstByCode = useMemo<CodeMap>(() => {
+    const map: CodeMap = new Map()
+    for (const r of fcstRows) {
+      if (Number(r.month_num) !== month) continue
+      const cur = map.get(r.segmentation) ?? { rn: 0, rev: 0 }
+      map.set(r.segmentation, { rn: cur.rn + (r.forecast_nights ?? 0), rev: cur.rev + (r.forecast_revenue ?? 0) })
+    }
+    return map
+  }, [fcstRows, month])
+
+  const budgetByCode = useMemo<CodeMap>(() => {
+    const map: CodeMap = new Map()
+    for (const r of budgetRows) {
+      if (Number(r.month_num) !== month) continue
+      const cur = map.get(r.segmentation) ?? { rn: 0, rev: 0 }
+      map.set(r.segmentation, { rn: cur.rn + (r.budget_nights ?? 0), rev: cur.rev + (r.budget_revenue ?? 0) })
+    }
+    return map
+  }, [budgetRows, month])
+
+  const lyByCode = useMemo<CodeMap>(() => {
+    const map: CodeMap = new Map()
+    for (const r of lyRows as any[]) {
+      const cur = map.get(r.segmentation) ?? { rn: 0, rev: 0 }
+      map.set(r.segmentation, { rn: cur.rn + (r.nights ?? 0), rev: cur.rev + (r.room_revenue ?? 0) })
+    }
+    return map
+  }, [lyRows])
+
+  // ── 세그먼트 트리 → 평탄화 (부모 bold + 자식 indent, 부모 codes = 자식 union) ──
+  const rows = useMemo<SegRow[]>(() => {
+    const out: SegRow[] = []
+    for (const g of groups) {
+      out.push({ id: g.id, name: g.name, isBold: true, indent: false, codes: g.segs.flatMap(s => s.codes) })
+      for (const s of g.segs) out.push({ id: s.id, name: s.name, isBold: false, indent: true, codes: s.codes })
+    }
+    return out
+  }, [groups])
 
   // body scroll lock + ESC
   useEffect(() => {
@@ -65,30 +178,35 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey }:
 
   if (!open) return null
 
-  const rows = getDummySegmentTable(monthKey)
-  const lyOf   = (r: DummySegmentRow): Cell => (lyMode === 'match' ? r.lyMatch : r.lyDate)
-  const baseOf = (r: DummySegmentRow): Cell => (gapBase === 'otb' ? r.otb : r.fcst)
-  const compOf = (r: DummySegmentRow): Cell => (gapCompare === 'budget' ? r.budget : lyOf(r))
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const avail = roomCount * daysInMonth
+
+  const otbOf    = (r: SegRow): Cell => aggByCodes(r.codes, otbByCode)
+  const fcstOf   = (r: SegRow): Cell => aggByCodes(r.codes, fcstByCode)
+  const budgetOf = (r: SegRow): Cell => aggByCodes(r.codes, budgetByCode)
+  const lyOf     = (r: SegRow): Cell => aggByCodes(r.codes, lyByCode)
+  const baseOf   = (r: SegRow): Cell => (gapBase === 'otb' ? otbOf(r) : fcstOf(r))
+  const compOf   = (r: SegRow): Cell => (gapCompare === 'budget' ? budgetOf(r) : lyOf(r))
 
   const baseLabel = gapBase === 'otb' ? 'OTB' : 'FCST'
   const compLabel = gapCompare === 'budget' ? 'BUDGET' : 'LY'
   const lyColLabel = lyMode === 'match' ? '전년동기간' : '전년일자'
 
-  // 합계 (HOU 제외) — 부모(자식 합산) 행 제외, leaf(sub) + 독립 mid만 합산
+  // 합계 (HOU 제외) — 부모(자식 합산) 행 제외, leaf(sub)만 합산
   const isParent = (i: number) => rows[i].isBold && !!rows[i + 1]?.indent
-  const sumGroup = (pick: (r: DummySegmentRow) => Cell): Cell => {
+  const sumGroup = (pick: (r: SegRow) => Cell): Cell => {
     let rn = 0, rev = 0
     rows.forEach((r, i) => { if (!isParent(i)) { const c = pick(r); rn += c.rn; rev += c.rev } })
     return { rn, rev, adr: rn > 0 ? Math.round(rev / rn) : 0 }
   }
-  const totOtb    = sumGroup(r => r.otb)
-  const totFcst   = sumGroup(r => r.fcst)
-  const totBudget = sumGroup(r => r.budget)
+  const totOtb    = sumGroup(otbOf)
+  const totFcst   = sumGroup(fcstOf)
+  const totBudget = sumGroup(budgetOf)
   const totLy     = sumGroup(lyOf)
   const totBase   = gapBase === 'otb' ? totOtb : totFcst
   const totComp   = gapCompare === 'budget' ? totBudget : totLy
-  const ROOM_COUNT = 320   // 더미 OCC 산정용 가용 객실
-  const occOf = (rn: number) => (ROOM_COUNT > 0 ? ((rn / ROOM_COUNT) * 100).toFixed(1) : '0') + '%'
+  const occOf    = (rn: number) => (avail > 0 ? ((rn / avail) * 100).toFixed(1) : '0') + '%'
+  const revparOf = (rev: number) => (avail > 0 ? Math.round(rev / avail).toLocaleString('ko-KR') : '—')
 
   // 그룹 cells 렌더 (R/N, ADR, REV) — 첫 셀에 그룹 구분선
   const groupCells = (c: Cell, color?: string, bold?: boolean) => (
@@ -187,15 +305,16 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey }:
             {rows.map((r) => {
               const rowBg = r.isBold ? BOLD_BG : 'transparent'
               const nameColor = r.indent ? '#999' : '#fff'
+              const otb = otbOf(r), fcst = fcstOf(r), budget = budgetOf(r), ly = lyOf(r)
               return (
                 <tr key={r.id} style={{ background: rowBg }}>
                   <td style={{ ...td, textAlign: 'left', position: 'sticky', left: 0, background: r.isBold ? BOLD_BG : BG, fontWeight: r.isBold ? 700 : 400, color: nameColor, minWidth: 170 }}>
                     {r.indent ? <><span style={{ color: '#555', marginRight: 4 }}>└</span>{r.name}</> : r.name}
                   </td>
-                  {groupCells(r.otb,    undefined, r.isBold)}
-                  {groupCells(r.fcst,   undefined, r.isBold)}
-                  {groupCells(r.budget, undefined, r.isBold)}
-                  {groupCells(lyOf(r),  undefined, r.isBold)}
+                  {groupCells(otb,    undefined, r.isBold)}
+                  {groupCells(fcst,   undefined, r.isBold)}
+                  {groupCells(budget, undefined, r.isBold)}
+                  {groupCells(ly,     undefined, r.isBold)}
                   {gapCells(baseOf(r), compOf(r), r.isBold)}
                 </tr>
               )
@@ -224,6 +343,15 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey }:
               <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: MINT, fontWeight: 600 }}>{occOf(totFcst.rn)}</td>
               <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: TXT3, fontWeight: 600 }}>{occOf(totBudget.rn)}</td>
               <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: TXT3, fontWeight: 600 }}>{occOf(totLy.rn)}</td>
+              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: TXT3 }}>—</td>
+            </tr>
+            {/* Rev.PAR */}
+            <tr style={{ background: '#111' }}>
+              <td style={{ ...td, textAlign: 'left', position: 'sticky', left: 0, background: '#111', fontWeight: 600, color: TXT3 }}>Rev.PAR</td>
+              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: '#fff', fontWeight: 600 }}>{revparOf(totOtb.rev)}</td>
+              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: '#fff', fontWeight: 600 }}>{revparOf(totFcst.rev)}</td>
+              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: TXT3, fontWeight: 600 }}>{revparOf(totBudget.rev)}</td>
+              <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: TXT3, fontWeight: 600 }}>{revparOf(totLy.rev)}</td>
               <td colSpan={3} style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', color: TXT3 }}>—</td>
             </tr>
           </tbody>
