@@ -303,11 +303,11 @@ const renderEventCard = (ev: EventGroup) => {
         <thead>
           <tr>
             <th style={{ ...evTh, textAlign: 'left' }}>일자</th>
-            <th style={{ ...evTh, textAlign: 'left' }}>OCC%</th>
-            <th style={{ ...evTh, textAlign: 'right' }}>ADR</th>
+            <th style={{ ...evTh, textAlign: 'left' }}>점유율</th>
+            <th style={{ ...evTh, textAlign: 'right' }}>객단가</th>
             <th style={{ ...evTh, textAlign: 'right' }}>BAR</th>
             <th style={{ ...evTh, textAlign: 'right' }}>픽업</th>
-            <th style={{ ...evTh, textAlign: 'right', paddingRight: 0 }}>LY OCC</th>
+            <th style={{ ...evTh, textAlign: 'right', paddingRight: 0 }}>전년 점유율</th>
           </tr>
         </thead>
         <tbody>
@@ -426,7 +426,7 @@ const createPage3Chart = (
     data: {
       labels: kpiRows.map(d => d.dateLabel),   // 날짜만 (요일은 ticks.callback에서 2줄 처리)
       datasets: [
-        { label: 'OCC%', data: kpiRows.map(d => d.occ), backgroundColor: kpiRows.map(d => d.occColor), barPercentage: 0.8, categoryPercentage: 0.9 },
+        { label: '점유율', data: kpiRows.map(d => d.occ), backgroundColor: kpiRows.map(d => d.occColor), barPercentage: 0.8, categoryPercentage: 0.9 },
         { type: 'line', label: 'BAR Rate', data: kpiRows.map(d => d.barRate) as any, yAxisID: 'yBar', borderColor: 'transparent', backgroundColor: 'transparent', pointRadius: 0, borderWidth: 0 },
       ],
     },
@@ -1315,7 +1315,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
         {/* ── 헤더 ── */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 16, fontWeight: 500, color: TXT }}>GM Daily Report</span>
+            <span style={{ fontSize: 16, fontWeight: 500, color: TXT }}>데일리 리포트</span>
             <div data-theme="light" style={{ colorScheme: 'light', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }} onClick={e => e.stopPropagation()}>
               <span style={{ color: TXT2 }}>기준일</span>
               <DatePicker label="" value={localOtbDate} onChange={setLocalOtbDate} availableDates={otbDates} bare plain fontPx={12} dateColor={TXT} underlineColor="transparent" />
@@ -1364,9 +1364,9 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-start', width: '100%' }}>
                 {[
-                  { name: 'OCC%',   val: yesterdayKpi.occ    !== null ? `${yesterdayKpi.occ}%`    : '-', diff: yesterdayKpi.diffOcc,    unit: '%p' },
-                  { name: 'ADR',    val: yesterdayKpi.adr    !== null ? `${yesterdayKpi.adr}k`    : '-', diff: yesterdayKpi.diffAdr,    unit: 'k' },
-                  { name: 'REV',    val: yesterdayKpi.rev    !== null ? `${yesterdayKpi.rev}m`    : '-', diff: yesterdayKpi.diffRev,    unit: 'm' },
+                  { name: '점유율',   val: yesterdayKpi.occ    !== null ? `${yesterdayKpi.occ}%`    : '-', diff: yesterdayKpi.diffOcc,    unit: '%p' },
+                  { name: '객단가',    val: yesterdayKpi.adr    !== null ? `${yesterdayKpi.adr}k`    : '-', diff: yesterdayKpi.diffAdr,    unit: 'k' },
+                  { name: '매출',    val: yesterdayKpi.rev    !== null ? `${yesterdayKpi.rev}m`    : '-', diff: yesterdayKpi.diffRev,    unit: 'm' },
                   { name: 'RevPAR', val: yesterdayKpi.revpar !== null ? `${yesterdayKpi.revpar}k` : '-', diff: yesterdayKpi.diffRevpar, unit: 'k' },
                 ].map(({ name, val, diff, unit }, idx, arr) => (
                   <div key={name} style={idx === arr.length - 1 ? { flex: 'none', marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' } : { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
@@ -1393,9 +1393,9 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-start', width: '100%' }}>
                 {[
-                  { name: 'OCC%', val: `${todayKpi.occ}%`, diff: todayKpi.diffOcc, unit: '%p', color: C.textPrimary },
-                  { name: 'ADR',  val: `${todayKpi.adr}k`,  diff: todayKpi.diffAdr, unit: 'k',  color: C.textPrimary },
-                  { name: 'REV',  val: `${todayKpi.rev}m`,  diff: todayKpi.diffRev, unit: 'm',  color: C.textPrimary },
+                  { name: '점유율', val: `${todayKpi.occ}%`, diff: todayKpi.diffOcc, unit: '%p', color: C.textPrimary },
+                  { name: '객단가',  val: `${todayKpi.adr}k`,  diff: todayKpi.diffAdr, unit: 'k',  color: C.textPrimary },
+                  { name: '매출',  val: `${todayKpi.rev}m`,  diff: todayKpi.diffRev, unit: 'm',  color: C.textPrimary },
                 ].map(({ name, val, diff, unit, color }) => (
                   <div key={name} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
                     <span style={{ fontSize: 9, color: C.textMuted, marginBottom: 4 }}>{name}</span>
@@ -1430,9 +1430,9 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                   <div style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
                     <span style={{ color: C.textMuted, fontSize: 10 }}>OCC</span>
                     <span style={{ fontWeight: 500, color: C.textPrimary }}>{mtdKpi.occ}%</span>
-                    <span style={{ color: C.textMuted, fontSize: 10 }}>ADR</span>
+                    <span style={{ color: C.textMuted, fontSize: 10 }}>객단가</span>
                     <span style={{ fontWeight: 500, color: C.textPrimary }}><FmtVal val={`${mtdKpi.adr}k`} numSize={11} /></span>
-                    <span style={{ color: C.textMuted, fontSize: 10 }}>REV</span>
+                    <span style={{ color: C.textMuted, fontSize: 10 }}>매출</span>
                     <span style={{ fontWeight: 500, color: C.textPrimary }}><FmtVal val={`${mtdKpi.rev}m`} numSize={11} /></span>
                   </div>
                 </div>
@@ -1467,7 +1467,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                   </tr>
                   {/* ADR 행 */}
                   <tr style={{ borderTop: `0.5px solid ${C.border}` }}>
-                    <td style={{ fontSize: 8, color: C.textMuted, padding: '3px 2px' }}>ADR</td>
+                    <td style={{ fontSize: 8, color: C.textMuted, padding: '3px 2px' }}>객단가</td>
                     {chartKpi.map(d => (
                       <td key={d.date} style={{ textAlign: 'center', padding: '3px 2px', fontSize: 9, color: C.textSecondary, fontWeight: d.isToday ? 500 : 400, background: d.isToday ? '#f0f4ff' : d.isPast ? '#fafaf8' : 'transparent', borderBottom: `0.5px solid ${C.border}` }}>{d.adr > 0 ? <FmtVal val={`${d.adr}k`} numSize={9} /> : '-'}</td>
                     ))}
@@ -1481,7 +1481,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                   </tr>
                   {/* LY 행 */}
                   <tr>
-                    <td style={{ fontSize: 8, color: C.textMuted, padding: '3px 2px' }}>LY</td>
+                    <td style={{ fontSize: 8, color: C.textMuted, padding: '3px 2px' }}>전년대비</td>
                     {chartKpi.map(d => (
                       <td key={d.date} style={{ textAlign: 'center', padding: '3px 2px', fontSize: 9, color: C.textMuted, background: d.isToday ? '#f0f4ff' : d.isPast ? '#fafaf8' : 'transparent' }}>{d.lyOcc !== null ? `${d.lyOcc}%` : '-'}</td>
                     ))}
@@ -1493,22 +1493,22 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
 
           {/* 섹션 D — 월별 OTB 현황 */}
           <div style={{ marginBottom: 18 }}>
-            <div style={sectionTitle}>월별 OTB 현황<span style={{ fontSize: 10, color: C.textMuted, marginLeft: 8, fontWeight: 400 }}>· LY 기준: 전년동월</span></div>
+            <div style={sectionTitle}>월별 OTB 현황<span style={{ fontSize: 10, color: C.textMuted, marginLeft: 8, fontWeight: 400 }}>· 전년대비 기준: 전년동월</span></div>
             <div style={{ ...card, padding: '10px 14px' }}>
               {/* 2줄 헤더 */}
               <div style={{ display: 'grid', gridTemplateColumns: '70px repeat(6, 1fr)', borderBottom: `0.5px solid ${BORDER}` }}>
                 <span />
                 <span style={{ ...th, fontSize: 8, gridColumn: 'span 3', textAlign: 'center', color: '#2a78d6', fontWeight: 600 }}>OTB 현황</span>
-                <span style={{ ...th, fontSize: 8, gridColumn: 'span 3', textAlign: 'center', color: '#1d9e75', fontWeight: 600, borderLeft: `1px solid ${BORDER}` }}>Forecast<span style={{ fontSize: 8, color: C.textMuted, fontWeight: 400, marginLeft: 3 }}>(하단: Budget 대비)</span></span>
+                <span style={{ ...th, fontSize: 8, gridColumn: 'span 3', textAlign: 'center', color: '#1d9e75', fontWeight: 600, borderLeft: `1px solid ${BORDER}` }}>전망<span style={{ fontSize: 8, color: C.textMuted, fontWeight: 400, marginLeft: 3 }}>(하단: 목표 대비)</span></span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '70px repeat(6, 1fr)', borderBottom: `0.5px solid ${BORDER}`, paddingBottom: 3 }}>
                 <span style={{ ...th, fontSize: 8 }}>구분</span>
-                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>OCC%</span>
-                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>ADR(천원)</span>
-                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>REV(백만)</span>
-                <span style={{ ...th, fontSize: 8, textAlign: 'right', borderLeft: `1px solid ${BORDER}` }}>OCC%</span>
-                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>ADR(천원)</span>
-                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>REV(백만)</span>
+                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>점유율</span>
+                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>객단가(천원)</span>
+                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>매출(백만)</span>
+                <span style={{ ...th, fontSize: 8, textAlign: 'right', borderLeft: `1px solid ${BORDER}` }}>점유율</span>
+                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>객단가(천원)</span>
+                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>매출(백만)</span>
               </div>
               {lyLoading ? (
                 <div style={{ padding: '10px 4px', fontSize: 10, color: TXT3, textAlign: 'center' }}>월별 데이터 불러오는 중…</div>
@@ -1528,9 +1528,9 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                     {cell(`${r.otbOcc}%`, `LY ${signOcc(r.diffLyOcc)}`, dir3(r.diffLyOcc))}
                     {cell(r.otbAdr.toLocaleString(), `LY ${sign(r.diffLyAdr)}k`, dir3(r.diffLyAdr))}
                     {cell(r.otbRevM.toLocaleString(), `LY ${sign(r.diffLyRevM)}m`, dir3(r.diffLyRevM))}
-                    {cell(`${r.fcOcc}%`, `Bud ${signOcc(r.diffBudOcc)}`, dir3(r.diffBudOcc), true)}
-                    {cell(r.fcAdr.toLocaleString(), `Bud ${sign(r.diffBudAdr)}k`, dir3(r.diffBudAdr))}
-                    {cell(r.fcRevM.toLocaleString(), `Bud ${sign(r.diffBudRevM)}m`, dir3(r.diffBudRevM))}
+                    {cell(`${r.fcOcc}%`, `목표 ${signOcc(r.diffBudOcc)}`, dir3(r.diffBudOcc), true)}
+                    {cell(r.fcAdr.toLocaleString(), `목표 ${sign(r.diffBudAdr)}k`, dir3(r.diffBudAdr))}
+                    {cell(r.fcRevM.toLocaleString(), `목표 ${sign(r.diffBudRevM)}m`, dir3(r.diffBudRevM))}
                   </div>
                 )
               })}
@@ -1570,7 +1570,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
               const col = (n: number) => (n > 0 ? C.mint : n < 0 ? C.red : C.textMuted)
               return (
                 <>어제 대비 3개월 픽업은 총{' '}
-                  <strong style={{ color: col(totalPuRn), fontWeight: 500 }}>{sign(totalPuRn)}실</strong>{' '}{verb(totalPuRn)}, ADR{' '}
+                  <strong style={{ color: col(totalPuRn), fontWeight: 500 }}>{sign(totalPuRn)}실</strong>{' '}{verb(totalPuRn)}, 객단가{' '}
                   <strong style={{ color: col(avgPuAdr), fontWeight: 500 }}>{sign(avgPuAdr)}k</strong>{' '}{verb(avgPuAdr)}, 매출{' '}
                   <strong style={{ color: col(totalPuRevM), fontWeight: 500 }}>{sign(totalPuRevM)}m</strong>{' '}{verb(totalPuRevM)}하였습니다.</>
               )
@@ -1589,8 +1589,8 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                   {/* KPI 미니박스 — OCC / ADR(k) / REV(m) */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', border: `0.5px solid ${BORDER}`, borderRadius: 4, marginBottom: 8 }}>
                     <KpiMini label="OCC" value={pv(s.puOcc, '%p')} dir={isPickupLoading ? 'neu' : dir3(s.puOcc)} />
-                    <KpiMini label="ADR" value={pv(s.puAdr, 'k')}  dir={isPickupLoading ? 'neu' : dir3(s.puAdr)} />
-                    <KpiMini label="REV" value={pv(s.puRevM, 'm')} dir={isPickupLoading ? 'neu' : dir3(s.puRevM)} />
+                    <KpiMini label="객단가" value={pv(s.puAdr, 'k')}  dir={isPickupLoading ? 'neu' : dir3(s.puAdr)} />
+                    <KpiMini label="매출" value={pv(s.puRevM, 'm')} dir={isPickupLoading ? 'neu' : dir3(s.puRevM)} />
                   </div>
                   {/* 세그 칩 — 소분류(segmentation), 남은 공간 채움 */}
                   <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 4, alignContent: 'flex-start' }}>
@@ -1643,7 +1643,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                 </span>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: C.textMuted }}>
-                    <div style={{ width: 10, height: 10, borderRadius: 2, background: '#2a78d6' }} />OCC%
+                    <div style={{ width: 10, height: 10, borderRadius: 2, background: '#2a78d6' }} />점유율
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: C.textMuted }}>
                     <span style={{ fontSize: 8, background: 'rgba(255,255,255,0.8)', color: '#4a4a48', borderRadius: 3, padding: '1px 4px', border: `0.5px solid ${C.border}` }}>150k</span>BAR Rate
