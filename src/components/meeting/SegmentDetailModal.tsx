@@ -275,8 +275,8 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
   }, [schema])
 
   // 표 본문 폰트 배율 적용본 (모듈스코프 td/th 상수에 fontScale 곱)
-  const tdS = useMemo(() => ({ ...td, fontSize: 11 * fontScale }), [fontScale])
-  const thS = useMemo(() => ({ ...th, fontSize: 10 * fontScale }), [fontScale])
+  const tdS = useMemo(() => ({ ...td, fontSize: 11 * fontScale, padding: `${Math.round(8 * fontScale)}px 4px` }), [fontScale])
+  const thS = useMemo(() => ({ ...th, fontSize: 10 * fontScale, padding: `${Math.round(8 * fontScale)}px 4px` }), [fontScale])
   const numSizeS = 11 * fontScale
 
   // body scroll lock + ESC
@@ -367,19 +367,23 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
       </div>
 
       {/* 표 상단 우측 액션 버튼 그룹 */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, padding: '10px 24px 0', flexShrink: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, padding: '8px 24px 0', flexShrink: 0 }}>
         {/* 표 폰트 배율 A- / A+ */}
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginRight: 8 }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginRight: 6 }}>
           <button onClick={decFont} style={{
-            fontSize: 12, width: 26, height: 26, borderRadius: 6, border: '0.5px solid rgba(255,255,255,0.15)',
-            background: 'transparent', color: '#ccc', cursor: 'pointer', lineHeight: 1,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 12, width: 26, height: 26, borderRadius: 6,
+            border: '1px solid #2a2a2a', background: 'transparent', color: '#888',
+            cursor: 'pointer', fontFamily: 'inherit', lineHeight: 1,
           }}>A-</button>
-          <span style={{ fontSize: 10, color: TXT3, minWidth: 32, textAlign: 'center', fontFamily: 'monospace' }}>
+          <span style={{ fontSize: 10, color: TXT3, minWidth: 30, textAlign: 'center', fontFamily: 'monospace' }}>
             {Math.round(fontScale * 100)}%
           </span>
           <button onClick={incFont} style={{
-            fontSize: 14, width: 26, height: 26, borderRadius: 6, border: '0.5px solid rgba(255,255,255,0.15)',
-            background: 'transparent', color: '#ccc', cursor: 'pointer', lineHeight: 1,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 13, width: 26, height: 26, borderRadius: 6,
+            border: '1px solid #2a2a2a', background: 'transparent', color: '#888',
+            cursor: 'pointer', fontFamily: 'inherit', lineHeight: 1,
           }}>A+</button>
         </div>
         {/* Accounts */}
@@ -418,11 +422,11 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
       </div>
 
       {/* 테이블 */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '14px 24px 32px' }}>
+      <div style={{ flex: 1, overflow: 'auto', padding: '8px 24px 24px' }}>
         <table style={{ minWidth: 980, borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
           <thead>
             <tr>
-              <th rowSpan={2} style={{ ...thS, padding: '8px 8px', textAlign: 'left', position: 'sticky', left: 0, width: 170, minWidth: 170, zIndex: 2 }}>SEGMENTATION</th>
+              <th rowSpan={2} style={{ ...thS, padding: `${Math.round(8 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, width: 170, minWidth: 170, zIndex: 2 }}>SEGMENTATION</th>
               {groupTh('OTB', undefined, GROUP_BG_HEADER.otb, GROUP_COLOR.otb)}
               {groupTh('FCST', undefined, GROUP_BG_HEADER.fcst, GROUP_COLOR.fcst)}
               {groupTh('BUDGET', undefined, GROUP_BG_HEADER.budget, GROUP_COLOR.budget)}
@@ -571,7 +575,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
               const otb = otbOf(r), fcst = fcstOf(r), budget = budgetOf(r), ly = lyOf(r)
               return (
                 <tr key={r.id} style={{ background: rowBg }}>
-                  <td style={{ ...tdS, padding: '8px 8px', textAlign: 'left', position: 'sticky', left: 0, background: r.bgColor ?? (r.isBold ? BOLD_BG : BG), fontWeight: r.isBold ? 700 : 400, color: nameColor, minWidth: 170 }}>
+                  <td style={{ ...tdS, padding: `${Math.round(8 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: r.bgColor ?? (r.isBold ? BOLD_BG : BG), fontWeight: r.isBold ? 700 : 400, color: nameColor, minWidth: 170 }}>
                     {r.indent ? <><span style={{ color: '#555', marginRight: 4 }}>└</span>{r.name}</> : r.name}
                   </td>
                   {groupCells(otb,    numColor, r.isBold, numBg)}
@@ -584,7 +588,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
             })}
             {/* 합계 (HOU 제외) */}
             <tr style={{ background: '#111' }}>
-              <td style={{ ...tdS, padding: '8px 8px', textAlign: 'left', position: 'sticky', left: 0, background: '#111', fontWeight: 700, color: '#fff', borderTop: '1px solid rgba(255,255,255,0.1)' }}>합계 (HOU 제외)</td>
+              <td style={{ ...tdS, padding: `${Math.round(8 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: '#111', fontWeight: 700, color: '#fff', borderTop: '1px solid rgba(255,255,255,0.1)' }}>합계 (HOU 제외)</td>
               {([
                 { c: totOtb, g: 'otb' as const },
                 { c: totFcst, g: 'fcst' as const },
@@ -606,7 +610,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
             </tr>
             {/* OCC */}
             <tr style={{ background: '#111' }}>
-              <td style={{ ...tdS, padding: '8px 8px', textAlign: 'left', position: 'sticky', left: 0, background: '#111', fontWeight: 600, color: TXT3 }}>OCC</td>
+              <td style={{ ...tdS, padding: `${Math.round(8 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: '#111', fontWeight: 600, color: TXT3 }}>OCC</td>
               <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.otb, textAlign: 'center', color: GROUP_COLOR.otb, fontWeight: 600 }}>{occOf(totOtb.rn)}</td>
               <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.fcst, textAlign: 'center', color: GROUP_COLOR.fcst, fontWeight: 600 }}>{occOf(totFcst.rn)}</td>
               <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.budget, textAlign: 'center', color: GROUP_COLOR.budget, fontWeight: 600 }}>{occOf(totBudget.rn)}</td>
@@ -615,7 +619,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
             </tr>
             {/* Rev.PAR */}
             <tr style={{ background: '#111' }}>
-              <td style={{ ...tdS, padding: '8px 8px', textAlign: 'left', position: 'sticky', left: 0, background: '#111', fontWeight: 600, color: TXT3 }}>Rev.PAR</td>
+              <td style={{ ...tdS, padding: `${Math.round(8 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: '#111', fontWeight: 600, color: TXT3 }}>Rev.PAR</td>
               <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.otb, textAlign: 'center', color: GROUP_COLOR.otb, fontWeight: 600 }}>{revparOf(totOtb.rev)}</td>
               <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.fcst, textAlign: 'center', color: GROUP_COLOR.fcst, fontWeight: 600 }}>{revparOf(totFcst.rev)}</td>
               <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.budget, textAlign: 'center', color: GROUP_COLOR.budget, fontWeight: 600 }}>{revparOf(totBudget.rev)}</td>
