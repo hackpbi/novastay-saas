@@ -204,7 +204,7 @@ function MetricRow({ label, value, metric, subValue, tooltip, yoyOverride, yoyLo
       style={{ borderBottom: '1px solid var(--divider-color)' }}
     >
       <div className="flex items-baseline gap-2">
-        <span className="text-[11px] font-semibold text-brand-dimmed tracking-widest w-8 shrink-0">
+        <span className="text-[11px] font-semibold text-brand-dimmed tracking-widest w-12 shrink-0 whitespace-nowrap">
           {label}
         </span>
         <div className="flex flex-col" title={tooltip}>
