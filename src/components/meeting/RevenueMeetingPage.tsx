@@ -798,7 +798,7 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
             gap: 5,
           }}
         >
-          ⊞ 세그먼트 상세 보기
+          ⊞ Segment Detail
         </button>
 
       </div>
