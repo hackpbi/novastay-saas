@@ -41,7 +41,7 @@ const BORDER_SUBTLE = '0.5px solid rgba(255,255,255,0.06)'
 // 그룹 교차 배경/색상 (OTB·FCST·BUDGET·LY·GAP) — FCST/LY만 은은한 하이라이트
 const GROUP_BG = { otb: 'transparent', fcst: 'rgba(255,255,255,0.02)', budget: 'transparent', ly: 'rgba(255,255,255,0.02)', gap: 'transparent' } as const
 // sticky 헤더/서브헤더는 반투명이면 스크롤 내용이 비치므로 불투명 합성색(#131313 + 2% white ≈ #181818) 사용
-const GROUP_BG_HEADER = { otb: '#131313', fcst: '#181818', budget: '#131313', ly: '#181818', gap: '#131313' } as const
+const GROUP_BG_HEADER = { otb: '#161a1f', fcst: '#1b2026', budget: '#161a1f', ly: '#1b2026', gap: '#161a1f' } as const
 const GROUP_COLOR = { otb: '#5B8DEF', fcst: '#F5A623', budget: '#aaaaaa', ly: '#B57EDC', gap: MINT } as const
 
 type Cell = { rn: number; adr: number; rev: number }
@@ -100,7 +100,7 @@ function aggByCodes(codes: string[], map: CodeMap): Cell {
 
 const th: React.CSSProperties = {
   fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em',
-  color: TXT3, padding: '8px 4px', background: '#131313', whiteSpace: 'nowrap',
+  color: TXT3, padding: '8px 4px', background: '#161a1f', whiteSpace: 'nowrap',
   position: 'sticky', top: 0, textAlign: 'right', zIndex: 1,
 }
 const td: React.CSSProperties = {
@@ -459,7 +459,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
       background: active ? MINT : 'transparent', color: active ? '#0a2018' : TXT3, fontWeight: active ? 600 : 400,
     }}>{children}</button>
   )
-  const groupTh = (label: string, sub?: string, bg: string = '#131313', color: string = '#fff') => (
+  const groupTh = (label: string, sub?: string, bg: string = '#161a1f', color: string = '#fff') => (
     <th colSpan={3} style={{ ...thS, textAlign: 'center', boxShadow: GROUP_SHADOW, color, background: bg, borderBottom: `2px solid ${color}` }}>
       {label}{sub && <span style={{ color: TXT3, fontWeight: 400 }}> · {sub}</span>}
     </th>
@@ -545,7 +545,8 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
       </div>
 
       {/* 테이블 */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '8px 24px 24px' }}>
+      <div style={{ flex: 1, minHeight: 0, padding: '8px 20px 10px' }}>
+        <div style={{ height: '100%', overflow: 'auto', background: '#111418', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10 }}>
         <table style={{ minWidth: 980, borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
           <thead>
             <tr>
@@ -710,8 +711,8 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
               )
             })}
             {/* 합계 (HOU 제외) */}
-            <tr style={{ background: '#111' }}>
-              <td style={{ ...tdS, padding: `${Math.round(8 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: '#111', fontWeight: 700, color: '#fff', borderTop: '1px solid rgba(255,255,255,0.1)' }}>합계 (HOU 제외)</td>
+            <tr style={{ background: '#0e1216' }}>
+              <td style={{ ...tdS, padding: `${Math.round(8 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: '#0e1216', fontWeight: 700, color: '#fff', borderTop: '1px solid rgba(255,255,255,0.1)' }}>합계 (HOU 제외)</td>
               {([
                 { c: totOtb, g: 'otb' as const },
                 { c: totFcst, g: 'fcst' as const },
@@ -732,8 +733,8 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
               })()}
             </tr>
             {/* OCC */}
-            <tr style={{ background: '#111' }}>
-              <td style={{ ...tdS, padding: `${Math.round(8 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: '#111', fontWeight: 600, color: TXT3 }}>OCC</td>
+            <tr style={{ background: '#0e1216' }}>
+              <td style={{ ...tdS, padding: `${Math.round(8 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: '#0e1216', fontWeight: 600, color: TXT3 }}>OCC</td>
               <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.otb, textAlign: 'center', color: GROUP_COLOR.otb, fontWeight: 600 }}>{occOf(totOtb.rn)}</td>
               <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.fcst, textAlign: 'center', color: GROUP_COLOR.fcst, fontWeight: 600 }}>{occOf(totFcst.rn)}</td>
               <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.budget, textAlign: 'center', color: GROUP_COLOR.budget, fontWeight: 600 }}>{occOf(totBudget.rn)}</td>
@@ -741,8 +742,8 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
               <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.gap, textAlign: 'center', color: '#555' }}>—</td>
             </tr>
             {/* Rev.PAR */}
-            <tr style={{ background: '#111' }}>
-              <td style={{ ...tdS, padding: `${Math.round(8 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: '#111', fontWeight: 600, color: TXT3 }}>Rev.PAR</td>
+            <tr style={{ background: '#0e1216' }}>
+              <td style={{ ...tdS, padding: `${Math.round(8 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: '#0e1216', fontWeight: 600, color: TXT3 }}>Rev.PAR</td>
               <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.otb, textAlign: 'center', color: GROUP_COLOR.otb, fontWeight: 600 }}>{revparOf(totOtb.rev)}</td>
               <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.fcst, textAlign: 'center', color: GROUP_COLOR.fcst, fontWeight: 600 }}>{revparOf(totFcst.rev)}</td>
               <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.budget, textAlign: 'center', color: GROUP_COLOR.budget, fontWeight: 600 }}>{revparOf(totBudget.rev)}</td>
@@ -751,10 +752,11 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* 하단 패널 — 회의록 목록 · 편집 · 지시사항 */}
-      <div style={{ flexShrink: 0, height: 300, display: 'flex', gap: 14, padding: '0 24px 16px' }}>
+      <div style={{ flexShrink: 0, height: 255, display: 'flex', gap: 12, padding: '0 20px 14px' }}>
 
         {/* ① 회의록 목록 */}
         <div style={{ flex: 1.1, background: '#111418', border: BORDER_SUBTLE, borderRadius: 10, padding: '12px 13px', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
