@@ -17,6 +17,7 @@ import { FmtVal } from '@/utils/FmtVal'
 import AccountComparisonModal from './AccountComparisonModal'
 import SegmentYoyModal from './SegmentYoyModal'
 import DatePicker from '@/components/DatePicker'
+import BarRateModal from '@/components/pickup/BarRateModal'
 
 interface SegmentDetailModalProps {
   open:       boolean
@@ -136,6 +137,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
   const [gapCmpPos,  setGapCmpPos]  = useState<{ x: number; y: number } | null>(null)
   const [acctOpen, setAcctOpen] = useState(false)
   const [yoyOpen, setYoyOpen] = useState(false)
+  const [barRateOpen, setBarRateOpen] = useState(false)
   const [fontScale, setFontScale] = useState(1)   // 모달 열 때마다 1.0
 
   const decFont = () => setFontScale(s => Math.max(0.7, Math.round((s - 0.1) * 10) / 10))
@@ -528,7 +530,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
         </button>
 
         {/* BAR Rate */}
-        <button onClick={() => {}} style={btnStyle} onMouseEnter={e => hoverIn(e)} onMouseLeave={e => hoverOut(e)}>
+        <button onClick={() => setBarRateOpen(true)} style={btnStyle} onMouseEnter={e => hoverIn(e)} onMouseLeave={e => hoverOut(e)}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 13, height: 13 }}>
             <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
           </svg>
@@ -900,6 +902,16 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
           pickupRows={pickupRows}
           roomCount={roomCount}
           groups={groups}
+        />
+      )}
+      {barRateOpen && (
+        <BarRateModal
+          open={barRateOpen}
+          onClose={() => setBarRateOpen(false)}
+          hotelId={hotelId}
+          year={Number(monthKey.split('-')[0])}
+          month={Number(monthKey.split('-')[1])}
+          roomCount={roomCount}
         />
       )}
     </div>,
