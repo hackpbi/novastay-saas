@@ -51,6 +51,7 @@ const td: React.CSSProperties = {
 }
 
 const HALF = 44  // YoY% 바 반쪽 최대 px (라벨 공간 확보)
+const SUB_TOP = 34  // 서브헤더(2행) sticky top — 그룹헤더 1행 높이(padding 8+8 + 폰트 ≈ 33~34)
 
 export default function AccountComparisonModal({ open, onClose, hotelId, monthKey, pickupRows }: AccountComparisonModalProps) {
   const [lyMode, setLyMode] = useState<LyMode>('match')
@@ -303,7 +304,7 @@ export default function AccountComparisonModal({ open, onClose, hotelId, monthKe
   const rnTh = (label: string, sk: 'otb' | 'ly' | 'gap') => {
     const active = sortKey === sk
     return (
-      <th key={`${sk}-rn`} onClick={() => onSort(sk)} style={{ ...th, width: 80, minWidth: 80, boxShadow: GROUP_SHADOW, cursor: 'pointer', userSelect: 'none' }}>
+      <th key={`${sk}-rn`} onClick={() => onSort(sk)} style={{ ...th, top: SUB_TOP, width: 80, minWidth: 80, boxShadow: GROUP_SHADOW, cursor: 'pointer', userSelect: 'none' }}>
         {label}{active && <span style={{ color: MINT, marginLeft: 3 }}>{sortDir === 'desc' ? '▼' : '▲'}</span>}
       </th>
     )
@@ -437,7 +438,7 @@ export default function AccountComparisonModal({ open, onClose, hotelId, monthKe
                   ['R/N', 'ADR', 'REV'].map((s) => (
                     s === 'R/N'
                       ? rnTh('R/N', g.toLowerCase() as 'otb' | 'ly' | 'gap')
-                      : <th key={`${g}-${s}`} style={{ ...th, width: 80, minWidth: 80 }}>{s}</th>
+                      : <th key={`${g}-${s}`} style={{ ...th, top: SUB_TOP, width: 80, minWidth: 80 }}>{s}</th>
                   ))
                 ))}
               </tr>
