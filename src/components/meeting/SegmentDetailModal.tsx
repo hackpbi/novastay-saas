@@ -547,8 +547,8 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
       {/* 본문 — 표(좌 75%) + 사이드(우 25%) */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 12, padding: '8px 20px 14px' }}>
 
-      {/* 좌: 표 영역 (75%) */}
-      <div style={{ flex: 3, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      {/* 좌: 표 영역 (82%) */}
+      <div style={{ flex: 82, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto', background: '#111418', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10 }}>
         <table style={{ minWidth: 980, borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
           <thead>
@@ -758,8 +758,8 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
         </div>
       </div>
 
-      {/* 우: 사이드 (25%) — 회의록 목록 / 편집 / 지시사항 세로 3단 */}
-      <div style={{ flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
+      {/* 우: 사이드 (18%) — 회의록 목록 / 편집 / 지시사항 세로 3단 */}
+      <div style={{ flex: 18, minWidth: 280, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
 
         {/* ① 회의록 목록 */}
         <div style={{ flex: '0 0 auto', maxHeight: '30%', background: '#111418', border: BORDER_SUBTLE, borderRadius: 10, padding: '10px 12px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
