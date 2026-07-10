@@ -7,6 +7,7 @@ import { X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useMarketSchema } from '@/hooks/useMarketSchema'
 import { useLyPacing } from '@/hooks/useLyPacing'
+import { useDateContext } from '@/contexts/DateContext'
 import { buildSegTable, type SegTableRow } from '@/utils/segmentationTable'
 import type { PickupRow } from '@/hooks/usePickupData'
 import type { SegGroup } from './MeetingPickupBlock'
@@ -48,10 +49,20 @@ export default function SegmentYoyModal({ open, onClose, hotelId, monthKey, pick
   const [lyColMode, setLyColMode]     = useState(true)                          // true=전년OTB(pacing) / false=전년마감(a01)
   const [lyAccSource, setLyAccSource] = useState<'otb' | 'ly' | 'gap'>('gap')   // 어카운트 패널 소스
   const [selMain, setSelMain]         = useState<string | null>(null)
+  const [fontScale, setFontScale]     = useState(1)   // 모달 열 때마다 1.0
+
+  const decFont = () => setFontScale(s => Math.max(0.7, Math.round((s - 0.1) * 10) / 10))
+  const incFont = () => setFontScale(s => Math.min(1.5, Math.round((s + 0.1) * 10) / 10))
 
   const [year, month0] = monthKey.split('-').map(Number)   // month0: 1-based
 
   const { data: schema = [] } = useMarketSchema()
+  const { otbDate } = useDateContext()   // useLyPacing이 쓰는 실제 OTB 스냅샷 날짜(읽기 전용 표시)
+
+  // 표 본문 폰트 배율 파생본 (모듈스코프 상수 원본 유지)
+  const numSizeS = 11 * fontScale
+  const segHeadThS = useMemo(() => ({ ...segHeadTh, fontSize: 10 * fontScale }), [fontScale])
+  const accHeadThS = useMemo(() => ({ ...accHeadTh, fontSize: 10 * fontScale }), [fontScale])
 
   // 세그 트리 (월 전체 — buildSegTable에 day 미지정 → 월 집계, month은 1-based)
   const rows = useMemo(
@@ -222,14 +233,19 @@ export default function SegmentYoyModal({ open, onClose, hotelId, monthKey, pick
     else { setSelMain(id); setLyAccSource(src) }
   }
 
-  const grpTh = (color: string): React.CSSProperties => ({ ...stickyTop0, textAlign: 'center', padding: '6px 12px', fontSize: 10, fontWeight: 700, color, letterSpacing: '0.07em', background: '#0f0f0f', borderLeft: `1px solid ${DIV}`, borderBottom: `2px solid ${color}` })
+  const grpTh = (color: string): React.CSSProperties => ({ ...stickyTop0, textAlign: 'center', padding: '6px 12px', fontSize: 10 * fontScale, fontWeight: 700, color, letterSpacing: '0.07em', background: '#0f0f0f', borderLeft: `1px solid ${DIV}`, borderBottom: `2px solid ${color}` })
 
   const renderLyTable = () => (
-    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 * fontScale }}>
       <thead>
         <tr>
-          <th style={{ ...stickyTop0, textAlign: 'left', padding: '6px 12px', fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.04em' }}>SEGMENT</th>
-          <th colSpan={3} style={grpTh('#5B8DEF')}>현재 OTB</th>
+          <th style={{ ...stickyTop0, textAlign: 'left', padding: '6px 12px', fontSize: 10 * fontScale, fontWeight: 500, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.04em' }}>SEGMENT</th>
+          <th colSpan={3} style={grpTh('#5B8DEF')}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+              <span>OTB</span>
+              <span style={{ fontSize: 9 * fontScale, fontWeight: 400, color: 'rgba(255,255,255,0.4)', letterSpacing: 0 }}>{otbDate}</span>
+            </div>
+          </th>
           <th colSpan={3} style={grpTh(lyColMode ? '#a78bfa' : '#F59E0B')}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <div
@@ -242,7 +258,7 @@ export default function SegmentYoyModal({ open, onClose, hotelId, monthKey, pick
                 onClick={() => setLyColMode(p => !p)}
               >
                 <div style={{ position: 'absolute', width: 16, height: 16, top: 3, left: lyColMode ? 5 : 'auto', right: lyColMode ? 'auto' : 5, borderRadius: '50%', background: '#fff', transition: 'all 0.2s' }} />
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(0,0,0,0.65)', position: 'relative', zIndex: 1 }}>{lyColMode ? '전년OTB' : '전년마감'}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(0,0,0,0.65)', position: 'relative', zIndex: 1 }}>{lyColMode ? 'LY OTB' : 'LY Actual'}</span>
               </div>
             </div>
           </th>
@@ -250,9 +266,9 @@ export default function SegmentYoyModal({ open, onClose, hotelId, monthKey, pick
         </tr>
         <tr style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
           <th style={{ ...stickyTop24, padding: '4px 12px 6px' }} />
-          {(['R/N', 'ADR', 'REV'] as const).map((h, i) => (<th key={`c-${h}`} style={{ ...segHeadTh, ...stickyTop24, padding: '4px 12px 6px', borderLeft: i === 0 ? `1px solid ${DIV}` : undefined }}>{h}</th>))}
-          {(['R/N', 'ADR', 'REV'] as const).map((h, i) => (<th key={`l-${h}`} style={{ ...segHeadTh, ...stickyTop24, padding: '4px 12px 6px', borderLeft: i === 0 ? `1px solid ${DIV}` : undefined }}>{h}</th>))}
-          {(['ΔR/N', 'ΔADR', 'ΔREV'] as const).map((h, i) => (<th key={`g-${h}`} style={{ ...segHeadTh, ...stickyTop24, padding: '4px 12px 6px', borderLeft: i === 0 ? `1px solid ${DIV}` : undefined }}>{h}</th>))}
+          {(['R/N', 'ADR', 'REV'] as const).map((h, i) => (<th key={`c-${h}`} style={{ ...segHeadThS, ...stickyTop24, padding: '4px 12px 6px', borderLeft: i === 0 ? `1px solid ${DIV}` : undefined }}>{h}</th>))}
+          {(['R/N', 'ADR', 'REV'] as const).map((h, i) => (<th key={`l-${h}`} style={{ ...segHeadThS, ...stickyTop24, padding: '4px 12px 6px', borderLeft: i === 0 ? `1px solid ${DIV}` : undefined }}>{h}</th>))}
+          {(['ΔR/N', 'ΔADR', 'ΔREV'] as const).map((h, i) => (<th key={`g-${h}`} style={{ ...segHeadThS, ...stickyTop24, padding: '4px 12px 6px', borderLeft: i === 0 ? `1px solid ${DIV}` : undefined }}>{h}</th>))}
         </tr>
       </thead>
       <tbody>
@@ -265,23 +281,23 @@ export default function SegmentYoyModal({ open, onClose, hotelId, monthKey, pick
             <tr key={r.id} style={{ background: active ? 'rgba(0,229,160,0.06)' : segBgColor(r), borderBottom: '0.5px solid rgba(255,255,255,0.04)' }}>
               <td style={{ padding: isSub ? '5px 12px 5px 24px' : '7px 12px', color: segTextColor(r), fontWeight: r.isBold ? 600 : 400, boxShadow: active ? 'inset 3px 0 0 #00E5A0' : undefined }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  {isSub && <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 10 }}>└</span>}
+                  {isSub && <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 10 * fontScale }}>└</span>}
                   <span style={{ width: 7, height: 7, borderRadius: 2, background: r.bgDarkColor || '#888', flexShrink: 0 }} />
                   {r.name}
                 </span>
               </td>
               {/* 현재 OTB — 클릭 시 현재 OTB 어카운트 */}
               <td onClick={() => selectLy(r.id, 'otb')} style={{ padding: '5px 12px', textAlign: 'right', color: cColor, cursor: 'pointer', borderLeft: `1px solid ${active && lyAccSource === 'otb' ? '#00E5A0' : DIV}` }}>{fmtOtbRn(v.otbN)}</td>
-              <td onClick={() => selectLy(r.id, 'otb')} style={{ padding: '5px 12px', textAlign: 'right', color: cColor, cursor: 'pointer' }}><FmtVal val={fmtOtbAdr(v.otbAdr)} numSize={11} /></td>
-              <td onClick={() => selectLy(r.id, 'otb')} style={{ padding: '5px 12px', textAlign: 'right', color: cColor, cursor: 'pointer' }}><FmtVal val={fmtOtbRev(v.otbR)} numSize={11} /></td>
+              <td onClick={() => selectLy(r.id, 'otb')} style={{ padding: '5px 12px', textAlign: 'right', color: cColor, cursor: 'pointer' }}><FmtVal val={fmtOtbAdr(v.otbAdr)} numSize={numSizeS} /></td>
+              <td onClick={() => selectLy(r.id, 'otb')} style={{ padding: '5px 12px', textAlign: 'right', color: cColor, cursor: 'pointer' }}><FmtVal val={fmtOtbRev(v.otbR)} numSize={numSizeS} /></td>
               {/* 작년 OTB — 클릭 시 작년 OTB 어카운트 */}
               <td onClick={() => selectLy(r.id, 'ly')} style={{ padding: '5px 12px', textAlign: 'right', color: lyGray, cursor: 'pointer', borderLeft: `1px solid ${active && lyAccSource === 'ly' ? '#00E5A0' : DIV}` }}>{fmtOtbRn(v.lyN)}</td>
-              <td onClick={() => selectLy(r.id, 'ly')} style={{ padding: '5px 12px', textAlign: 'right', color: lyGray, cursor: 'pointer' }}><FmtVal val={fmtOtbAdr(v.lyAdr)} numSize={11} /></td>
-              <td onClick={() => selectLy(r.id, 'ly')} style={{ padding: '5px 12px', textAlign: 'right', color: lyGray, cursor: 'pointer' }}><FmtVal val={fmtOtbRev(v.lyR)} numSize={11} /></td>
+              <td onClick={() => selectLy(r.id, 'ly')} style={{ padding: '5px 12px', textAlign: 'right', color: lyGray, cursor: 'pointer' }}><FmtVal val={fmtOtbAdr(v.lyAdr)} numSize={numSizeS} /></td>
+              <td onClick={() => selectLy(r.id, 'ly')} style={{ padding: '5px 12px', textAlign: 'right', color: lyGray, cursor: 'pointer' }}><FmtVal val={fmtOtbRev(v.lyR)} numSize={numSizeS} /></td>
               {/* GAP — 클릭 시 GAP 어카운트 */}
               <td onClick={() => selectLy(r.id, 'gap')} style={{ padding: '5px 12px', textAlign: 'right', color: gapColor(v.gapN), cursor: 'pointer', borderLeft: `1px solid ${active && lyAccSource === 'gap' ? '#00E5A0' : DIV}`, fontWeight: 500 }}>{fmtGapRn(v.gapN)}</td>
-              <td onClick={() => selectLy(r.id, 'gap')} style={{ padding: '5px 12px', textAlign: 'right', color: gapColor(v.gapAdr), cursor: 'pointer' }}><FmtVal val={fmtGapAdrK(v.gapAdr)} numSize={11} /></td>
-              <td onClick={() => selectLy(r.id, 'gap')} style={{ padding: '5px 12px', textAlign: 'right', color: gapColor(v.gapR), cursor: 'pointer' }}><FmtVal val={fmtGapRevM(v.gapR)} numSize={11} /></td>
+              <td onClick={() => selectLy(r.id, 'gap')} style={{ padding: '5px 12px', textAlign: 'right', color: gapColor(v.gapAdr), cursor: 'pointer' }}><FmtVal val={fmtGapAdrK(v.gapAdr)} numSize={numSizeS} /></td>
+              <td onClick={() => selectLy(r.id, 'gap')} style={{ padding: '5px 12px', textAlign: 'right', color: gapColor(v.gapR), cursor: 'pointer' }}><FmtVal val={fmtGapRevM(v.gapR)} numSize={numSizeS} /></td>
             </tr>
           )
         })}
@@ -290,33 +306,33 @@ export default function SegmentYoyModal({ open, onClose, hotelId, monthKey, pick
         <tr style={{ position: 'sticky', bottom: 0, background: '#0a0a0a' }}>
           <td style={{ padding: '7px 12px', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}>Total</td>
           <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)', borderLeft: `1px solid ${DIV}` }}>{fmtOtbRn(lyTotal.otbN)}</td>
-          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtOtbAdr(lyTotOtbAdr)} numSize={11} /></td>
-          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtOtbRev(lyTotal.otbR)} numSize={11} /></td>
+          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtOtbAdr(lyTotOtbAdr)} numSize={numSizeS} /></td>
+          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtOtbRev(lyTotal.otbR)} numSize={numSizeS} /></td>
           <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: lyGray, borderTop: '1px solid rgba(0,229,160,0.5)', borderLeft: `1px solid ${DIV}` }}>{fmtOtbRn(lyTotal.lyN)}</td>
-          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: lyGray, borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtOtbAdr(lyTotLyAdr)} numSize={11} /></td>
-          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: lyGray, borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtOtbRev(lyTotal.lyR)} numSize={11} /></td>
+          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: lyGray, borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtOtbAdr(lyTotLyAdr)} numSize={numSizeS} /></td>
+          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: lyGray, borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtOtbRev(lyTotal.lyR)} numSize={numSizeS} /></td>
           <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: gapColor(lyGapTotN), borderTop: '1px solid rgba(0,229,160,0.5)', borderLeft: `1px solid ${DIV}` }}>{fmtGapRn(lyGapTotN)}</td>
-          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: gapColor(lyGapTotAdr), borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtGapAdrK(lyGapTotAdr)} numSize={11} /></td>
-          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: gapColor(lyGapTotR), borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtGapRevM(lyGapTotR)} numSize={11} /></td>
+          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: gapColor(lyGapTotAdr), borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtGapAdrK(lyGapTotAdr)} numSize={numSizeS} /></td>
+          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: gapColor(lyGapTotR), borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtGapRevM(lyGapTotR)} numSize={numSizeS} /></td>
         </tr>
         <tr style={{ borderTop: '0.5px solid rgba(255,255,255,0.06)' }}>
-          <td style={{ padding: '6px 12px', fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>OCC</td>
-          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)', borderLeft: `1px solid ${DIV}` }}>{(lyTotal.otbN / (roomCount || 1) * 100).toFixed(1)}%</td>
-          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: lyGray, borderLeft: `1px solid ${DIV}` }}>{(lyTotal.lyN / (roomCount || 1) * 100).toFixed(1)}%</td>
-          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: gapColor(lyGapTotN), borderLeft: `1px solid ${DIV}` }}>{lyGapTotN >= 0 ? '+' : ''}{(lyGapTotN / (roomCount || 1) * 100).toFixed(1)}%p</td>
+          <td style={{ padding: '6px 12px', fontSize: 11 * fontScale, color: 'rgba(255,255,255,0.4)' }}>OCC</td>
+          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11 * fontScale, fontWeight: 500, color: 'var(--color-text-primary)', borderLeft: `1px solid ${DIV}` }}>{(lyTotal.otbN / (roomCount || 1) * 100).toFixed(1)}%</td>
+          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11 * fontScale, fontWeight: 500, color: lyGray, borderLeft: `1px solid ${DIV}` }}>{(lyTotal.lyN / (roomCount || 1) * 100).toFixed(1)}%</td>
+          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11 * fontScale, fontWeight: 500, color: gapColor(lyGapTotN), borderLeft: `1px solid ${DIV}` }}>{lyGapTotN >= 0 ? '+' : ''}{(lyGapTotN / (roomCount || 1) * 100).toFixed(1)}%p</td>
         </tr>
         <tr>
-          <td style={{ padding: '6px 12px', fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>Rev.PAR</td>
-          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)', borderLeft: `1px solid ${DIV}` }}><FmtVal numSize={11} val={`${Math.round(lyTotal.otbR / (roomCount || 1) / 1000)}k`} /></td>
-          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: lyGray, borderLeft: `1px solid ${DIV}` }}><FmtVal numSize={11} val={`${Math.round(lyTotal.lyR / (roomCount || 1) / 1000)}k`} /></td>
-          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: gapColor(lyGapTotR), borderLeft: `1px solid ${DIV}` }}><FmtVal numSize={11} val={`${lyGapTotR >= 0 ? '+' : ''}${Math.round(lyGapTotR / (roomCount || 1) / 1000)}k`} /></td>
+          <td style={{ padding: '6px 12px', fontSize: 11 * fontScale, color: 'rgba(255,255,255,0.4)' }}>Rev.PAR</td>
+          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11 * fontScale, fontWeight: 500, color: 'var(--color-text-primary)', borderLeft: `1px solid ${DIV}` }}><FmtVal numSize={numSizeS} val={`${Math.round(lyTotal.otbR / (roomCount || 1) / 1000)}k`} /></td>
+          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11 * fontScale, fontWeight: 500, color: lyGray, borderLeft: `1px solid ${DIV}` }}><FmtVal numSize={numSizeS} val={`${Math.round(lyTotal.lyR / (roomCount || 1) / 1000)}k`} /></td>
+          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11 * fontScale, fontWeight: 500, color: gapColor(lyGapTotR), borderLeft: `1px solid ${DIV}` }}><FmtVal numSize={numSizeS} val={`${lyGapTotR >= 0 ? '+' : ''}${Math.round(lyGapTotR / (roomCount || 1) / 1000)}k`} /></td>
         </tr>
       </tfoot>
     </table>
   )
 
   const src = lyAccSource
-  const accTitle = src === 'otb' ? '현재 OTB' : src === 'ly' ? (lyColMode ? '작년 OTB' : '전년마감') : 'GAP (증감)'
+  const accTitle = src === 'otb' ? 'OTB' : src === 'ly' ? (lyColMode ? 'LY OTB' : 'LY Actual') : 'GAP (증감)'
   const isGap = src === 'gap'
   const heads = isGap ? ['ΔR/N', 'ΔADR', 'ΔREV'] : ['R/N', 'ADR', 'REV']
   type LAcc = (typeof lyAccountRows)[number]
@@ -330,7 +346,7 @@ export default function SegmentYoyModal({ open, onClose, hotelId, monthKey, pick
 
   return createPortal(
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 1400, maxWidth: '95vw', height: '88vh', background: '#0a0a0a', borderRadius: 12, border: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 1400, maxWidth: '95vw', height: 'auto', maxHeight: '90vh', background: '#0a0a0a', borderRadius: 12, border: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* 헤더 */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -345,12 +361,32 @@ export default function SegmentYoyModal({ open, onClose, hotelId, monthKey, pick
               ))}
             </div>
           </div>
-          <button onClick={onClose} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '7px 14px',
-            borderRadius: 8, border: 'none', background: '#141414', color: '#ccc', cursor: 'pointer',
-          }}>
-            <X size={16} /> 닫기
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* 표 폰트 배율 A- / A+ */}
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <button onClick={decFont} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12, width: 26, height: 26, borderRadius: 6,
+                border: '1px solid #2a2a2a', background: 'transparent', color: '#888',
+                cursor: 'pointer', fontFamily: 'inherit', lineHeight: 1,
+              }}>A-</button>
+              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', minWidth: 30, textAlign: 'center', fontFamily: 'monospace' }}>
+                {Math.round(fontScale * 100)}%
+              </span>
+              <button onClick={incFont} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 13, width: 26, height: 26, borderRadius: 6,
+                border: '1px solid #2a2a2a', background: 'transparent', color: '#888',
+                cursor: 'pointer', fontFamily: 'inherit', lineHeight: 1,
+              }}>A+</button>
+            </div>
+            <button onClick={onClose} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '7px 14px',
+              borderRadius: 8, border: 'none', background: '#141414', color: '#ccc', cursor: 'pointer',
+            }}>
+              <X size={16} /> 닫기
+            </button>
+          </div>
         </div>
 
         {/* 본문 — 전년 비교 테이블 · 어카운트 */}
@@ -377,11 +413,11 @@ export default function SegmentYoyModal({ open, onClose, hotelId, monthKey, pick
                   {lyAccountRows.length === 0 ? (
                     <div style={{ padding: 16, textAlign: 'center', fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>No data</div>
                   ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 * fontScale }}>
                       <thead>
                         <tr style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)', position: 'sticky', top: 0, background: '#0a0a0a', zIndex: 1 }}>
-                          <th style={{ textAlign: 'left', padding: '7px 12px', fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>ACCOUNT</th>
-                          {heads.map(h => <th key={h} style={accHeadTh}>{h}</th>)}
+                          <th style={{ textAlign: 'left', padding: '7px 12px', fontSize: 10 * fontScale, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>ACCOUNT</th>
+                          {heads.map(h => <th key={h} style={accHeadThS}>{h}</th>)}
                         </tr>
                       </thead>
                       <tbody>
@@ -392,8 +428,8 @@ export default function SegmentYoyModal({ open, onClose, hotelId, monthKey, pick
                           >
                             <td style={{ padding: '6px 12px', color: 'rgba(255,255,255,0.75)' }}>{a.name}</td>
                             <td style={{ padding: '6px 12px', textAlign: 'right', color: valColor(rowN(a)) }}>{fmtN(rowN(a))}</td>
-                            <td style={{ padding: '6px 12px', textAlign: 'right', color: valColor(rowAdr(a)) }}><FmtVal val={fmtA(rowAdr(a))} numSize={11} /></td>
-                            <td style={{ padding: '6px 12px', textAlign: 'right', color: valColor(rowR(a)) }}><FmtVal val={fmtR(rowR(a))} numSize={11} /></td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right', color: valColor(rowAdr(a)) }}><FmtVal val={fmtA(rowAdr(a))} numSize={numSizeS} /></td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right', color: valColor(rowR(a)) }}><FmtVal val={fmtR(rowR(a))} numSize={numSizeS} /></td>
                           </tr>
                         ))}
                       </tbody>
