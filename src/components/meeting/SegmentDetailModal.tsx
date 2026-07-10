@@ -16,6 +16,7 @@ import { monthKeyLabel } from './dummyMeetingData'
 import { FmtVal } from '@/utils/FmtVal'
 import AccountComparisonModal from './AccountComparisonModal'
 import SegmentYoyModal from './SegmentYoyModal'
+import DatePicker from '@/components/DatePicker'
 
 interface SegmentDetailModalProps {
   open:       boolean
@@ -57,6 +58,29 @@ type CodeMap = Map<string, { rn: number; rev: number }>
 type GapBase    = 'otb' | 'fcst'
 type GapCompare = 'budget' | 'ly'
 type LyMode     = 'match' | 'date'
+
+// ── 회의록(c12_meeting_notes) / 지시사항(c11_meeting_directives) ─────────────────
+type MeetingNote = {
+  id:           string
+  hotel_id:     string
+  month_key:    string
+  title:        string | null
+  content:      string
+  meeting_date: string | null   // 'YYYY-MM-DD'
+  author:       string | null
+  created_at:   string
+  updated_at:   string
+}
+type Directive = {
+  id: string; hotel_id: string; month_key: string; content: string
+  assignee: string | null; date: string
+  status: '진행중' | '연장' | '보류' | '완료'; created_at: string
+}
+const DIRECTIVE_STATUS = ['진행중', '연장', '보류', '완료'] as const
+const DIRECTIVE_STATUS_COLOR: Record<string, string> = {
+  '진행중': '#5B8DEF', '연장': '#F5A623', '보류': '#888888', '완료': '#00E5A0',
+}
+const todayKST = () => new Date().toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })
 
 // ── 포맷 ─────────────────────────────────────────────────────────────────────────
 const fmtRn  = (v: number) => (v === 0 ? '-' : v.toLocaleString('ko-KR'))
@@ -116,6 +140,96 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
 
   const decFont = () => setFontScale(s => Math.max(0.7, Math.round((s - 0.1) * 10) / 10))
   const incFont = () => setFontScale(s => Math.min(1.5, Math.round((s + 0.1) * 10) / 10))
+
+  // ── 회의록(c12_meeting_notes) ───────────────────────────────────────────────────
+  const [noteFrom, setNoteFrom] = useState(`${monthKey}-01`)
+  const [noteTo,   setNoteTo]   = useState(`${monthKey}-31`)
+  const [selNoteId, setSelNoteId] = useState<string | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editDate,  setEditDate]  = useState(todayKST())
+  const [editBody,  setEditBody]  = useState('')
+
+  const { data: notes = [], refetch: refetchNotes } = useQuery<MeetingNote[]>({
+    queryKey: ['seg-meeting-notes', hotelId, noteFrom, noteTo],
+    enabled: !!hotelId && open,
+    staleTime: 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('c12_meeting_notes')
+        .select('*')
+        .eq('hotel_id', hotelId)
+        .gte('meeting_date', noteFrom)
+        .lte('meeting_date', noteTo)
+        .order('meeting_date', { ascending: false })
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return (data ?? []) as MeetingNote[]
+    },
+  })
+  const loadNote = (n: MeetingNote) => {
+    setSelNoteId(n.id)
+    setEditTitle(n.title ?? '')
+    setEditDate(n.meeting_date ?? todayKST())
+    setEditBody(n.content ?? '')
+  }
+  const newNote = () => { setSelNoteId(null); setEditTitle(''); setEditDate(todayKST()); setEditBody('') }
+  const saveNote = async () => {
+    if (selNoteId) {
+      const { error } = await (supabase as any).from('c12_meeting_notes')
+        .update({ title: editTitle.trim() || null, content: editBody, meeting_date: editDate })
+        .eq('id', selNoteId)
+      if (error) { console.error(error); return }
+    } else {
+      const { data, error } = await (supabase as any).from('c12_meeting_notes')
+        .insert({ hotel_id: hotelId, month_key: monthKey, title: editTitle.trim() || null, content: editBody, meeting_date: editDate })
+        .select().single()
+      if (error) { console.error(error); return }
+      if (data) setSelNoteId(data.id)
+    }
+    refetchNotes()
+  }
+  const deleteNote = async () => {
+    if (!selNoteId) return
+    const { error } = await (supabase as any).from('c12_meeting_notes').delete().eq('id', selNoteId)
+    if (error) { console.error(error); return }
+    newNote(); refetchNotes()
+  }
+
+  // ── 지시사항(c11_meeting_directives) — RevenueMeetingPage와 동일 queryKey(캐시 공유) ──
+  const [inlineOpen,     setInlineOpen]     = useState(false)
+  const [inlineContent,  setInlineContent]  = useState('')
+  const [inlineDate,     setInlineDate]     = useState(todayKST())
+  const [inlineAssignee, setInlineAssignee] = useState('')
+
+  const { data: directives = [], refetch: refetchDirectives } = useQuery<Directive[]>({
+    queryKey: ['meeting-directives', hotelId, monthKey],
+    enabled: !!hotelId && !!monthKey && open,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from('c11_meeting_directives')
+        .select('*').eq('hotel_id', hotelId).eq('month_key', monthKey)
+        .order('date', { ascending: false }).order('created_at', { ascending: false })
+      if (error) throw error
+      return (data ?? []) as Directive[]
+    },
+  })
+  const addDirective = async (content: string, date: string, assignee: string) => {
+    if (!content.trim()) return
+    const { error } = await (supabase as any).from('c11_meeting_directives')
+      .insert({ hotel_id: hotelId, month_key: monthKey, content: content.trim(), date, assignee: assignee.trim() || null })
+    if (error) { console.error('[addDirective] error:', error); return }
+    refetchDirectives()
+  }
+  const deleteDirective = async (id: string) => {
+    const { error } = await (supabase as any).from('c11_meeting_directives').delete().eq('id', id)
+    if (error) { console.error(error); return }
+    refetchDirectives()
+  }
+  const updateDirectiveStatus = async (id: string, status: string) => {
+    const { error } = await (supabase as any).from('c11_meeting_directives').update({ status }).eq('id', id)
+    if (error) { console.error('[updateDirectiveStatus] error:', error); return }
+    refetchDirectives()
+  }
 
   const handleGapBaseClick = () => {
     if (gapBasePos) { setGapBasePos(null); return }
@@ -637,6 +751,128 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
             </tr>
           </tbody>
         </table>
+      </div>
+
+      {/* 하단 패널 — 회의록 목록 · 편집 · 지시사항 */}
+      <div style={{ flexShrink: 0, height: 300, display: 'flex', gap: 14, padding: '0 24px 16px' }}>
+
+        {/* ① 회의록 목록 */}
+        <div style={{ flex: 1.1, background: '#111418', border: BORDER_SUBTLE, borderRadius: 10, padding: '12px 13px', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#ddd' }}>회의록 목록</span>
+            <button onClick={newNote} style={{ fontSize: 10, padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(0,229,160,0.3)', background: 'rgba(0,229,160,0.08)', color: MINT, cursor: 'pointer' }}>+ 새 회의록</button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 10, color: TXT3 }}>
+            <DatePicker label="시작" value={noteFrom} onChange={setNoteFrom} bare plain fontPx={10} />
+            <span>~</span>
+            <DatePicker label="종료" value={noteTo} onChange={setNoteTo} bare plain fontPx={10} />
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {notes.length === 0 ? (
+              <div style={{ fontSize: 11, color: '#555', textAlign: 'center', padding: '16px 0' }}>회의록이 없습니다</div>
+            ) : notes.map(n => {
+              const active = selNoteId === n.id
+              return (
+                <div key={n.id} onClick={() => loadNote(n)} style={{
+                  padding: '7px 9px', borderRadius: 7, cursor: 'pointer',
+                  background: active ? 'rgba(0,229,160,0.08)' : '#0c0f13',
+                  border: `1px solid ${active ? 'rgba(0,229,160,0.3)' : 'rgba(255,255,255,0.06)'}`,
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: '#eee', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.title || '(제목 없음)'}</div>
+                  <div style={{ fontSize: 9, color: TXT3, marginTop: 2 }}>{n.meeting_date ?? '-'}{n.author ? ` · ${n.author}` : ''}</div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* ② 회의록 편집 */}
+        <div style={{ flex: 1.9, background: '#111418', border: BORDER_SUBTLE, borderRadius: 10, padding: '12px 14px', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#ddd' }}>회의록 편집</span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {selNoteId && (
+                <button onClick={deleteNote} style={{ fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(226,75,74,0.35)', background: 'rgba(226,75,74,0.08)', color: RED, cursor: 'pointer' }}>삭제</button>
+              )}
+              <button onClick={saveNote} style={{ fontSize: 10, padding: '4px 12px', borderRadius: 6, border: 'none', background: MINT, color: '#0a2018', fontWeight: 600, cursor: 'pointer' }}>저장</button>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <input
+              value={editTitle}
+              onChange={e => setEditTitle(e.target.value)}
+              placeholder="제목"
+              style={{ flex: 1, fontSize: 12, padding: '6px 9px', borderRadius: 6, background: '#0c0f13', border: '1px solid rgba(255,255,255,0.08)', color: '#fff', outline: 'none', fontFamily: 'inherit', minWidth: 0 }}
+            />
+            <div style={{ fontSize: 10, color: TXT3, flexShrink: 0 }}>
+              <DatePicker label="날짜" value={editDate} onChange={setEditDate} bare plain fontPx={10} />
+            </div>
+          </div>
+          <textarea
+            value={editBody}
+            onChange={e => setEditBody(e.target.value)}
+            placeholder="회의 내용을 입력하세요..."
+            style={{ flex: 1, fontSize: 12, lineHeight: 1.6, padding: '9px 11px', borderRadius: 8, background: '#0c0f13', border: '1px solid rgba(255,255,255,0.08)', color: '#eee', outline: 'none', resize: 'none', fontFamily: 'inherit' }}
+          />
+        </div>
+
+        {/* ③ 지시사항 */}
+        <div style={{ flex: 1.1, background: '#111418', border: BORDER_SUBTLE, borderRadius: 10, padding: '12px 13px', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#ddd' }}>지시사항</span>
+            <button onClick={() => setInlineOpen(v => !v)} style={{ fontSize: 10, padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(0,229,160,0.3)', background: 'rgba(0,229,160,0.08)', color: MINT, cursor: 'pointer' }}>{inlineOpen ? '닫기' : '+ 추가'}</button>
+          </div>
+          {inlineOpen && (
+            <div style={{ marginBottom: 8, padding: 9, borderRadius: 8, background: '#0c0f13', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <textarea
+                value={inlineContent}
+                onChange={e => setInlineContent(e.target.value)}
+                placeholder="지시사항 내용..."
+                style={{ fontSize: 11, lineHeight: 1.5, padding: '6px 8px', borderRadius: 6, background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.08)', color: '#eee', outline: 'none', resize: 'none', fontFamily: 'inherit', minHeight: 44 }}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ fontSize: 10, color: TXT3 }}>
+                  <DatePicker label="날짜" value={inlineDate} onChange={setInlineDate} bare plain fontPx={10} />
+                </div>
+                <input
+                  value={inlineAssignee}
+                  onChange={e => setInlineAssignee(e.target.value)}
+                  placeholder="담당자"
+                  style={{ flex: 1, fontSize: 11, padding: '5px 8px', borderRadius: 6, background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.08)', color: '#fff', outline: 'none', fontFamily: 'inherit', minWidth: 0 }}
+                />
+                <button
+                  onClick={async () => { await addDirective(inlineContent, inlineDate, inlineAssignee); setInlineContent(''); setInlineAssignee('') }}
+                  style={{ fontSize: 10, padding: '5px 12px', borderRadius: 6, border: 'none', background: MINT, color: '#0a2018', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}
+                >저장</button>
+              </div>
+            </div>
+          )}
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {directives.length === 0 ? (
+              <div style={{ fontSize: 11, color: '#555', textAlign: 'center', padding: '16px 0' }}>지시사항이 없습니다</div>
+            ) : directives.map(d => {
+              const col = DIRECTIVE_STATUS_COLOR[d.status] ?? '#888'
+              const cycleStatus = () => {
+                const idx = DIRECTIVE_STATUS.indexOf(d.status as typeof DIRECTIVE_STATUS[number])
+                updateDirectiveStatus(d.id, DIRECTIVE_STATUS[(idx + 1) % DIRECTIVE_STATUS.length])
+              }
+              return (
+                <div key={d.id} style={{ padding: '7px 9px', borderRadius: 7, background: '#0c0f13', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'flex-start', gap: 7 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: col, flexShrink: 0, marginTop: 4 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 11, color: '#eee', lineHeight: 1.4, wordBreak: 'break-word' }}>{d.content}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                      <span onClick={cycleStatus} style={{ fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 4, cursor: 'pointer', color: col, background: `${col}26` }}>{d.status}</span>
+                      <span style={{ fontSize: 9, color: TXT3 }}>{d.date}{d.assignee ? ` · ${d.assignee}` : ''}</span>
+                      <button onClick={() => deleteDirective(d.id)} style={{ marginLeft: 'auto', fontSize: 9, color: '#555', background: 'transparent', border: 'none', cursor: 'pointer' }}>×</button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
       </div>
       </div>
       {acctOpen && (
