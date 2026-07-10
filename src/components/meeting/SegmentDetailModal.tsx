@@ -467,7 +467,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
 
   return createPortal(
     <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: '#0a0a0a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: '95%', maxWidth: 1600, height: '100vh', background: BG, borderRadius: 10, border: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ width: '96%', maxWidth: 1850, height: '100vh', background: BG, borderRadius: 10, border: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* 헤더 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 16px', borderBottom: BORDER_SUBTLE, flexShrink: 0 }}>
         <div>
@@ -544,9 +544,12 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
         </button>
       </div>
 
-      {/* 테이블 */}
-      <div style={{ flex: 1, minHeight: 0, padding: '8px 20px 10px' }}>
-        <div style={{ height: '100%', overflow: 'auto', background: '#111418', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10 }}>
+      {/* 본문 — 표(좌 75%) + 사이드(우 25%) */}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 12, padding: '8px 20px 14px' }}>
+
+      {/* 좌: 표 영역 (75%) */}
+      <div style={{ flex: 3, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', background: '#111418', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10 }}>
         <table style={{ minWidth: 980, borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
           <thead>
             <tr>
@@ -755,11 +758,11 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
         </div>
       </div>
 
-      {/* 하단 패널 — 회의록 목록 · 편집 · 지시사항 */}
-      <div style={{ flexShrink: 0, height: 255, display: 'flex', gap: 12, padding: '0 20px 14px' }}>
+      {/* 우: 사이드 (25%) — 회의록 목록 / 편집 / 지시사항 세로 3단 */}
+      <div style={{ flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
 
         {/* ① 회의록 목록 */}
-        <div style={{ flex: 1.1, background: '#111418', border: BORDER_SUBTLE, borderRadius: 10, padding: '12px 13px', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <div style={{ flex: '0 0 auto', maxHeight: '30%', background: '#111418', border: BORDER_SUBTLE, borderRadius: 10, padding: '10px 12px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: '#ddd' }}>회의록 목록</span>
             <button onClick={newNote} style={{ fontSize: 10, padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(0,229,160,0.3)', background: 'rgba(0,229,160,0.08)', color: MINT, cursor: 'pointer' }}>+ 새 회의록</button>
@@ -789,7 +792,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
         </div>
 
         {/* ② 회의록 편집 */}
-        <div style={{ flex: 1.9, background: '#111418', border: BORDER_SUBTLE, borderRadius: 10, padding: '12px 14px', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <div style={{ flex: '1 1 auto', background: '#111418', border: BORDER_SUBTLE, borderRadius: 10, padding: '10px 12px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: '#ddd' }}>회의록 편집</span>
             <div style={{ display: 'flex', gap: 6 }}>
@@ -819,7 +822,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
         </div>
 
         {/* ③ 지시사항 */}
-        <div style={{ flex: 1.1, background: '#111418', border: BORDER_SUBTLE, borderRadius: 10, padding: '12px 13px', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <div style={{ flex: '0 0 auto', maxHeight: '32%', background: '#111418', border: BORDER_SUBTLE, borderRadius: 10, padding: '10px 12px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: '#ddd' }}>지시사항</span>
             <button onClick={() => setInlineOpen(v => !v)} style={{ fontSize: 10, padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(0,229,160,0.3)', background: 'rgba(0,229,160,0.08)', color: MINT, cursor: 'pointer' }}>{inlineOpen ? '닫기' : '+ 추가'}</button>
@@ -875,6 +878,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
           </div>
         </div>
 
+      </div>
       </div>
       </div>
       {acctOpen && (
