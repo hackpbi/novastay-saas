@@ -21,6 +21,7 @@ import { useLatestConfirmedBudgetDate } from '@/hooks/useLatestConfirmedBudgetDa
 import ForecastBudgetModal from '@/components/dashboard/ForecastBudgetModal'
 import ActualBudgetModal from '@/components/dashboard/ActualBudgetModal'
 import GMDailyReportModal from '@/components/dashboard/GMDailyReportModal'
+import MonthlyClosingReportModal from '@/components/dashboard/MonthlyClosingReportModal'
 import { useForecastMonthly, type ForecastMonthlyRow } from '@/hooks/useForecastMonthly'
 import { useBudgetMonthly, type BudgetMonthlyRow } from '@/hooks/useBudgetMonthly'
 import { supabase } from '@/lib/supabase'
@@ -534,6 +535,7 @@ export default function DashboardPage() {
   const [segModal,     setSegModal]     = useState<{ open: boolean; year?: number; month?: number }>({ open: false })
   const [actualBudgetModal, setActualBudgetModal] = useState(false)
   const [gmReportOpen, setGmReportOpen] = useState(false)
+  const [closingReportOpen, setClosingReportOpen] = useState(false)
   const [monthlyPickupSegOpen,       setMonthlyPickupSegOpen]       = useState(false)
   const [pickupViewMode,             setPickupViewMode]             = useState<'monthly' | 'total'>('total')
   const [forecastBudgetModal,        setForecastBudgetModal]        = useState<{
@@ -754,6 +756,17 @@ export default function DashboardPage() {
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
               </svg>
               데일리 리포트
+            </button>
+            <button
+              onClick={() => setClosingReportOpen(true)}
+              style={{ display:'inline-flex', alignItems:'center', gap:6, background:'transparent', border:'1px solid rgba(255,255,255,0.15)', borderRadius:8, padding:'6px 14px', fontSize:12, color:'rgba(255,255,255,0.6)', cursor:'pointer', transition:'all 0.15s', whiteSpace:'nowrap', height:34 }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor='#00E5A0'; e.currentTarget.style.color='#00E5A0' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor='rgba(255,255,255,0.15)'; e.currentTarget.style.color='rgba(255,255,255,0.6)' }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/>
+              </svg>
+              마감 보고서
             </button>
           </div>
         </div>
@@ -1009,6 +1022,14 @@ export default function DashboardPage() {
         lyLoading={lyLoading}
         forecastRows={forecastRows}
         budgetRows={budgetRows}
+      />
+
+      <MonthlyClosingReportModal
+        open={closingReportOpen}
+        onClose={() => setClosingReportOpen(false)}
+        hotelId={hotelId}
+        roomCount={roomCount}
+        otbDate={otbDate}
       />
     </div>
   )

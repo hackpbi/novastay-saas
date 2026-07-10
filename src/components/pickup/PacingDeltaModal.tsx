@@ -55,8 +55,11 @@ const shortDate = (s: string) => {
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
+type AccSrc = 'prev' | 'cur' | 'delta'
+
 export default function PacingDeltaModal({ open, onClose, hotelId, stayDate, snapshot, prevSnapshot, roomCount }: PacingDeltaModalProps) {
   const [selMain, setSelMain]     = useState<string | null>(null)
+  const [accSource, setAccSource] = useState<AccSrc>('delta')   // 어카운트 패널 소스
   const [fontScale, setFontScale] = useState(1)   // 모달 열 때마다 1.0
 
   const decFont = () => setFontScale(s => Math.max(0.7, Math.round((s - 0.1) * 10) / 10))
@@ -127,7 +130,7 @@ export default function PacingDeltaModal({ open, onClose, hotelId, stayDate, sna
       a.curN  += r.cur_nights  ?? 0; a.curR  += r.cur_revenue  ?? 0
       m.set(acc, a)
     }
-    return Array.from(m.entries()).map(([account, a]) => {
+    const arr = Array.from(m.entries()).map(([account, a]) => {
       const prevAdr = a.prevN > 0 ? Math.round(a.prevR / a.prevN) : 0
       const curAdr  = a.curN  > 0 ? Math.round(a.curR  / a.curN)  : 0
       return {
@@ -137,17 +140,28 @@ export default function PacingDeltaModal({ open, onClose, hotelId, stayDate, sna
         prevAdr, curAdr, gapAdr: curAdr - prevAdr,
       }
     })
-      .filter(a => a.gapN !== 0 || a.gapR !== 0)
-      .sort((a, b) => a.gapN - b.gapN)   // 감소(음수) 먼저
-  }, [selMain, deltaRows, codesBySchemaId])
+    // accSource별 정렬: prev/cur는 값 큰 순, delta는 감소(음수) 먼저
+    if (accSource === 'delta') {
+      return arr.filter(a => a.gapN !== 0 || a.gapR !== 0).sort((a, b) => a.gapN - b.gapN)
+    }
+    const key = accSource === 'prev' ? 'prevN' : 'curN'
+    return arr.filter(a => (a as any)[key] > 0).sort((a, b) => (b as any)[key] - (a as any)[key])
+  }, [selMain, accSource, deltaRows, codesBySchemaId])
 
+  // selMain 리셋은 open 변화에만 반응 (onClose 참조 변경으로 인한 선택 해제 방지)
   useEffect(() => {
     if (!open) return
     setSelMain(null)
     document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [open])
+
+  // 키 리스너만 onClose 의존 (selMain 안 건드림)
+  useEffect(() => {
+    if (!open) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
-    return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey) }
+    return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
   if (!open) return null
@@ -182,7 +196,10 @@ export default function PacingDeltaModal({ open, onClose, hotelId, stayDate, sna
   const prevOcc = total.prevN / (roomCount || 1) * 100
   const curOcc  = total.curN  / (roomCount || 1) * 100
 
-  const selectSeg = (id: string) => setSelMain(prev => prev === id ? null : id)
+  const selectSeg = (id: string, src: AccSrc) => {
+    if (selMain === id && accSource === src) { setSelMain(null); return }
+    setSelMain(id); setAccSource(src)
+  }
 
   const grpTh = (color: string): React.CSSProperties => ({ ...stickyTop0, textAlign: 'center', padding: '6px 12px', fontSize: 10 * fontScale, fontWeight: 700, color, letterSpacing: '0.07em', background: '#0f0f0f', borderLeft: `1px solid ${DIV}`, borderBottom: `2px solid ${color}` })
 
@@ -203,7 +220,7 @@ export default function PacingDeltaModal({ open, onClose, hotelId, stayDate, sna
               <span style={{ fontSize: 9 * fontScale, fontWeight: 400, color: 'rgba(255,255,255,0.4)', letterSpacing: 0 }}>{shortDate(snapshot)}</span>
             </div>
           </th>
-          <th colSpan={3} style={grpTh('#F59E0B')}>Δ</th>
+          <th colSpan={3} style={grpTh('#F59E0B')}>증감 (Δ)</th>
         </tr>
         <tr style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
           <th style={{ ...stickyTop24, padding: '4px 12px 6px' }} />
@@ -219,7 +236,7 @@ export default function PacingDeltaModal({ open, onClose, hotelId, stayDate, sna
           const active = selMain === r.id
           const cColor = v.curN > 0 ? segTextColor(r) : 'rgba(255,255,255,0.25)'
           return (
-            <tr key={r.id} onClick={() => selectSeg(r.id)} style={{ cursor: 'pointer', background: active ? 'rgba(0,229,160,0.06)' : segBgColor(r), borderBottom: '0.5px solid rgba(255,255,255,0.04)' }}>
+            <tr key={r.id} style={{ background: active ? 'rgba(0,229,160,0.06)' : segBgColor(r), borderBottom: '0.5px solid rgba(255,255,255,0.04)' }}>
               <td style={{ padding: isSub ? '5px 12px 5px 24px' : '7px 12px', color: segTextColor(r), fontWeight: r.isBold ? 600 : 400, boxShadow: active ? 'inset 3px 0 0 #00E5A0' : undefined }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   {isSub && <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 10 * fontScale }}>└</span>}
@@ -227,18 +244,18 @@ export default function PacingDeltaModal({ open, onClose, hotelId, stayDate, sna
                   {r.name}
                 </span>
               </td>
-              {/* 전날 */}
-              <td style={{ padding: '5px 12px', textAlign: 'right', color: prevGray, borderLeft: `1px solid ${DIV}` }}>{fmtOtbRn(v.prevN)}</td>
-              <td style={{ padding: '5px 12px', textAlign: 'right', color: prevGray }}><FmtVal val={fmtOtbAdr(v.prevAdr)} numSize={numSizeS} /></td>
-              <td style={{ padding: '5px 12px', textAlign: 'right', color: prevGray }}><FmtVal val={fmtOtbRev(v.prevR)} numSize={numSizeS} /></td>
-              {/* 현재 */}
-              <td style={{ padding: '5px 12px', textAlign: 'right', color: cColor, borderLeft: `1px solid ${DIV}` }}>{fmtOtbRn(v.curN)}</td>
-              <td style={{ padding: '5px 12px', textAlign: 'right', color: cColor }}><FmtVal val={fmtOtbAdr(v.curAdr)} numSize={numSizeS} /></td>
-              <td style={{ padding: '5px 12px', textAlign: 'right', color: cColor }}><FmtVal val={fmtOtbRev(v.curR)} numSize={numSizeS} /></td>
-              {/* Δ */}
-              <td style={{ padding: '5px 12px', textAlign: 'right', color: gapColor(v.gapN), borderLeft: `1px solid ${DIV}`, fontWeight: 500 }}>{fmtGapRn(v.gapN)}</td>
-              <td style={{ padding: '5px 12px', textAlign: 'right', color: gapColor(v.gapAdr) }}><FmtVal val={fmtGapAdrK(v.gapAdr)} numSize={numSizeS} /></td>
-              <td style={{ padding: '5px 12px', textAlign: 'right', color: gapColor(v.gapR) }}><FmtVal val={fmtGapRevM(v.gapR)} numSize={numSizeS} /></td>
+              {/* 전날 — 클릭 시 전날 어카운트 */}
+              <td onClick={() => selectSeg(r.id, 'prev')} style={{ padding: '5px 12px', textAlign: 'right', color: prevGray, cursor: 'pointer', borderLeft: `1px solid ${active && accSource === 'prev' ? '#00E5A0' : DIV}` }}>{fmtOtbRn(v.prevN)}</td>
+              <td onClick={() => selectSeg(r.id, 'prev')} style={{ padding: '5px 12px', textAlign: 'right', color: prevGray, cursor: 'pointer' }}><FmtVal val={fmtOtbAdr(v.prevAdr)} numSize={numSizeS} /></td>
+              <td onClick={() => selectSeg(r.id, 'prev')} style={{ padding: '5px 12px', textAlign: 'right', color: prevGray, cursor: 'pointer' }}><FmtVal val={fmtOtbRev(v.prevR)} numSize={numSizeS} /></td>
+              {/* 현재 — 클릭 시 현재 어카운트 */}
+              <td onClick={() => selectSeg(r.id, 'cur')} style={{ padding: '5px 12px', textAlign: 'right', color: cColor, cursor: 'pointer', borderLeft: `1px solid ${active && accSource === 'cur' ? '#00E5A0' : DIV}` }}>{fmtOtbRn(v.curN)}</td>
+              <td onClick={() => selectSeg(r.id, 'cur')} style={{ padding: '5px 12px', textAlign: 'right', color: cColor, cursor: 'pointer' }}><FmtVal val={fmtOtbAdr(v.curAdr)} numSize={numSizeS} /></td>
+              <td onClick={() => selectSeg(r.id, 'cur')} style={{ padding: '5px 12px', textAlign: 'right', color: cColor, cursor: 'pointer' }}><FmtVal val={fmtOtbRev(v.curR)} numSize={numSizeS} /></td>
+              {/* Δ — 클릭 시 증감 어카운트 */}
+              <td onClick={() => selectSeg(r.id, 'delta')} style={{ padding: '5px 12px', textAlign: 'right', color: gapColor(v.gapN), cursor: 'pointer', borderLeft: `1px solid ${active && accSource === 'delta' ? '#00E5A0' : DIV}`, fontWeight: 500 }}>{fmtGapRn(v.gapN)}</td>
+              <td onClick={() => selectSeg(r.id, 'delta')} style={{ padding: '5px 12px', textAlign: 'right', color: gapColor(v.gapAdr), cursor: 'pointer' }}><FmtVal val={fmtGapAdrK(v.gapAdr)} numSize={numSizeS} /></td>
+              <td onClick={() => selectSeg(r.id, 'delta')} style={{ padding: '5px 12px', textAlign: 'right', color: gapColor(v.gapR), cursor: 'pointer' }}><FmtVal val={fmtGapRevM(v.gapR)} numSize={numSizeS} /></td>
             </tr>
           )
         })}
@@ -271,6 +288,19 @@ export default function PacingDeltaModal({ open, onClose, hotelId, stayDate, sna
       </tfoot>
     </table>
   )
+
+  // 어카운트 패널 — accSource별 라벨/값/색상/포맷
+  const isDelta  = accSource === 'delta'
+  const srcTitle = accSource === 'prev' ? '전날' : accSource === 'cur' ? '현재' : '증감 (Δ)'
+  const accHeads = isDelta ? ['ΔR/N', 'ΔADR', 'ΔREV'] : ['R/N', 'ADR', 'REV']
+  type Acc = (typeof acctRows)[number]
+  const accN   = (a: Acc) => accSource === 'prev' ? a.prevN   : accSource === 'cur' ? a.curN   : a.gapN
+  const accAdr = (a: Acc) => accSource === 'prev' ? a.prevAdr : accSource === 'cur' ? a.curAdr : a.gapAdr
+  const accR   = (a: Acc) => accSource === 'prev' ? a.prevR   : accSource === 'cur' ? a.curR   : a.gapR
+  const accColor = (v: number) => isDelta ? gapColor(v) : accSource === 'prev' ? prevGray : (v !== 0 ? '#fff' : 'rgba(255,255,255,0.25)')
+  const accFmtN = (v: number) => isDelta ? fmtGapRn(v)   : fmtOtbRn(v)
+  const accFmtA = (v: number) => isDelta ? fmtGapAdrK(v) : fmtOtbAdr(v)
+  const accFmtR = (v: number) => isDelta ? fmtGapRevM(v) : fmtOtbRev(v)
 
   return createPortal(
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 100010, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
@@ -344,7 +374,7 @@ export default function PacingDeltaModal({ open, onClose, hotelId, stayDate, sna
               <>
                 <div style={{ padding: '10px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                   <span style={{ width: 8, height: 8, borderRadius: 2, background: selRow?.bgDarkColor || '#888', flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, fontWeight: 500, color: '#fff' }}>{selRow?.name} · 증감 (Δ)</span>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: '#fff' }}>{selRow?.name} · {srcTitle}</span>
                 </div>
                 <div style={{ overflowY: 'auto', flex: 1 }}>
                   {acctRows.length === 0 ? (
@@ -354,7 +384,7 @@ export default function PacingDeltaModal({ open, onClose, hotelId, stayDate, sna
                       <thead>
                         <tr style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)', position: 'sticky', top: 0, background: '#0a0a0a', zIndex: 1 }}>
                           <th style={{ textAlign: 'left', padding: '7px 12px', fontSize: 10 * fontScale, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>ACCOUNT</th>
-                          {(['ΔR/N', 'ΔADR', 'ΔREV'] as const).map(h => <th key={h} style={accHeadThS}>{h}</th>)}
+                          {accHeads.map(h => <th key={h} style={accHeadThS}>{h}</th>)}
                         </tr>
                       </thead>
                       <tbody>
@@ -364,9 +394,9 @@ export default function PacingDeltaModal({ open, onClose, hotelId, stayDate, sna
                             onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
                           >
                             <td style={{ padding: '6px 12px', color: 'rgba(255,255,255,0.75)' }}>{a.account}</td>
-                            <td style={{ padding: '6px 12px', textAlign: 'right', color: gapColor(a.gapN) }}>{fmtGapRn(a.gapN)}</td>
-                            <td style={{ padding: '6px 12px', textAlign: 'right', color: gapColor(a.gapAdr) }}><FmtVal val={fmtGapAdrK(a.gapAdr)} numSize={numSizeS} /></td>
-                            <td style={{ padding: '6px 12px', textAlign: 'right', color: gapColor(a.gapR) }}><FmtVal val={fmtGapRevM(a.gapR)} numSize={numSizeS} /></td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right', color: accColor(accN(a)) }}>{accFmtN(accN(a))}</td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right', color: accColor(accAdr(a)) }}><FmtVal val={accFmtA(accAdr(a))} numSize={numSizeS} /></td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right', color: accColor(accR(a)) }}><FmtVal val={accFmtR(accR(a))} numSize={numSizeS} /></td>
                           </tr>
                         ))}
                       </tbody>

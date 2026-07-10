@@ -138,7 +138,9 @@
       "Bash(rmdir \"src/app/setup/translations\" \"src/app/setup\")",
       "Bash(ls \"src/app/setup\")",
       "Bash(node extract.js)",
-      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts,null,2\\)\\)\")"
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts,null,2\\)\\)\")",
+      "PowerShell(npx tsc --noEmit -p tsconfig.json)",
+      "PowerShell(if \\($?\\) { \"TYPECHECK_OK\" } else { \"TYPECHECK_FAILED\" })"
     ],
     "additionalDirectories": [
       "C:\\dev\\18_NovaStay_Saas_ver1\\.next-verify"
