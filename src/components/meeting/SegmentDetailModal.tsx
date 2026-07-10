@@ -15,6 +15,7 @@ import type { SegGroup } from './MeetingPickupBlock'
 import { monthKeyLabel } from './dummyMeetingData'
 import { FmtVal } from '@/utils/FmtVal'
 import AccountComparisonModal from './AccountComparisonModal'
+import SegmentYoyModal from './SegmentYoyModal'
 
 interface SegmentDetailModalProps {
   open:       boolean
@@ -101,7 +102,7 @@ const hoverOut = (e: React.MouseEvent<HTMLButtonElement>) => {
   e.currentTarget.style.background = 'transparent'
 }
 
-export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, pickupRows, roomCount }: SegmentDetailModalProps) {
+export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, pickupRows, roomCount, groups }: SegmentDetailModalProps) {
   const [lyMode,    setLyMode]    = useState<LyMode>('match')
   const [gapBase,   setGapBase]   = useState<GapBase>('otb')
   const [gapCompare, setGapCompare] = useState<GapCompare>('budget')
@@ -110,6 +111,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
   const [gapBasePos, setGapBasePos] = useState<{ x: number; y: number } | null>(null)
   const [gapCmpPos,  setGapCmpPos]  = useState<{ x: number; y: number } | null>(null)
   const [acctOpen, setAcctOpen] = useState(false)
+  const [yoyOpen, setYoyOpen] = useState(false)
   const [fontScale, setFontScale] = useState(1)   // 모달 열 때마다 1.0
 
   const decFont = () => setFontScale(s => Math.max(0.7, Math.round((s - 0.1) * 10) / 10))
@@ -386,6 +388,13 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
             cursor: 'pointer', fontFamily: 'inherit', lineHeight: 1,
           }}>A+</button>
         </div>
+        {/* YoY (전년 비교) */}
+        <button onClick={() => setYoyOpen(true)} style={btnStyle} onMouseEnter={e => hoverIn(e)} onMouseLeave={e => hoverOut(e)}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 13, height: 13 }}>
+            <path d="M3 3v18h18" /><path d="m19 9-5 5-4-4-3 3" />
+          </svg>
+          YoY
+        </button>
         {/* Accounts */}
         <button onClick={() => setAcctOpen(true)} style={btnStyle} onMouseEnter={e => hoverIn(e)} onMouseLeave={e => hoverOut(e)}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 13, height: 13 }}>
@@ -638,6 +647,17 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
           monthKey={monthKey}
           pickupRows={pickupRows}
           roomCount={roomCount}
+        />
+      )}
+      {yoyOpen && (
+        <SegmentYoyModal
+          open={yoyOpen}
+          onClose={() => setYoyOpen(false)}
+          hotelId={hotelId}
+          monthKey={monthKey}
+          pickupRows={pickupRows}
+          roomCount={roomCount}
+          groups={groups}
         />
       )}
     </div>,
