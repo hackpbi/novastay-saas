@@ -50,7 +50,7 @@ const td: React.CSSProperties = {
   borderBottom: BORDER_SUBTLE,
 }
 
-const HALF = 64  // YoY% 바 반쪽 최대 px
+const HALF = 44  // YoY% 바 반쪽 최대 px (라벨 공간 확보)
 
 export default function AccountComparisonModal({ open, onClose, hotelId, monthKey, pickupRows }: AccountComparisonModalProps) {
   const [lyMode, setLyMode] = useState<LyMode>('match')
@@ -256,8 +256,8 @@ export default function AccountComparisonModal({ open, onClose, hotelId, monthKe
       col = yoy > 0 ? MINT : yoy < 0 ? RED : TXT3
     }
     return (
-      <td style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', width: 200, minWidth: 200, maxWidth: 200 }}>
-        <div style={{ position: 'relative', width: 180, height: 14, margin: '0 auto' }}>
+      <td style={{ ...td, boxShadow: GROUP_SHADOW, textAlign: 'center', width: 210, minWidth: 210, maxWidth: 210 }}>
+        <div style={{ position: 'relative', width: 190, height: 14, margin: '0 auto' }}>
           {/* 중앙 기준선 */}
           <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.15)' }} />
           {/* 바 */}
@@ -267,10 +267,10 @@ export default function AccountComparisonModal({ open, onClose, hotelId, monthKe
           }} />
           {/* 라벨 — 바 방향 끝 바깥 */}
           <span className="font-mono" style={{
-            position: 'absolute', top: 0, fontSize: 11, color: col, fontWeight: isNew ? 700 : 500, whiteSpace: 'nowrap',
+            position: 'absolute', top: 0, fontSize: 10, color: col, fontWeight: isNew ? 700 : 500, whiteSpace: 'nowrap',
             ...(pos
-              ? { left: `calc(50% + ${barW}px + 6px)` }
-              : { right: `calc(50% + ${barW}px + 6px)` }),
+              ? { left: `calc(50% + ${barW}px + 5px)` }
+              : { right: `calc(50% + ${barW}px + 5px)` }),
           }}>{label}</span>
         </div>
       </td>
