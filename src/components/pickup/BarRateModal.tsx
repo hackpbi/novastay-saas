@@ -31,9 +31,10 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
   const [lyOn,        setLyOn]        = useState(true)
   const [lyPeriod,    setLyPeriod]    = useState(true)   // true=동기간(period), false=동일자(day)
   const [showLyFinal, setShowLyFinal] = useState(true)   // 전년마감 실선
-  const [showLyOtb,   setShowLyOtb]   = useState(false)  // 전년OTB 점선
+  const [showLyOtb,   setShowLyOtb]   = useState(true)   // 전년OTB 점선 (기본 ON)
   const lyMode: 'none' | 'day' | 'period' = !lyOn ? 'none' : (lyPeriod ? 'period' : 'day')
 
+  const [showBarRate, setShowBarRate] = useState(true)   // BAR Rate 추세선 on/off
   const [showOccLabel, setShowOccLabel] = useState(true)
   const showOccLabelRef = useRef(showOccLabel)
   const [occOpacity, setOccOpacity] = useState(0.05)
@@ -382,7 +383,7 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
               barPercentage: 0.9,
               categoryPercentage: 0.9,
             },
-            {
+            ...(showBarRate ? [{
               type: 'line',
               label: 'BAR Rate',
               data: rateData,
@@ -396,7 +397,7 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
               spanGaps: true,
               yAxisID: 'yBar',
               order: 0,
-            } as any,
+            } as any] : []),
           ],
         },
         options: {
@@ -490,7 +491,7 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
       chartRef.current?.destroy(); chartRef.current = null
       document.getElementById('barrate-chart-tooltip')?.remove()
     }
-  }, [open, daily, modalMonth, eventMap, lyMode, lyOccData, lyOtbData, showLyFinal, showLyOtb, barRateData, yBarMax])
+  }, [open, daily, modalMonth, eventMap, lyMode, lyOccData, lyOtbData, showLyFinal, showLyOtb, showBarRate, barRateData, yBarMax])
 
   useEffect(() => { showOccLabelRef.current = showOccLabel; chartRef.current?.update('none') }, [showOccLabel])
   useEffect(() => () => { document.getElementById('barrate-chart-tooltip')?.remove() }, [])
@@ -544,6 +545,13 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
                 <div style={thumbStyle(showLyOtb)} />
               </div>
               <span style={{ fontSize: 11, color: '#666' }}>전년OTB</span>
+            </div>
+            {/* BAR Rate 토글 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={trackStyle(showBarRate, BAR_GOLD, '#2a2a2a')} onClick={() => setShowBarRate(p => !p)}>
+                <div style={thumbStyle(showBarRate)} />
+              </div>
+              <span style={{ fontSize: 11, color: showBarRate ? BAR_GOLD : '#666' }}>BAR Rate</span>
             </div>
             {/* OCC% */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
