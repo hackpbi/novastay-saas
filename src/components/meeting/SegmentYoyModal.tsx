@@ -327,8 +327,6 @@ export default function SegmentYoyModal({ open, onClose, hotelId, monthKey, pick
   const fmtN = (v: number) => isGap ? fmtGapRn(v)   : fmtOtbRn(v)
   const fmtA = (v: number) => isGap ? fmtGapAdrK(v) : fmtOtbAdr(v)
   const fmtR = (v: number) => isGap ? fmtGapRevM(v) : fmtOtbRev(v)
-  const tN = lyAccountRows.reduce((s, a) => s + rowN(a), 0)
-  const tR = lyAccountRows.reduce((s, a) => s + rowR(a), 0)
 
   return createPortal(
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
@@ -399,14 +397,6 @@ export default function SegmentYoyModal({ open, onClose, hotelId, monthKey, pick
                           </tr>
                         ))}
                       </tbody>
-                      <tfoot>
-                        <tr style={{ position: 'sticky', bottom: 0, background: '#0a0a0a' }}>
-                          <td style={{ padding: '7px 12px', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.4)' }}>Total</td>
-                          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: valColor(tN), borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtN(tN)}</td>
-                          <td style={{ padding: '7px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.25)', borderTop: '1px solid rgba(0,229,160,0.4)' }}>—</td>
-                          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: valColor(tR), borderTop: '1px solid rgba(0,229,160,0.4)' }}><FmtVal val={fmtR(tR)} numSize={11} /></td>
-                        </tr>
-                      </tfoot>
                     </table>
                   )}
                 </div>
