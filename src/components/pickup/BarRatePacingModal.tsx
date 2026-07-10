@@ -49,6 +49,29 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
     },
   })
 
+  // 현재 BAR Rate (변경 이력 없을 때 fallback용) — change > single > base 우선순위
+  const { data: currentRate = null } = useQuery({
+    queryKey: ['bar-current-rate', hotelId, stayDate],
+    enabled: open && !!hotelId && !!stayDate,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('s02_rate_detail')
+        .select('new_rate, date_type')
+        .eq('hotel_id', hotelId)
+        .eq('stay_date', stayDate)
+      if (error) throw error
+      const rows = (data ?? []) as { new_rate: number; date_type: string }[]
+      if (rows.length === 0) return null
+      const priority: Record<string, number> = { change: 3, single: 2, base: 1 }
+      let best = rows[0]
+      for (const r of rows) {
+        if ((priority[r.date_type] ?? 0) > (priority[best.date_type] ?? 0)) best = r
+      }
+      return best.new_rate as number
+    },
+  })
+
   // 데이터 가공 — 스냅샷 라벨 + 점유율 + BAR Rate forward-fill
   const chart = useMemo(() => {
     const labels = pacing.map(p => {
@@ -56,19 +79,23 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
       return `${d.getMonth() + 1}/${d.getDate()}`
     })
     const occData = pacing.map(p => (roomCount > 0 ? Math.round((p.otb_nights / roomCount) * 100) : 0))
-    // forward-fill: 스냅샷일 이하 변경 중 가장 최근 new_rate, 변경 이전은 첫 이력 old_rate
     const rateData = pacing.map(p => {
       const snap = p.update_date
-      const applied = rateHist.filter(h => h.changed_date <= snap)
-      if (applied.length > 0) return applied[applied.length - 1].new_rate
-      return rateHist.length > 0 ? rateHist[0].old_rate : null
+      // 1) 변경 이력이 있으면 forward-fill
+      if (rateHist.length > 0) {
+        const applied = rateHist.filter(h => h.changed_date <= snap)
+        if (applied.length > 0) return applied[applied.length - 1].new_rate
+        return rateHist[0].old_rate   // 첫 변경 이전
+      }
+      // 2) 이력이 없으면 s02 현재 요금으로 평탄선 (fallback, null이면 미표시)
+      return currentRate
     })
     return { labels, occData, rateData }
-  }, [pacing, rateHist, roomCount])
+  }, [pacing, rateHist, currentRate, roomCount])
 
   const yBarMax = useMemo(() => {
-    const vals = chart.rateData.filter((v): v is number => v != null)
-    return vals.length ? Math.max(...vals) * 1.2 : undefined
+    const rateVals = chart.rateData.filter((v): v is number => v != null && v > 0)
+    return rateVals.length > 0 ? Math.max(...rateVals) * 1.2 : 300000
   }, [chart.rateData])
 
   // ESC + scroll lock
