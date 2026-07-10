@@ -10,30 +10,8 @@ import PacingDeltaModal from './PacingDeltaModal'
 const DOW_KR = ['일', '월', '화', '수', '목', '금', '토']
 const BAR_GOLD = '#E8C468'
 
-// BAR Rate 라인 포인트 위에 천원 단위 라벨 (변경점만 표시)
-const barRateLabels = {
-  id: 'barRateLabels',
-  afterDatasetsDraw(chart: any) {
-    const ds = chart.data.datasets.findIndex((d: any) => d.type === 'line' && d.label === 'BAR Rate')
-    if (ds === -1) return
-    const meta = chart.getDatasetMeta(ds)
-    if (meta.hidden) return
-    const { ctx } = chart
-    ctx.save()
-    ctx.font = '600 9px -apple-system, sans-serif'
-    ctx.fillStyle = BAR_GOLD
-    ctx.textAlign = 'center'
-    let last: number | null = null
-    meta.data.forEach((pt: any, i: number) => {
-      const v = chart.data.datasets[ds].data[i]
-      if (v == null) return
-      if (last !== null && v === last) return   // 값 변동 없으면 생략
-      last = v
-      ctx.fillText(String(Math.round(v / 1000)), pt.x, pt.y - 8)
-    })
-    ctx.restore()
-  },
-}
+// 요금대별 색상 팔레트 (구간 순서대로 순환)
+const TIER_PALETTE = ['#5B8DEF', '#00E5A0', '#E8C468', '#B57EDC', '#F5A623', '#E24B4A']
 
 interface BarRatePacingModalProps {
   open:      boolean
@@ -121,9 +99,22 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
     return { labels, occData, rateData }
   }, [pacing, rateHist, currentRate, roomCount])
 
-  const yBarMax = useMemo(() => {
+  // 고유 요금대 → 색 매핑 (구간별 색상 전환용)
+  const rateTiers = useMemo(() => {
+    const uniq = Array.from(new Set(chart.rateData.filter((v): v is number => v != null))).sort((a, b) => a - b)
+    const map = new Map<number, string>()
+    uniq.forEach((r, i) => map.set(r, TIER_PALETTE[i % TIER_PALETTE.length]))
+    return map
+  }, [chart.rateData])
+
+  // 각 포인트(스냅샷)의 요금대 색
+  const pointColors = chart.rateData.map(v => (v != null ? rateTiers.get(v) ?? BAR_GOLD : BAR_GOLD))
+
+  // yBar 축 범위 — min을 요금 최솟값 근처로 좁혀 선을 중앙에 표시
+  const yBarRange = useMemo(() => {
     const rateVals = chart.rateData.filter((v): v is number => v != null && v > 0)
-    return rateVals.length > 0 ? Math.max(...rateVals) * 1.2 : 300000
+    if (rateVals.length === 0) return { min: 0, max: 300000 }
+    return { min: Math.max(0, Math.min(...rateVals) - 40000), max: Math.max(...rateVals) + 40000 }
   }, [chart.rateData])
 
   // ESC + scroll lock
@@ -134,6 +125,52 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
     document.body.style.overflow = 'hidden'
     return () => { window.removeEventListener('keydown', h); document.body.style.overflow = '' }
   }, [open, onClose])
+
+  // 점유율 라벨 (각 막대 위 %)
+  const occLabels = {
+    id: 'occLabels',
+    afterDatasetsDraw(c: any) {
+      const meta = c.getDatasetMeta(0)   // 막대 dataset
+      if (!meta || meta.hidden) return
+      const { ctx } = c
+      ctx.save()
+      ctx.font = '9px -apple-system, sans-serif'
+      ctx.fillStyle = '#999'
+      ctx.textAlign = 'center'
+      meta.data.forEach((bar: any, i: number) => {
+        const pct = Math.round(c.data.datasets[0].data[i] ?? 0)
+        ctx.fillText(`${pct}%`, bar.x, bar.y - 4)
+      })
+      ctx.restore()
+    },
+  }
+
+  // BAR Rate 요금 라벨 (변경점만, 12px bold, 구간색)
+  const barRateLabels = {
+    id: 'barRateLabels',
+    afterDatasetsDraw(c: any) {
+      const dsIdx = c.data.datasets.findIndex((d: any) => d.type === 'line' && d.label === 'BAR Rate')
+      if (dsIdx === -1) return
+      const meta = c.getDatasetMeta(dsIdx)
+      if (meta.hidden) return
+      const { ctx } = c
+      ctx.save()
+      ctx.font = '700 12px -apple-system, sans-serif'
+      ctx.textAlign = 'center'
+      const data = c.data.datasets[dsIdx].data
+      data.forEach((v: any, i: number) => {
+        if (v == null) return
+        // 변경점(값이 이전과 다름) 또는 첫 포인트만 표시
+        if (i === 0 || v !== data[i - 1]) {
+          const pt = meta.data[i]
+          if (!pt) return
+          ctx.fillStyle = pointColors[i] ?? BAR_GOLD
+          ctx.fillText(String(Math.round(v / 1000)), pt.x, pt.y - 12)
+        }
+      })
+      ctx.restore()
+    },
+  }
 
   // 차트
   useEffect(() => {
@@ -146,13 +183,13 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
       chartRef.current?.destroy()
 
       chartRef.current = new Chart(canvasRef.current, {
-        plugins: [barRateLabels],
+        plugins: [occLabels, barRateLabels],
         data: {
           labels: chart.labels,
           datasets: [
             {
               type: 'bar',
-              label: 'OTB 점유율',
+              label: 'OTB OCC',
               data: chart.occData,
               backgroundColor: 'rgba(180,180,180,0.35)',
               borderColor: 'rgba(180,180,180,0.5)',
@@ -167,12 +204,17 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
               type: 'line',
               label: 'BAR Rate',
               data: chart.rateData,
-              borderColor: BAR_GOLD,
+              borderColor: BAR_GOLD,          // 기본(폴백)
               backgroundColor: BAR_GOLD,
-              borderWidth: 2,
+              borderWidth: 2.5,
               pointRadius: 2.5,
-              pointBackgroundColor: BAR_GOLD,
-              tension: 0.35,
+              pointBackgroundColor: pointColors,
+              pointBorderColor: pointColors,
+              segment: {
+                // 두 점 사이 선 색 = 뒤 점(p1)의 요금대 색
+                borderColor: (ctx: any) => pointColors[ctx.p1DataIndex] ?? BAR_GOLD,
+              },
+              tension: 0,
               spanGaps: true,
               yAxisID: 'yBar',
               order: 0,
@@ -210,7 +252,7 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
                   if (ctx.dataset.label === 'BAR Rate') {
                     return ctx.parsed.y != null ? `BAR Rate: ${Math.round(ctx.parsed.y).toLocaleString('ko-KR')}` : 'BAR Rate: -'
                   }
-                  return `OTB 점유율: ${ctx.parsed.y}%`
+                  return `OTB OCC: ${ctx.parsed.y}%`
                 },
               },
             },
@@ -226,7 +268,7 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
               ticks: { color: '#444', font: { size: 10 }, callback: (v: any) => (v <= 100 ? `${v}%` : '') },
             },
             yBar: {
-              position: 'right', min: 0, max: yBarMax,
+              position: 'right', min: yBarRange.min, max: yBarRange.max,
               grid: { display: false }, border: { display: false },
               ticks: { color: BAR_GOLD, font: { size: 10 }, callback: (v: any) => `${Math.round(v / 1000)}K` },
             },
@@ -238,7 +280,7 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
       cancelled = true
       chartRef.current?.destroy(); chartRef.current = null
     }
-  }, [open, chart, yBarMax])
+  }, [open, chart, yBarRange])
 
   if (!open) return null
 
@@ -256,7 +298,7 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px 10px', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>{title}</div>
-            <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>점유율 변화 · BAR Rate 이력 (최근 30일)</div>
+            <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>OCC Trend · BAR Rate History (Last 30 days)</div>
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', padding: 4, display: 'inline-flex' }} aria-label="닫기">
             <X size={20} />
@@ -266,22 +308,24 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
         {/* 차트 */}
         <div style={{ padding: '10px 16px 8px', flex: 1, minHeight: 0 }}>
           {pacing.length === 0 ? (
-            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#555' }}>데이터 없음</div>
+            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#555' }}>No data</div>
           ) : (
             <canvas ref={canvasRef} />
           )}
         </div>
 
-        {/* 범례 */}
-        <div style={{ padding: '0 16px 14px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
+        {/* 범례 — OTB OCC + 요금대별 색상 */}
+        <div style={{ padding: '0 16px 14px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{ width: 14, height: 10, background: 'rgba(180,180,180,0.5)', borderRadius: 2 }} />
-            <span style={{ fontSize: 11, color: '#888' }}>OTB 점유율</span>
+            <span style={{ fontSize: 11, color: '#888' }}>OTB OCC</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 20, height: 0, borderTop: `2.5px solid ${BAR_GOLD}`, borderRadius: 2 }} />
-            <span style={{ fontSize: 11, color: '#888' }}>BAR Rate</span>
-          </div>
+          {Array.from(rateTiers.entries()).map(([rate, color]) => (
+            <div key={rate} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 20, height: 0, borderTop: `2.5px solid ${color}`, borderRadius: 2 }} />
+              <span style={{ fontSize: 11, color: '#888' }}>{Math.round(rate / 1000)}K</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>

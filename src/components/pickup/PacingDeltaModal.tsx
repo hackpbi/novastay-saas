@@ -124,7 +124,7 @@ export default function PacingDeltaModal({ open, onClose, hotelId, stayDate, sna
     const m = new Map<string, { prevN: number; prevR: number; curN: number; curR: number }>()
     for (const r of deltaRows) {
       if (!codes.has(r.segmentation)) continue
-      const acc = r.account_name || '(미지정)'
+      const acc = r.account_name || '(Unassigned)'
       const a = m.get(acc) ?? { prevN: 0, prevR: 0, curN: 0, curR: 0 }
       a.prevN += r.prev_nights ?? 0; a.prevR += r.prev_revenue ?? 0
       a.curN  += r.cur_nights  ?? 0; a.curR  += r.cur_revenue  ?? 0
@@ -210,17 +210,17 @@ export default function PacingDeltaModal({ open, onClose, hotelId, stayDate, sna
           <th style={{ ...stickyTop0, textAlign: 'left', padding: '6px 12px', fontSize: 10 * fontScale, fontWeight: 500, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.04em' }}>SEGMENT</th>
           <th colSpan={3} style={grpTh('#5B8DEF')}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-              <span>전날</span>
+              <span>Previous</span>
               <span style={{ fontSize: 9 * fontScale, fontWeight: 400, color: 'rgba(255,255,255,0.4)', letterSpacing: 0 }}>{shortDate(prevSnapshot)}</span>
             </div>
           </th>
           <th colSpan={3} style={grpTh('#a78bfa')}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-              <span>현재</span>
+              <span>Current</span>
               <span style={{ fontSize: 9 * fontScale, fontWeight: 400, color: 'rgba(255,255,255,0.4)', letterSpacing: 0 }}>{shortDate(snapshot)}</span>
             </div>
           </th>
-          <th colSpan={3} style={grpTh('#F59E0B')}>증감 (Δ)</th>
+          <th colSpan={3} style={grpTh('#F59E0B')}>Delta (Δ)</th>
         </tr>
         <tr style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
           <th style={{ ...stickyTop24, padding: '4px 12px 6px' }} />
@@ -291,7 +291,7 @@ export default function PacingDeltaModal({ open, onClose, hotelId, stayDate, sna
 
   // 어카운트 패널 — accSource별 라벨/값/색상/포맷
   const isDelta  = accSource === 'delta'
-  const srcTitle = accSource === 'prev' ? '전날' : accSource === 'cur' ? '현재' : '증감 (Δ)'
+  const srcTitle = accSource === 'prev' ? 'Previous' : accSource === 'cur' ? 'Current' : 'Delta (Δ)'
   const accHeads = isDelta ? ['ΔR/N', 'ΔADR', 'ΔREV'] : ['R/N', 'ADR', 'REV']
   type Acc = (typeof acctRows)[number]
   const accN   = (a: Acc) => accSource === 'prev' ? a.prevN   : accSource === 'cur' ? a.curN   : a.gapN
@@ -309,21 +309,21 @@ export default function PacingDeltaModal({ open, onClose, hotelId, stayDate, sna
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <span style={{ fontSize: 16, fontWeight: 600, color: '#fff' }}>{stayDate} · 점유율 증감 분석</span>
-              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>{shortDate(snapshot)} vs {shortDate(prevSnapshot)} (전날)</span>
+              <span style={{ fontSize: 16, fontWeight: 600, color: '#fff' }}>{stayDate} · Pace Delta Analysis</span>
+              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>{shortDate(snapshot)} vs {shortDate(prevSnapshot)} (D-1)</span>
             </div>
             {/* 순증감 요약 */}
             <div style={{ display: 'flex', gap: 12, paddingLeft: 12, borderLeft: '1px solid #1a1a1a' }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)' }}>순증감 R/N</span>
+                <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)' }}>Net Δ R/N</span>
                 <span style={{ fontSize: 13, fontWeight: 600, color: gapColor(gapTotN) }}>{fmtGapRn(gapTotN)}</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)' }}>매출</span>
+                <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)' }}>Revenue</span>
                 <span style={{ fontSize: 13, fontWeight: 600, color: gapColor(gapTotR) }}>{fmtGapRevM(gapTotR)}</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)' }}>점유율</span>
+                <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)' }}>OCC</span>
                 <span style={{ fontSize: 13, fontWeight: 600, color: gapColor(gapTotN) }}>{prevOcc.toFixed(1)}→{curOcc.toFixed(1)}%</span>
               </div>
             </div>
@@ -351,7 +351,7 @@ export default function PacingDeltaModal({ open, onClose, hotelId, stayDate, sna
               display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '7px 14px',
               borderRadius: 8, border: 'none', background: '#141414', color: '#ccc', cursor: 'pointer',
             }}>
-              <X size={16} /> 닫기
+              <X size={16} /> Close
             </button>
           </div>
         </div>
