@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import { X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useDateContext } from '@/contexts/DateContext'
+import BarRatePacingModal from './BarRatePacingModal'
 
 const DOW_KR = ['일', '월', '화', '수', '목', '금', '토']
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -41,6 +42,7 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
   const occOpacityRef = useRef(0.05)
   const [occLabelOpacity, setOccLabelOpacity] = useState(0.40)
   const occLabelOpacityRef = useRef(occLabelOpacity)
+  const [pacingDay, setPacingDay] = useState<string | null>(null)   // 추세선 포인트 클릭 → 상세 모달 (stayDate)
 
   // 모달 내부 월 상태 (month는 1-based → 내부 0-based)
   const [modalYear,  setModalYear]  = useState(year)
@@ -404,6 +406,20 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
           responsive: true, maintainAspectRatio: false,
           layout: { padding: { top: 18, bottom: hasEvents ? 30 : 8 } },
           interaction: { mode: 'index', intersect: false },
+          // 일자 클릭 → 해당 stay_date pacing 상세 모달
+          onClick: (_e: any, els: any[]) => {
+            if (!els.length) return
+            const i = els[0].index
+            const d = daily[i]
+            if (!d) return
+            const mm = String(modalMonth + 1).padStart(2, '0')
+            const dd = String(d.day).padStart(2, '0')
+            setPacingDay(`${modalYear}-${mm}-${dd}`)
+          },
+          onHover: (e: any, els: any[]) => {
+            const cv = e?.native?.target as HTMLCanvasElement | undefined
+            if (cv) cv.style.cursor = els.length ? 'pointer' : 'default'
+          },
           plugins: {
             legend: { display: false },
             tooltip: {
@@ -628,6 +644,15 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
           )}
         </div>
       </div>
+      {pacingDay && (
+        <BarRatePacingModal
+          open={!!pacingDay}
+          onClose={() => setPacingDay(null)}
+          hotelId={hotelId}
+          stayDate={pacingDay}
+          roomCount={roomCount}
+        />
+      )}
     </div>,
     document.body,
   )
