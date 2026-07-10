@@ -1,13 +1,39 @@
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import PacingDeltaModal from './PacingDeltaModal'
 
 const DOW_KR = ['일', '월', '화', '수', '목', '금', '토']
 const BAR_GOLD = '#E8C468'
+
+// BAR Rate 라인 포인트 위에 천원 단위 라벨 (변경점만 표시)
+const barRateLabels = {
+  id: 'barRateLabels',
+  afterDatasetsDraw(chart: any) {
+    const ds = chart.data.datasets.findIndex((d: any) => d.type === 'line' && d.label === 'BAR Rate')
+    if (ds === -1) return
+    const meta = chart.getDatasetMeta(ds)
+    if (meta.hidden) return
+    const { ctx } = chart
+    ctx.save()
+    ctx.font = '600 9px -apple-system, sans-serif'
+    ctx.fillStyle = BAR_GOLD
+    ctx.textAlign = 'center'
+    let last: number | null = null
+    meta.data.forEach((pt: any, i: number) => {
+      const v = chart.data.datasets[ds].data[i]
+      if (v == null) return
+      if (last !== null && v === last) return   // 값 변동 없으면 생략
+      last = v
+      ctx.fillText(String(Math.round(v / 1000)), pt.x, pt.y - 8)
+    })
+    ctx.restore()
+  },
+}
 
 interface BarRatePacingModalProps {
   open:      boolean
@@ -20,6 +46,8 @@ interface BarRatePacingModalProps {
 export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, roomCount }: BarRatePacingModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const chartRef  = useRef<any>(null)
+  // 점유율 막대 클릭 → 전날 대비 증감 모달 (현재/전날 스냅샷)
+  const [deltaSnap, setDeltaSnap] = useState<{ cur: string; prev: string } | null>(null)
 
   // 점유율 pacing (최근 30일 스냅샷)
   const { data: pacing = [] } = useQuery({
@@ -118,6 +146,7 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
       chartRef.current?.destroy()
 
       chartRef.current = new Chart(canvasRef.current, {
+        plugins: [barRateLabels],
         data: {
           labels: chart.labels,
           datasets: [
@@ -154,6 +183,19 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
           responsive: true, maintainAspectRatio: false,
           layout: { padding: { top: 16, bottom: 8 } },
           interaction: { mode: 'index', intersect: false },
+          onClick: (_e: any, els: any[]) => {
+            if (!els.length) return
+            const i = els[0].index
+            if (i <= 0) return   // 첫 스냅샷은 전날 없음 → 무시
+            const cur  = pacing[i]?.update_date
+            const prev = pacing[i - 1]?.update_date
+            if (!cur || !prev) return
+            setDeltaSnap({ cur, prev })
+          },
+          onHover: (e: any, els: any[]) => {
+            const cv = e?.native?.target as HTMLCanvasElement | undefined
+            if (cv) cv.style.cursor = els.length ? 'pointer' : 'default'
+          },
           plugins: {
             legend: { display: false },
             tooltip: {
@@ -206,6 +248,7 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
   const title = `${sm}월 ${sd}일 (${DOW_KR[dow]}) 상세`
 
   return createPortal(
+    <>
     <div style={{ position: 'fixed', inset: 0, zIndex: 100002, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }} onClick={onClose} />
       <div style={{ position: 'relative', background: '#0a0a0a', border: '1px solid #1e1e1e', borderRadius: 16, boxShadow: '0 8px 40px rgba(0,0,0,0.6)', width: '72vw', maxWidth: 1100, height: '64vh', maxHeight: '64vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -241,7 +284,20 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
           </div>
         </div>
       </div>
-    </div>,
+    </div>
+
+    {deltaSnap && (
+      <PacingDeltaModal
+        open={!!deltaSnap}
+        onClose={() => setDeltaSnap(null)}
+        hotelId={hotelId}
+        stayDate={stayDate}
+        snapshot={deltaSnap.cur}
+        prevSnapshot={deltaSnap.prev}
+        roomCount={roomCount}
+      />
+    )}
+    </>,
     document.body,
   )
 }
