@@ -115,8 +115,8 @@ function KpiCard({
           <div style={{ fontWeight: 500 }}><FmtVal val={mainVal} numSize={22} /></div>
         </div>
         <div style={{ background: '#0f0f0f', border: '1px solid #2a2a2a', borderRadius: 7, padding: '6px 10px', minWidth: 82, textAlign: 'right', flexShrink: 0 }}>
-          <div style={{ fontSize: 9, color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>FCST</div>
-          <div style={{ fontWeight: 500, color: '#F5A623', marginBottom: 2 }}><FmtVal val={fcstVal} numSize={14} /></div>
+          <div style={{ fontSize: 9, color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>OTB</div>
+          <div style={{ fontWeight: 500, color: BLUE, marginBottom: 2 }}><FmtVal val={fcstVal} numSize={14} /></div>
           <div style={{ color: fcstVsBudPos ? MINT : RED }}><FmtVal val={fcstVsBudStr} numSize={10} /></div>
         </div>
       </div>
@@ -126,7 +126,7 @@ function KpiCard({
 
       {/* vs Budget */}
       <div style={{ marginBottom: 8 }}>
-        <div style={{ fontSize: 10, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+        <div style={{ fontSize: 10, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
           <span style={{ color: '#555' }}>Budget</span>
           <span style={{ color: '#888', fontWeight: 500 }}><FmtVal val={budStr} numSize={10} /></span>
         </div>
@@ -140,7 +140,7 @@ function KpiCard({
 
       {/* vs LY (전년 마감) */}
       <div>
-        <div style={{ fontSize: 10, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+        <div style={{ fontSize: 10, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
           <span style={{ color: '#555' }}>LY</span>
           <span style={{ color: '#888', fontWeight: 500 }}><FmtVal val={lyStr} numSize={10} /></span>
         </div>
@@ -809,10 +809,10 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
           <KpiCard
             key={m.label}
             label={m.label}
-            mainVal={m.fmt(m.otb)}
-            fcstVal={fcstAgg.has ? m.fmt(m.fcst) : '—'}
-            fcstVsBudStr={fcstAgg.has && budgetAgg.has ? `vs Bud ${m.fmtDiff(m.fcst - m.bud)}` : '—'}
-            fcstVsBudPos={m.fcst - m.bud >= 0}
+            mainVal={fcstAgg.has ? m.fmt(m.fcst) : '—'}
+            fcstVal={m.fmt(m.otb)}
+            fcstVsBudStr={budgetAgg.has ? `vs Bud ${m.fmtDiff(m.otb - m.bud)}` : '—'}
+            fcstVsBudPos={m.otb - m.bud >= 0}
             budStr={budgetAgg.has ? m.fmt(m.bud) : '—'}
             lyStr={lyAgg.has ? m.fmt(m.ly) : '—'}
             vsBudDiffStr={budgetAgg.has ? m.fmtDiff(m.otb - m.bud) : '—'}

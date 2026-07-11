@@ -34,6 +34,21 @@ const C = {
 const diffColor = (n: number): string => (n > 0 ? C.mint : n < 0 ? C.red : C.textMuted)
 const diffText = (n: number, unit: string): string => (n > 0 ? `+${n}${unit}` : n < 0 ? `${n}${unit}` : `±0${unit}`)
 
+// 숫자·단위 분리 → 단위 글자를 숫자 크기의 30%로 축소 렌더
+const splitUnit = (val: string): { num: string; unit: string } => {
+  const match = val.match(/^([+-]?\d+(?:\.\d+)?)([km%p]*)$/)
+  return match ? { num: match[1], unit: match[2] } : { num: val, unit: '' }
+}
+const renderVal = (val: string, fontSize: number, color?: string) => {
+  const { num, unit } = splitUnit(val)
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 2, color }}>
+      <span style={{ fontSize }}>{num}</span>
+      {unit && <span style={{ fontSize: Math.round(fontSize * 0.7), fontWeight: 400, color: color ?? C.textMuted }}>{unit}</span>}
+    </span>
+  )
+}
+
 export default function MonthlyClosingReportModal({ open, onClose, hotelId, roomCount, otbDate }: MonthlyClosingReportModalProps) {
   const [reportYear,  setReportYear]  = useState<number>(0)
   const [reportMonth, setReportMonth] = useState<number>(0)
@@ -109,19 +124,50 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     staleTime: 10 * 60 * 1000,
   })
 
-  // 예산 (get_budget_monthly RPC)
-  const { data: budgetRows } = useQuery({
-    queryKey: ['closing_budget', hotelId, reportYear],
+  // 예산 Step 1: 해당 연도의 최신 update_date 조회
+  const { data: budgetDateData } = useQuery({
+    queryKey: ['closing_budget_date', hotelId, reportYear],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .rpc('get_budget_monthly', { p_hotel_id: hotelId, p_year: reportYear, p_update_date: null })
+        .from('a03_budget')
+        .select('update_date')
+        .eq('hotel_id', hotelId)
+        .gte('business_date', `${reportYear}-01-01`)
+        .lte('business_date', `${reportYear}-12-31`)
+        .order('update_date', { ascending: false })
+        .limit(1)
       if (error) throw error
       return data ?? []
     },
     enabled: open && !!hotelId && !!reportYear,
     staleTime: 10 * 60 * 1000,
   })
+  const budgetUpdateDate = budgetDateData?.[0]?.update_date ?? null
+
+  // 예산 Step 2: get_budget_monthly RPC (최신 update_date 사용)
+  const { data: budgetRows } = useQuery({
+    queryKey: ['closing_budget', hotelId, reportYear, budgetUpdateDate],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .rpc('get_budget_monthly', { p_hotel_id: hotelId, p_year: reportYear, p_update_date: budgetUpdateDate })
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: open && !!hotelId && !!reportYear && !!budgetUpdateDate,
+    staleTime: 10 * 60 * 1000,
+  })
   const monthBudget = (budgetRows ?? []).filter((r: any) => Number(r.month_num) === reportMonth)
+  console.log('[ClosingReport budget]', {
+    reportMonth,
+    reportMonthType: typeof reportMonth,
+    budgetRowsLen: (budgetRows ?? []).length,
+    budgetRows,
+    firstMonthNum: (budgetRows ?? [])[0]?.month_num,
+    firstMonthNumType: typeof (budgetRows ?? [])[0]?.month_num,
+    monthNums: (budgetRows ?? []).map((r: any) => r.month_num),
+    monthBudgetLen: monthBudget.length,
+    monthBudget,
+  })
   const budRn  = monthBudget.reduce((s: number, r: any) => s + (r.budget_nights ?? 0), 0)
   const budRev = monthBudget.reduce((s: number, r: any) => s + (r.budget_revenue ?? 0), 0)
 
@@ -182,24 +228,100 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     }
   }, [actualData, lyData, budRn, budRev, roomCount, reportYear, reportMonth])
 
+  // ── 세그별 ──
+  const segKpi = useMemo(() => {
+    // segmentation 기준 집계
+    const segMap: Record<string, {
+      sorting1: string
+      actRn: number; actRev: number
+      lyRn:  number; lyRev:  number
+      budRn: number; budRev: number
+    }> = {}
+
+    // 실적
+    ;(actualData ?? []).forEach((r: any) => {
+      const seg = r.segmentation ?? '기타'
+      if (!segMap[seg]) segMap[seg] = { sorting1: r.sorting1 ?? '', actRn:0, actRev:0, lyRn:0, lyRev:0, budRn:0, budRev:0 }
+      segMap[seg].actRn  += r.nights ?? 0
+      segMap[seg].actRev += r.room_revenue ?? 0
+    })
+
+    // 전년
+    ;(lyData ?? []).forEach((r: any) => {
+      const seg = r.segmentation ?? '기타'
+      if (!segMap[seg]) segMap[seg] = { sorting1: r.sorting1 ?? '', actRn:0, actRev:0, lyRn:0, lyRev:0, budRn:0, budRev:0 }
+      segMap[seg].lyRn  += r.nights ?? 0
+      segMap[seg].lyRev += r.room_revenue ?? 0
+    })
+
+    // 예산 (monthBudget: month_num 필터 후)
+    ;(monthBudget ?? []).forEach((r: any) => {
+      const seg = r.segmentation ?? '기타'
+      if (!segMap[seg]) segMap[seg] = { sorting1: r.sorting1 ?? '', actRn:0, actRev:0, lyRn:0, lyRev:0, budRn:0, budRev:0 }
+      segMap[seg].budRn  += r.budget_nights ?? 0
+      segMap[seg].budRev += r.budget_revenue ?? 0
+    })
+
+    // sorting1 기준 정렬
+    const rows = Object.entries(segMap)
+      .sort((a, b) => (a[1].sorting1).localeCompare(b[1].sorting1))
+      .map(([seg, v]) => {
+        const actAdr = v.actRn > 0 ? Math.round(v.actRev / v.actRn / 1000) : 0
+        const lyAdr  = v.lyRn  > 0 ? Math.round(v.lyRev  / v.lyRn  / 1000) : 0
+        const budAdr = v.budRn > 0 ? Math.round(v.budRev  / v.budRn / 1000) : 0
+        return {
+          seg,
+          actRn:  v.actRn,
+          actAdr,
+          actRev: Math.round(v.actRev / 1000000),
+          lyRn:   v.lyRn,
+          lyAdr,
+          lyRev:  Math.round(v.lyRev / 1000000),
+          budRn:  v.budRn,
+          budAdr,
+          budRev: Math.round(v.budRev / 1000000),
+        }
+      })
+
+    // 합계 행
+    const tot = rows.reduce((s, r) => ({
+      actRn: s.actRn+r.actRn, actRev: s.actRev+r.actRev,
+      lyRn:  s.lyRn+r.lyRn,   lyRev:  s.lyRev+r.lyRev,
+      budRn: s.budRn+r.budRn, budRev: s.budRev+r.budRev,
+    }), { actRn:0, actRev:0, lyRn:0, lyRev:0, budRn:0, budRev:0 })
+
+    const totActAdr = tot.actRn > 0 ? Math.round(tot.actRev * 1000000 / tot.actRn / 1000) : 0
+    const totLyAdr  = tot.lyRn  > 0 ? Math.round(tot.lyRev  * 1000000 / tot.lyRn  / 1000) : 0
+    const totBudAdr = tot.budRn > 0 ? Math.round(tot.budRev * 1000000 / tot.budRn / 1000) : 0
+
+    const total = {
+      seg: '합계',
+      actRn: tot.actRn, actAdr: totActAdr, actRev: tot.actRev,
+      lyRn:  tot.lyRn,  lyAdr:  totLyAdr,  lyRev:  tot.lyRev,
+      budRn: tot.budRn, budAdr: totBudAdr, budRev: tot.budRev,
+    }
+
+    return { rows, total }
+  }, [actualData, lyData, monthBudget])
+
   // ── 요일별 ──
   const dowKpi = useMemo(() => {
     const dowOrder = ['월', '화', '수', '목', '금', '토', '일']
-    const map: Record<string, { rn: number; rev: number; count: number }> = {}
-    dowOrder.forEach(d => { map[d] = { rn: 0, rev: 0, count: 0 } })
+    const map: Record<string, { rn: number; rev: number; dates: Set<string> }> = {}
+    dowOrder.forEach(d => { map[d] = { rn: 0, rev: 0, dates: new Set<string>() } })
     ;(actualData ?? []).forEach((r: any) => {
       const day = calMap[r.business_date]?.day
       if (!day || !map[day]) return
       map[day].rn  += r.nights ?? 0
       map[day].rev += r.room_revenue ?? 0
-      map[day].count++
+      map[day].dates.add(r.business_date)
     })
     return dowOrder.map(day => {
       const d = map[day]
-      const avgRn = d.count > 0 ? d.rn / d.count : 0
+      const totalAvailForDow = d.dates.size * roomCount   // 해당 요일 날짜 수 × roomCount
       return {
         day,
-        occ:  roomCount > 0 ? Math.round((avgRn / roomCount) * 1000) / 10 : 0,
+        occ:  totalAvailForDow > 0 ? Math.round((d.rn / totalAvailForDow) * 1000) / 10 : 0,
         adr:  d.rn > 0 ? Math.round(d.rev / d.rn / 1000) : 0,
         rev:  Math.round(d.rev / 1000000),
         isFriSat: day === '금' || day === '토',
@@ -348,11 +470,6 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
   if (!open) return null
 
   // ── 스타일 헬퍼 ──
-  const pageBreak = (label: string) => (
-    <div style={{ borderTop: '2px dashed #e1e0d9', margin: '24px 0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <span style={{ fontSize: 9, color: '#898781', background: '#fff', padding: '0 8px', position: 'relative', top: -1 }}>— {label} —</span>
-    </div>
-  )
   const th: React.CSSProperties = { fontSize: 10, color: C.textMuted, fontWeight: 500, padding: '5px 6px', borderBottom: `0.5px solid ${C.border}` }
   const td: React.CSSProperties = { fontSize: 11, color: C.textPrimary, padding: '4px 6px' }
 
@@ -366,10 +483,10 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
   ] : []
 
   const kpiCards = kpi ? [
-    { label: '점유율',  value: `${kpi.act.occ}%`,  sub: diffText(kpi.vsLy.occ, '%p'), subN: kpi.vsLy.occ },
-    { label: '객단가',  value: `${kpi.act.adr}k`,  sub: diffText(kpi.vsLy.adr, 'k'),  subN: kpi.vsLy.adr },
-    { label: '매출',    value: `${kpi.act.rev}m`,  sub: diffText(kpi.vsLy.rev, 'm'),  subN: kpi.vsLy.rev },
-    { label: 'RevPAR',  value: `${kpi.act.revpar}k`, sub: diffText(kpi.vsLy.revpar, 'k'), subN: kpi.vsLy.revpar },
+    { label: '점유율',  value: `${kpi.act.occ}%`,  budSub: diffText(kpi.vsBud.occ, '%p'), budSubN: kpi.vsBud.occ, sub: diffText(kpi.vsLy.occ, '%p'), subN: kpi.vsLy.occ },
+    { label: '객단가',  value: `${kpi.act.adr}k`,  budSub: diffText(kpi.vsBud.adr, 'k'),  budSubN: kpi.vsBud.adr,  sub: diffText(kpi.vsLy.adr, 'k'),  subN: kpi.vsLy.adr },
+    { label: '매출',    value: `${kpi.act.rev}m`,  budSub: diffText(kpi.vsBud.rev, 'm'),  budSubN: kpi.vsBud.rev,  sub: diffText(kpi.vsLy.rev, 'm'),  subN: kpi.vsLy.rev },
+    { label: 'RevPAR',  value: `${kpi.act.revpar}k`, budSub: diffText(kpi.vsBud.revpar, 'k'), budSubN: kpi.vsBud.revpar, sub: diffText(kpi.vsLy.revpar, 'k'), subN: kpi.vsLy.revpar },
   ] : []
 
   const overlayStyle: React.CSSProperties = {
@@ -442,20 +559,37 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
             {kpiCards.map(c => (
               <div key={c.label} style={{ background: C.cardBg, borderRadius: 8, padding: '12px 14px', textAlign: 'center' }}>
                 <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 5 }}>{c.label}</div>
-                <div style={{ fontSize: 20, fontWeight: 600, color: C.textPrimary }}>{c.value}</div>
-                <div style={{ fontSize: 10, fontWeight: 500, color: diffColor(c.subN), marginTop: 4 }}>전년비 {c.sub}</div>
+                <div style={{ fontSize: 20, fontWeight: 600, color: C.textPrimary }}>{renderVal(c.value, 20)}</div>
+                <div style={{ borderTop: `0.5px solid ${C.border}`, paddingTop: 6, marginTop: 8, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10 }}>
+                    <span style={{ color: C.textMuted }}>목표대비</span>
+                    <span style={{ fontWeight: 500 }}>{renderVal(c.budSub, 10, diffColor(c.budSubN))}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10 }}>
+                    <span style={{ color: C.textMuted }}>전년비</span>
+                    <span style={{ fontWeight: 500 }}>{renderVal(c.sub, 10, diffColor(c.subN))}</span>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
 
           {/* 비교표 */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 4 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 4, tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: '20%' }} />
+              <col style={{ width: '16%' }} />
+              <col style={{ width: '16%' }} />
+              <col style={{ width: '16%' }} />
+              <col style={{ width: '16%' }} />
+              <col style={{ width: '16%' }} />
+            </colgroup>
             <thead>
               <tr>
                 <th style={{ ...th, textAlign: 'left' }}>구분</th>
                 <th style={{ ...th, textAlign: 'right' }}>실적</th>
-                <th style={{ ...th, textAlign: 'right' }}>예산</th>
-                <th style={{ ...th, textAlign: 'right' }}>예산대비</th>
+                <th style={{ ...th, textAlign: 'right' }}>목표</th>
+                <th style={{ ...th, textAlign: 'right' }}>목표대비</th>
                 <th style={{ ...th, textAlign: 'right' }}>전년</th>
                 <th style={{ ...th, textAlign: 'right' }}>전년대비</th>
               </tr>
@@ -464,17 +598,102 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
               {kpiRows.map(r => (
                 <tr key={r.name} style={{ borderBottom: `0.5px solid ${C.border}` }}>
                   <td style={{ ...td, textAlign: 'left', fontWeight: 500 }}>{r.name}</td>
-                  <td style={{ ...td, textAlign: 'right', fontWeight: 600 }}>{r.act}</td>
-                  <td style={{ ...td, textAlign: 'right', color: C.textSecondary }}>{r.bud}</td>
-                  <td style={{ ...td, textAlign: 'right', color: diffColor(r.vsBudN), fontWeight: 500 }}>{r.vsBud}</td>
-                  <td style={{ ...td, textAlign: 'right', color: C.textSecondary }}>{r.ly}</td>
-                  <td style={{ ...td, textAlign: 'right', color: diffColor(r.vsLyN), fontWeight: 500 }}>{r.vsLy}</td>
+                  <td style={{ ...td, textAlign: 'right', fontWeight: 600 }}>{renderVal(r.act, 11)}</td>
+                  <td style={{ ...td, textAlign: 'right', color: C.textSecondary }}>{renderVal(r.bud, 11)}</td>
+                  <td style={{ ...td, textAlign: 'right', color: diffColor(r.vsBudN), fontWeight: 500 }}>{renderVal(r.vsBud, 11)}</td>
+                  <td style={{ ...td, textAlign: 'right', color: C.textSecondary }}>{renderVal(r.ly, 11)}</td>
+                  <td style={{ ...td, textAlign: 'right', color: diffColor(r.vsLyN), fontWeight: 500 }}>{renderVal(r.vsLy, 11)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
 
-          {pageBreak('2페이지')}
+          {/* 세그별 실적 */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10 }}>세그별 실적</div>
+            <div style={{ background: '#f5f5f3', borderRadius: 8, overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col style={{ width: '16%' }} />
+                  {/* R/N: 실적/목표/전년 */}
+                  <col style={{ width: '9%' }} /><col style={{ width: '9%' }} /><col style={{ width: '9%' }} />
+                  {/* ADR: 실적/목표/전년 */}
+                  <col style={{ width: '9%' }} /><col style={{ width: '9%' }} /><col style={{ width: '9%' }} />
+                  {/* REV: 실적/목표/전년 */}
+                  <col style={{ width: '10%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} />
+                </colgroup>
+                <thead>
+                  {/* 그룹 헤더 */}
+                  <tr>
+                    <th rowSpan={2} style={{ textAlign:'left', padding:'8px 10px', fontSize:9, color:'#898781', fontWeight:500, borderBottom:'0.5px solid #e1e0d9' }}>
+                      세그먼트
+                    </th>
+                    {[['R/N'], ['ADR'], ['REV']].map(([label]) => (
+                      <th key={label} colSpan={3} style={{
+                        textAlign:'center', padding:'6px 8px', fontSize:10,
+                        color:'#4a4a48', fontWeight:500,
+                        borderLeft:'0.5px solid #e1e0d9',
+                        borderBottom:'0.5px solid #e1e0d9',
+                      }}>
+                        {label}
+                      </th>
+                    ))}
+                  </tr>
+                  {/* 소컬럼 헤더 */}
+                  <tr>
+                    {['실적','목표','전년', '실적','목표','전년', '실적','목표','전년'].map((h, i) => (
+                      <th key={i} style={{
+                        textAlign:'right', padding:'5px 8px', fontSize:9, color:'#898781', fontWeight:500,
+                        borderBottom:'0.5px solid #e1e0d9',
+                        borderLeft: i % 3 === 0 ? '0.5px solid #e1e0d9' : 'none',
+                      }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...segKpi.rows, { ...segKpi.total, isTotal: true }].map((row: any, idx: number) => (
+                    <tr key={idx} style={row.isTotal ? { background:'#eeecea', borderTop:'1px solid #c8c7c0' } : {}}>
+                      <td style={{ textAlign:'left', fontWeight: row.isTotal ? 500 : 400, padding:'5px 10px', borderBottom: row.isTotal ? 'none' : '0.5px solid #e1e0d9', color:'#0b0b0b' }}>
+                        {row.seg}
+                      </td>
+                      {/* R/N */}
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom: row.isTotal ? 'none' : '0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9', fontWeight: row.isTotal ? 500 : 400 }}>
+                        {row.actRn.toLocaleString()}
+                      </td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom: row.isTotal ? 'none' : '0.5px solid #e1e0d9', color:'#898781' }}>
+                        {row.budRn.toLocaleString()}
+                      </td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom: row.isTotal ? 'none' : '0.5px solid #e1e0d9', color: row.actRn - row.lyRn >= 0 ? '#1d9e75' : '#a32d2d' }}>
+                        {row.actRn - row.lyRn > 0 ? `+${(row.actRn - row.lyRn).toLocaleString()}` : (row.actRn - row.lyRn).toLocaleString()}
+                      </td>
+                      {/* ADR */}
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom: row.isTotal ? 'none' : '0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9', fontWeight: row.isTotal ? 500 : 400 }}>
+                        {row.actAdr}<span style={{ fontSize:8, color:'#898781', marginLeft:1 }}>k</span>
+                      </td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom: row.isTotal ? 'none' : '0.5px solid #e1e0d9', color:'#898781' }}>
+                        {row.budAdr}<span style={{ fontSize:8, color:'#898781', marginLeft:1 }}>k</span>
+                      </td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom: row.isTotal ? 'none' : '0.5px solid #e1e0d9', color: row.actAdr - row.lyAdr >= 0 ? '#1d9e75' : '#a32d2d' }}>
+                        {row.actAdr - row.lyAdr > 0 ? `+${row.actAdr - row.lyAdr}` : row.actAdr - row.lyAdr}<span style={{ fontSize:8, marginLeft:1 }}>k</span>
+                      </td>
+                      {/* REV */}
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom: row.isTotal ? 'none' : '0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9', fontWeight: row.isTotal ? 500 : 400 }}>
+                        {row.actRev}<span style={{ fontSize:8, color:'#898781', marginLeft:1 }}>m</span>
+                      </td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom: row.isTotal ? 'none' : '0.5px solid #e1e0d9', color:'#898781' }}>
+                        {row.budRev}<span style={{ fontSize:8, color:'#898781', marginLeft:1 }}>m</span>
+                      </td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom: row.isTotal ? 'none' : '0.5px solid #e1e0d9', color: row.actRev - row.lyRev >= 0 ? '#1d9e75' : '#a32d2d' }}>
+                        {row.actRev - row.lyRev > 0 ? `+${row.actRev - row.lyRev}` : row.actRev - row.lyRev}<span style={{ fontSize:8, marginLeft:1 }}>m</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
           {/* ══════════ 2페이지 — 요일별 + 이벤트 ══════════ */}
           <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, breakBefore: 'page' } as React.CSSProperties}>요일별 실적</div>
@@ -483,7 +702,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
               <div key={d.day} style={{ background: C.cardBg, borderRadius: 8, padding: '10px 6px', textAlign: 'center' }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: d.isFriSat ? '#e24b4a' : C.textPrimary, marginBottom: 6 }}>{d.day}</div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: C.blue }}>{d.occ}%</div>
-                <div style={{ fontSize: 9, color: C.textMuted, marginTop: 3 }}>{d.adr}k · {d.rev}m</div>
+                <div style={{ fontSize: 9, color: C.textMuted, marginTop: 3 }}>{renderVal(`${d.adr}k`, 9)} · {renderVal(`${d.rev}m`, 9)}</div>
               </div>
             ))}
           </div>
@@ -521,8 +740,6 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
             </div>
           ))}
 
-          {pageBreak('3페이지')}
-
           {/* ══════════ 3페이지 — 일자별 그래프 ══════════ */}
           <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, breakBefore: 'page' } as React.CSSProperties}>
             일자별 OCC% & ADR
@@ -538,8 +755,6 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
               <canvas ref={chartRef} />
             </div>
           </div>
-
-          {pageBreak('4페이지')}
 
           {/* ══════════ 4페이지 — 어카운트별 실적 ══════════ */}
           <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, breakBefore: 'page' } as React.CSSProperties}>세그먼트별 어카운트 실적</div>
