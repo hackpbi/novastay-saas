@@ -792,21 +792,11 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
         </div>
       )}
 
-      {/* ── Meeting 전용 날짜 바 ── */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 16,
-        padding: '8px 14px',
-        background: '#0d0d0d',
-        borderRadius: 8,
-        marginBottom: 16,
-      }}>
-        {/* 세그먼트 상세 보기 버튼 — 오른쪽 끝 (날짜는 상단 글로벌 헤더 사용) */}
+      {/* Segment Table 버튼 — 헤더 바로 아래, 좌측 정렬 */}
+      <div style={{ display: 'flex', marginBottom: 20 }}>
         <button
           onClick={() => setSegOpen(true)}
           style={{
-            marginLeft: 'auto',
             fontSize: 11,
             padding: '4px 10px',
             borderRadius: 6,
@@ -820,9 +810,8 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
             gap: 5,
           }}
         >
-          ⊞ Segment Detail
+          ⊞ Segment Table
         </button>
-
       </div>
 
       {/* ② 월간 요약 KPI */}
