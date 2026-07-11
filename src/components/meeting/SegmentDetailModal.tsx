@@ -552,10 +552,10 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
       {/* 좌: 표 영역 (82%) */}
       <div style={{ flex: 82, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto', background: '#111418', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10 }}>
-        <table style={{ minWidth: 980, borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
+        <table style={{ minWidth: 890, borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
           <thead>
             <tr>
-              <th rowSpan={2} style={{ ...thS, padding: `${Math.round(8 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, width: 170, minWidth: 170, zIndex: 2 }}>SEGMENTATION</th>
+              <th rowSpan={2} style={{ ...thS, padding: `${Math.round(8 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, width: 150, minWidth: 150, zIndex: 2 }}>SEGMENTATION</th>
               {groupTh('OTB', undefined, GROUP_BG_HEADER.otb, GROUP_COLOR.otb)}
               {groupTh('FCST', undefined, GROUP_BG_HEADER.fcst, GROUP_COLOR.fcst)}
               {groupTh('BUDGET', undefined, GROUP_BG_HEADER.budget, GROUP_COLOR.budget)}
@@ -592,7 +592,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
                   </span>
                 </div>
               </th>
-              <th colSpan={3} style={{ ...thS, textAlign: 'center', boxShadow: GROUP_SHADOW, color: GROUP_COLOR.gap, minWidth: 240, borderBottom: `2px solid ${GROUP_COLOR.gap}` }}>
+              <th colSpan={3} style={{ ...thS, textAlign: 'center', boxShadow: GROUP_SHADOW, color: GROUP_COLOR.gap, minWidth: 198, borderBottom: `2px solid ${GROUP_COLOR.gap}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                   <span style={{ color: GROUP_COLOR.gap }}>GAP</span>
                   <span style={{ color: '#2a2a2a' }}>·</span>
@@ -686,7 +686,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
             <tr>
               {['OTB', 'FCST', 'BUDGET', 'LY', 'GAP'].map(g => (
                 ['R/N', 'ADR', 'REV'].map((s, si) => (
-                  <th key={`${g}-${s}`} style={{ ...thS, width: 80, minWidth: 80, background: GROUP_BG_HEADER[g.toLowerCase() as keyof typeof GROUP_BG_HEADER], ...(si === 0 ? { boxShadow: GROUP_SHADOW } : {}) }}>{s}</th>
+                  <th key={`${g}-${s}`} style={{ ...thS, width: 66, minWidth: 66, background: GROUP_BG_HEADER[g.toLowerCase() as keyof typeof GROUP_BG_HEADER], ...(si === 0 ? { boxShadow: GROUP_SHADOW } : {}) }}>{s}</th>
                 ))
               ))}
             </tr>
@@ -704,7 +704,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
               const otb = otbOf(r), fcst = fcstOf(r), budget = budgetOf(r), ly = lyOf(r)
               return (
                 <tr key={r.id} style={{ background: rowBg }}>
-                  <td style={{ ...tdS, padding: `${Math.round(8 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: r.bgColor ?? (r.isBold ? BOLD_BG : BG), fontWeight: r.isBold ? 700 : 400, color: nameColor, minWidth: 170 }}>
+                  <td style={{ ...tdS, padding: `${Math.round(8 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: r.bgColor ?? (r.isBold ? BOLD_BG : BG), fontWeight: r.isBold ? 700 : 400, color: nameColor, minWidth: 150 }}>
                     {r.indent ? <><span style={{ color: '#555', marginRight: 4 }}>└</span>{r.name}</> : r.name}
                   </td>
                   {groupCells(otb,    numColor, r.isBold, numBg)}
