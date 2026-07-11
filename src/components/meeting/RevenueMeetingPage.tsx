@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { PickupRow } from '@/hooks/usePickupData'
@@ -284,22 +284,19 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
     refetchDirectives()
   }
 
-  // ── 헤더 지시사항 캐러셀 (완료 제외, 2개씩 3초 순환) ──────────────────────────────
-  const [carouselIdx, setCarouselIdx] = useState(0)
+  // ── 지시사항 드롭다운 (버튼 토글 + 바깥 클릭 닫기) ──────────────────────────────
+  const [dirOpen, setDirOpen] = useState(false)
+  const dirRef = useRef<HTMLDivElement>(null)
   const [showDoneDirectives, setShowDoneDirectives] = useState(false)   // more 모달: 완료 표시 토글
 
-  const activeDirectives = useMemo(
-    () => directives.filter(d => d.status !== '완료'),
-    [directives],
-  )
-
   useEffect(() => {
-    if (activeDirectives.length <= 2) return
-    const timer = setInterval(() => {
-      setCarouselIdx(i => (i + 1) % activeDirectives.length)
-    }, 3000)
-    return () => clearInterval(timer)
-  }, [activeDirectives.length])
+    if (!dirOpen) return
+    const onDown = (e: MouseEvent) => {
+      if (dirRef.current && !dirRef.current.contains(e.target as Node)) setDirOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [dirOpen])
 
   // more 모달 목록 필터 (완료 기본 숨김 + 내용/담당자 검색 + 날짜)
   const filteredDirectives = directives.filter(d => {
@@ -497,7 +494,7 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
       `}</style>
 
       {/* ── HEADER ── */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 20 }}>
 
         {/* 좌: 타이틀 + 월 네비게이터 */}
         <div>
@@ -541,9 +538,38 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
           </div>
         </div>
 
-        {/* 헤더 우측: 지시사항 섹션 */}
-        <div style={{ marginLeft: 'auto', minWidth: 280, maxWidth: 400, marginTop: 4 }}>
-          <div style={{ fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        {/* 헤더 우측: Segment Table + 지시사항 드롭다운 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }} ref={dirRef}>
+          {/* Segment Table (기존 버튼 이동) */}
+          <button
+            onClick={() => setSegOpen(true)}
+            style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, background: 'transparent', border: '1px solid rgba(0,229,160,0.4)', color: MINT, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}
+          >
+            ⊞ Segment Table
+          </button>
+
+          {/* 지시사항 토글 버튼 */}
+          <button
+            onClick={(e) => { e.stopPropagation(); setDirOpen(p => !p) }}
+            style={{ fontSize: 12, padding: '7px 13px', borderRadius: 7, background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: '#ccc', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+          >
+            <span>📋 지시사항</span>
+            {directives.length > 0 && (
+              <span style={{ fontSize: 10, fontWeight: 600, minWidth: 17, height: 17, padding: '0 5px', borderRadius: 9, background: '#F5A623', color: '#0a0a0a', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                {directives.length}
+              </span>
+            )}
+            <span style={{ fontSize: 9, color: '#666', transition: 'transform .18s', transform: dirOpen ? 'rotate(180deg)' : 'none' }}>▼</span>
+          </button>
+
+          {/* 드롭다운 패널 — absolute로 KPI 위에 겹침 (페이지 안 밀림) */}
+          {dirOpen && (
+          <div
+            style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 400, background: '#141a20', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: 12, boxShadow: '0 12px 32px rgba(0,0,0,0.6)', zIndex: 50 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+          {/* 패널 헤더: 타이틀 + 추가 + more */}
+          <div style={{ fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             {/* 좌: 라벨 */}
             <span>지시사항</span>
             {/* 우: 버튼 그룹 나란히 */}
@@ -563,43 +589,10 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
             </div>
           </div>
 
-          {/* 캐러셀 카드 — 완료 제외 항목 2개씩 순환 */}
-          {activeDirectives.length === 0 ? (
-            <div style={{ border: '1px solid #1e1e1e', borderRadius: 7, padding: '7px 10px', background: CARD, fontSize: 11, color: '#444' }}>
-              등록된 지시사항이 없습니다
-            </div>
-          ) : (
-            <div style={{ border: '1px solid #1e1e1e', borderRadius: 7, padding: '7px 10px', background: CARD, minHeight: 52 }}>
-              {[0, 1].map(offset => {
-                if (offset >= activeDirectives.length) return null   // 활성 1개면 중복 렌더 방지
-                const d = activeDirectives[(carouselIdx + offset) % activeDirectives.length]
-                if (!d) return null
-                return (
-                  <div key={d.id} style={{
-                    display: 'flex', alignItems: 'center', gap: 7,
-                    padding: '3px 0', fontSize: 11, color: '#ccc', overflow: 'hidden',
-                    borderBottom: offset === 0 ? '1px solid #1a1a1a' : 'none',
-                  }}>
-                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: DIRECTIVE_STATUS_COLOR[d.status], flexShrink: 0 }} />
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{d.content}</span>
-                    <span style={{
-                      fontSize: 9, padding: '1px 5px', borderRadius: 3, whiteSpace: 'nowrap', flexShrink: 0,
-                      color: DIRECTIVE_STATUS_COLOR[d.status],
-                      background: `${DIRECTIVE_STATUS_COLOR[d.status]}1a`,
-                      border: `1px solid ${DIRECTIVE_STATUS_COLOR[d.status]}44`,
-                    }}>
-                      {d.status}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
           {/* 인라인 입력창 */}
           {inlineOpen && (
             <div style={{
-              marginTop: 8,
+              marginBottom: 10,
               background: '#0f1f17',
               border: '1px solid #1a3028',
               borderRadius: 8,
@@ -664,6 +657,44 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
                 >저장</button>
               </div>
             </div>
+          )}
+
+          {/* 리스트 (기존 CRUD 유지: 상태 순환 / 삭제) */}
+          {directives.length === 0 ? (
+            <div style={{ fontSize: 12, color: '#666', textAlign: 'center', padding: '12px 0' }}>지시사항이 없습니다</div>
+          ) : (
+            <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+              {directives.map(d => (
+                <div key={d.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, background: '#0c0f13', border: '0.5px solid rgba(255,255,255,0.06)', borderRadius: 7, padding: '8px 10px', marginBottom: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, overflow: 'hidden', flex: 1 }}>
+                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: DIRECTIVE_STATUS_COLOR[d.status], flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: '#ccc' }}>{d.content}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                    {/* 상태 버튼 — 클릭 시 다음 상태로 순환 */}
+                    <button
+                      onClick={() => {
+                        const cur = DIRECTIVE_STATUS.indexOf(d.status)
+                        const next = DIRECTIVE_STATUS[(cur + 1) % DIRECTIVE_STATUS.length]
+                        updateDirectiveStatus(d.id, next)
+                      }}
+                      style={{ fontSize: 9, padding: '1px 6px', borderRadius: 3, whiteSpace: 'nowrap', color: DIRECTIVE_STATUS_COLOR[d.status], background: `${DIRECTIVE_STATUS_COLOR[d.status]}1a`, border: `1px solid ${DIRECTIVE_STATUS_COLOR[d.status]}44`, cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      {d.status}
+                    </button>
+                    {/* 삭제 버튼 */}
+                    <button
+                      onClick={() => deleteDirective(d.id)}
+                      style={{ fontSize: 11, color: '#333', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', borderRadius: 3, flexShrink: 0 }}
+                      onMouseEnter={e => { e.currentTarget.style.color = '#E24B4A'; e.currentTarget.style.background = '#1a0f0f' }}
+                      onMouseLeave={e => { e.currentTarget.style.color = '#333'; e.currentTarget.style.background = 'none' }}
+                    >✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          </div>
           )}
         </div>
       </div>
@@ -791,28 +822,6 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
           </div>
         </div>
       )}
-
-      {/* Segment Table 버튼 — 헤더 바로 아래, 좌측 정렬 */}
-      <div style={{ display: 'flex', marginBottom: 20 }}>
-        <button
-          onClick={() => setSegOpen(true)}
-          style={{
-            fontSize: 11,
-            padding: '4px 10px',
-            borderRadius: 6,
-            background: 'transparent',
-            border: '1px solid rgba(0,229,160,0.4)',
-            color: MINT,
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 5,
-          }}
-        >
-          ⊞ Segment Table
-        </button>
-      </div>
 
       {/* ② 월간 요약 KPI */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
