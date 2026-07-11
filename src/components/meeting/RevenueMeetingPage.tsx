@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { PickupRow } from '@/hooks/usePickupData'
@@ -8,8 +8,8 @@ import { useMarketSchema } from '@/hooks/useMarketSchema'
 import { useBudgetMonthly, type BudgetMonthlyRow } from '@/hooks/useBudgetMonthly'
 import { useForecastMonthly, type ForecastMonthlyRow } from '@/hooks/useForecastMonthly'
 import { useLatestConfirmedBudgetDate } from '@/hooks/useLatestConfirmedBudgetDate'
+import { useDateContext } from '@/contexts/DateContext'
 import { useFcstDateContext } from '@/contexts/FcstDateContext'
-import DatePicker from '@/components/DatePicker'
 import { FmtVal } from '@/utils/FmtVal'
 import SegmentDetailModal from './SegmentDetailModal'
 import MeetingPickupBlock, { type SegGroup } from '@/components/meeting/MeetingPickupBlock'
@@ -52,13 +52,6 @@ const MINT   = '#00E5A0'
 const RED    = '#E24B4A'
 const BLUE   = '#5B8DEF'
 const TXT3   = '#888'
-
-// KST 기준 dateStr('YYYY-MM-DD')에서 days일 전 'YYYY-MM-DD'
-function subtractDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr)
-  d.setDate(d.getDate() - days)
-  return d.toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })
-}
 
 // 향후 4개월(당월 + 3) monthKey 생성
 function buildMonthKeys(): string[] {
@@ -203,14 +196,10 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
   const [segOpen, setSegOpen]         = useState(false)
   const [dirModalOpen, setDirModalOpen] = useState(false)
 
-  // Meeting 전용 OTB 날짜 (초기값: 오늘 KST)
-  const [meetingOtbDate, setMeetingOtbDate] = useState<string>(() =>
-    new Date().toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })
-  )
-  // Meeting 전용 vs OTB 날짜 (초기값: 오늘 -7일, otbDates 로드 후 자동 리셋)
-  const [meetingVsOtbDate, setMeetingVsOtbDate] = useState<string>(() =>
-    subtractDays(new Date().toLocaleDateString('sv', { timeZone: 'Asia/Seoul' }), 7)
-  )
+  // 글로벌 헤더 date(OTB / VS OTB)를 그대로 사용 — 값은 이미 'YYYY-MM-DD' 문자열
+  const { otbDate, vsOtbDate, setOtbDate, setVsOtbDate } = useDateContext()
+  const meetingOtbDate   = otbDate
+  const meetingVsOtbDate = vsOtbDate
 
   // MeetingPickupBlock에서 올려주는 픽업 요약(Picked up 칩 + KPI) — 날짜 바 우측 표시용
   const [pickupSummary, setPickupSummary] = useState<{
@@ -325,20 +314,6 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
     },
     enabled: !!hotelId,
   })
-
-  // otbDates 로드 완료 시 초기값 1회 보정: OTB=가장 최근 스냅샷, VS=OTB-7 근접 스냅샷
-  // (이후에는 사용자가 날짜 바에서 수동 변경)
-  const initializedRef = useRef(false)
-  useEffect(() => {
-    if (otbDates.length === 0 || initializedRef.current) return
-    initializedRef.current = true
-    const sorted = [...otbDates].sort()
-    const latestOtb = sorted[sorted.length - 1]
-    setMeetingOtbDate(latestOtb)
-    const target = subtractDays(latestOtb, 7)
-    const prev = sorted.filter(d => d <= target)
-    if (prev.length > 0) setMeetingVsOtbDate(prev[prev.length - 1])
-  }, [otbDates])
 
   const minDate = otbDates[otbDates.length - 1] ?? ''
 
@@ -806,29 +781,7 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
         borderRadius: 8,
         marginBottom: 16,
       }}>
-        {/* OTB DatePicker — 스냅샷 날짜만 선택 가능 */}
-        <DatePicker
-          label="OTB"
-          value={meetingOtbDate}
-          onChange={setMeetingOtbDate}
-          accent
-          bare
-          availableDates={otbDates}
-        />
-
-        {/* 구분선 */}
-        <div style={{ width: 1, height: 16, background: '#2a2a2a' }} />
-
-        {/* vs OTB DatePicker — OTB 이전 스냅샷 날짜만 선택 가능 */}
-        <DatePicker
-          label="VS OTB"
-          value={meetingVsOtbDate}
-          onChange={setMeetingVsOtbDate}
-          bare
-          availableDates={otbDates.filter(d => d < meetingOtbDate)}
-        />
-
-        {/* 세그먼트 상세 보기 버튼 — 오른쪽 끝 */}
+        {/* 세그먼트 상세 보기 버튼 — 오른쪽 끝 (날짜는 상단 글로벌 헤더 사용) */}
         <button
           onClick={() => setSegOpen(true)}
           style={{
@@ -1027,7 +980,7 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
         otbDate={meetingOtbDate}
         vsDate={meetingVsOtbDate}
         otbDates={otbDates ?? []}
-        onDateChange={(newOtb, newVs) => { setMeetingOtbDate(newOtb); setMeetingVsOtbDate(newVs) }}
+        onDateChange={(newOtb, newVs) => { setOtbDate(newOtb); setVsOtbDate(newVs) }}
       />
 
       {/* 세그먼트 상세 풀스크린 모달 */}
