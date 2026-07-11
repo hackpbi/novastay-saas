@@ -38,10 +38,6 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
   const [showBarRate, setShowBarRate] = useState(true)   // BAR Rate 추세선 on/off
   const [showOccLabel, setShowOccLabel] = useState(true)
   const showOccLabelRef = useRef(showOccLabel)
-  const [occOpacity, setOccOpacity] = useState(0.05)
-  const occOpacityRef = useRef(0.05)
-  const [occLabelOpacity, setOccLabelOpacity] = useState(0.40)
-  const occLabelOpacityRef = useRef(occLabelOpacity)
   const [pacingDay, setPacingDay] = useState<string | null>(null)   // 추세선 포인트 클릭 → 상세 모달 (stayDate)
 
   // 모달 내부 월 상태 (month는 1-based → 내부 0-based)
@@ -300,7 +296,7 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
             const xPos = x.getPixelForValue(i)
             const yPos = yOcc.getPixelForValue(val)
             ctx.save()
-            ctx.fillStyle = `rgba(160,160,160,${occLabelOpacityRef.current})`
+            ctx.fillStyle = 'rgba(160,160,160,0.4)'
             ctx.font = '9px sans-serif'
             ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'
             ctx.fillText(`${val}%`, xPos, yPos - 3)
@@ -376,8 +372,8 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
               type: 'bar',
               label: 'OCC%',
               data: occData,
-              backgroundColor: () => `rgba(180,180,180,${occOpacityRef.current})`,
-              borderColor: () => `rgba(180,180,180,${Math.min(occOpacityRef.current + 0.05, 1)})`,
+              backgroundColor: 'rgba(180,180,180,0.35)',
+              borderColor: 'rgba(180,180,180,0.4)',
               borderWidth: 1,
               borderRadius: 2,
               yAxisID: 'yOcc',
@@ -582,22 +578,9 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
           </div>
         </div>
 
-        {/* 서브바 — OTB 날짜(읽기 전용) + OCC 투명도 슬라이더 */}
-        <div style={{ padding: '0 20px 12px', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        {/* 서브바 — OTB 날짜(읽기 전용) */}
+        <div style={{ padding: '0 20px 12px', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 12, color: '#888' }}>OTB <b style={{ color: '#ccc', fontWeight: 500 }}>{otbDate || '-'}</b> 기준 일별 BAR Rate</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1a1a1a', borderRadius: 8, padding: '4px 10px', border: '1px solid #2a2a2a', flexShrink: 0 }}>
-            <span style={{ fontSize: 10, color: '#555', whiteSpace: 'nowrap' }}>Bar</span>
-            <input type="range" min={0} max={50} step={1} value={Math.round(occOpacity * 100)}
-              onChange={e => { const val = Number(e.target.value) / 100; setOccOpacity(val); occOpacityRef.current = val; chartRef.current?.update('none') }}
-              style={{ width: 60, accentColor: '#00E5A0', cursor: 'pointer' }} />
-            <span style={{ fontSize: 10, color: '#00E5A0', minWidth: 24 }}>{Math.round(occOpacity * 100)}%</span>
-            <div style={{ width: 1, height: 14, background: '#2a2a2a' }} />
-            <span style={{ fontSize: 10, color: '#555', whiteSpace: 'nowrap' }}>Label</span>
-            <input type="range" min={0} max={100} step={1} value={Math.round(occLabelOpacity * 100)}
-              onChange={e => { const val = Number(e.target.value) / 100; setOccLabelOpacity(val); occLabelOpacityRef.current = val; chartRef.current?.update('none') }}
-              style={{ width: 60, accentColor: '#00E5A0', cursor: 'pointer' }} />
-            <span style={{ fontSize: 10, color: '#00E5A0', minWidth: 24 }}>{Math.round(occLabelOpacity * 100)}%</span>
-          </div>
         </div>
 
         {/* 월 네비게이션 */}
