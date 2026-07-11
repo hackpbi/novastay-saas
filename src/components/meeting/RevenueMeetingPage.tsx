@@ -86,7 +86,48 @@ function barPct(otbVal: number, refVal: number): number {
   return Math.min(Math.round((otbVal / refVal) * 100), 100)
 }
 
-// ── KPI 카드 (OTB 값 + FCST 박스 + vs Budget/LY 프로그레스 바) ─────────────────────
+// ── KPI Bar (라벨 밀착 + Budget 시머 + 최초 차오름) ─────────────────────────────────
+function Bar({ label, value, pct, delta, deltaColor, shimmer }: {
+  label:      string
+  value:      string
+  pct:        number
+  delta:      string
+  deltaColor: string
+  shimmer:    boolean
+}) {
+  return (
+    <div>
+      {/* 라벨 — 바에 밀착 */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 1, lineHeight: 1.2 }}>
+        <span style={{ fontSize: 11, color: TXT3 }}>{label}</span>
+        <span style={{ fontSize: 12, color: '#ccc', fontWeight: 500 }}><FmtVal val={value} numSize={12} /></span>
+      </div>
+      {/* 바 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ flex: 1, height: 6, background: '#2a2a2a', borderRadius: 3, overflow: 'hidden' }}>
+          <div style={{
+            width: `${pct}%`, height: '100%', background: deltaColor, borderRadius: 3,
+            position: 'relative', overflow: 'hidden',
+            animation: 'kpiGrow 1.1s cubic-bezier(.22,1,.36,1)',
+          }}>
+            {shimmer && (
+              <div style={{
+                position: 'absolute', inset: 0, width: '40%',
+                background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)',
+                animation: 'kpiSweep 2.6s ease-in-out infinite',
+              }} />
+            )}
+          </div>
+        </div>
+        <span style={{ fontSize: 11, color: deltaColor, fontFamily: 'monospace', minWidth: 52, textAlign: 'right' }}>
+          <FmtVal val={delta} numSize={11} />
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ── KPI 카드 (FCST 메인 + OTB 서브 + 상태 스트립/도트 + Budget/LY 바) ─────────────────
 function KpiCard({
   label, mainVal, fcstVal, fcstVsBudStr, fcstVsBudPos,
   budStr, lyStr, vsBudDiffStr, vsBudBarPct, vsBudPos,
@@ -106,51 +147,43 @@ function KpiCard({
   vsLyBarPct:    number
   vsLyPos:       boolean
 }) {
+  const STATUS = fcstVsBudPos ? MINT : RED
   return (
-    <div style={{ background: CARD, borderRadius: 10, padding: 14, border: '1px solid #1e1e1e' }}>
-      {/* 상단: OTB 값 + FCST 박스 */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
+    <div style={{ background: '#111418', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '16px 18px', position: 'relative', overflow: 'hidden' }}>
+      {/* 좌측 상태 스트립 (달성=민트 / 미달=레드) */}
+      <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: `linear-gradient(180deg, ${STATUS}, ${STATUS}26)` }} />
+
+      {/* 지표명 + 맥박 도트 */}
+      <div style={{ fontSize: 12, color: TXT3, letterSpacing: '0.04em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+        {label}
+        <span style={{ width: 5, height: 5, borderRadius: '50%', background: STATUS, animation: 'kpiPulse 2s ease-in-out infinite' }} />
+      </div>
+
+      {/* FCST 메인 + OTB 서브 박스 */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        {/* 좌: FCST 메인 */}
         <div>
-          <div style={{ fontSize: 10, color: '#666', marginBottom: 4 }}>{label}</div>
-          <div style={{ fontWeight: 500 }}><FmtVal val={mainVal} numSize={22} /></div>
+          <div style={{ fontSize: 10, color: '#F5A623', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginBottom: 2 }}>FCST</div>
+          <div style={{ color: '#fff', fontWeight: 600, lineHeight: 1.05 }}><FmtVal val={mainVal} numSize={32} /></div>
+          <div style={{ fontSize: 11, color: STATUS, marginTop: 4 }}><FmtVal val={fcstVsBudStr} numSize={11} /></div>
         </div>
-        <div style={{ background: '#0f0f0f', border: '1px solid #2a2a2a', borderRadius: 7, padding: '6px 10px', minWidth: 82, textAlign: 'right', flexShrink: 0 }}>
-          <div style={{ fontSize: 9, color: '#555', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>OTB</div>
-          <div style={{ fontWeight: 500, color: BLUE, marginBottom: 2 }}><FmtVal val={fcstVal} numSize={14} /></div>
-          <div style={{ color: fcstVsBudPos ? MINT : RED }}><FmtVal val={fcstVsBudStr} numSize={10} /></div>
+        {/* 우: OTB 서브 박스 (값만) */}
+        <div style={{ border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '8px 12px', minWidth: 104, background: 'rgba(91,141,239,0.05)', flexShrink: 0 }}>
+          <div style={{ fontSize: 9, color: TXT3, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'right', marginBottom: 2 }}>OTB</div>
+          <div style={{ color: BLUE, fontWeight: 600, textAlign: 'right', lineHeight: 1.1 }}><FmtVal val={fcstVal} numSize={17} /></div>
         </div>
       </div>
 
       {/* 구분선 */}
-      <div style={{ height: 1, background: '#1e1e1e', marginBottom: 9 }} />
+      <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '16px 0 12px' }} />
 
-      {/* vs Budget */}
-      <div style={{ marginBottom: 8 }}>
-        <div style={{ fontSize: 10, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ color: '#555' }}>Budget</span>
-          <span style={{ color: '#888', fontWeight: 500 }}><FmtVal val={budStr} numSize={10} /></span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ flex: 1, height: 5, background: '#222', borderRadius: 3, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${vsBudBarPct}%`, background: vsBudPos ? MINT : RED, borderRadius: 3 }} />
-          </div>
-          <span style={{ fontWeight: 600, color: vsBudPos ? MINT : RED, whiteSpace: 'nowrap', minWidth: 42, textAlign: 'right' }}><FmtVal val={vsBudDiffStr} numSize={10} /></span>
-        </div>
+      {/* Budget 바 (시머) */}
+      <div style={{ marginBottom: 10 }}>
+        <Bar label="Budget" value={budStr} pct={vsBudBarPct} delta={vsBudDiffStr} deltaColor={vsBudPos ? MINT : RED} shimmer />
       </div>
 
-      {/* vs LY (전년 마감) */}
-      <div>
-        <div style={{ fontSize: 10, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ color: '#555' }}>LY</span>
-          <span style={{ color: '#888', fontWeight: 500 }}><FmtVal val={lyStr} numSize={10} /></span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ flex: 1, height: 5, background: '#222', borderRadius: 3, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${vsLyBarPct}%`, background: vsLyPos ? MINT : RED, borderRadius: 3 }} />
-          </div>
-          <span style={{ fontWeight: 600, color: vsLyPos ? MINT : RED, whiteSpace: 'nowrap', minWidth: 42, textAlign: 'right' }}><FmtVal val={vsLyDiffStr} numSize={10} /></span>
-        </div>
-      </div>
+      {/* LY 바 (시머 없음) */}
+      <Bar label="LY" value={lyStr} pct={vsLyBarPct} delta={vsLyDiffStr} deltaColor={vsLyPos ? MINT : RED} shimmer={false} />
     </div>
   )
 }
@@ -465,6 +498,13 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
 
   return (
     <div style={{ minHeight: '100%', background: BG, padding: 0, color: '#fff' }}>
+
+      {/* KPI 카드 애니메이션 keyframes (1회 주입) */}
+      <style>{`
+        @keyframes kpiPulse { 0%,100% { opacity:.35; transform:scale(1); } 50% { opacity:1; transform:scale(1.35); } }
+        @keyframes kpiSweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
+        @keyframes kpiGrow  { from { width: 0; } }
+      `}</style>
 
       {/* ── HEADER ── */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
@@ -811,8 +851,8 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
             label={m.label}
             mainVal={fcstAgg.has ? m.fmt(m.fcst) : '—'}
             fcstVal={m.fmt(m.otb)}
-            fcstVsBudStr={budgetAgg.has ? `vs Bud ${m.fmtDiff(m.otb - m.bud)}` : '—'}
-            fcstVsBudPos={m.otb - m.bud >= 0}
+            fcstVsBudStr={fcstAgg.has && budgetAgg.has ? `vs Bud ${m.fmtDiff(m.fcst - m.bud)}` : '—'}
+            fcstVsBudPos={m.fcst - m.bud >= 0}
             budStr={budgetAgg.has ? m.fmt(m.bud) : '—'}
             lyStr={lyAgg.has ? m.fmt(m.ly) : '—'}
             vsBudDiffStr={budgetAgg.has ? m.fmtDiff(m.otb - m.bud) : '—'}
