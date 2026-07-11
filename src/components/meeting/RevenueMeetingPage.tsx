@@ -15,7 +15,6 @@ import SegmentDetailModal from './SegmentDetailModal'
 import MeetingPickupBlock, { type SegGroup } from '@/components/meeting/MeetingPickupBlock'
 import MarketPickupDayModal from '@/components/market-pickup/MarketPickupDayModal'
 import {
-  getDummySectionExtras,
   monthKeyLabel,
 } from './dummyMeetingData'
 
@@ -76,9 +75,6 @@ const signNum = (v: number) => `${v > 0 ? '+' : ''}${v.toLocaleString('ko-KR')}`
 const signK   = (v: number) => `${v > 0 ? '+' : ''}${Math.round(v / 1000)}K`
 const signM   = (v: number) => `${v > 0 ? '+' : ''}${(v / 1_000_000).toFixed(1)}M`
 const signPct = (v: number) => `${v > 0 ? '+' : ''}${v}%p`
-const dColor  = (v: number) => (v > 0 ? MINT : v < 0 ? RED : TXT3)
-const fmtAdr  = (v: number) => `${Math.round(v / 1000)}K`
-const fmtRevM = (v: number) => `${(v / 1_000_000).toFixed(0)}M`
 
 // KPI 프로그레스 바 — OTB가 목표(Budget/LY) 대비 몇 % 달성인지 (최대 100)
 function barPct(otbVal: number, refVal: number): number {
@@ -236,8 +232,6 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
     new Date().toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })
   )
   const [addAssignee, setAddAssignee] = useState('')
-
-  const extras  = getDummySectionExtras(monthKey)
 
   // ── 지시사항 (c11_meeting_directives) ─────────────────────────────────────────
   const { data: directives = [], refetch: refetchDirectives } = useQuery<Directive[]>({
@@ -861,128 +855,6 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
           isDayModalOpen={!!dayModal}
           onSummaryChange={setPickupSummary}
         />
-      </div>
-
-      {/* ④ 2열 그리드: 픽업 / 온북 ─────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
-
-        {/* 일주일간의 픽업 */}
-        <div style={{ background: CARD, borderRadius: 10, padding: 14 }}>
-          <div style={{ fontSize: 12, color: TXT3, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ color: MINT, fontSize: 14 }}>↑</span> 일주일간의 픽업
-          </div>
-          {extras.pickup7.map(p => (
-            <div key={p.date} style={{
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              padding: '5px 0', borderBottom: '1px solid #1e1e1e', fontSize: 12,
-            }}>
-              <span style={{ color: '#666' }}>{p.date}</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ color: '#fff', fontWeight: 500 }}>{p.rn > 0 ? '+' : ''}{p.rn} R/N</span>
-                <span style={{
-                  fontSize: 10, padding: '2px 6px', borderRadius: 4,
-                  background: p.rn >= 0 ? '#0f2a1e' : '#2a0f0f',
-                  color: p.rn >= 0 ? MINT : RED,
-                }}>
-                  {p.rn > 0 ? '+' : ''}{p.rn}
-                </span>
-              </div>
-            </div>
-          ))}
-          {/* 7일 합계 */}
-          {(() => {
-            const total = extras.pickup7.reduce((s, p) => s + p.rn, 0)
-            return (
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11 }}>
-                <span style={{ color: '#666' }}>7일 합계</span>
-                <span style={{ color: total >= 0 ? MINT : RED, fontWeight: 500 }}>
-                  {total > 0 ? '+' : ''}{total} R/N
-                </span>
-              </div>
-            )
-          })()}
-        </div>
-
-        {/* 현재 온북 (OTB) */}
-        <div style={{ background: CARD, borderRadius: 10, padding: 14 }}>
-          <div style={{ fontSize: 12, color: TXT3, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ color: MINT, fontSize: 14 }}>◎</span> 현재 온북 (OTB)
-          </div>
-          {/* 미니 KPI 3칸 */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 10 }}>
-            {[
-              { label: 'OCC%', val: `${extras.otbKpi.occ}%`,     lyVal: `LY ${extras.otbKpi.lyOcc}%`,     color: BLUE },
-              { label: 'ADR',  val: fmtAdr(extras.otbKpi.adr),   lyVal: `LY ${fmtAdr(extras.otbKpi.lyAdr)}`, color: '#fff' },
-              { label: 'REV',  val: fmtRevM(extras.otbKpi.rev),  lyVal: `LY ${fmtRevM(extras.otbKpi.lyRev)}`, color: MINT },
-            ].map(k => (
-              <div key={k.label} style={{ background: '#0f0f0f', borderRadius: 6, padding: '7px 8px', textAlign: 'center' }}>
-                <div style={{ fontSize: 9, color: '#555', marginBottom: 2 }}>{k.label}</div>
-                <div style={{ fontWeight: 500, color: k.color }}><FmtVal val={k.val} numSize={14} /></div>
-                <div style={{ fontSize: 9, color: '#555', marginTop: 1 }}>{k.lyVal}</div>
-              </div>
-            ))}
-          </div>
-          {/* 바차트 */}
-          <div style={{ fontSize: 9, color: '#555', marginBottom: 4 }}>남은 날짜별 OTB R/N</div>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 55 }}>
-            {extras.otbDays.map(d => {
-              const ROOM_COUNT = 72
-              const pct = d.rn / ROOM_COUNT
-              const barH = Math.max(3, Math.round(pct * 55))
-              const barColor = pct >= 0.8 ? BLUE : pct >= 0.65 ? MINT : '#2a3a2a'
-              return (
-                <div key={d.day} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <div style={{ width: '100%', height: `${barH}px`, background: barColor, borderRadius: '2px 2px 0 0' }} />
-                  {extras.otbDays.length <= 16 && (
-                    <div style={{ fontSize: 7, color: '#444', marginTop: 1 }}>{d.day}</div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* ⑤ 전망 (Forecast) — 전체 너비 ──────────────────────────────── */}
-      <div style={{ background: CARD, borderRadius: 10, padding: 14, marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: TXT3, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ color: MINT, fontSize: 14 }}>↗</span> 전망 (Forecast vs Budget)
-          </div>
-        </div>
-        {/* 상단 KPI 4칸 */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 12 }}>
-          {[
-            { label: 'FCST OCC',    val: `${extras.fcstKpi.fcstOcc}%`,             color: '#fff' },
-            { label: 'vs BUDGET',   val: `${extras.fcstKpi.vsBudgetOccPp > 0 ? '+' : ''}${extras.fcstKpi.vsBudgetOccPp}%p`, color: dColor(extras.fcstKpi.vsBudgetOccPp) },
-            { label: 'FCST REV',    val: fmtRevM(extras.fcstKpi.fcstRev),          color: '#fff' },
-            { label: 'vs BUDGET',   val: `${extras.fcstKpi.vsBudgetRevPct > 0 ? '+' : ''}${extras.fcstKpi.vsBudgetRevPct}%`, color: dColor(extras.fcstKpi.vsBudgetRevPct) },
-          ].map((k, i) => (
-            <div key={i} style={{ background: '#0f0f0f', borderRadius: 6, padding: '8px 10px', textAlign: 'center' }}>
-              <div style={{ fontSize: 9, color: '#555', marginBottom: 2 }}>{k.label}</div>
-              <div style={{ fontWeight: 500, color: k.color }}><FmtVal val={k.val} numSize={15} /></div>
-            </div>
-          ))}
-        </div>
-        {/* 세그먼트 행 */}
-        <div style={{ fontSize: 11, color: '#555', marginBottom: 6 }}>세그먼트별 FCST vs BUDGET</div>
-        {extras.fcstSegs.map(s => (
-          <div key={s.seg} style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: '5px 0', borderBottom: '1px solid #1a1a1a', fontSize: 12,
-          }}>
-            <span style={{ color: '#888', width: 60 }}>{s.seg}</span>
-            <span style={{ fontWeight: 500 }}>{s.fcstOcc}%</span>
-            <span style={{ color: '#666', fontSize: 11 }}>{s.fcstRn.toLocaleString('ko-KR')} R/N</span>
-            <span style={{
-              fontSize: 10, padding: '2px 7px', borderRadius: 4,
-              background: s.gapVsBudget >= 0 ? '#0f2a1e' : '#2a0f0f',
-              color: s.gapVsBudget >= 0 ? MINT : RED,
-            }}>
-              {s.gapVsBudget > 0 ? '+' : ''}{s.gapVsBudget}%p
-            </span>
-          </div>
-        ))}
       </div>
 
       {/* Market Pick-up — Day 모달 */}
