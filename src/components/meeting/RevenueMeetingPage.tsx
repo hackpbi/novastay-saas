@@ -64,6 +64,13 @@ function buildMonthKeys(): string[] {
   return keys
 }
 
+// 헤더용 영문 월 라벨: '2026-07' → 'Jul 2026'
+const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'] as const
+const monthLabelEn = (key: string): string => {
+  const [y, m] = key.split('-').map(Number)
+  return `${MONTH_ABBR[m - 1]} ${y}`
+}
+
 // 증감 포맷 (단위별)
 const signNum = (v: number) => `${v > 0 ? '+' : ''}${v.toLocaleString('ko-KR')}`
 const signK   = (v: number) => `${v > 0 ? '+' : ''}${Math.round(v / 1000)}K`
@@ -494,28 +501,42 @@ export default function RevenueMeetingPage({ hotelId }: RevenueMeetingPageProps)
 
         {/* 좌: 타이틀 + 월 네비게이터 */}
         <div>
-          <div style={{ fontSize: 22, fontWeight: 500, marginBottom: 8 }}>Revenue meeting</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {/* 헤더 — ‹ Jul 2026 Revenue Meeting › (한 줄) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* 이전 달 */}
             <button
               onClick={() => setMonthKey(monthKeys[Math.max(0, monthKeys.indexOf(monthKey) - 1)])}
               disabled={monthKeys.indexOf(monthKey) === 0}
               style={{
-                width: 24, height: 24, borderRadius: 5, border: 'none',
-                background: '#1a1a1a', color: '#888', cursor: 'pointer',
-                fontSize: 14, opacity: monthKeys.indexOf(monthKey) === 0 ? 0.3 : 1,
+                width: 28, height: 28, borderRadius: 6, border: 'none', background: 'transparent', color: '#666',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', fontSize: 20, lineHeight: 1, padding: 0,
+                opacity: monthKeys.indexOf(monthKey) === 0 ? 0.3 : 1,
+                transition: 'color .15s, background .15s',
               }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = '#666'; e.currentTarget.style.background = 'transparent' }}
             >‹</button>
-            <div style={{ fontSize: 13, fontWeight: 500, color: '#fff', minWidth: 90, textAlign: 'center' }}>
-              {monthKeyLabel(monthKey)}
+
+            {/* 월 + 페이지명 */}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+              <span style={{ fontSize: 26, fontWeight: 600, color: MINT, letterSpacing: '-0.01em' }}>{monthLabelEn(monthKey)}</span>
+              <span style={{ fontSize: 26, fontWeight: 600, color: '#fff', letterSpacing: '-0.01em' }}>Revenue Meeting</span>
             </div>
+
+            {/* 다음 달 */}
             <button
               onClick={() => setMonthKey(monthKeys[Math.min(monthKeys.length - 1, monthKeys.indexOf(monthKey) + 1)])}
               disabled={monthKeys.indexOf(monthKey) === monthKeys.length - 1}
               style={{
-                width: 24, height: 24, borderRadius: 5, border: 'none',
-                background: '#1a1a1a', color: '#888', cursor: 'pointer',
-                fontSize: 14, opacity: monthKeys.indexOf(monthKey) === monthKeys.length - 1 ? 0.3 : 1,
+                width: 28, height: 28, borderRadius: 6, border: 'none', background: 'transparent', color: '#666',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', fontSize: 20, lineHeight: 1, padding: 0,
+                opacity: monthKeys.indexOf(monthKey) === monthKeys.length - 1 ? 0.3 : 1,
+                transition: 'color .15s, background .15s',
               }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = '#666'; e.currentTarget.style.background = 'transparent' }}
             >›</button>
           </div>
         </div>
