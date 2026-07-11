@@ -97,10 +97,13 @@ function Bar({ label, value, pct, delta, deltaColor, shimmer }: {
 }) {
   return (
     <div>
-      {/* 라벨 — 바에 밀착 */}
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 1, lineHeight: 1.2 }}>
-        <span style={{ fontSize: 11, color: TXT3 }}>{label}</span>
-        <span style={{ fontSize: 12, color: '#ccc', fontWeight: 500 }}><FmtVal val={value} numSize={12} /></span>
+      {/* 라벨 — 바에 밀착 (우측 끝에 vs OTB) */}
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 1, lineHeight: 1.2 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+          <span style={{ fontSize: 11, color: TXT3 }}>{label}</span>
+          <span style={{ fontSize: 12, color: '#ccc', fontWeight: 500 }}><FmtVal val={value} numSize={12} /></span>
+        </div>
+        <span style={{ fontSize: 9, color: '#666', letterSpacing: '0.05em' }}>vs OTB</span>
       </div>
       {/* 바 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -150,17 +153,20 @@ function KpiCard({
   const STATUS = fcstVsBudPos ? MINT : RED
   return (
     <div style={{ background: '#111418', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '16px 18px', position: 'relative', overflow: 'hidden' }}>
+      {/* 상단 라디얼 글로우 — 상태색이 위에서 은은하게 */}
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: `radial-gradient(130% 65% at 50% 0%, ${STATUS}17, transparent 62%)` }} />
+
       {/* 좌측 상태 스트립 (달성=민트 / 미달=레드) */}
       <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: `linear-gradient(180deg, ${STATUS}, ${STATUS}26)` }} />
 
       {/* 지표명 + 맥박 도트 */}
-      <div style={{ fontSize: 12, color: TXT3, letterSpacing: '0.04em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ position: 'relative', zIndex: 1, fontSize: 12, color: TXT3, letterSpacing: '0.04em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
         {label}
         <span style={{ width: 5, height: 5, borderRadius: '50%', background: STATUS, animation: 'kpiPulse 2s ease-in-out infinite' }} />
       </div>
 
       {/* FCST 메인 + OTB 서브 박스 */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
         {/* 좌: FCST 메인 */}
         <div>
           <div style={{ fontSize: 10, color: '#F5A623', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginBottom: 2 }}>FCST</div>
@@ -170,20 +176,22 @@ function KpiCard({
         {/* 우: OTB 서브 박스 (값만) */}
         <div style={{ border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '8px 12px', minWidth: 104, background: 'rgba(91,141,239,0.05)', flexShrink: 0 }}>
           <div style={{ fontSize: 9, color: TXT3, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'right', marginBottom: 2 }}>OTB</div>
-          <div style={{ color: BLUE, fontWeight: 600, textAlign: 'right', lineHeight: 1.1 }}><FmtVal val={fcstVal} numSize={17} /></div>
+          <div style={{ color: BLUE, fontWeight: 600, textAlign: 'right', lineHeight: 1.1 }}><FmtVal val={fcstVal} numSize={19} /></div>
         </div>
       </div>
 
       {/* 구분선 */}
-      <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '16px 0 12px' }} />
+      <div style={{ position: 'relative', zIndex: 1, height: 1, background: 'rgba(255,255,255,0.06)', margin: '16px 0 12px' }} />
 
       {/* Budget 바 (시머) */}
-      <div style={{ marginBottom: 10 }}>
+      <div style={{ position: 'relative', zIndex: 1, marginBottom: 12 }}>
         <Bar label="Budget" value={budStr} pct={vsBudBarPct} delta={vsBudDiffStr} deltaColor={vsBudPos ? MINT : RED} shimmer />
       </div>
 
       {/* LY 바 (시머 없음) */}
-      <Bar label="LY" value={lyStr} pct={vsLyBarPct} delta={vsLyDiffStr} deltaColor={vsLyPos ? MINT : RED} shimmer={false} />
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        <Bar label="LY" value={lyStr} pct={vsLyBarPct} delta={vsLyDiffStr} deltaColor={vsLyPos ? MINT : RED} shimmer={false} />
+      </div>
     </div>
   )
 }
