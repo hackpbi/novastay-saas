@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { SlidersHorizontal, ChevronDown, Check } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { useHotel } from '@/contexts/HotelContext'
 import type { PickupRow } from '@/hooks/usePickupData'
 import { lastDayOfMonth, inMonth } from '@/utils/pickupPageUtils'
 import MarketPickupAllDaysModal from '@/components/market-pickup/MarketPickupAllDaysModal'
@@ -95,16 +94,6 @@ export default function MeetingPickupBlock({
   const [allDaysOpen, setAllDaysOpen] = useState(false)
   const [hoveredSeg, setHoveredSeg] = useState<{ segId: string; x: number; y: number } | null>(null)
 
-  // Pick-up / OTB 차트 토글
-  type ChartMode = 'pickup' | 'otb'
-  const [chartMode, setChartMode]     = useState<ChartMode>('pickup')
-  const [showAdr, setShowAdr]         = useState(true)
-  const [showBarRate, setShowBarRate] = useState(true)
-
-  // BAR Rate fetch(s02_rate_detail)를 위해 현재 호텔 id (프로젝트 컨텍스트 패턴)
-  const { currentHotel } = useHotel()
-  const hotelId = currentHotel?.id ?? ''
-
   // 세그먼트 패널 외부 클릭 시 닫힘
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -181,6 +170,9 @@ export default function MeetingPickupBlock({
 
   // Picked up 칩: 선택된 세그 중 픽업이 0이 아닌 소분류
   const pickedSegs = groups.flatMap(g => g.segs).filter(s => selected.has(s.id) && segTotal(s) !== 0)
+
+  // 카드 상태색 — 픽업 총 R/N 부호 (KPI 카드와 동일 컨셉: 민트/레드)
+  const STATUS = total >= 0 ? '#00E5A0' : '#E24B4A'
 
   // 선택 세그 기준 컬럼 합산 헬퍼 (코드 → 값 Map 빌드 후 그룹/세그 합)
   const sumByCol = (col: keyof PickupRow) => {
@@ -287,68 +279,6 @@ export default function MeetingPickupBlock({
     return m
   }, [calEvents])
 
-  // ── BAR Rate (s02_rate_detail) — Daily Status 패턴 (컬럼: new_rate) ──────────────
-  const { data: barRates = [] } = useQuery({
-    queryKey: ['meeting-bar-rates', hotelId, year, month1],
-    staleTime: 5 * 60 * 1000,
-    enabled: !!hotelId,
-    queryFn: async () => {
-      const start = `${year}-${String(month1).padStart(2, '0')}-01`
-      const lastDay = lastDayOfMonth(year, month1)
-      const end = `${year}-${String(month1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
-      const { data, error } = await (supabase as any)
-        .from('s02_rate_detail')
-        .select('stay_date, new_rate, date_type')
-        .eq('hotel_id', hotelId)
-        .gte('stay_date', start)
-        .lte('stay_date', end)
-        .order('stay_date')
-      if (error) throw error
-      return (data ?? []) as { stay_date: string; new_rate: number; date_type: string }[]
-    },
-  })
-
-  // 날짜별 BAR Rate — date_type 우선순위 change > single > base
-  const barRateByDay = useMemo(() => {
-    const priority: Record<string, number> = { change: 3, single: 2, base: 1 }
-    const m = new Map<number, { rate: number; prio: number }>()
-    for (const r of barRates) {
-      const d = new Date(r.stay_date).getDate()
-      const p = priority[r.date_type] ?? 0
-      const cur = m.get(d)
-      if (!cur || p > cur.prio) m.set(d, { rate: r.new_rate, prio: p })
-    }
-    return m
-  }, [barRates])
-
-  // OTB 날짜별 집계 (선택된 세그먼트 기준)
-  const otbDailyData = useMemo(() => {
-    const rnArr  = new Array(days).fill(0)
-    const revArr = new Array(days).fill(0)
-    for (const r of pickupRows) {
-      if (!inMonth(r.business_date, year, month1)) continue
-      const d = new Date(r.business_date).getDate()
-      const seg = groups.flatMap(g => g.segs).find(s => selected.has(s.id) && s.codes.includes(r.segmentation))
-      if (!seg) continue
-      rnArr[d - 1]  += r.otb_nights ?? 0
-      revArr[d - 1] += r.otb_revenue ?? 0
-    }
-    return rnArr.map((rn, i) => ({
-      rn:  Math.round(rn),
-      adr: rn > 0 ? Math.round(revArr[i] / rn) : 0,
-    }))
-  }, [pickupRows, groups, selected, year, month1, days])
-
-  const otbOccArr = useMemo(
-    () => otbDailyData.map(d => (roomCount > 0 ? Math.round((d.rn / roomCount) * 1000) / 10 : 0)),
-    [otbDailyData, roomCount],
-  )
-  const otbAdrArr = useMemo(() => otbDailyData.map(d => d.adr), [otbDailyData])
-  const barRateArr = useMemo(
-    () => Array.from({ length: days }, (_, i) => barRateByDay.get(i + 1)?.rate ?? null),
-    [barRateByDay, days],
-  )
-
   // ── 차트 ───────────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
@@ -388,101 +318,6 @@ export default function MeetingPickupBlock({
         },
       }
 
-      if (chartMode === 'otb') {
-        chartRef.current = new Chart(canvasRef.current, {
-          plugins: [eventDots],
-          data: {
-            labels,
-            datasets: [
-              // OCC 바
-              {
-                type: 'bar',
-                label: 'OCC%',
-                data: otbOccArr,
-                backgroundColor: otbOccArr.map(v =>
-                  v >= 80 ? 'rgba(91,141,239,0.6)' :
-                  v >= 60 ? 'rgba(0,229,160,0.5)' :
-                  'rgba(255,255,255,0.1)'
-                ),
-                borderColor: 'transparent',
-                borderRadius: 2,
-                yAxisID: 'yOcc',
-              },
-              // ADR 라인
-              ...(showAdr ? [{
-                type: 'line' as const,
-                label: 'ADR',
-                data: otbAdrArr,
-                borderColor: '#5B8DEF',
-                backgroundColor: 'transparent',
-                borderWidth: 1.5,
-                pointRadius: 0,
-                pointHoverRadius: 3,
-                tension: 0.3,
-                yAxisID: 'yAdr',
-              }] : []),
-              // BAR Rate 라인 (점선)
-              ...(showBarRate ? [{
-                type: 'line' as const,
-                label: 'BAR Rate',
-                data: barRateArr,
-                borderColor: '#00E5A0',
-                backgroundColor: 'transparent',
-                borderWidth: 1.5,
-                borderDash: [4, 3],
-                pointRadius: 0,
-                pointHoverRadius: 3,
-                tension: 0,
-                yAxisID: 'yAdr',
-                spanGaps: true,
-              }] : []),
-            ],
-          },
-          options: {
-            responsive: true, maintainAspectRatio: false, animation: false,
-            layout: { padding: { bottom: hasEvents ? 28 : 0 } },
-            interaction: { mode: 'index', intersect: false },
-            onClick: (_event: any, elements: any[]) => {
-              if (!elements.length) return
-              onBarClick(elements[0].index + 1, 'otb')
-            },
-            plugins: { legend: { display: false }, tooltip: { enabled: false } },
-            scales: {
-              x: {
-                grid: { color: 'rgba(255,255,255,0.04)' },
-                ticks: {
-                  font: { size: 10 },
-                  color: (ctx: any) => {
-                    const dd = new Date(year, month, ctx.index + 1)
-                    const tdy = new Date()
-                    if (tdy.getFullYear() === year && tdy.getMonth() === month && tdy.getDate() === ctx.index + 1) return '#5B8DEF'
-                    const dow = dd.getDay()
-                    return dow === 5 || dow === 6 ? '#E24B4A' : '#888'
-                  },
-                  callback: (_v: any, index: number) => {
-                    const dow = new Date(year, month, index + 1).getDay()
-                    return [String(index + 1), DAY_NAMES[dow]]
-                  },
-                },
-              },
-              yOcc: {
-                position: 'left',
-                grid: { color: 'rgba(255,255,255,0.05)' },
-                ticks: { color: '#717171', font: { size: 10 }, callback: (v: any) => `${v}%` },
-                min: 0, max: 110,
-              },
-              yAdr: {
-                position: 'right',
-                grid: { display: false },
-                ticks: {
-                  color: '#717171', font: { size: 10 },
-                  callback: (v: any) => `${Math.round(Number(v) / 1000)}K`,
-                },
-              },
-            },
-          },
-        })
-      } else {
       chartRef.current = new Chart(canvasRef.current, {
         plugins: [barLabelPlugin, eventDots],
         data: {
@@ -610,73 +445,35 @@ export default function MeetingPickupBlock({
           },
         },
       })
-      }
     })()
     return () => { cancelled = true; chartRef.current?.destroy(); chartRef.current = null }
-  }, [chartMode, showAdr, showBarRate, dailyTotals, otbOccArr, otbAdrArr, barRateArr, days, month1, onBarClick, eventMap, year, month])
+  }, [dailyTotals, days, month1, onBarClick, eventMap, year, month])
 
   return (
-    <div className="rounded-2xl overflow-visible" style={{ background: 'var(--color-bg-surface, var(--card-header-bg))', border: '1px solid var(--color-border-default)', height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* 섹션 제목 — 카드 밖 왼쪽 상단 */}
+      <div style={{ fontSize: 13, fontWeight: 500, color: '#888', marginBottom: 10, letterSpacing: '0.02em', flexShrink: 0 }}>
+        Daily Pick-up Status
+      </div>
+
+      {/* 픽업 차트 카드 */}
+      <div className="rounded-2xl overflow-visible" style={{ position: 'relative', background: 'var(--color-bg-surface, var(--card-header-bg))', border: '1px solid var(--color-border-default)', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      {/* 배경 효과 레이어 — 좌측 상태 스트립 + 상단 라디얼 글로우 (라운드 클립, 드롭다운은 미포함) */}
+      <div style={{ position: 'absolute', inset: 0, borderRadius: 16, overflow: 'hidden', pointerEvents: 'none', zIndex: 0 }}>
+        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: `linear-gradient(180deg, ${STATUS}, ${STATUS}26)` }} />
+        <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(130% 65% at 50% 0%, ${STATUS}17, transparent 62%)` }} />
+      </div>
+
       {/* 월 헤더 — 월 라벨 + Segment 패널 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px 8px', flexWrap: 'wrap', flexShrink: 0 }}>
-        {/* 월 라벨 */}
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)' }}>{MONTH_NAMES[month]}</span>
-          <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>{year}</span>
-        </div>
-
-        {/* Pick-up / OTB 토글 */}
-        <div style={{ display: 'flex', background: '#1a1a1a', borderRadius: 6, padding: 2, gap: 1 }}>
-          {(['pickup', 'otb'] as ChartMode[]).map(mode => (
-            <button
-              key={mode}
-              onClick={() => setChartMode(mode)}
-              style={{
-                fontSize: 11, padding: '3px 10px', borderRadius: 5, border: 'none',
-                cursor: 'pointer', fontFamily: 'inherit',
-                background: chartMode === mode ? '#00E5A0' : 'transparent',
-                color: chartMode === mode ? '#0a0a0a' : '#666',
-                fontWeight: chartMode === mode ? 600 : 400,
-              }}
-            >
-              {mode === 'pickup' ? 'Pick-up' : 'OTB'}
-            </button>
-          ))}
-        </div>
-
-        {/* OTB 모드일 때 눈알 버튼 */}
-        {chartMode === 'otb' && (
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button
-              onClick={() => setShowAdr(v => !v)}
-              title="ADR"
-              style={{
-                fontSize: 10, padding: '3px 8px', borderRadius: 5,
-                border: `1px solid ${showAdr ? '#5B8DEF' : '#2a2a2a'}`,
-                background: showAdr ? 'rgba(91,141,239,0.15)' : 'transparent',
-                color: showAdr ? '#5B8DEF' : '#444',
-                cursor: 'pointer', fontFamily: 'inherit',
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-              }}
-            >
-              👁 ADR
-            </button>
-            <button
-              onClick={() => setShowBarRate(v => !v)}
-              title="BAR Rate"
-              style={{
-                fontSize: 10, padding: '3px 8px', borderRadius: 5,
-                border: `1px solid ${showBarRate ? '#00E5A0' : '#2a2a2a'}`,
-                background: showBarRate ? 'rgba(0,229,160,0.1)' : 'transparent',
-                color: showBarRate ? '#00E5A0' : '#444',
-                cursor: 'pointer', fontFamily: 'inherit',
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-              }}
-            >
-              👁 BAR
-            </button>
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px 8px', flexWrap: 'wrap', flexShrink: 0 }}>
+        {/* 월 라벨 + 맥박 도트 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)' }}>{MONTH_NAMES[month]}</span>
+            <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>{year}</span>
           </div>
-        )}
+          <span style={{ width: 5, height: 5, borderRadius: '50%', background: STATUS, animation: 'kpiPulse 2s ease-in-out infinite' }} />
+        </div>
 
         {/* Segment 패널 */}
         <div style={{ position: 'relative' }} data-seg-panel>
@@ -782,7 +579,7 @@ export default function MeetingPickupBlock({
 
       {/* 차트 */}
       <div
-        style={{ position: 'relative', width: '100%', flex: 1, minHeight: 0, padding: '0 12px 12px' }}
+        style={{ position: 'relative', zIndex: 1, width: '100%', flex: 1, minHeight: 0, padding: '0 12px 12px' }}
         onMouseLeave={() => { const el = document.getElementById(tooltipId); if (el) el.style.opacity = '0' }}
       >
         <canvas ref={canvasRef} role="img" aria-label={`${month1}월 마켓 픽업`} />
@@ -797,6 +594,7 @@ export default function MeetingPickupBlock({
         activeSegs={activeSegs}
         roomCount={roomCount}
       />
+      </div>
     </div>
   )
 }
