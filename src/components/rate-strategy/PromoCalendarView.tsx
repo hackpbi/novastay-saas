@@ -313,15 +313,8 @@ export function PromoCalendarView({ year, month, onPrevMonth, onNextMonth, onTod
     }}>
       {/* 달력 */}
       <div style={{ padding: '8px 12px', flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {/* 월 네비게이션 (캘린더 헤더) */}
+        {/* 캘린더 헤더 — 월 네비는 상단 통합 헤더로 이동. 오늘 / 지난 프로모션 버튼만 유지 */}
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 30, marginBottom: 4, flexShrink: 0 }}>
-          <button onClick={() => onPrevMonth?.()}
-            style={{ width: 24, height: 24, border: '0.5px solid var(--color-border-default)', borderRadius: 6, background: 'transparent', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 14, lineHeight: 1 }}>‹</button>
-          <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-text-primary)', minWidth: 110, textAlign: 'center' }}>
-            {year}년 {month}월
-          </span>
-          <button onClick={() => onNextMonth?.()}
-            style={{ width: 24, height: 24, border: '0.5px solid var(--color-border-default)', borderRadius: 6, background: 'transparent', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 14, lineHeight: 1 }}>›</button>
           <button onClick={() => onToday?.()}
             style={{ position: 'absolute', left: 14, fontSize: 11, padding: '3px 9px', borderRadius: 5, border: '0.5px solid var(--color-border-default)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>오늘</button>
           {/* 지난 프로모션 토글 — 우측 절대 배치 */}

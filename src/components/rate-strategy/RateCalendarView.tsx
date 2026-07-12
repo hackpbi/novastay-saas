@@ -696,15 +696,8 @@ export function RateCalendarView({
       {/* 달력 영역 */}
       <div style={{ flex: 1, minWidth: 0, padding: '8px 12px', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
 
-        {/* 월 네비게이션 (캘린더 헤더) */}
+        {/* 캘린더 헤더 — 월 네비는 상단 통합 헤더로 이동. 지난 프로모션 토글만 유지 */}
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 30, marginBottom: 4, flexShrink: 0 }}>
-          <button onClick={() => onPrevMonth?.()}
-            style={{ width: 24, height: 24, border: '0.5px solid var(--color-border-default)', borderRadius: 6, background: 'transparent', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 14, lineHeight: 1 }}>‹</button>
-          <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-text-primary)', minWidth: 110, textAlign: 'center' }}>
-            {year}년 {month}월
-          </span>
-          <button onClick={() => onNextMonth?.()}
-            style={{ width: 24, height: 24, border: '0.5px solid var(--color-border-default)', borderRadius: 6, background: 'transparent', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 14, lineHeight: 1 }}>›</button>
           {/* 지난 프로모션 토글 — 우측 절대 배치 ([오늘] 버튼 대체) */}
           <button
             onClick={() => setShowPastPromos(v => !v)}

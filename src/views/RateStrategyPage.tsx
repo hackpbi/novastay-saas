@@ -1299,6 +1299,24 @@ export default function RateStrategyPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
+  // 통합 월 헤더 — 각 탭 상단 (Daily BAR Rate 헤더와 동일 스타일). 스펙 CSS 변수는 프로젝트 실제 변수로 매핑
+  const monthHeader = (y: number, m: number, onPrev: () => void, onNext: () => void) => (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 18px', background: 'var(--color-bg-secondary)', borderRadius: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button onClick={onPrev} style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', fontSize: 18, cursor: 'pointer' }}>‹</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
+            <span style={{ fontSize: 15, fontWeight: 500, color: '#00E5A0' }}>{m}월</span>
+            <span style={{ fontSize: 10, fontWeight: 500, color: '#00E5A0' }}>{String(y).slice(2)}년</span>
+          </div>
+          <span style={{ color: 'var(--color-border-default)', fontSize: 14 }}>|</span>
+          <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)' }}>Rate Strategy</span>
+        </div>
+        <button onClick={onNext} style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', fontSize: 18, cursor: 'pointer' }}>›</button>
+      </div>
+    </div>
+  )
+
   const filterDivider = (
     <div style={{ width: 1, height: 32, background: 'var(--color-border-default)', flexShrink: 0, alignSelf: 'flex-end', marginBottom: 1 }} />
   )
@@ -1407,6 +1425,9 @@ export default function RateStrategyPage() {
 
       {/* ── 일자별 탭 (list) ── */}
       <div style={{ display: activeTab === 'list' ? undefined : 'none' }} className="space-y-6">
+
+      {/* 통합 월 헤더 */}
+      {monthHeader(viewYear, viewMonth, prevMonth, nextMonth)}
 
       {/* ── 필터 바 (1줄) ── */}
       <div className="flex items-end flex-wrap gap-2 px-4 py-3 rounded-xl"
@@ -2096,19 +2117,25 @@ export default function RateStrategyPage() {
 
       {/* ── 프로모션 달력 탭 ── */}
       {activeTab === 'promo-cal' && (
-        <div style={{ height: 'calc(100vh - 210px)', minHeight: 400 }}>
-          <PromoCalendarView
-            year={promoYear}
-            month={promoMonth}
-            onPrevMonth={promoPrev}
-            onNextMonth={promoNext}
-            onToday={promoToday}
-          />
+        <div style={{ height: 'calc(100vh - 210px)', minHeight: 400, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {monthHeader(promoYear, promoMonth, promoPrev, promoNext)}
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <PromoCalendarView
+              year={promoYear}
+              month={promoMonth}
+              onPrevMonth={promoPrev}
+              onNextMonth={promoNext}
+              onToday={promoToday}
+            />
+          </div>
         </div>
       )}
 
       {/* ── 요금 달력 (항상 마운트 — 일자 상세 모달을 어느 탭에서든 표시) ── */}
       <div style={activeTab === 'rate-cal' ? { minHeight: 400 } : undefined}>
+        {activeTab === 'rate-cal' && (
+          <div style={{ marginBottom: 10 }}>{monthHeader(viewYear, viewMonth, prevMonth, nextMonth)}</div>
+        )}
         <RateCalendarView
           year={viewYear}
           month={viewMonth}
