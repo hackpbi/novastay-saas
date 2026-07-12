@@ -21,9 +21,10 @@ interface BarRateModalProps {
   year:      number
   month:     number    // 1-based
   roomCount: number
+  embed?:    boolean   // true면 overlay/portal 없이 컨테이너에 인라인 렌더 (기본 false = 기존 overlay)
 }
 
-export default function BarRateModal({ open, onClose, hotelId, year, month, roomCount }: BarRateModalProps) {
+export default function BarRateModal({ open, onClose, hotelId, year, month, roomCount, embed = false }: BarRateModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const chartRef  = useRef<any>(null)
   const { otbDate } = useDateContext()   // 전년OTB pacing / OCC 스냅샷 날짜
@@ -219,14 +220,14 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
   })
   const lyOtbData = lyOtbArr ?? LY_EMPTY
 
-  // ESC + scroll lock
+  // ESC + scroll lock (embed 모드는 인라인이라 스크롤 잠금/ESC 미적용)
   useEffect(() => {
-    if (!open) return
+    if (!open || embed) return
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', h)
     document.body.style.overflow = 'hidden'
     return () => { window.removeEventListener('keydown', h); document.body.style.overflow = '' }
-  }, [open, onClose])
+  }, [open, onClose, embed])
 
   // ── 차트 ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -520,10 +521,10 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
     borderRadius: '50%', background: '#fff', transition: 'left 0.2s',
   })
 
-  return createPortal(
-    <div style={{ position: 'fixed', inset: 0, zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={onClose} />
-      <div style={{ position: 'relative', background: 'linear-gradient(175deg, #0d1f1a 0%, #0a0a0a 40%)', border: '1px solid #1e1e1e', borderRadius: 16, boxShadow: '0 8px 40px rgba(0,0,0,0.6)', width: '85vw', maxWidth: '85vw', height: '81vh', maxHeight: '81vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+  const body = (
+    <>
+      {!embed && <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={onClose} />}
+      <div style={{ position: 'relative', background: 'linear-gradient(175deg, #0d1f1a 0%, #0a0a0a 40%)', border: '1px solid #1e1e1e', borderRadius: 16, boxShadow: '0 8px 40px rgba(0,0,0,0.6)', width: embed ? '100%' : '85vw', maxWidth: embed ? '100%' : '85vw', height: embed ? '72vh' : '81vh', maxHeight: embed ? '72vh' : '81vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* 헤더 */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px 4px', flexShrink: 0 }}>
           <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>Daily BAR Rate</span>
@@ -572,9 +573,11 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
               </div>
               <span style={{ fontSize: 11, color: '#666' }}>OCC%</span>
             </div>
-            <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', padding: 4, display: 'inline-flex' }} aria-label="닫기">
-              <X size={20} />
-            </button>
+            {!embed && (
+              <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', padding: 4, display: 'inline-flex' }} aria-label="닫기">
+                <X size={20} />
+              </button>
+            )}
           </div>
         </div>
 
@@ -636,6 +639,13 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
           roomCount={roomCount}
         />
       )}
+    </>
+  )
+
+  if (embed) return body
+  return createPortal(
+    <div style={{ position: 'fixed', inset: 0, zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      {body}
     </div>,
     document.body,
   )

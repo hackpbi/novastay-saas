@@ -6,7 +6,7 @@ import {
   Plus, ChevronDown, X, Save, Tag, Loader2, Send,
   CheckSquare, Square, TrendingUp, TrendingDown,
   Minus, Activity, Trash2, FileSpreadsheet,
-  Table, CalendarClock, BarChart3, Calculator,
+  Table, CalendarClock, BarChart3, Calculator, Maximize2,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { FormDatePicker } from '@/components/DatePicker'
@@ -29,7 +29,7 @@ import BarRateModal from '@/components/pickup/BarRateModal'
 type DiscountType   = 'pct' | 'amount' | 'fixed' | 'addon'
 type ChangeMode     = '%' | '+-' | 'direct'
 type PickupView     = 'total' | 'fit' | 'fit_grp'
-type RateTab        = 'list' | 'promo-cal' | 'rate-cal' | 'chart'
+type RateTab        = 'barrate' | 'list' | 'promo-cal' | 'rate-cal' | 'chart'
 
 interface RateDetail {
   id:             string
@@ -530,7 +530,7 @@ export default function RateStrategyPage() {
   const [showAllTypes,    setShowAllTypes]    = useState(false)
 
   // ── UI State ───────────────────────────────────────────────────────────────
-  const [showBarRateChart, setShowBarRateChart] = useState(false)  // 진입 시 Daily BAR Rate 차트 자동 표시(마운트 후 open)
+  const [barRateExpanded, setBarRateExpanded] = useState(false)    // Daily BAR Rate 탭 확대 → overlay 모달
   const [showPromoModal,  setShowPromoModal]  = useState(false)
   const [adrSimOpen,      setAdrSimOpen]      = useState(false)
   const [simDate,         setSimDate]         = useState('')
@@ -551,7 +551,7 @@ export default function RateStrategyPage() {
   const [rpaSending,      setRpaSending]      = useState(false)
   const [segModalDate,    setSegModalDate]    = useState<string | null>(null)
   const [pickupView,      setPickupView]      = useState<PickupView>('fit')
-  const [activeTab,       setActiveTab]       = useState<RateTab>('list')
+  const [activeTab,       setActiveTab]       = useState<RateTab>('barrate')
   const [dayModalDate,    setDayModalDate]    = useState<string | null>(null)  // 일자 상세 모달(RateCalendarView)
   const [previewBuffer,   setPreviewBuffer]   = useState<Record<string, Record<string, number>>>({})
   const isPreviewMode = Object.keys(previewBuffer).length > 0
@@ -617,9 +617,6 @@ export default function RateStrategyPage() {
 
   // 월 변경 시 미리보기 버퍼 초기화
   useEffect(() => { setPreviewBuffer({}) }, [viewYear, viewMonth])
-
-  // 페이지 마운트(클라이언트) 시 Daily BAR Rate 차트 자동 오픈 — SSR 시 portal(document) 참조 회피
-  useEffect(() => { setShowBarRateChart(true) }, [])
 
   const { data: rateDetails = [], isLoading: ratesLoading } = useQuery<RateDetail[]>({
     queryKey: ['s02_rate_detail', hotelId],
@@ -1320,9 +1317,10 @@ export default function RateStrategyPage() {
           {/* 탭 버튼 */}
           <div style={{ display: 'flex', gap: 4 }}>
             {([
-              { id: 'list',      label: '일자별',       Icon: Table         },
-              { id: 'promo-cal', label: '프로모션 달력', Icon: Tag           },
+              { id: 'barrate',   label: 'Daily BAR Rate', Icon: Activity     },
               { id: 'rate-cal',  label: '요금 달력',    Icon: CalendarClock },
+              { id: 'list',      label: '일자 요금',    Icon: Table         },
+              { id: 'promo-cal', label: '프로모션 달력', Icon: Tag           },
               { id: 'chart',     label: '그래프',       Icon: BarChart3     },
             ] as { id: RateTab; label: string; Icon: typeof Table }[]).map(t => {
               const active = activeTab === t.id
@@ -1364,6 +1362,29 @@ export default function RateStrategyPage() {
           )}
         </div>
       </div>
+
+      {/* ── Daily BAR Rate 탭 (barrate) — 인라인 차트 + 확대 버튼 ── */}
+      {activeTab === 'barrate' && (
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setBarRateExpanded(true)}
+            title="확대"
+            aria-label="확대"
+            style={{ position: 'absolute', top: 8, right: 8, zIndex: 5, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, padding: '5px 10px', borderRadius: 8, border: '1px solid var(--color-border-default)', background: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}
+          >
+            <Maximize2 size={13} /> 확대
+          </button>
+          <BarRateModal
+            embed
+            open
+            onClose={() => {}}
+            hotelId={hotelId}
+            year={viewYear}
+            month={viewMonth}
+            roomCount={roomCount}
+          />
+        </div>
+      )}
 
       {/* ── 일자별 탭 (list) ── */}
       <div style={{ display: activeTab === 'list' ? undefined : 'none' }} className="space-y-6">
@@ -2174,11 +2195,11 @@ export default function RateStrategyPage() {
         fcstUpdateDate={fcstDate}
       />
 
-      {/* 진입 시 자동 표시 — Daily BAR Rate 차트 (Meeting 페이지와 동일 모달 재사용) */}
-      {showBarRateChart && (
+      {/* Daily BAR Rate 확대 — overlay 모달 (탭의 확대 버튼) */}
+      {barRateExpanded && (
         <BarRateModal
-          open={showBarRateChart}
-          onClose={() => setShowBarRateChart(false)}
+          open={barRateExpanded}
+          onClose={() => setBarRateExpanded(false)}
           hotelId={hotelId}
           year={viewYear}
           month={viewMonth}
