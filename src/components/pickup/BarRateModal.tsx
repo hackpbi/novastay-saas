@@ -186,15 +186,18 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
     queryKey: ['barrate-ly-occ', hotelId, modalYear, modalMonth, lyMode, lyDateByDay.join(',')],
     enabled: open && lyMode !== 'none' && !!hotelId && lyDateByDay.length > 0,
     queryFn: async () => {
+      // 동기간(yoy_match) 날짜에 실적이 없을 수 있어 동일자(-1년)도 함께 조회해 폴백 (period 모드 전년마감 누락 방지)
+      const simpleDates = Array.from({ length: lyLastDay }, (_, i) => `${modalYear - 1}-${pad(modalMonth + 1)}-${pad(i + 1)}`)
+      const queryDates = Array.from(new Set([...lyDateByDay, ...simpleDates]))
       const { data } = await (supabase as any)
         .from('a01_actual_daily').select('business_date, nights')
-        .eq('hotel_id', hotelId).in('business_date', lyDateByDay)
+        .eq('hotel_id', hotelId).in('business_date', queryDates)
       const map = new Map<string, number>()
       for (const r of (data ?? []) as { business_date: string; nights: number }[]) {
         map.set(r.business_date, (map.get(r.business_date) ?? 0) + (r.nights ?? 0))
       }
-      return lyDateByDay.map(ly => {
-        const n = map.get(ly)
+      return lyDateByDay.map((ly, i) => {
+        const n = map.get(ly) ?? map.get(simpleDates[i])   // 동기간 실적 없으면 동일자 폴백
         return n != null && roomCount > 0 ? Math.round((n / roomCount) * 100) : null
       })
     },
