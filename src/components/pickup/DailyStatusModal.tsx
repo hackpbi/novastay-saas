@@ -351,9 +351,12 @@ export default function DailyStatusModal({ open, onClose, hotelId, year, month, 
               const y = yOcc.getPixelForValue(fcstData[i]!)
               ctx.setLineDash([]); ctx.strokeStyle = FCST_ORANGE; ctx.lineWidth = 2.5
               ctx.beginPath(); ctx.moveTo(R0, y); ctx.lineTo(R1, y); ctx.stroke()
-              const rx = (R0 + R1) / 2
-              ctx.setLineDash([2, 3]); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(245,166,35,0.4)'
-              ctx.beginPath(); ctx.moveTo(rx, barTop); ctx.lineTo(rx, y); ctx.stroke()
+              // 막대상단↔FCST 세로 연결선 — 막대가 보일 때(OCC 표시 중)만 (공중에 뜬 선 방지)
+              if (showOccLabelRef.current) {
+                const rx = (R0 + R1) / 2
+                ctx.setLineDash([2, 3]); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(245,166,35,0.4)'
+                ctx.beginPath(); ctx.moveTo(rx, barTop); ctx.lineTo(rx, y); ctx.stroke()
+              }
             }
           }
           ctx.setLineDash([])
@@ -370,8 +373,9 @@ export default function DailyStatusModal({ open, onClose, hotelId, year, month, 
               type: 'bar',
               label: 'OTB OCC',
               data: occData,
-              backgroundColor: 'rgba(91,141,239,0.6)',
-              borderColor: 'rgba(91,141,239,0.85)',
+              // OCC% 토글 OFF → 투명(막대 숨김). scriptable이라 update('none')만으로 반영
+              backgroundColor: () => (showOccLabelRef.current ? 'rgba(91,141,239,0.6)' : 'transparent'),
+              borderColor:     () => (showOccLabelRef.current ? 'rgba(91,141,239,0.85)' : 'transparent'),
               borderWidth: 1,
               borderRadius: 2,
               yAxisID: 'yOcc',
