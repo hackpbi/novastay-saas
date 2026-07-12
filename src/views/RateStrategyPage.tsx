@@ -22,6 +22,7 @@ import { PromoCalendarView } from '@/components/rate-strategy/PromoCalendarView'
 import { RateCalendarView }  from '@/components/rate-strategy/RateCalendarView'
 import { RateChartView }     from '@/components/rate-strategy/RateChartView'
 import AdrSimulatorModal from '@/components/rate-strategy/AdrSimulatorModal'
+import BarRateModal from '@/components/pickup/BarRateModal'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -529,6 +530,7 @@ export default function RateStrategyPage() {
   const [showAllTypes,    setShowAllTypes]    = useState(false)
 
   // ── UI State ───────────────────────────────────────────────────────────────
+  const [showBarRateChart, setShowBarRateChart] = useState(false)  // 진입 시 Daily BAR Rate 차트 자동 표시(마운트 후 open)
   const [showPromoModal,  setShowPromoModal]  = useState(false)
   const [adrSimOpen,      setAdrSimOpen]      = useState(false)
   const [simDate,         setSimDate]         = useState('')
@@ -615,6 +617,9 @@ export default function RateStrategyPage() {
 
   // 월 변경 시 미리보기 버퍼 초기화
   useEffect(() => { setPreviewBuffer({}) }, [viewYear, viewMonth])
+
+  // 페이지 마운트(클라이언트) 시 Daily BAR Rate 차트 자동 오픈 — SSR 시 portal(document) 참조 회피
+  useEffect(() => { setShowBarRateChart(true) }, [])
 
   const { data: rateDetails = [], isLoading: ratesLoading } = useQuery<RateDetail[]>({
     queryKey: ['s02_rate_detail', hotelId],
@@ -2168,6 +2173,18 @@ export default function RateStrategyPage() {
         booked={simBooked}
         fcstUpdateDate={fcstDate}
       />
+
+      {/* 진입 시 자동 표시 — Daily BAR Rate 차트 (Meeting 페이지와 동일 모달 재사용) */}
+      {showBarRateChart && (
+        <BarRateModal
+          open={showBarRateChart}
+          onClose={() => setShowBarRateChart(false)}
+          hotelId={hotelId}
+          year={viewYear}
+          month={viewMonth}
+          roomCount={roomCount}
+        />
+      )}
     </div>
   )
 }
