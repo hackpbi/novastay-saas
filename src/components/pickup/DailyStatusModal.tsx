@@ -374,8 +374,9 @@ export default function DailyStatusModal({ open, onClose, hotelId, year, month, 
               label: 'OTB OCC',
               data: occData,
               // OCC% 토글 OFF → 투명(막대 숨김). scriptable이라 update('none')만으로 반영
-              backgroundColor: () => (showOccLabelRef.current ? 'rgba(91,141,239,0.6)' : 'transparent'),
-              borderColor:     () => (showOccLabelRef.current ? 'rgba(91,141,239,0.85)' : 'transparent'),
+              // 막대를 더 연하게(0.5/0.7) → 전년/FCST 마커 가독성 향상
+              backgroundColor: () => (showOccLabelRef.current ? 'rgba(91,141,239,0.5)' : 'transparent'),
+              borderColor:     () => (showOccLabelRef.current ? 'rgba(91,141,239,0.7)' : 'transparent'),
               borderWidth: 1,
               borderRadius: 2,
               yAxisID: 'yOcc',
