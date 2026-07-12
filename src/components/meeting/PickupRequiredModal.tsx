@@ -18,6 +18,7 @@ interface PickupRequiredModalProps {
 }
 
 type RowData = { day: number; dow: number; otb: number; fcst: number; need: number; pct: number }
+type SegBreakdown = { segKey: string; name: string; color: string; otb: number; fcst: number; need: number; pct: number }
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
@@ -28,16 +29,21 @@ export default function PickupRequiredModal({ open, onClose, hotelId, monthKey, 
   const [ym, setYm] = useState(monthKey)          // 내부 월 상태 (‹ › 네비)
   const [rows, setRows] = useState<RowData[]>([])
   const [loading, setLoading] = useState(false)
-  // 세그별(코드별) 집계 — OTB(get_ly_pacing_data) / FCST(get_forecast_monthly)
+  // 세그별(코드별) 집계 — OTB(get_ly_pacing_data) / FCST(get_forecast_monthly, 월간)
   const [segMaps, setSegMaps] = useState<{ otb: Record<string, number>; fcst: Record<string, number> }>({ otb: {}, fcst: {} })
+  // 날짜×세그(코드) OTB 실데이터 — key: `${day}_${code}` (드릴다운용)
+  const [dateOtb, setDateOtb] = useState<Record<string, number>>({})
+  const [openDay, setOpenDay] = useState<number | null>(null)   // accordion (한 번에 하나)
+  const toggleDay = (day: number) => setOpenDay(prev => (prev === day ? null : day))
 
-  useEffect(() => { if (open) setYm(monthKey) }, [open, monthKey])
+  useEffect(() => { if (open) { setYm(monthKey); setOpenDay(null) } }, [open, monthKey])
 
   const [y, m] = ym.split('-').map(Number)        // m: 1-based
   const monthLabel = `${MON_EN[m - 1]} ${y}`
   const shiftMonth = (delta: number) => {
     const d = new Date(y, m - 1 + delta, 1)        // KST 로컬
     setYm(`${d.getFullYear()}-${pad(d.getMonth() + 1)}`)
+    setOpenDay(null)
   }
 
   // ── 데이터 로딩 — 기존 RPC 재사용 ──
@@ -49,7 +55,7 @@ export default function PickupRequiredModal({ open, onClose, hotelId, monthKey, 
     let cancelled = false
     const fetchData = async () => {
       setLoading(true)
-      if (!hotelId || !fcstDate) { if (!cancelled) { setRows([]); setSegMaps({ otb: {}, fcst: {} }); setLoading(false) }; return }
+      if (!hotelId || !fcstDate) { if (!cancelled) { setRows([]); setSegMaps({ otb: {}, fcst: {} }); setDateOtb({}); setLoading(false) }; return }
 
       const lastDay = new Date(y, m, 0).getDate()
       const start = `${y}-${pad(m)}-01`
@@ -102,11 +108,15 @@ export default function PickupRequiredModal({ open, onClose, hotelId, monthKey, 
 
       // 세그별(코드별) 집계 — OTB: 해당 월 필터 후 segmentation SUM / FCST: month_num 필터 후 segmentation SUM
       const otbBySeg: Record<string, number> = {}
+      const otbDateSeg: Record<string, number> = {}   // `${day}_${code}` → OTB (드릴다운)
       for (const r of (otbRows ?? []) as { business_date: string; segmentation: string; otb_nights: number }[]) {
         const d = new Date(r.business_date)
         if (d.getFullYear() !== y || d.getMonth() !== m - 1) continue
         const c = r.segmentation ?? ''
-        otbBySeg[c] = (otbBySeg[c] ?? 0) + Number(r.otb_nights ?? 0)
+        const n = Number(r.otb_nights ?? 0)
+        otbBySeg[c] = (otbBySeg[c] ?? 0) + n
+        const dk = `${d.getDate()}_${c}`
+        otbDateSeg[dk] = (otbDateSeg[dk] ?? 0) + n
       }
       const fcstBySeg: Record<string, number> = {}
       for (const r of (fcstMonRows ?? []) as { segmentation: string; month_num: number; forecast_nights: number }[]) {
@@ -117,6 +127,7 @@ export default function PickupRequiredModal({ open, onClose, hotelId, monthKey, 
 
       setRows(out)
       setSegMaps({ otb: otbBySeg, fcst: fcstBySeg })
+      setDateOtb(otbDateSeg)
       setLoading(false)
     }
     fetchData()
@@ -163,6 +174,21 @@ export default function PickupRequiredModal({ open, onClose, hotelId, monthKey, 
     const segNeed = Math.round(segFcst - segOtb)
     return { id: seg.id, name: seg.name, color: seg.font_dark_color || seg.color || '#00E5A0', segNeed }
   })
+
+  // 드릴다운 — 세그별 월간FCST(get_forecast_monthly) 비율로 일별 총FCST를 안분, OTB는 일별 실데이터
+  const segMonthly = topSegs.map(seg => {
+    const codes = collectCodes(seg.id)
+    return { seg, codes, monFcst: codes.reduce((s, c) => s + (segMaps.fcst[c] ?? 0), 0) }
+  })
+  const monFcstTotal = segMonthly.reduce((s, x) => s + x.monFcst, 0)
+  const segsForDay = (day: number, dayFcst: number): SegBreakdown[] =>
+    segMonthly.map(({ seg, codes, monFcst }) => {
+      const segOtb  = Math.round(codes.reduce((s, c) => s + (dateOtb[`${day}_${c}`] ?? 0), 0))
+      const segFcst = monFcstTotal > 0 ? Math.round(dayFcst * (monFcst / monFcstTotal)) : 0
+      const need = segFcst - segOtb
+      const pct  = segFcst > 0 ? Math.round((segOtb / segFcst) * 100) : 100
+      return { segKey: seg.id, name: seg.name, color: seg.font_dark_color || seg.color || '#00E5A0', otb: segOtb, fcst: segFcst, need, pct }
+    }).filter(s => s.fcst > 0)
 
   const navBtn: React.CSSProperties = {
     width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent',
@@ -284,6 +310,7 @@ export default function PickupRequiredModal({ open, onClose, hotelId, monthKey, 
                 <span style={{ width: 72, flexShrink: 0 }}>Date</span>
                 <span style={{ flex: 1 }}>Fill Progress (OTB / FCST)</span>
                 <span style={{ width: 80, textAlign: 'right', flexShrink: 0 }}>Still Needed</span>
+                <span style={{ width: 14, flexShrink: 0 }} />
               </div>
               {loading ? (
                 <div style={{ fontSize: 12, color: '#666', textAlign: 'center', padding: '28px 0' }}>Loading...</div>
@@ -295,20 +322,50 @@ export default function PickupRequiredModal({ open, onClose, hotelId, monthKey, 
                 const barColor = pct >= 100 ? '#00E5A0' : pct >= 80 ? '#4caf82' : pct >= 60 ? '#F5A623' : '#E24B4A'
                 const needColor = r.need > 0 ? (pct < 60 ? '#E24B4A' : pct < 80 ? '#F5A623' : '#8a8f98') : '#4a4a4a'
                 const wc = dayOfWeek === 'Sat' ? '#5B8DEF' : dayOfWeek === 'Sun' ? '#E24B4A' : '#ccc'
+                const isOpen = openDay === r.day
+                const segs = isOpen ? segsForDay(r.day, r.fcst) : []
                 return (
-                  <div key={r.day} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 0', borderBottom: '0.5px solid rgba(255,255,255,0.04)' }}>
-                    <span style={{ width: 72, fontSize: 12, color: wc, flexShrink: 0 }}>
-                      {MON_EN[m - 1]} {r.day} <span style={{ color: '#666', fontSize: 11 }}>({dayOfWeek})</span>
-                    </span>
-                    <div style={{ flex: 1, height: 16, background: '#20242a', borderRadius: 4, position: 'relative', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: barColor, opacity: 0.75, borderRadius: 4 }} />
-                      <span style={{ position: 'absolute', left: 7, top: 0, bottom: 0, display: 'flex', alignItems: 'center', fontSize: 10, color: 'rgba(255,255,255,0.9)', fontFamily: 'ui-monospace, monospace' }}>
-                        {r.otb} / {r.fcst} rms
+                  <div key={r.day} style={{ borderBottom: '0.5px solid rgba(255,255,255,0.04)' }}>
+                    {/* 메인 행 (클릭 → 드릴다운) */}
+                    <div onClick={() => toggleDay(r.day)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 0', cursor: 'pointer' }}>
+                      <span style={{ width: 72, fontSize: 12, color: wc, flexShrink: 0 }}>
+                        {MON_EN[m - 1]} {r.day} <span style={{ color: '#666', fontSize: 11 }}>({dayOfWeek})</span>
                       </span>
+                      <div style={{ flex: 1, height: 16, background: '#20242a', borderRadius: 4, position: 'relative', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: barColor, opacity: 0.75, borderRadius: 4 }} />
+                        <span style={{ position: 'absolute', left: 7, top: 0, bottom: 0, display: 'flex', alignItems: 'center', fontSize: 10, color: 'rgba(255,255,255,0.9)', fontFamily: 'ui-monospace, monospace' }}>
+                          {r.otb} / {r.fcst} rms
+                        </span>
+                      </div>
+                      <span style={{ width: 80, textAlign: 'right', fontSize: 12, fontFamily: 'ui-monospace, monospace', fontWeight: 600, color: needColor, flexShrink: 0 }}>
+                        {r.need > 0 ? `+${r.need} rms` : 'Done ✓'}
+                      </span>
+                      <span style={{ width: 14, fontSize: 12, textAlign: 'center', flexShrink: 0, color: isOpen ? '#00E5A0' : '#444', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .15s, color .15s', display: 'inline-block' }}>›</span>
                     </div>
-                    <span style={{ width: 80, textAlign: 'right', fontSize: 12, fontFamily: 'ui-monospace, monospace', fontWeight: 600, color: needColor, flexShrink: 0 }}>
-                      {r.need > 0 ? `+${r.need} rms` : 'Done ✓'}
-                    </span>
+
+                    {/* 드릴다운 — 세그별 mini fill-bar */}
+                    {isOpen && (
+                      <div style={{ marginLeft: 72, marginBottom: 4, borderRadius: '0 6px 6px 0', borderLeft: '2px solid rgba(0,229,160,0.2)', background: '#0f1a13', padding: '6px 10px' }}>
+                        {segs.length === 0 ? (
+                          <div style={{ fontSize: 10, color: '#555', padding: '4px 0' }}>No segment data for this day.</div>
+                        ) : segs.map(s => {
+                          const sBarColor = s.pct >= 100 ? '#00E5A0' : s.pct >= 80 ? '#4caf82' : s.pct >= 60 ? '#F5A623' : '#E24B4A'
+                          const sNeedColor = s.need <= 0 ? '#3a4a3a' : s.pct < 60 ? '#E24B4A' : s.pct < 80 ? '#F5A623' : '#888'
+                          return (
+                            <div key={s.segKey} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', borderBottom: '0.5px solid rgba(255,255,255,0.03)' }}>
+                              <span style={{ width: 80, fontSize: 11, color: s.color, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                              <div style={{ flex: 1, height: 10, background: '#20242a', borderRadius: 3, position: 'relative', overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${Math.min(s.pct, 100)}%`, background: sBarColor, opacity: 0.7, borderRadius: 3 }} />
+                                <span style={{ position: 'absolute', left: 5, top: 0, bottom: 0, display: 'flex', alignItems: 'center', fontSize: 9, color: 'rgba(255,255,255,0.8)', fontFamily: 'ui-monospace, monospace' }}>{s.otb}/{s.fcst}</span>
+                              </div>
+                              <span style={{ width: 56, textAlign: 'right', fontSize: 11, fontFamily: 'ui-monospace, monospace', fontWeight: 600, color: sNeedColor, flexShrink: 0 }}>
+                                {s.need > 0 ? `+${s.need} rms` : 'Done ✓'}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 )
               })}
