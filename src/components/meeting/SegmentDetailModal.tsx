@@ -140,8 +140,14 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
   const [barRateOpen, setBarRateOpen] = useState(false)
   const [fontScale, setFontScale] = useState(1)   // 모달 열 때마다 1.0
 
-  const decFont = () => setFontScale(s => Math.max(0.7, Math.round((s - 0.1) * 10) / 10))
-  const incFont = () => setFontScale(s => Math.min(1.5, Math.round((s + 0.1) * 10) / 10))
+  // Zoom 모드 (행 확대 패널) — 새 쿼리 없이 기존 계산값 재사용
+  const [zoomOn,  setZoomOn]  = useState(false)                 // Zoom 모드 on/off
+  const [zoomRow, setZoomRow] = useState<string | null>(null)   // 확대 중인 행 id
+  const [zoomPos, setZoomPos] = useState({ x: 0, y: 8 })        // 패널 위치 (드래그)
+  const dragRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null)
+
+  const decFont = () => setFontScale(s => Math.max(0.7, Math.round((s - 0.05) * 100) / 100))
+  const incFont = () => setFontScale(s => Math.min(1.5, Math.round((s + 0.05) * 100) / 100))
 
   // ── 회의록(c12_meeting_notes) ───────────────────────────────────────────────────
   const [noteFrom, setNoteFrom] = useState(`${monthKey}-01`)
@@ -406,6 +412,29 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
     return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey) }
   }, [open, onClose])
 
+  // 모달 열 때마다 Zoom 상태 초기화
+  useEffect(() => {
+    if (!open) return
+    setZoomOn(false); setZoomRow(null); setZoomPos({ x: 0, y: 8 })
+  }, [open])
+
+  // Zoom 패널 드래그 이동
+  useEffect(() => {
+    if (!zoomOn) return
+    const onMove = (e: MouseEvent) => {
+      const d = dragRef.current
+      if (!d) return
+      setZoomPos({ x: d.ox + e.clientX - d.sx, y: d.oy + e.clientY - d.sy })
+    }
+    const onUp = () => { dragRef.current = null }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    return () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+  }, [zoomOn])
+
   if (!open) return null
 
   const daysInMonth = new Date(year, month, 0).getDate()
@@ -545,13 +574,26 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
           </svg>
           PU Required
         </button>
+
+        {/* Zoom 모드 토글 — 행 확대 패널 */}
+        <button
+          onClick={() => { setZoomOn(p => !p); if (zoomOn) setZoomRow(null) }}
+          style={{
+            ...btnStyle,
+            background: zoomOn ? 'rgba(0,229,160,0.12)' : 'transparent',
+            border: `1px solid ${zoomOn ? 'rgba(0,229,160,0.45)' : 'rgba(255,255,255,0.15)'}`,
+            color: zoomOn ? MINT : '#aaa',
+          }}
+        >
+          🔍 Zoom{zoomOn && <span style={{ fontSize: 9, opacity: 0.7, marginLeft: 4 }}>ON</span>}
+        </button>
       </div>
 
       {/* 본문 — 표(좌 75%) + 사이드(우 25%) */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 12, padding: '8px 20px 14px' }}>
 
       {/* 좌: 표 영역 (82%) */}
-      <div style={{ flex: 82, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 82, minWidth: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}>
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto', background: '#111418', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10 }}>
         <table style={{ minWidth: 890, borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
           <thead>
@@ -703,9 +745,16 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
               // 숫자 셀 배경: schema bg_dark_color 우선, 없으면 bold → BOLD_BG, 자식 → undefined(투명)
               const numBg = r.bgColor ?? (r.isBold ? BOLD_BG : undefined)
               const otb = otbOf(r), fcst = fcstOf(r), budget = budgetOf(r), ly = lyOf(r)
+              const zoomSel = zoomOn && zoomRow === r.id
               return (
-                <tr key={r.id} style={{ background: rowBg }}>
-                  <td style={{ ...tdS, padding: `${Math.round(7 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: r.bgColor ?? (r.isBold ? BOLD_BG : BG), fontWeight: r.isBold ? 700 : 400, color: nameColor, minWidth: 150 }}>
+                <tr
+                  key={r.id}
+                  onClick={zoomOn ? () => setZoomRow(r.id) : undefined}
+                  onMouseEnter={zoomOn ? (e) => { if (zoomRow !== r.id) e.currentTarget.style.background = 'rgba(0,229,160,0.10)' } : undefined}
+                  onMouseLeave={zoomOn ? (e) => { e.currentTarget.style.background = zoomRow === r.id ? 'rgba(0,229,160,0.16)' : rowBg } : undefined}
+                  style={{ background: zoomSel ? 'rgba(0,229,160,0.16)' : rowBg, cursor: zoomOn ? 'pointer' : 'default' }}
+                >
+                  <td style={{ ...tdS, padding: `${Math.round(7 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: zoomSel ? '#0f2a20' : (r.bgColor ?? (r.isBold ? BOLD_BG : BG)), boxShadow: zoomSel ? `inset 3px 0 0 ${MINT}` : undefined, fontWeight: r.isBold ? 700 : 400, color: nameColor, minWidth: 150 }}>
                     {r.indent ? <><span style={{ color: '#555', marginRight: 4 }}>└</span>{r.name}</> : r.name}
                   </td>
                   {groupCells(otb,    numColor, r.isBold, numBg)}
@@ -759,6 +808,76 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
           </tbody>
         </table>
         </div>
+
+        {/* Zoom 확대 패널 — 클릭한 행을 표와 동일한 가로 구조로 크게 (드래그 이동) */}
+        {zoomOn && zoomRow && (() => {
+          const zr = rows.find(r => r.id === zoomRow)
+          if (!zr) return null
+          const cols = [
+            { key: 'otb'    as const, label: 'OTB',    cell: otbOf(zr) },
+            { key: 'fcst'   as const, label: 'FCST',   cell: fcstOf(zr) },
+            { key: 'budget' as const, label: 'BUDGET', cell: budgetOf(zr) },
+            { key: 'ly'     as const, label: 'LY',     cell: lyOf(zr) },
+          ]
+          const zb = baseOf(zr), zc = compOf(zr)
+          const gRn = zb.rn - zc.rn, gAdr = zb.adr - zc.adr, gRev = zb.rev - zc.rev
+          return (
+            <div style={{
+              position: 'absolute', top: zoomPos.y, left: zoomPos.x, zIndex: 30, minWidth: 900,
+              background: '#141a20', border: '1px solid rgba(0,229,160,0.35)', borderRadius: 12,
+              boxShadow: '0 14px 44px rgba(0,0,0,0.8)', paddingBottom: 12,
+            }}>
+              {/* 드래그 핸들 헤더 */}
+              <div
+                onMouseDown={(e) => { dragRef.current = { sx: e.clientX, sy: e.clientY, ox: zoomPos.x, oy: zoomPos.y }; e.preventDefault() }}
+                style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '9px 14px', cursor: 'grab', userSelect: 'none',
+                  borderBottom: '0.5px solid rgba(255,255,255,0.08)',
+                  background: 'rgba(0,229,160,0.05)', borderRadius: '12px 12px 0 0',
+                }}
+              >
+                <span style={{ fontSize: 11, color: MINT, letterSpacing: '0.06em', fontWeight: 600 }}>⠿ ZOOM</span>
+                <button onClick={() => setZoomRow(null)} style={{ fontSize: 12, color: '#888', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕ Close</button>
+              </div>
+
+              {/* 확대 테이블 — 원본 표와 동일한 컬럼 구조 */}
+              <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
+                <thead>
+                  <tr>
+                    <th rowSpan={2} style={{ textAlign: 'left', padding: '8px 16px', fontSize: 11, color: TXT3, fontWeight: 600, letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>SEGMENTATION</th>
+                    {cols.map(c => (
+                      <th key={c.key} colSpan={3} style={{ textAlign: 'center', padding: '8px 6px', fontSize: 13, fontWeight: 700, color: GROUP_COLOR[c.key], background: GROUP_BG_HEADER[c.key], borderBottom: `2px solid ${GROUP_COLOR[c.key]}` }}>{c.label}</th>
+                    ))}
+                    <th colSpan={3} style={{ textAlign: 'center', padding: '8px 6px', fontSize: 13, fontWeight: 700, color: GROUP_COLOR.gap, borderBottom: `2px solid ${GROUP_COLOR.gap}` }}>GAP</th>
+                  </tr>
+                  <tr>
+                    {['OTB', 'FCST', 'BUDGET', 'LY', 'GAP'].map(g => (
+                      ['R/N', 'ADR', 'REV'].map(s => (
+                        <th key={`${g}-${s}`} style={{ textAlign: 'center', padding: '4px 6px', fontSize: 11, color: TXT3, fontWeight: 500 }}>{s}</th>
+                      ))
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style={{ textAlign: 'left', padding: '10px 16px', fontSize: 24, fontWeight: 700, color: zr.fontColor ?? (zr.indent ? '#ccc' : '#fff'), whiteSpace: 'nowrap' }}>
+                      {zr.indent ? <><span style={{ color: '#555', marginRight: 6 }}>└</span>{zr.name}</> : zr.name}
+                    </td>
+                    {cols.flatMap(c => [
+                      <td key={`${c.key}-rn`}  style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 600, color: '#e8e8e8', whiteSpace: 'nowrap' }} className="font-mono">{fmtRn(c.cell.rn)}</td>,
+                      <td key={`${c.key}-adr`} style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 600, color: '#e8e8e8', whiteSpace: 'nowrap' }} className="font-mono"><FmtVal val={fmtAdr(c.cell.adr)} numSize={28} /></td>,
+                      <td key={`${c.key}-rev`} style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 600, color: '#e8e8e8', whiteSpace: 'nowrap' }} className="font-mono"><FmtVal val={fmtRev(c.cell.rev)} numSize={28} /></td>,
+                    ])}
+                    <td style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 700, color: gapColor(gRn), whiteSpace: 'nowrap' }} className="font-mono">{fmtGapRn(gRn)}</td>
+                    <td style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 700, color: gapColor(gAdr), whiteSpace: 'nowrap' }} className="font-mono"><FmtVal val={fmtGapAdr(gAdr)} numSize={28} /></td>
+                    <td style={{ textAlign: 'right', padding: '10px 16px 10px 10px', fontSize: 28, fontWeight: 700, color: gapColor(gRev), whiteSpace: 'nowrap' }} className="font-mono"><FmtVal val={fmtGapRev(gRev)} numSize={28} /></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )
+        })()}
       </div>
 
       {/* 우: 사이드 (18%) — 회의록 목록 / 편집 / 지시사항 세로 3단 */}
