@@ -526,6 +526,19 @@ export default function RateStrategyPage() {
   const [promoMonth,      setPromoMonth]      = useState(Number(todayKST.slice(5, 7)))
   const [saleDate,        setSaleDate]        = useState<string>(getKSTDateString())
   const saleDateRef = useRef<HTMLDivElement>(null)  // 숨긴 FormDatePicker 트리거용
+  const tabOuterRef = useRef<HTMLDivElement>(null)  // 슬라이딩 탭 컨테이너
+  const sliderRef   = useRef<HTMLDivElement>(null)  // 슬라이딩 인디케이터
+
+  // 슬라이더를 클릭된 탭 위치로 이동
+  const moveSlider = (btn: HTMLButtonElement) => {
+    const outer = tabOuterRef.current
+    const slider = sliderRef.current
+    if (!outer || !slider) return
+    const oRect = outer.getBoundingClientRect()
+    const bRect = btn.getBoundingClientRect()
+    slider.style.left = (bRect.left - oRect.left) + 'px'
+    slider.style.width = bRect.width + 'px'
+  }
   const [selRoomType,     setSelRoomType]     = useState('')
   const [showAllTypes,    setShowAllTypes]    = useState(false)
 
@@ -616,6 +629,12 @@ export default function RateStrategyPage() {
 
   // 월 변경 시 미리보기 버퍼 초기화
   useEffect(() => { setPreviewBuffer({}) }, [viewYear, viewMonth])
+
+  // 슬라이딩 탭 인디케이터 위치 초기화/동기화 (마운트 + activeTab 변경)
+  useEffect(() => {
+    const activeBtn = tabOuterRef.current?.querySelector<HTMLButtonElement>('.slide-tab.active')
+    if (activeBtn) moveSlider(activeBtn)
+  }, [activeTab])
 
   const { data: rateDetails = [], isLoading: ratesLoading } = useQuery<RateDetail[]>({
     queryKey: ['s02_rate_detail', hotelId],
@@ -1312,9 +1331,15 @@ export default function RateStrategyPage() {
             }
             .btn-icon { display: inline-block; transition: transform 0.2s; }
             .rate-tab-btn:hover .btn-icon { animation: shake 0.3s ease; }
+            .slide-tab { color: #444; }
+            .slide-tab:hover { color: #777; }
+            .slide-tab.active { color: #00E5A0; }
+            .slide-tab.active .btn-icon { transform: scale(1.1); }
           `}</style>
-          {/* 탭 버튼 */}
-          <div style={{ display: 'flex', gap: 4 }}>
+          {/* 탭 버튼 — 슬라이딩 필 */}
+          <div ref={tabOuterRef} style={{ background: '#0d0d0d', border: '0.5px solid #1e1e1e', borderRadius: 14, padding: 4, position: 'relative', display: 'inline-flex', gap: 2 }}>
+            {/* 슬라이딩 인디케이터 */}
+            <div ref={sliderRef} style={{ position: 'absolute', top: 4, height: 'calc(100% - 8px)', background: 'linear-gradient(135deg, #0a2e1f, #0d1f14)', border: '0.5px solid #00E5A040', borderRadius: 10, boxShadow: '0 0 12px #00E5A010', transition: 'left .28s cubic-bezier(.34,1.2,.64,1), width .28s cubic-bezier(.34,1.2,.64,1)', pointerEvents: 'none', zIndex: 0 }} />
             {([
               { id: 'barrate',   label: 'Daily BAR Rate', Icon: Activity     },
               { id: 'rate-cal',  label: '요금 달력',    Icon: CalendarClock },
@@ -1327,21 +1352,24 @@ export default function RateStrategyPage() {
               return (
                 <button
                   key={t.id}
-                  onClick={() => setActiveTab(t.id)}
-                  className={`rate-tab-btn${active ? ' active' : ''}`}
+                  onClick={(e) => { setActiveTab(t.id); moveSlider(e.currentTarget) }}
+                  className={`rate-tab-btn slide-tab${active ? ' active' : ''}`}
                   style={{
-                    display:      'inline-flex',
-                    alignItems:   'center',
-                    gap:          6,
-                    fontSize:     12,
-                    fontWeight:   active ? 600 : 400,
-                    padding:      '5px 14px',
-                    borderRadius: 8,
-                    border:       active ? '1.5px solid #00E5A0' : '1px solid var(--color-border-default)',
-                    background:   active ? 'rgba(0,229,160,0.08)' : 'var(--color-bg-secondary)',
-                    color:        active ? '#00E5A0' : 'var(--color-text-secondary)',
-                    cursor:       'pointer',
-                    transition:   'all 0.15s',
+                    position:      'relative',
+                    zIndex:        1,
+                    display:       'flex',
+                    alignItems:    'center',
+                    gap:           5,
+                    padding:       '7px 15px',
+                    border:        'none',
+                    background:    'none',
+                    fontSize:      12,
+                    fontWeight:    active ? 500 : 400,
+                    borderRadius:  10,
+                    whiteSpace:    'nowrap',
+                    transition:    'color .2s',
+                    letterSpacing: '0.01em',
+                    cursor:        'pointer',
                   }}
                 >
                   <Icon size={14} className="btn-icon" aria-hidden="true" />
