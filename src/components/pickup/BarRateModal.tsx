@@ -419,6 +419,9 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
           },
           plugins: {
             legend: { display: false },
+            // 그래프 탭(RateChartView)이 전역 등록하는 'customDatalabels' 플러그인이
+            // 이 차트에도 적용되어 BAR Rate/OCC 레이블이 새어나오고 전년 틱을 덮는 문제 → 이 차트에선 비활성
+            ...({ customDatalabels: false } as any),
             tooltip: {
               enabled: false,
               external: (context: any) => {
