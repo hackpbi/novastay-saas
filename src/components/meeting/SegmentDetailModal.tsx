@@ -101,11 +101,11 @@ function aggByCodes(codes: string[], map: CodeMap): Cell {
 
 const th: React.CSSProperties = {
   fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em',
-  color: TXT3, padding: '8px 4px', background: '#161a1f', whiteSpace: 'nowrap',
+  color: TXT3, padding: '9px 4px', background: '#161a1f', whiteSpace: 'nowrap',
   position: 'sticky', top: 0, textAlign: 'right', zIndex: 1,
 }
 const td: React.CSSProperties = {
-  fontSize: 11, padding: '8px 4px', textAlign: 'right', whiteSpace: 'nowrap',
+  fontSize: 11, padding: '7px 4px', textAlign: 'right', whiteSpace: 'nowrap',
   borderBottom: BORDER_SUBTLE,
 }
 
@@ -393,8 +393,8 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
   }, [schema])
 
   // 표 본문 폰트 배율 적용본 (모듈스코프 td/th 상수에 fontScale 곱)
-  const tdS = useMemo(() => ({ ...td, fontSize: 11 * fontScale, padding: `${Math.round(8 * fontScale)}px 4px` }), [fontScale])
-  const thS = useMemo(() => ({ ...th, fontSize: 10 * fontScale, padding: `${Math.round(8 * fontScale)}px 4px` }), [fontScale])
+  const tdS = useMemo(() => ({ ...td, fontSize: 11 * fontScale, padding: `${Math.round(7 * fontScale)}px 4px` }), [fontScale])
+  const thS = useMemo(() => ({ ...th, fontSize: 10 * fontScale, padding: `${Math.round(9 * fontScale)}px 4px` }), [fontScale])
   const numSizeS = 11 * fontScale
 
   // body scroll lock + ESC
@@ -446,11 +446,12 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
   )
   const gapCells = (b: Cell, cmp: Cell, bold?: boolean, bg?: string) => {
     const gRn = b.rn - cmp.rn, gAdr = b.adr - cmp.adr, gRev = b.rev - cmp.rev
+    const dim = bold ? 1 : 0.55          // 소분류는 흐리게 → 대분류가 도드라짐
     return (
       <>
-        <td style={{ ...tdS, boxShadow: GROUP_SHADOW, color: gapColor(gRn), fontWeight: bold ? 600 : 500, background: bg }} className="font-mono">{fmtGapRn(gRn)}</td>
-        <td style={{ ...tdS, color: gapColor(gAdr), fontWeight: bold ? 600 : 500, background: bg }} className="font-mono"><FmtVal val={fmtGapAdr(gAdr)} numSize={numSizeS} /></td>
-        <td style={{ ...tdS, color: gapColor(gRev), fontWeight: bold ? 600 : 500, background: bg }} className="font-mono"><FmtVal val={fmtGapRev(gRev)} numSize={numSizeS} /></td>
+        <td style={{ ...tdS, boxShadow: GROUP_SHADOW, color: gapColor(gRn), fontWeight: bold ? 600 : 400, background: bg, opacity: dim }} className="font-mono">{fmtGapRn(gRn)}</td>
+        <td style={{ ...tdS, color: gapColor(gAdr), fontWeight: bold ? 600 : 400, background: bg, opacity: dim }} className="font-mono"><FmtVal val={fmtGapAdr(gAdr)} numSize={numSizeS} /></td>
+        <td style={{ ...tdS, color: gapColor(gRev), fontWeight: bold ? 600 : 400, background: bg, opacity: dim }} className="font-mono"><FmtVal val={fmtGapRev(gRev)} numSize={numSizeS} /></td>
       </>
     )
   }
@@ -555,7 +556,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
         <table style={{ minWidth: 890, borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
           <thead>
             <tr>
-              <th rowSpan={2} style={{ ...thS, padding: `${Math.round(8 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, width: 150, minWidth: 150, zIndex: 2 }}>SEGMENTATION</th>
+              <th rowSpan={2} style={{ ...thS, padding: `${Math.round(9 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, width: 150, minWidth: 150, zIndex: 2 }}>SEGMENTATION</th>
               {groupTh('OTB', undefined, GROUP_BG_HEADER.otb, GROUP_COLOR.otb)}
               {groupTh('FCST', undefined, GROUP_BG_HEADER.fcst, GROUP_COLOR.fcst)}
               {groupTh('BUDGET', undefined, GROUP_BG_HEADER.budget, GROUP_COLOR.budget)}
@@ -704,7 +705,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
               const otb = otbOf(r), fcst = fcstOf(r), budget = budgetOf(r), ly = lyOf(r)
               return (
                 <tr key={r.id} style={{ background: rowBg }}>
-                  <td style={{ ...tdS, padding: `${Math.round(8 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: r.bgColor ?? (r.isBold ? BOLD_BG : BG), fontWeight: r.isBold ? 700 : 400, color: nameColor, minWidth: 150 }}>
+                  <td style={{ ...tdS, padding: `${Math.round(7 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: r.bgColor ?? (r.isBold ? BOLD_BG : BG), fontWeight: r.isBold ? 700 : 400, color: nameColor, minWidth: 150 }}>
                     {r.indent ? <><span style={{ color: '#555', marginRight: 4 }}>└</span>{r.name}</> : r.name}
                   </td>
                   {groupCells(otb,    numColor, r.isBold, numBg)}
@@ -717,7 +718,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
             })}
             {/* 합계 (HOU 제외) */}
             <tr style={{ background: '#0e1216' }}>
-              <td style={{ ...tdS, padding: `${Math.round(8 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: '#0e1216', fontWeight: 700, color: '#fff', borderTop: '1px solid rgba(255,255,255,0.1)' }}>합계 (HOU 제외)</td>
+              <td style={{ ...tdS, padding: `${Math.round(8 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: '#0e1216', fontWeight: 700, color: '#fff', borderTop: '1px solid rgba(255,255,255,0.12)' }}>합계 (HOU 제외)</td>
               {([
                 { c: totOtb, g: 'otb' as const },
                 { c: totFcst, g: 'fcst' as const },
@@ -730,9 +731,9 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
                 const gRn = totBase.rn - totComp.rn, gAdr = totBase.adr - totComp.adr, gRev = totBase.rev - totComp.rev
                 return (
                   <>
-                    <td style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.gap, color: gapColor(gRn), fontWeight: 700, borderTop: '1px solid rgba(255,255,255,0.1)' }} className="font-mono">{fmtGapRn(gRn)}</td>
-                    <td style={{ ...tdS, background: GROUP_BG.gap, color: gapColor(gAdr), fontWeight: 700, borderTop: '1px solid rgba(255,255,255,0.1)' }} className="font-mono"><FmtVal val={fmtGapAdr(gAdr)} numSize={numSizeS} /></td>
-                    <td style={{ ...tdS, background: GROUP_BG.gap, color: gapColor(gRev), fontWeight: 700, borderTop: '1px solid rgba(255,255,255,0.1)' }} className="font-mono"><FmtVal val={fmtGapRev(gRev)} numSize={numSizeS} /></td>
+                    <td style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.gap, color: gapColor(gRn), fontWeight: 600, borderTop: `2px solid ${GROUP_COLOR.gap}` }} className="font-mono">{fmtGapRn(gRn)}</td>
+                    <td style={{ ...tdS, background: GROUP_BG.gap, color: gapColor(gAdr), fontWeight: 600, borderTop: `2px solid ${GROUP_COLOR.gap}` }} className="font-mono"><FmtVal val={fmtGapAdr(gAdr)} numSize={numSizeS} /></td>
+                    <td style={{ ...tdS, background: GROUP_BG.gap, color: gapColor(gRev), fontWeight: 600, borderTop: `2px solid ${GROUP_COLOR.gap}` }} className="font-mono"><FmtVal val={fmtGapRev(gRev)} numSize={numSizeS} /></td>
                   </>
                 )
               })()}
@@ -740,19 +741,19 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
             {/* OCC */}
             <tr style={{ background: '#0e1216' }}>
               <td style={{ ...tdS, padding: `${Math.round(8 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: '#0e1216', fontWeight: 600, color: TXT3 }}>OCC</td>
-              <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.otb, textAlign: 'center', color: GROUP_COLOR.otb, fontWeight: 600 }}>{occOf(totOtb.rn)}</td>
-              <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.fcst, textAlign: 'center', color: GROUP_COLOR.fcst, fontWeight: 600 }}>{occOf(totFcst.rn)}</td>
-              <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.budget, textAlign: 'center', color: GROUP_COLOR.budget, fontWeight: 600 }}>{occOf(totBudget.rn)}</td>
-              <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.ly, textAlign: 'center', color: GROUP_COLOR.ly, fontWeight: 600 }}>{occOf(totLy.rn)}</td>
+              <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.otb, textAlign: 'center', color: '#ccc', fontWeight: 600 }}>{occOf(totOtb.rn)}</td>
+              <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.fcst, textAlign: 'center', color: '#ccc', fontWeight: 600 }}>{occOf(totFcst.rn)}</td>
+              <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.budget, textAlign: 'center', color: '#ccc', fontWeight: 600 }}>{occOf(totBudget.rn)}</td>
+              <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.ly, textAlign: 'center', color: '#ccc', fontWeight: 600 }}>{occOf(totLy.rn)}</td>
               <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.gap, textAlign: 'center', color: '#555' }}>—</td>
             </tr>
             {/* Rev.PAR */}
             <tr style={{ background: '#0e1216' }}>
               <td style={{ ...tdS, padding: `${Math.round(8 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: '#0e1216', fontWeight: 600, color: TXT3 }}>Rev.PAR</td>
-              <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.otb, textAlign: 'center', color: GROUP_COLOR.otb, fontWeight: 600 }}>{revparOf(totOtb.rev)}</td>
-              <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.fcst, textAlign: 'center', color: GROUP_COLOR.fcst, fontWeight: 600 }}>{revparOf(totFcst.rev)}</td>
-              <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.budget, textAlign: 'center', color: GROUP_COLOR.budget, fontWeight: 600 }}>{revparOf(totBudget.rev)}</td>
-              <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.ly, textAlign: 'center', color: GROUP_COLOR.ly, fontWeight: 600 }}>{revparOf(totLy.rev)}</td>
+              <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.otb, textAlign: 'center', color: '#ccc', fontWeight: 600 }}>{revparOf(totOtb.rev)}</td>
+              <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.fcst, textAlign: 'center', color: '#ccc', fontWeight: 600 }}>{revparOf(totFcst.rev)}</td>
+              <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.budget, textAlign: 'center', color: '#ccc', fontWeight: 600 }}>{revparOf(totBudget.rev)}</td>
+              <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.ly, textAlign: 'center', color: '#ccc', fontWeight: 600 }}>{revparOf(totLy.rev)}</td>
               <td colSpan={3} style={{ ...tdS, boxShadow: GROUP_SHADOW, background: GROUP_BG.gap, textAlign: 'center', color: '#555' }}>—</td>
             </tr>
           </tbody>
@@ -919,13 +920,13 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
   )
 }
 
-// 합계 행의 그룹 셀 (R/N, ADR, REV)
+// 합계 행의 그룹 셀 (R/N, ADR, REV) — 상단 그룹색 라인 + 숫자는 일반색(#e8e8e8)
 function GroupTotal({ c, bg, color, tdStyle, numSize }: { c: Cell; bg: string; color: string; tdStyle: React.CSSProperties; numSize: number }) {
   return (
     <>
-      <td style={{ ...tdStyle, boxShadow: GROUP_SHADOW, background: bg, fontWeight: 700, color, borderTop: '1px solid rgba(255,255,255,0.1)' }} className="font-mono">{fmtRn(c.rn)}</td>
-      <td style={{ ...tdStyle, background: bg, fontWeight: 700, color, borderTop: '1px solid rgba(255,255,255,0.1)' }} className="font-mono"><FmtVal val={fmtAdr(c.adr)} numSize={numSize} /></td>
-      <td style={{ ...tdStyle, background: bg, fontWeight: 700, color, borderTop: '1px solid rgba(255,255,255,0.1)' }} className="font-mono"><FmtVal val={fmtRev(c.rev)} numSize={numSize} /></td>
+      <td style={{ ...tdStyle, boxShadow: GROUP_SHADOW, background: bg, fontWeight: 600, color: '#e8e8e8', borderTop: `2px solid ${color}` }} className="font-mono">{fmtRn(c.rn)}</td>
+      <td style={{ ...tdStyle, background: bg, fontWeight: 600, color: '#e8e8e8', borderTop: `2px solid ${color}` }} className="font-mono"><FmtVal val={fmtAdr(c.adr)} numSize={numSize} /></td>
+      <td style={{ ...tdStyle, background: bg, fontWeight: 600, color: '#e8e8e8', borderTop: `2px solid ${color}` }} className="font-mono"><FmtVal val={fmtRev(c.rev)} numSize={numSize} /></td>
     </>
   )
 }
