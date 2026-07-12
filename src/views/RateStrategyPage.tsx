@@ -6,7 +6,7 @@ import {
   Plus, ChevronDown, X, Save, Tag, Loader2, Send,
   CheckSquare, Square, TrendingUp, TrendingDown,
   Minus, Activity, Trash2, FileSpreadsheet,
-  Table, CalendarClock, BarChart3, Calculator, Maximize2,
+  Table, CalendarClock, BarChart3, Calculator,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { FormDatePicker } from '@/components/DatePicker'
@@ -530,7 +530,6 @@ export default function RateStrategyPage() {
   const [showAllTypes,    setShowAllTypes]    = useState(false)
 
   // ── UI State ───────────────────────────────────────────────────────────────
-  const [barRateExpanded, setBarRateExpanded] = useState(false)    // Daily BAR Rate 탭 확대 → overlay 모달
   const [showPromoModal,  setShowPromoModal]  = useState(false)
   const [adrSimOpen,      setAdrSimOpen]      = useState(false)
   const [simDate,         setSimDate]         = useState('')
@@ -1363,17 +1362,9 @@ export default function RateStrategyPage() {
         </div>
       </div>
 
-      {/* ── Daily BAR Rate 탭 (barrate) — 인라인 차트 + 확대 버튼 ── */}
+      {/* ── Daily BAR Rate 탭 (barrate) — 인라인 차트 (남은 높이 전체 사용) ── */}
       {activeTab === 'barrate' && (
-        <div style={{ position: 'relative' }}>
-          <button
-            onClick={() => setBarRateExpanded(true)}
-            title="확대"
-            aria-label="확대"
-            style={{ position: 'absolute', top: 8, right: 8, zIndex: 5, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, padding: '5px 10px', borderRadius: 8, border: '1px solid var(--color-border-default)', background: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}
-          >
-            <Maximize2 size={13} /> 확대
-          </button>
+        <div style={{ height: 'calc(100vh - 160px)' }}>
           <BarRateModal
             embed
             open
@@ -2195,17 +2186,6 @@ export default function RateStrategyPage() {
         fcstUpdateDate={fcstDate}
       />
 
-      {/* Daily BAR Rate 확대 — overlay 모달 (탭의 확대 버튼) */}
-      {barRateExpanded && (
-        <BarRateModal
-          open={barRateExpanded}
-          onClose={() => setBarRateExpanded(false)}
-          hotelId={hotelId}
-          year={viewYear}
-          month={viewMonth}
-          roomCount={roomCount}
-        />
-      )}
     </div>
   )
 }
