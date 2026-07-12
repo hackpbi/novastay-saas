@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
-import { X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useDateContext } from '@/contexts/DateContext'
 import BarRatePacingModal from './BarRatePacingModal'
@@ -525,9 +525,18 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
     <>
       {!embed && <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={onClose} />}
       <div style={{ position: 'relative', background: 'linear-gradient(175deg, #0d1f1a 0%, #0a0a0a 40%)', border: '1px solid #1e1e1e', borderRadius: 16, boxShadow: '0 8px 40px rgba(0,0,0,0.6)', width: embed ? '100%' : '85vw', maxWidth: embed ? '100%' : '85vw', height: embed ? '100%' : '81vh', maxHeight: embed ? '100%' : '81vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {/* 헤더 */}
+        {/* 헤더 — ‹ Jul 2026 Daily Status › (월 네비 통합) */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px 4px', flexShrink: 0 }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>Daily BAR Rate</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button onClick={handlePrev} disabled={isMinMonth} aria-label="이전 달"
+              style={{ border: 'none', background: 'transparent', color: '#666', cursor: isMinMonth ? 'not-allowed' : 'pointer', opacity: isMinMonth ? 0.4 : 1, fontSize: 16, lineHeight: 1, padding: '0 4px', display: 'inline-flex', alignItems: 'center' }}>‹</button>
+            <span style={{ fontSize: 14, fontWeight: 500 }}>
+              <span style={{ color: '#00E5A0' }}>{MONTH_NAMES[modalMonth]} {modalYear}</span>{' '}
+              <span style={{ color: '#fff' }}>Daily Status</span>
+            </span>
+            <button onClick={handleNext} aria-label="다음 달"
+              style={{ border: 'none', background: 'transparent', color: '#666', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '0 4px', display: 'inline-flex', alignItems: 'center' }}>›</button>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {/* 전년 + 동기간/동일자 */}
             <div style={{ display: 'inline-flex', alignItems: 'center', background: '#1a1a1a', borderRadius: 30, padding: '3px 8px', gap: 6, border: '1px solid #2a2a2a' }}>
@@ -584,21 +593,6 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
         {/* 서브바 — OTB 날짜(읽기 전용) */}
         <div style={{ padding: '0 20px 12px', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 12, color: '#888' }}>OTB <b style={{ color: '#ccc', fontWeight: 500 }}>{otbDate || '-'}</b> 기준 일별 BAR Rate</span>
-        </div>
-
-        {/* 월 네비게이션 */}
-        <div style={{ padding: '8px 20px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-          <button onClick={handlePrev} disabled={isMinMonth} aria-label="이전 달"
-            style={{ border: 'none', background: 'transparent', color: '#888', cursor: isMinMonth ? 'not-allowed' : 'pointer', opacity: isMinMonth ? 0.4 : 1, padding: 6, display: 'inline-flex' }}>
-            <ChevronLeft size={15} />
-          </button>
-          <span style={{ fontSize: 15, fontWeight: 500, color: '#fff', minWidth: 100, textAlign: 'center' }}>
-            {MONTH_NAMES[modalMonth]} {modalYear}
-          </span>
-          <button onClick={handleNext} aria-label="다음 달"
-            style={{ border: 'none', background: 'transparent', color: '#888', cursor: 'pointer', padding: 6, display: 'inline-flex' }}>
-            <ChevronRight size={15} />
-          </button>
         </div>
 
         {/* 차트 */}

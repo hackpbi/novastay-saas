@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
-import { X } from 'lucide-react'
+import { X, Pencil } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useFcstDateContext } from '@/contexts/FcstDateContext'
+import AdrSimulatorModal from '@/components/rate-strategy/AdrSimulatorModal'
 import PacingDeltaModal from './PacingDeltaModal'
 
 const DOW_KR = ['일', '월', '화', '수', '목', '금', '토']
@@ -26,6 +28,10 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
   const chartRef  = useRef<any>(null)
   // 점유율 막대 클릭 → 전날 대비 증감 모달 (현재/전날 스냅샷)
   const [deltaSnap, setDeltaSnap] = useState<{ cur: string; prev: string } | null>(null)
+  // 요금 수정 → AdrSimulatorModal
+  const { fcstDate } = useFcstDateContext()
+  const [adrSimOpen, setAdrSimOpen] = useState(false)
+  const [simDate, setSimDate] = useState(stayDate)
 
   // 점유율 pacing (최근 30일 스냅샷)
   const { data: pacing = [] } = useQuery({
@@ -300,9 +306,17 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
             <div style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>{title}</div>
             <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>OCC Trend · BAR Rate History (Last 30 days)</div>
           </div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', padding: 4, display: 'inline-flex' }} aria-label="닫기">
-            <X size={20} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button
+              onClick={() => { setSimDate(stayDate); setAdrSimOpen(true) }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: '#ccc', cursor: 'pointer' }}
+            >
+              <Pencil size={13} /> 요금 수정
+            </button>
+            <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', padding: 4, display: 'inline-flex' }} aria-label="닫기">
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* 차트 */}
@@ -328,6 +342,21 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
           ))}
         </div>
       </div>
+
+      {/* 요금 수정 — AdrSimulatorModal (overlay 내부 중첩 → z-index 스택 정상) */}
+      {adrSimOpen && (
+        <AdrSimulatorModal
+          isOpen={adrSimOpen}
+          onClose={() => setAdrSimOpen(false)}
+          date={simDate}
+          onDateChange={setSimDate}
+          totalRooms={roomCount}
+          roomTypes={[]}
+          baseBarRate={currentRate ?? 0}
+          booked={pacing.length ? Math.round(Number(pacing[pacing.length - 1].otb_nights ?? 0)) : 0}
+          fcstUpdateDate={fcstDate}
+        />
+      )}
     </div>
 
     {deltaSnap && (
