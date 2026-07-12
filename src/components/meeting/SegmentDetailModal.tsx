@@ -19,6 +19,7 @@ import SegmentYoyModal from './SegmentYoyModal'
 import DatePicker from '@/components/DatePicker'
 import BarRateModal from '@/components/pickup/BarRateModal'
 import DailyStatusModal from '@/components/pickup/DailyStatusModal'
+import PickupRequiredModal from './PickupRequiredModal'
 
 interface SegmentDetailModalProps {
   open:       boolean
@@ -140,6 +141,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
   const [yoyOpen, setYoyOpen] = useState(false)
   const [barRateOpen, setBarRateOpen] = useState(false)
   const [dailyOpen, setDailyOpen] = useState(false)
+  const [puOpen, setPuOpen] = useState(false)
   const [fontScale, setFontScale] = useState(1)   // 모달 열 때마다 1.0
 
   // Zoom 모드 (행 확대 패널) — 새 쿼리 없이 기존 계산값 재사용
@@ -571,7 +573,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
         </button>
 
         {/* PU Required */}
-        <button onClick={() => {}} style={btnStyle} onMouseEnter={e => hoverIn(e)} onMouseLeave={e => hoverOut(e)}>
+        <button onClick={() => setPuOpen(true)} style={btnStyle} onMouseEnter={e => hoverIn(e)} onMouseLeave={e => hoverOut(e)}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 13, height: 13 }}>
             <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
           </svg>
@@ -1060,6 +1062,17 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
           month={Number(monthKey.split('-')[1])}
           roomCount={roomCount}
         />
+      )}
+      {puOpen && createPortal(
+        <PickupRequiredModal
+          open={puOpen}
+          onClose={() => setPuOpen(false)}
+          hotelId={hotelId}
+          monthKey={monthKey}
+          fcstDate={fcstDate}
+          roomCount={roomCount}
+        />,
+        document.body,
       )}
     </div>,
     document.body,
