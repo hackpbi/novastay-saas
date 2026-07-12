@@ -7,7 +7,6 @@ import { X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useDateContext } from '@/contexts/DateContext'
 import { useFcstDateContext } from '@/contexts/FcstDateContext'
-import { fetchBaselineForecast } from '@/lib/forecast/baseline'
 
 const DOW_KR = ['일', '월', '화', '수', '목', '금', '토']
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -97,7 +96,7 @@ export default function DailyStatusModal({ open, onClose, hotelId, year, month, 
     return arr
   }, [otbOccByDay, modalYear, modalMonth, roomCount])
 
-  // ── FCST 일별 (calculate_baseline_forecast_v7 → forecast_rn / roomCount) ──────────
+  // ── FCST 일별 (get_forecast_daily RPC → forecast_nights / roomCount) ──────────────
   const { data: fcstArr } = useQuery({
     queryKey: ['daily-fcst', hotelId, modalYear, modalMonth, fcstDate],
     enabled: open && !!hotelId && !!fcstDate,
@@ -105,12 +104,24 @@ export default function DailyStatusModal({ open, onClose, hotelId, year, month, 
     queryFn: async () => {
       const start = `${modalYear}-${pad(modalMonth + 1)}-01`
       const end   = `${modalYear}-${pad(modalMonth + 1)}-${pad(lyLastDay)}`
-      const rows = await fetchBaselineForecast(hotelId, start, end, undefined, fcstDate)
+      const { data, error } = await (supabase as any).rpc('get_forecast_daily', {
+        p_hotel_id:    hotelId,
+        p_start_date:  start,
+        p_end_date:    end,
+        p_update_date: fcstDate,      // 글로벌 FCST date picker 값
+      })
+      if (error) throw error
+      const rows = (data ?? []) as {
+        business_date: string
+        forecast_nights: number
+        forecast_revenue: number
+        forecast_adr: number
+      }[]
+      // RPC가 business_date별 세그 전체 합산 반환 → 일자 매핑 + 점유율 계산만
       const byDay: Record<number, number> = {}
-      for (const r of rows ?? []) {
+      for (const r of rows) {
         const dt = new Date(r.business_date)
-        if (dt.getFullYear() !== modalYear || dt.getMonth() !== modalMonth) continue
-        byDay[dt.getDate()] = (byDay[dt.getDate()] ?? 0) + Number(r.forecast_rn ?? 0)
+        byDay[dt.getDate()] = Number(r.forecast_nights ?? 0)
       }
       return Array.from({ length: lyLastDay }, (_, i) => {
         const n = byDay[i + 1]
