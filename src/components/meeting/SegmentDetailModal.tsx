@@ -18,6 +18,7 @@ import AccountComparisonModal from './AccountComparisonModal'
 import SegmentYoyModal from './SegmentYoyModal'
 import DatePicker from '@/components/DatePicker'
 import BarRateModal from '@/components/pickup/BarRateModal'
+import DailyStatusModal from '@/components/pickup/DailyStatusModal'
 
 interface SegmentDetailModalProps {
   open:       boolean
@@ -138,6 +139,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
   const [acctOpen, setAcctOpen] = useState(false)
   const [yoyOpen, setYoyOpen] = useState(false)
   const [barRateOpen, setBarRateOpen] = useState(false)
+  const [dailyOpen, setDailyOpen] = useState(false)
   const [fontScale, setFontScale] = useState(1)   // 모달 열 때마다 1.0
 
   // Zoom 모드 (행 확대 패널) — 새 쿼리 없이 기존 계산값 재사용
@@ -553,7 +555,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
         </button>
 
         {/* Daily Status */}
-        <button onClick={() => {}} style={btnStyle} onMouseEnter={e => hoverIn(e)} onMouseLeave={e => hoverOut(e)}>
+        <button onClick={() => setDailyOpen(true)} style={btnStyle} onMouseEnter={e => hoverIn(e)} onMouseLeave={e => hoverOut(e)}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 13, height: 13 }}>
             <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
           </svg>
@@ -1043,6 +1045,16 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
         <BarRateModal
           open={barRateOpen}
           onClose={() => setBarRateOpen(false)}
+          hotelId={hotelId}
+          year={Number(monthKey.split('-')[0])}
+          month={Number(monthKey.split('-')[1])}
+          roomCount={roomCount}
+        />
+      )}
+      {dailyOpen && (
+        <DailyStatusModal
+          open={dailyOpen}
+          onClose={() => setDailyOpen(false)}
           hotelId={hotelId}
           year={Number(monthKey.split('-')[0])}
           month={Number(monthKey.split('-')[1])}
