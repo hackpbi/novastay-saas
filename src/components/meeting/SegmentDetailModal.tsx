@@ -868,17 +868,17 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
                 </thead>
                 <tbody>
                   <tr>
-                    <td style={{ textAlign: 'left', padding: '10px 16px', fontSize: 24, fontWeight: 700, color: zr.fontColor ?? (zr.indent ? '#ccc' : '#fff'), whiteSpace: 'nowrap' }}>
+                    <td style={{ textAlign: 'left', padding: '10px 16px', fontSize: 24, fontWeight: 400, color: zr.fontColor ?? (zr.indent ? '#ccc' : '#fff'), whiteSpace: 'nowrap' }}>
                       {zr.indent ? <><span style={{ color: '#555', marginRight: 6 }}>└</span>{zr.name}</> : zr.name}
                     </td>
                     {cols.flatMap(c => [
-                      <td key={`${c.key}-rn`}  style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 600, color: '#e8e8e8', whiteSpace: 'nowrap', borderLeft: gDiv }} className="font-mono">{fmtRn(c.cell.rn)}</td>,
-                      <td key={`${c.key}-adr`} style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 600, color: '#e8e8e8', whiteSpace: 'nowrap' }} className="font-mono"><FmtVal val={fmtAdr(c.cell.adr)} numSize={28} /></td>,
-                      <td key={`${c.key}-rev`} style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 600, color: '#e8e8e8', whiteSpace: 'nowrap' }} className="font-mono"><FmtVal val={fmtRev(c.cell.rev)} numSize={28} /></td>,
+                      <td key={`${c.key}-rn`}  style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 400, color: '#e8e8e8', whiteSpace: 'nowrap', borderLeft: gDiv }} className="font-mono">{fmtRn(c.cell.rn)}</td>,
+                      <td key={`${c.key}-adr`} style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 400, color: '#e8e8e8', whiteSpace: 'nowrap' }} className="font-mono"><FmtVal val={fmtAdr(c.cell.adr)} numSize={28} /></td>,
+                      <td key={`${c.key}-rev`} style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 400, color: '#e8e8e8', whiteSpace: 'nowrap' }} className="font-mono"><FmtVal val={fmtRev(c.cell.rev)} numSize={28} /></td>,
                     ])}
-                    <td style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 700, color: gapColor(gRn), whiteSpace: 'nowrap', borderLeft: gDiv }} className="font-mono">{fmtGapRn(gRn)}</td>
-                    <td style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 700, color: gapColor(gAdr), whiteSpace: 'nowrap' }} className="font-mono"><FmtVal val={fmtGapAdr(gAdr)} numSize={28} /></td>
-                    <td style={{ textAlign: 'right', padding: '10px 16px 10px 10px', fontSize: 28, fontWeight: 700, color: gapColor(gRev), whiteSpace: 'nowrap' }} className="font-mono"><FmtVal val={fmtGapRev(gRev)} numSize={28} /></td>
+                    <td style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 400, color: gapColor(gRn), whiteSpace: 'nowrap', borderLeft: gDiv }} className="font-mono">{fmtGapRn(gRn)}</td>
+                    <td style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 400, color: gapColor(gAdr), whiteSpace: 'nowrap' }} className="font-mono"><FmtVal val={fmtGapAdr(gAdr)} numSize={28} /></td>
+                    <td style={{ textAlign: 'right', padding: '10px 16px 10px 10px', fontSize: 28, fontWeight: 400, color: gapColor(gRev), whiteSpace: 'nowrap' }} className="font-mono"><FmtVal val={fmtGapRev(gRev)} numSize={28} /></td>
                   </tr>
                 </tbody>
               </table>
