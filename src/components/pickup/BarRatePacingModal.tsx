@@ -246,6 +246,9 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
           },
           plugins: {
             legend: { display: false },
+            // 그래프 탭(RateChartView)이 전역 등록하는 'customDatalabels' 플러그인이
+            // 이 차트에도 적용되어 BAR Rate 레이블이 새어나오는 문제 → 이 차트에선 비활성
+            ...({ customDatalabels: false } as any),
             tooltip: {
               backgroundColor: '#0a0a0a',
               borderColor: 'rgba(255,255,255,0.1)',
