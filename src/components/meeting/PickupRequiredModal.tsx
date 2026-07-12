@@ -28,6 +28,8 @@ export default function PickupRequiredModal({ open, onClose, hotelId, monthKey, 
   const [ym, setYm] = useState(monthKey)          // 내부 월 상태 (‹ › 네비)
   const [rows, setRows] = useState<RowData[]>([])
   const [loading, setLoading] = useState(false)
+  // 세그별(코드별) 집계 — OTB(get_ly_pacing_data) / FCST(get_forecast_monthly)
+  const [segMaps, setSegMaps] = useState<{ otb: Record<string, number>; fcst: Record<string, number> }>({ otb: {}, fcst: {} })
 
   useEffect(() => { if (open) setYm(monthKey) }, [open, monthKey])
 
@@ -38,13 +40,16 @@ export default function PickupRequiredModal({ open, onClose, hotelId, monthKey, 
     setYm(`${d.getFullYear()}-${pad(d.getMonth() + 1)}`)
   }
 
-  // ── 데이터 로딩 — 기존 RPC 재사용 (get_ly_pacing_data: OTB / get_forecast_daily: FCST) ──
+  // ── 데이터 로딩 — 기존 RPC 재사용 ──
+  //   일별 합산: get_forecast_daily(FCST) / get_ly_pacing_data(OTB)
+  //   세그별: get_ly_pacing_data(OTB, segmentation) / get_forecast_monthly(FCST, segmentation)
+  //   (get_forecast_daily는 일자별 세그 합산이라 segmentation 컬럼이 없음 → 세그 FCST는 월간 RPC 사용)
   useEffect(() => {
     if (!open) return
     let cancelled = false
     const fetchData = async () => {
       setLoading(true)
-      if (!hotelId || !fcstDate) { if (!cancelled) { setRows([]); setLoading(false) }; return }
+      if (!hotelId || !fcstDate) { if (!cancelled) { setRows([]); setSegMaps({ otb: {}, fcst: {} }); setLoading(false) }; return }
 
       const lastDay = new Date(y, m, 0).getDate()
       const start = `${y}-${pad(m)}-01`
@@ -57,11 +62,17 @@ export default function PickupRequiredModal({ open, onClose, hotelId, monthKey, 
         p_end_date:    end,
         p_update_date: fcstDate,
       })
-      // OTB 일별 (get_ly_pacing_data → otb_nights)
+      // OTB 일별/세그별 (get_ly_pacing_data → otb_nights, segmentation)
       const { data: otbRows } = await (supabase as any).rpc('get_ly_pacing_data', {
         p_hotel_id:  hotelId,
         p_otb_date:  otbDate,
       }).limit(100000)
+      // FCST 세그별 (get_forecast_monthly → segmentation, month_num, forecast_nights)
+      const { data: fcstMonRows } = await (supabase as any).rpc('get_forecast_monthly', {
+        p_hotel_id:    hotelId,
+        p_year:        y,
+        p_update_date: fcstDate,
+      })
       if (cancelled) return
 
       const fcstByDay: Record<number, number> = {}
@@ -88,7 +99,24 @@ export default function PickupRequiredModal({ open, onClose, hotelId, monthKey, 
         const pct  = fcst > 0 ? Math.round((otb / fcst) * 100) : 100
         out.push({ day, dow, otb, fcst, need, pct })
       }
+
+      // 세그별(코드별) 집계 — OTB: 해당 월 필터 후 segmentation SUM / FCST: month_num 필터 후 segmentation SUM
+      const otbBySeg: Record<string, number> = {}
+      for (const r of (otbRows ?? []) as { business_date: string; segmentation: string; otb_nights: number }[]) {
+        const d = new Date(r.business_date)
+        if (d.getFullYear() !== y || d.getMonth() !== m - 1) continue
+        const c = r.segmentation ?? ''
+        otbBySeg[c] = (otbBySeg[c] ?? 0) + Number(r.otb_nights ?? 0)
+      }
+      const fcstBySeg: Record<string, number> = {}
+      for (const r of (fcstMonRows ?? []) as { segmentation: string; month_num: number; forecast_nights: number }[]) {
+        if (Number(r.month_num) !== m) continue
+        const c = r.segmentation ?? ''
+        fcstBySeg[c] = (fcstBySeg[c] ?? 0) + Number(r.forecast_nights ?? 0)
+      }
+
       setRows(out)
+      setSegMaps({ otb: otbBySeg, fcst: fcstBySeg })
       setLoading(false)
     }
     fetchData()
@@ -119,13 +147,22 @@ export default function PickupRequiredModal({ open, onClose, hotelId, monthKey, 
 
   const urgent = rows.filter(r => r.need > 0).sort((a, b) => a.pct - b.pct).slice(0, 3)
 
-  // 우측 세그 패널 (더미 비율 — 이후 실데이터 연동)
-  const topSegs = (schema ?? []).filter(s => s.parent_id === null && s.level === 'main')
-  const segNeed = topSegs.map(s => ({
-    name:  s.name,
-    color: s.bg_dark_color ?? s.color ?? '#ccc',
-    need:  topSegs.length > 0 ? Math.round(totalNeed / topSegs.length) : 0,
-  }))
+  // 우측 세그 패널 — 실데이터 (세그별 OTB/FCST → need)
+  // 최상위 노드(parent_id===null)별로 하위 모든 코드를 모아 세그별 OTB/FCST 합산
+  const collectCodes = (nodeId: string): string[] => {
+    const node = (schema ?? []).find(s => s.id === nodeId)
+    const codes = [...(node?.segmentation ?? [])]
+    for (const ch of (schema ?? []).filter(s => s.parent_id === nodeId)) codes.push(...collectCodes(ch.id))
+    return codes
+  }
+  const topSegs = (schema ?? []).filter(s => s.parent_id === null)
+  const segPanelData = topSegs.map(seg => {
+    const codes = collectCodes(seg.id)
+    const segOtb  = codes.reduce((s, c) => s + (segMaps.otb[c] ?? 0), 0)
+    const segFcst = codes.reduce((s, c) => s + (segMaps.fcst[c] ?? 0), 0)
+    const segNeed = Math.round(segFcst - segOtb)
+    return { id: seg.id, name: seg.name, color: seg.font_dark_color || seg.color || '#00E5A0', segNeed }
+  })
 
   const navBtn: React.CSSProperties = {
     width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent',
@@ -281,11 +318,11 @@ export default function PickupRequiredModal({ open, onClose, hotelId, monthKey, 
           {/* 우측 — Segment Remaining */}
           <div style={{ width: 160, flexShrink: 0, borderLeft: '0.5px solid rgba(255,255,255,0.07)', padding: '14px 12px', overflowY: 'auto' }}>
             <div style={{ fontSize: 9, color: '#666', letterSpacing: '.08em', marginBottom: 8 }}>SEGMENT REMAINING</div>
-            {segNeed.map((s, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '0.5px solid rgba(255,255,255,0.04)' }}>
-                <span style={{ fontSize: 11, color: s.color, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
-                <span style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 600, color: s.need > 0 ? '#E24B4A' : '#4a4a4a', flexShrink: 0, marginLeft: 6 }}>
-                  {s.need > 0 ? `+${s.need}` : '✓'}
+            {segPanelData.map(s => (
+              <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '0.5px solid rgba(255,255,255,0.04)' }}>
+                <span style={{ fontSize: 11, color: s.color, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 90 }}>{s.name}</span>
+                <span style={{ fontSize: 11, fontFamily: 'ui-monospace, monospace', fontWeight: 600, color: s.segNeed > 0 ? '#E24B4A' : '#4a4a4a', flexShrink: 0, marginLeft: 6 }}>
+                  {s.segNeed > 0 ? `+${s.segNeed}` : '✓'}
                 </span>
               </div>
             ))}
