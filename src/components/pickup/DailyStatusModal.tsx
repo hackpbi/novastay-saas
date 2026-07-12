@@ -498,7 +498,7 @@ export default function DailyStatusModal({ open, onClose, hotelId, year, month, 
   return createPortal(
     <div style={{ position: 'fixed', inset: 0, zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={onClose} />
-      <div style={{ position: 'relative', background: '#0a0a0a', border: '1px solid #1e1e1e', borderRadius: 16, boxShadow: '0 8px 40px rgba(0,0,0,0.6)', width: '85vw', maxWidth: '85vw', height: '81vh', maxHeight: '81vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ position: 'relative', background: 'linear-gradient(175deg, #0d1f1a 0%, #0a0a0a 40%)', border: '1px solid #1e1e1e', borderRadius: 16, boxShadow: '0 8px 40px rgba(0,0,0,0.6)', width: '85vw', maxWidth: '85vw', height: '81vh', maxHeight: '81vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* 헤더 — ‹ Jul 2026 Daily Status › */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px 4px', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
