@@ -183,7 +183,7 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
     return arr
   }, [lyCalRows, modalYear, modalMonth, lyLastDay, lyMode])
   const { data: lyOccArr } = useQuery({
-    queryKey: ['barrate-ly-occ', hotelId, modalYear, modalMonth, lyMode, lyDateByDay.join(',')],
+    queryKey: ['barrate-ly-occ', hotelId, modalYear, modalMonth, lyMode, lyDateByDay.join(','), roomCount],
     enabled: open && lyMode !== 'none' && !!hotelId && lyDateByDay.length > 0,
     queryFn: async () => {
       // 동기간(yoy_match) 날짜에 실적이 없을 수 있어 동일자(-1년)도 함께 조회해 폴백 (period 모드 전년마감 누락 방지)
@@ -204,7 +204,7 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
   })
   const lyOccData = lyOccArr ?? LY_EMPTY
   const { data: lyOtbArr } = useQuery({
-    queryKey: ['barrate-ly-otb', hotelId, otbDate, modalYear, modalMonth, lyMode],
+    queryKey: ['barrate-ly-otb', hotelId, otbDate, modalYear, modalMonth, lyMode, roomCount],
     enabled: open && lyMode !== 'none' && !!hotelId && !!otbDate,
     queryFn: async () => {
       const rpc = lyMode === 'day' ? 'get_ly_pacing_data' : 'get_ly_pacing_data_v2'
