@@ -144,6 +144,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
   const [zoomOn,  setZoomOn]  = useState(false)                 // Zoom 모드 on/off
   const [zoomRow, setZoomRow] = useState<string | null>(null)   // 확대 중인 행 id
   const [zoomPos, setZoomPos] = useState({ x: 0, y: 8 })        // 패널 위치 (드래그)
+  const [hoverRow, setHoverRow] = useState<string | null>(null) // Zoom 모드 hover 행 id
   const dragRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null)
 
   const decFont = () => setFontScale(s => Math.max(0.7, Math.round((s - 0.05) * 100) / 100))
@@ -415,7 +416,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
   // 모달 열 때마다 Zoom 상태 초기화
   useEffect(() => {
     if (!open) return
-    setZoomOn(false); setZoomRow(null); setZoomPos({ x: 0, y: 8 })
+    setZoomOn(false); setZoomRow(null); setZoomPos({ x: 0, y: 8 }); setHoverRow(null)
   }, [open])
 
   // Zoom 패널 드래그 이동
@@ -594,7 +595,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
 
       {/* 좌: 표 영역 (82%) */}
       <div style={{ flex: 82, minWidth: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', background: '#111418', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10 }}>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', background: '#111418', border: '0.5px solid rgba(255,255,255,0.08)', borderRadius: 10, opacity: (zoomOn && zoomRow) ? 0.35 : 1, transition: 'opacity .18s' }}>
         <table style={{ minWidth: 890, borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
           <thead>
             <tr>
@@ -745,23 +746,28 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
               // 숫자 셀 배경: schema bg_dark_color 우선, 없으면 bold → BOLD_BG, 자식 → undefined(투명)
               const numBg = r.bgColor ?? (r.isBold ? BOLD_BG : undefined)
               const otb = otbOf(r), fcst = fcstOf(r), budget = budgetOf(r), ly = lyOf(r)
-              const zoomSel = zoomOn && zoomRow === r.id
+              const isSel   = zoomOn && zoomRow  === r.id
+              const isHover = zoomOn && hoverRow === r.id
+              // hover/선택이 기존 배경을 이기도록 각 셀 배경 우선 적용 (숫자 셀 = 반투명 민트)
+              const cellBg = isSel ? 'rgba(0,229,160,0.16)' : isHover ? 'rgba(0,229,160,0.10)' : numBg
+              // sticky 세그명 셀은 불투명 유지(가로 스크롤 비침 방지) → 불투명 근사색
+              const firstBg = isSel ? '#0f2a20' : isHover ? '#11241c' : (r.bgColor ?? (r.isBold ? BOLD_BG : BG))
               return (
                 <tr
                   key={r.id}
                   onClick={zoomOn ? () => setZoomRow(r.id) : undefined}
-                  onMouseEnter={zoomOn ? (e) => { if (zoomRow !== r.id) e.currentTarget.style.background = 'rgba(0,229,160,0.10)' } : undefined}
-                  onMouseLeave={zoomOn ? (e) => { e.currentTarget.style.background = zoomRow === r.id ? 'rgba(0,229,160,0.16)' : rowBg } : undefined}
-                  style={{ background: zoomSel ? 'rgba(0,229,160,0.16)' : rowBg, cursor: zoomOn ? 'pointer' : 'default' }}
+                  onMouseEnter={zoomOn ? () => setHoverRow(r.id) : undefined}
+                  onMouseLeave={zoomOn ? () => setHoverRow(null) : undefined}
+                  style={{ background: rowBg, cursor: zoomOn ? 'pointer' : 'default' }}
                 >
-                  <td style={{ ...tdS, padding: `${Math.round(7 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: zoomSel ? '#0f2a20' : (r.bgColor ?? (r.isBold ? BOLD_BG : BG)), boxShadow: zoomSel ? `inset 3px 0 0 ${MINT}` : undefined, fontWeight: r.isBold ? 700 : 400, color: nameColor, minWidth: 150 }}>
+                  <td style={{ ...tdS, padding: `${Math.round(7 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: firstBg, boxShadow: isSel ? `inset 3px 0 0 ${MINT}` : undefined, fontWeight: r.isBold ? 700 : 400, color: nameColor, minWidth: 150 }}>
                     {r.indent ? <><span style={{ color: '#555', marginRight: 4 }}>└</span>{r.name}</> : r.name}
                   </td>
-                  {groupCells(otb,    numColor, r.isBold, numBg)}
-                  {groupCells(fcst,   numColor, r.isBold, numBg)}
-                  {groupCells(budget, numColor, r.isBold, numBg)}
-                  {groupCells(ly,     numColor, r.isBold, numBg)}
-                  {gapCells(baseOf(r), compOf(r), r.isBold, numBg)}
+                  {groupCells(otb,    numColor, r.isBold, cellBg)}
+                  {groupCells(fcst,   numColor, r.isBold, cellBg)}
+                  {groupCells(budget, numColor, r.isBold, cellBg)}
+                  {groupCells(ly,     numColor, r.isBold, cellBg)}
+                  {gapCells(baseOf(r), compOf(r), r.isBold, cellBg)}
                 </tr>
               )
             })}
@@ -821,6 +827,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
           ]
           const zb = baseOf(zr), zc = compOf(zr)
           const gRn = zb.rn - zc.rn, gAdr = zb.adr - zc.adr, gRev = zb.rev - zc.rev
+          const gDiv = '1px solid rgba(0,229,160,0.35)'   // 그룹 경계 민트 구분선
           return (
             <div style={{
               position: 'absolute', top: zoomPos.y, left: zoomPos.x, zIndex: 30, minWidth: 900,
@@ -847,14 +854,14 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
                   <tr>
                     <th rowSpan={2} style={{ textAlign: 'left', padding: '8px 16px', fontSize: 11, color: TXT3, fontWeight: 600, letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>SEGMENTATION</th>
                     {cols.map(c => (
-                      <th key={c.key} colSpan={3} style={{ textAlign: 'center', padding: '8px 6px', fontSize: 13, fontWeight: 700, color: GROUP_COLOR[c.key], background: GROUP_BG_HEADER[c.key], borderBottom: `2px solid ${GROUP_COLOR[c.key]}` }}>{c.label}</th>
+                      <th key={c.key} colSpan={3} style={{ textAlign: 'center', padding: '8px 6px', fontSize: 13, fontWeight: 700, color: GROUP_COLOR[c.key], background: GROUP_BG_HEADER[c.key], borderBottom: `2px solid ${GROUP_COLOR[c.key]}`, borderLeft: gDiv }}>{c.label}</th>
                     ))}
-                    <th colSpan={3} style={{ textAlign: 'center', padding: '8px 6px', fontSize: 13, fontWeight: 700, color: GROUP_COLOR.gap, borderBottom: `2px solid ${GROUP_COLOR.gap}` }}>GAP</th>
+                    <th colSpan={3} style={{ textAlign: 'center', padding: '8px 6px', fontSize: 13, fontWeight: 700, color: GROUP_COLOR.gap, borderBottom: `2px solid ${GROUP_COLOR.gap}`, borderLeft: gDiv }}>GAP</th>
                   </tr>
                   <tr>
                     {['OTB', 'FCST', 'BUDGET', 'LY', 'GAP'].map(g => (
-                      ['R/N', 'ADR', 'REV'].map(s => (
-                        <th key={`${g}-${s}`} style={{ textAlign: 'center', padding: '4px 6px', fontSize: 11, color: TXT3, fontWeight: 500 }}>{s}</th>
+                      ['R/N', 'ADR', 'REV'].map((s, si) => (
+                        <th key={`${g}-${s}`} style={{ textAlign: 'center', padding: '4px 6px', fontSize: 11, color: TXT3, fontWeight: 500, ...(si === 0 ? { borderLeft: gDiv } : {}) }}>{s}</th>
                       ))
                     ))}
                   </tr>
@@ -865,11 +872,11 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
                       {zr.indent ? <><span style={{ color: '#555', marginRight: 6 }}>└</span>{zr.name}</> : zr.name}
                     </td>
                     {cols.flatMap(c => [
-                      <td key={`${c.key}-rn`}  style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 600, color: '#e8e8e8', whiteSpace: 'nowrap' }} className="font-mono">{fmtRn(c.cell.rn)}</td>,
+                      <td key={`${c.key}-rn`}  style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 600, color: '#e8e8e8', whiteSpace: 'nowrap', borderLeft: gDiv }} className="font-mono">{fmtRn(c.cell.rn)}</td>,
                       <td key={`${c.key}-adr`} style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 600, color: '#e8e8e8', whiteSpace: 'nowrap' }} className="font-mono"><FmtVal val={fmtAdr(c.cell.adr)} numSize={28} /></td>,
                       <td key={`${c.key}-rev`} style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 600, color: '#e8e8e8', whiteSpace: 'nowrap' }} className="font-mono"><FmtVal val={fmtRev(c.cell.rev)} numSize={28} /></td>,
                     ])}
-                    <td style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 700, color: gapColor(gRn), whiteSpace: 'nowrap' }} className="font-mono">{fmtGapRn(gRn)}</td>
+                    <td style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 700, color: gapColor(gRn), whiteSpace: 'nowrap', borderLeft: gDiv }} className="font-mono">{fmtGapRn(gRn)}</td>
                     <td style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 700, color: gapColor(gAdr), whiteSpace: 'nowrap' }} className="font-mono"><FmtVal val={fmtGapAdr(gAdr)} numSize={28} /></td>
                     <td style={{ textAlign: 'right', padding: '10px 16px 10px 10px', fontSize: 28, fontWeight: 700, color: gapColor(gRev), whiteSpace: 'nowrap' }} className="font-mono"><FmtVal val={fmtGapRev(gRev)} numSize={28} /></td>
                   </tr>
