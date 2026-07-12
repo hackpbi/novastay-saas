@@ -747,7 +747,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
               const numBg = r.bgColor ?? (r.isBold ? BOLD_BG : undefined)
               const otb = otbOf(r), fcst = fcstOf(r), budget = budgetOf(r), ly = lyOf(r)
               const isSel   = zoomOn && zoomRow  === r.id
-              const isHover = zoomOn && hoverRow === r.id
+              const isHover = hoverRow === r.id   // hover는 Zoom과 무관하게 항상 작동
               // hover/선택이 기존 배경을 이기도록 각 셀 배경 우선 적용 (숫자 셀 = 반투명 민트)
               const cellBg = isSel ? 'rgba(0,229,160,0.16)' : isHover ? 'rgba(0,229,160,0.10)' : numBg
               // sticky 세그명 셀은 불투명 유지(가로 스크롤 비침 방지) → 불투명 근사색
@@ -756,8 +756,8 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
                 <tr
                   key={r.id}
                   onClick={zoomOn ? () => setZoomRow(r.id) : undefined}
-                  onMouseEnter={zoomOn ? () => setHoverRow(r.id) : undefined}
-                  onMouseLeave={zoomOn ? () => setHoverRow(null) : undefined}
+                  onMouseEnter={() => setHoverRow(r.id)}
+                  onMouseLeave={() => setHoverRow(null)}
                   style={{ background: rowBg, cursor: zoomOn ? 'pointer' : 'default' }}
                 >
                   <td style={{ ...tdS, padding: `${Math.round(7 * fontScale)}px 8px`, textAlign: 'left', position: 'sticky', left: 0, background: firstBg, boxShadow: isSel ? `inset 3px 0 0 ${MINT}` : undefined, fontWeight: r.isBold ? 700 : 400, color: nameColor, minWidth: 150 }}>
@@ -828,6 +828,13 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
           const zb = baseOf(zr), zc = compOf(zr)
           const gRn = zb.rn - zc.rn, gAdr = zb.adr - zc.adr, gRev = zb.rev - zc.rev
           const gDiv = '1px solid rgba(0,229,160,0.35)'   // 그룹 경계 민트 구분선
+          // 확대 패널 전용 포맷 — 단위(K/M) 없이 숫자만 (단위는 헤더에 일괄 표기). 원본 표 포맷은 무변경.
+          const zRn  = (v: number) => (v === 0 ? '-' : Math.round(v).toLocaleString('ko-KR'))
+          const zAdr = (v: number) => (v === 0 ? '-' : `${Math.round(v / 1000)}`)
+          const zRev = (v: number) => (v === 0 ? '-' : `${(v / 1_000_000).toFixed(1)}`)
+          const zGapRn  = (v: number) => (v === 0 ? '-' : `${v >= 0 ? '+' : '−'}${Math.abs(Math.round(v)).toLocaleString('ko-KR')}`)
+          const zGapAdr = (v: number) => (v === 0 ? '-' : `${v >= 0 ? '+' : '−'}${Math.abs(Math.round(v / 1000))}`)
+          const zGapRev = (v: number) => (v === 0 ? '-' : `${v >= 0 ? '+' : '−'}${Math.abs(v / 1_000_000).toFixed(1)}`)
           return (
             <div style={{
               position: 'absolute', top: zoomPos.y, left: zoomPos.x, zIndex: 30, minWidth: 900,
@@ -845,6 +852,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
                 }}
               >
                 <span style={{ fontSize: 11, color: MINT, letterSpacing: '0.06em', fontWeight: 600 }}>⠿ ZOOM</span>
+                <span style={{ fontSize: 10, color: '#666' }}>단위 · R/N: 실 &nbsp;|&nbsp; ADR: 천원 &nbsp;|&nbsp; REV: 백만원</span>
                 <button onClick={() => setZoomRow(null)} style={{ fontSize: 12, color: '#888', background: 'transparent', border: 'none', cursor: 'pointer' }}>✕ Close</button>
               </div>
 
@@ -872,13 +880,13 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
                       {zr.indent ? <><span style={{ color: '#555', marginRight: 6 }}>└</span>{zr.name}</> : zr.name}
                     </td>
                     {cols.flatMap(c => [
-                      <td key={`${c.key}-rn`}  style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 400, color: '#e8e8e8', whiteSpace: 'nowrap', borderLeft: gDiv }} className="font-mono">{fmtRn(c.cell.rn)}</td>,
-                      <td key={`${c.key}-adr`} style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 400, color: '#e8e8e8', whiteSpace: 'nowrap' }} className="font-mono"><FmtVal val={fmtAdr(c.cell.adr)} numSize={28} /></td>,
-                      <td key={`${c.key}-rev`} style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 400, color: '#e8e8e8', whiteSpace: 'nowrap' }} className="font-mono"><FmtVal val={fmtRev(c.cell.rev)} numSize={28} /></td>,
+                      <td key={`${c.key}-rn`}  style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 400, color: '#e8e8e8', whiteSpace: 'nowrap', borderLeft: gDiv }} className="font-mono">{zRn(c.cell.rn)}</td>,
+                      <td key={`${c.key}-adr`} style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 400, color: '#e8e8e8', whiteSpace: 'nowrap' }} className="font-mono">{zAdr(c.cell.adr)}</td>,
+                      <td key={`${c.key}-rev`} style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 400, color: '#e8e8e8', whiteSpace: 'nowrap' }} className="font-mono">{zRev(c.cell.rev)}</td>,
                     ])}
-                    <td style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 400, color: gapColor(gRn), whiteSpace: 'nowrap', borderLeft: gDiv }} className="font-mono">{fmtGapRn(gRn)}</td>
-                    <td style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 400, color: gapColor(gAdr), whiteSpace: 'nowrap' }} className="font-mono"><FmtVal val={fmtGapAdr(gAdr)} numSize={28} /></td>
-                    <td style={{ textAlign: 'right', padding: '10px 16px 10px 10px', fontSize: 28, fontWeight: 400, color: gapColor(gRev), whiteSpace: 'nowrap' }} className="font-mono"><FmtVal val={fmtGapRev(gRev)} numSize={28} /></td>
+                    <td style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 400, color: gapColor(gRn), whiteSpace: 'nowrap', borderLeft: gDiv }} className="font-mono">{zGapRn(gRn)}</td>
+                    <td style={{ textAlign: 'right', padding: '10px 10px', fontSize: 28, fontWeight: 400, color: gapColor(gAdr), whiteSpace: 'nowrap' }} className="font-mono">{zGapAdr(gAdr)}</td>
+                    <td style={{ textAlign: 'right', padding: '10px 16px 10px 10px', fontSize: 28, fontWeight: 400, color: gapColor(gRev), whiteSpace: 'nowrap' }} className="font-mono">{zGapRev(gRev)}</td>
                   </tr>
                 </tbody>
               </table>
