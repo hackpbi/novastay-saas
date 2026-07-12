@@ -559,7 +559,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 13, height: 13 }}>
             <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
           </svg>
-          Daily
+          Daily FCST
         </button>
 
         {/* BAR Rate */}
