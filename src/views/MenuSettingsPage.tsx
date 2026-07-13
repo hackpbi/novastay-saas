@@ -12,7 +12,10 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  DragStartEvent,
+  DragOverEvent,
   DragEndEvent,
+  DragOverlay,
 } from '@dnd-kit/core'
 import {
   SortableContext,
@@ -97,48 +100,52 @@ function TypeBadge({ type }: { type: MenuType }) {
 // ── Sortable Menu Item ────────────────────────────────────────────────────────
 
 function SortableMenuItem({
-  menu, selected, onSelect, depth, disabled,
+  menu, selected, onSelect, depth, isDropTarget,
 }: {
-  menu: SaasMenu; selected: SaasMenu | null; onSelect: (m: SaasMenu) => void; depth: number; disabled?: boolean
+  menu: SaasMenu; selected: SaasMenu | null; onSelect: (m: SaasMenu) => void; depth: number; isDropTarget?: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: menu.id,
-    disabled,
   })
 
   const style: React.CSSProperties = {
     transform:   CSS.Transform.toString(transform),
     transition,
-    opacity:     isDragging ? 0.5 : 1,
+    opacity:     isDragging ? 0.4 : 1,
     paddingLeft: depth * 20,
   }
 
   const isSelected = selected?.id === menu.id
+
+  // 드래그 중 이 상위 메뉴로 드롭 예정이면 강조 (parent_id 변경 미리보기)
+  const rowBorder = isDropTarget
+    ? '2px dashed var(--color-accent-primary)'
+    : isSelected
+      ? '1px solid var(--color-accent-primary)'
+      : '1px solid transparent'
+  const rowBg = isDropTarget
+    ? 'rgba(0, 201, 167, 0.08)'
+    : isSelected
+      ? 'var(--accent-badge-bg)'
+      : 'transparent'
 
   return (
     <div ref={setNodeRef} style={style}>
       <div
         onClick={() => onSelect(menu)}
         className="flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer transition-all"
-        style={{
-          background: isSelected ? 'var(--accent-badge-bg)' : 'transparent',
-          border:     isSelected ? '1px solid var(--color-accent-primary)' : '1px solid transparent',
-        }}
-        onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--color-bg-secondary)' }}
-        onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
+        style={{ background: rowBg, border: rowBorder }}
+        onMouseEnter={e => { if (!isSelected && !isDropTarget) e.currentTarget.style.background = 'var(--color-bg-secondary)' }}
+        onMouseLeave={e => { if (!isSelected && !isDropTarget) e.currentTarget.style.background = 'transparent' }}
       >
-        {!disabled ? (
-          <button
-            {...attributes}
-            {...listeners}
-            className="text-brand-dimmed hover:text-brand-muted transition-colors cursor-grab active:cursor-grabbing shrink-0"
-            onClick={e => e.stopPropagation()}
-          >
-            <GripVertical size={13} />
-          </button>
-        ) : (
-          <span className="shrink-0" style={{ width: 13 }} />
-        )}
+        <button
+          {...attributes}
+          {...listeners}
+          className="text-brand-dimmed hover:text-brand-muted transition-colors cursor-grab active:cursor-grabbing shrink-0"
+          onClick={e => e.stopPropagation()}
+        >
+          <GripVertical size={13} />
+        </button>
 
         <TypeBadge type={menu.menu_type} />
 
@@ -158,6 +165,31 @@ function SortableMenuItem({
 
         <ChevronRight size={12} className={`shrink-0 transition-colors ${isSelected ? 'text-accent-primary' : 'text-brand-dimmed'}`} />
       </div>
+    </div>
+  )
+}
+
+// ── Drag Overlay Preview ──────────────────────────────────────────────────────
+
+function MenuItemPreview({ menu }: { menu: SaasMenu }) {
+  return (
+    <div
+      className="flex items-center gap-2 px-3 py-2.5 rounded-lg"
+      style={{
+        background:  'var(--color-bg-secondary)',
+        border:      '1px solid var(--color-accent-primary)',
+        boxShadow:   'var(--shadow-elevated)',
+        cursor:      'grabbing',
+      }}
+    >
+      <GripVertical size={13} className="text-brand-muted shrink-0" />
+      <TypeBadge type={menu.menu_type} />
+      {menu.icon && (
+        <span className="shrink-0" style={{ color: 'var(--color-accent-primary)' }}>
+          {renderIcon(menu.icon, 14)}
+        </span>
+      )}
+      <span className="text-sm" style={{ color: 'var(--color-text-primary)' }}>{menu.name}</span>
     </div>
   )
 }
@@ -213,6 +245,16 @@ export default function MenuSettingsPage() {
   const [success,  setSuccess]  = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
+  // ── DnD 상태 ──
+  const [activeId,          setActiveId]          = useState<string | null>(null)
+  const [dragOverParentId,  setDragOverParentId]  = useState<string | null>(null)
+  const [dndToast,          setDndToast]          = useState<string | null>(null)
+
+  function showToast(msg: string) {
+    setDndToast(msg)
+    setTimeout(() => setDndToast(null), 1800)
+  }
+
   // super_admin 전용
   useEffect(() => {
     if (authLoading) return
@@ -235,8 +277,32 @@ export default function MenuSettingsPage() {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
-  // DnD 완료 — 상위 메뉴 드래그 시 하위 메뉴를 블록으로 함께 이동
+  const activeMenu = activeId ? menus.find(m => m.id === activeId) ?? null : null
+
+  // 드래그 시작 — 오버레이 미리보기용
+  function handleDragStart(event: DragStartEvent) {
+    setActiveId(String(event.active.id))
+  }
+
+  // 드래그 중 — 하위 메뉴를 다른 상위 메뉴로 옮길 때 대상 상위 강조
+  function handleDragOver(event: DragOverEvent) {
+    const { active, over } = event
+    if (!over) { setDragOverParentId(null); return }
+
+    const am = menus.find(m => m.id === active.id)
+    const om = menus.find(m => m.id === over.id)
+    if (!am || !om || !am.parent_id) { setDragOverParentId(null); return }
+
+    // 대상 상위 메뉴 id (상위 위 → 그 상위, 하위 위 → 그 하위의 상위)
+    const targetParentId = om.parent_id ? om.parent_id : om.id
+    setDragOverParentId(targetParentId !== am.parent_id ? targetParentId : null)
+  }
+
+  // DnD 완료 — 상위 블록 이동 / 하위 순서 변경 / 하위 parent_id 변경
   async function handleDragEnd(event: DragEndEvent) {
+    setActiveId(null)
+    setDragOverParentId(null)
+
     const { active, over } = event
     if (!over || active.id === over.id) return
 
@@ -244,50 +310,84 @@ export default function MenuSettingsPage() {
     const overId   = String(over.id)
     const sorted   = [...menus].sort((a, b) => a.sort_order - b.sort_order)
 
-    // 드래그된 아이템의 하위 메뉴 수집
-    const children = sorted.filter(m => m.parent_id === activeId)
+    const activeMenu = sorted.find(m => m.id === activeId)
+    const overMenu   = sorted.find(m => m.id === overId)
+    if (!activeMenu || !overMenu) return
 
-    let newSorted: SaasMenu[]
+    // 상위 메뉴 + 각 상위의 하위 목록으로 구성
+    const parents = sorted.filter(m => !m.parent_id)
+    const childrenByParent = new Map<string, SaasMenu[]>()
+    parents.forEach(p => childrenByParent.set(p.id, sorted.filter(m => m.parent_id === p.id)))
 
-    if (children.length === 0) {
-      // 하위 메뉴 없음 — 단순 이동
-      const oldIdx = sorted.findIndex(m => m.id === activeId)
-      const newIdx = sorted.findIndex(m => m.id === overId)
+    let reparentedId: string | null = null
+
+    if (!activeMenu.parent_id) {
+      // ── 상위 메뉴 이동: 하위를 블록으로 데리고 이동, 항상 최상위 유지 ──
+      // (children이 있는 메뉴는 여기서만 처리되므로 parent_id로 절대 바뀌지 않음)
+      const oldIdx = parents.findIndex(p => p.id === activeId)
+      const newIdx = overMenu.parent_id
+        ? parents.findIndex(p => p.id === overMenu.parent_id)
+        : parents.findIndex(p => p.id === overId)
       if (oldIdx === -1 || newIdx === -1) return
-      newSorted = arrayMove(sorted, oldIdx, newIdx)
+      const reordered = arrayMove(parents, oldIdx, newIdx)
+      parents.splice(0, parents.length, ...reordered)
     } else {
-      // 상위 메뉴 — 부모 + 자식을 블록으로 이동
-      const childIds  = new Set(children.map(c => c.id))
-      const block     = sorted.filter(m => m.id === activeId || childIds.has(m.id))
-      const remaining = sorted.filter(m => m.id !== activeId && !childIds.has(m.id))
+      // ── 하위 메뉴 이동 ──
+      const targetParentId = overMenu.parent_id ? overMenu.parent_id : overMenu.id
 
-      // over가 블록 내 자식이면 이동 불가
-      if (childIds.has(overId)) return
+      if (targetParentId === activeMenu.parent_id) {
+        // 같은 상위 메뉴 내 순서 변경
+        const sibs   = childrenByParent.get(targetParentId) ?? []
+        const oldIdx = sibs.findIndex(m => m.id === activeId)
+        const newIdx = overMenu.parent_id
+          ? sibs.findIndex(m => m.id === overId)
+          : sibs.length - 1 // 자기 상위 헤더에 드롭 → 맨 뒤로
+        if (oldIdx !== -1 && newIdx !== -1) {
+          childrenByParent.set(targetParentId, arrayMove(sibs, oldIdx, newIdx))
+        }
+      } else {
+        // 다른 상위 메뉴로 이동 → parent_id 변경
+        const oldSibs = (childrenByParent.get(activeMenu.parent_id) ?? []).filter(m => m.id !== activeId)
+        childrenByParent.set(activeMenu.parent_id, oldSibs)
 
-      const overInRemaining = remaining.findIndex(m => m.id === overId)
-      if (overInRemaining === -1) return
-
-      // 이동 방향에 따라 삽입 위치 결정
-      const oldParentPos = sorted.findIndex(m => m.id === activeId)
-      const overPos      = sorted.findIndex(m => m.id === overId)
-      const insertAt     = overPos > oldParentPos ? overInRemaining + 1 : overInRemaining
-
-      newSorted = [
-        ...remaining.slice(0, insertAt),
-        ...block,
-        ...remaining.slice(insertAt),
-      ]
+        const newSibs   = [...(childrenByParent.get(targetParentId) ?? [])]
+        const insertIdx = overMenu.parent_id
+          ? Math.max(0, newSibs.findIndex(m => m.id === overId))
+          : newSibs.length // 상위 헤더에 드롭 → 맨 뒤
+        newSibs.splice(insertIdx, 0, { ...activeMenu, parent_id: targetParentId })
+        childrenByParent.set(targetParentId, newSibs)
+        reparentedId = activeId
+      }
     }
 
-    const updated = newSorted.map((m, i) => ({ ...m, sort_order: i + 1 }))
+    // 트리 순서(상위 → 하위)로 평탄화하여 sort_order 재부여
+    const rebuilt: SaasMenu[] = []
+    parents.forEach(p => {
+      rebuilt.push(p)
+      ;(childrenByParent.get(p.id) ?? []).forEach(c => rebuilt.push(c))
+    })
+    const updated = rebuilt.map((m, i) => ({ ...m, sort_order: i + 1 }))
+
+    // 낙관적 반영
     setMenus(updated)
     setTree(buildTree(updated))
 
-    for (let i = 0; i < newSorted.length; i++) {
-      await (supabase as any)
-        .from('m06_saas_menus')
-        .update({ sort_order: i + 1 })
-        .eq('id', newSorted[i].id)
+    try {
+      for (let i = 0; i < updated.length; i++) {
+        const patch: Record<string, unknown> = { sort_order: i + 1 }
+        if (updated[i].id === reparentedId) patch.parent_id = updated[i].parent_id
+        const { error } = await (supabase as any)
+          .from('m06_saas_menus')
+          .update(patch)
+          .eq('id', updated[i].id)
+        if (error) throw error
+      }
+      await fetchMenus()
+      if (reparentedId) showToast('상위 메뉴로 이동됐습니다.')
+    } catch (e) {
+      console.error('메뉴 순서 저장 실패:', e)
+      showToast('메뉴 순서 저장에 실패했습니다.')
+      await fetchMenus() // 원복
     }
   }
 
@@ -449,7 +549,13 @@ export default function MenuSettingsPage() {
                 <p className="text-sm text-brand-muted">등록된 메뉴가 없습니다.</p>
               </div>
             ) : (
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDragEnd={handleDragEnd}
+              >
                 <SortableContext
                   items={[...menus].sort((a, b) => a.sort_order - b.sort_order).map(m => m.id)}
                   strategy={verticalListSortingStrategy}
@@ -462,11 +568,14 @@ export default function MenuSettingsPage() {
                         selected={selected}
                         onSelect={handleSelect}
                         depth={menu.parent_id ? 1 : 0}
-                        disabled={!!menu.parent_id}
+                        isDropTarget={dragOverParentId === menu.id}
                       />
                     ))}
                   </div>
                 </SortableContext>
+                <DragOverlay>
+                  {activeMenu ? <MenuItemPreview menu={activeMenu} /> : null}
+                </DragOverlay>
               </DndContext>
             )}
           </div>
@@ -650,6 +759,22 @@ export default function MenuSettingsPage() {
           </div>
         </div>
       )}
+
+      {/* ── DnD 토스트 ── */}
+      <div
+        className="fixed left-1/2 bottom-8 -translate-x-1/2 z-[60] px-4 py-2.5 rounded-lg text-sm font-medium"
+        style={{
+          background:    'var(--color-bg-secondary)',
+          border:        '1px solid var(--color-accent-primary)',
+          color:         'var(--color-text-primary)',
+          boxShadow:     'var(--shadow-elevated)',
+          pointerEvents: 'none',
+          opacity:       dndToast ? 1 : 0,
+          transition:    'opacity 0.25s',
+        }}
+      >
+        {dndToast ?? ''}
+      </div>
     </div>
   )
 }

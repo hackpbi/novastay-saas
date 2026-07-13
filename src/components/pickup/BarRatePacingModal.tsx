@@ -340,12 +340,12 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
             <div style={{ width: 14, height: 10, background: 'rgba(180,180,180,0.5)', borderRadius: 2 }} />
             <span style={{ fontSize: 11, color: '#888' }}>OTB OCC</span>
           </div>
-          {Array.from(rateTiers.entries()).map(([rate, color]) => (
-            <div key={rate} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <div style={{ width: 20, height: 0, borderTop: `2.5px solid ${color}`, borderRadius: 2 }} />
-              <span style={{ fontSize: 11, color: '#888' }}>{Math.round(rate / 1000)}K</span>
+          {rateTiers.size > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 20, height: 0, borderTop: `2.5px solid ${rateTiers.size === 1 ? Array.from(rateTiers.values())[0] : BAR_GOLD}`, borderRadius: 2 }} />
+              <span style={{ fontSize: 11, color: '#888' }}>Bar Rate</span>
             </div>
-          ))}
+          )}
         </div>
       </div>
 
