@@ -21,9 +21,10 @@ interface BarRatePacingModalProps {
   hotelId:   string
   stayDate:  string    // 'YYYY-MM-DD' (클릭한 일자)
   roomCount: number
+  showRateEdit?: boolean   // '요금 수정' 버튼 표시 (Rate Strategy 페이지에서만 true)
 }
 
-export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, roomCount }: BarRatePacingModalProps) {
+export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, roomCount, showRateEdit = false }: BarRatePacingModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const chartRef  = useRef<any>(null)
   // 점유율 막대 클릭 → 전날 대비 증감 모달 (현재/전날 스냅샷)
@@ -310,12 +311,14 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
             <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>OCC Trend · BAR Rate History (Last 30 days)</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <button
-              onClick={() => { setSimDate(stayDate); setAdrSimOpen(true) }}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: '#ccc', cursor: 'pointer' }}
-            >
-              <Pencil size={13} /> 요금 수정
-            </button>
+            {showRateEdit && (
+              <button
+                onClick={() => { setSimDate(stayDate); setAdrSimOpen(true) }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: '#ccc', cursor: 'pointer' }}
+              >
+                <Pencil size={13} /> 요금 수정
+              </button>
+            )}
             <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', padding: 4, display: 'inline-flex' }} aria-label="닫기">
               <X size={20} />
             </button>

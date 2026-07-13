@@ -637,6 +637,7 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
           hotelId={hotelId}
           stayDate={pacingDay}
           roomCount={roomCount}
+          showRateEdit={embed}
         />
       )}
     </>
