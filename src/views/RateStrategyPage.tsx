@@ -1293,16 +1293,16 @@ export default function RateStrategyPage() {
         {/* 좌측: 타이틀 — ‹ {월} {년} | Rate Strategy › (전체 탭 공통 월 네비) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button onClick={prevMonth} style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: 0 }}>‹</button>
+            <button onClick={prevMonth} style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', fontSize: 23, cursor: 'pointer', lineHeight: 1, padding: 0 }}>‹</button>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
-                <span style={{ fontSize: 15, fontWeight: 500, color: '#00E5A0' }}>{viewMonth}월</span>
-                <span style={{ fontSize: 10, fontWeight: 500, color: '#00E5A0' }}>{String(viewYear).slice(2)}년</span>
+                <span style={{ fontSize: 20, fontWeight: 500, color: '#00E5A0' }}>{viewMonth}월</span>
+                <span style={{ fontSize: 13, fontWeight: 500, color: '#00E5A0' }}>{String(viewYear).slice(2)}년</span>
               </div>
               <span style={{ color: 'var(--color-border-default)', fontSize: 14 }}>|</span>
-              <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)' }}>Rate Strategy</span>
+              <span style={{ fontSize: 20, fontWeight: 500, color: 'var(--color-text-primary)' }}>Rate Strategy</span>
             </div>
-            <button onClick={nextMonth} style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: 0 }}>›</button>
+            <button onClick={nextMonth} style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', fontSize: 23, cursor: 'pointer', lineHeight: 1, padding: 0 }}>›</button>
           </div>
 
           {/* 숨긴 FormDatePicker — DayPanel 판매기준일 클릭(onOpenSaleDatePicker)이 .click() 으로 트리거.

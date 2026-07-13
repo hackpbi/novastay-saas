@@ -544,7 +544,9 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
               <button onClick={handleNext} aria-label="다음 달"
                 style={{ border: 'none', background: 'transparent', color: '#666', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '0 4px', display: 'inline-flex', alignItems: 'center' }}>›</button>
             </div>
-          ) : <div />}
+          ) : (
+            <span style={{ fontSize: 12, color: '#888' }}>OTB <b style={{ color: '#ccc', fontWeight: 500 }}>{otbDate || '-'}</b> 기준 일별 BAR Rate</span>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {/* 전년 + 동기간/동일자 */}
             <div style={{ display: 'inline-flex', alignItems: 'center', background: '#1a1a1a', borderRadius: 30, padding: '3px 8px', gap: 6, border: '1px solid #2a2a2a' }}>
@@ -598,10 +600,12 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
           </div>
         </div>
 
-        {/* 서브바 — OTB 날짜(읽기 전용) */}
-        <div style={{ padding: '0 20px 12px', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 12, color: '#888' }}>OTB <b style={{ color: '#ccc', fontWeight: 500 }}>{otbDate || '-'}</b> 기준 일별 BAR Rate</span>
-        </div>
+        {/* 서브바 — OTB 날짜(읽기 전용). embed(Rate Strategy)에선 헤더 placeholder로 이동 → 오버레이(Meeting)에서만 표시 */}
+        {!embed && (
+          <div style={{ padding: '0 20px 12px', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 12, color: '#888' }}>OTB <b style={{ color: '#ccc', fontWeight: 500 }}>{otbDate || '-'}</b> 기준 일별 BAR Rate</span>
+          </div>
+        )}
 
         {/* 차트 */}
         <div style={{ padding: '4px 16px 16px', flex: 1, minHeight: 0 }}>
