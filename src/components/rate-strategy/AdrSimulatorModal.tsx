@@ -111,6 +111,7 @@ export default function AdrSimulatorModal({
   const queryClient = useQueryClient()
 
   const [barRaw,    setBarRaw]    = useState(baseBarRate)   // 원단위 저장 (표시는 K)
+  const [prevBarRaw, setPrevBarRaw] = useState<number | null>(null)  // 추천 적용 전 요금(되돌리기용)
   const [otaPct,    setOtaPct]    = useState(60)
   const [otaFeePct, setOtaFeePct] = useState(13.5)
   const [showFcstPanel, setShowFcstPanel] = useState(true)   // 우측 Forecast 패널 always-on(기본 열림)
@@ -370,6 +371,9 @@ export default function AdrSimulatorModal({
 
   // 현재 BAR(effBase) 변경 시 BAR 입력 동기화 — 0이면 현재 입력값 유지
   useEffect(() => { if (effBase > 0) setBarRaw(effBase) }, [effBase])
+
+  // 날짜 변경 시 되돌리기 상태 초기화
+  useEffect(() => { setPrevBarRaw(null) }, [date])
 
   // 픽업 추천 클릭 → 날짜 이동 후 sim 로드로 위 effBase 효과가 barRaw를 덮어쓰면 추천 BAR 재적용 (일회성)
   useEffect(() => {
@@ -843,12 +847,17 @@ export default function AdrSimulatorModal({
                       <button
                         style={{ padding: '4px 12px', borderRadius: 6, border: `1px solid ${BORDER}`, background: BG_INPUT, color: TXT3, fontSize: 12, fontWeight: 600, cursor: 'default', whiteSpace: 'nowrap' }}>현재 유지</button>
                     )
+                    // 추천 적용됨 → 되돌리기 버튼 (이전 요금, 회색)
+                    if (prevBarRaw !== null) return (
+                      <button onClick={() => { setBarRaw(prevBarRaw); setPrevBarRaw(null) }}
+                        style={{ padding: '4px 12px', borderRadius: 6, border: `1px solid ${BORDER}`, background: BG_INPUT, color: TXT3, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>↩ {Math.round(prevBarRaw / 1000)}K</button>
+                    )
                     // up → 민트(accent) / dn(그 외) → 빨강(danger)
                     const st = dir === 'up'
                       ? { bg: SUCCESS_BG, bd: SUCCESS_BD, fg: MINT }
                       : { bg: 'rgba(226,75,74,0.10)', bd: 'rgba(226,75,74,0.30)', fg: RED }
                     return (
-                      <button onClick={() => setBarRaw(recBar)}
+                      <button onClick={() => { setPrevBarRaw(barRaw); setBarRaw(recBar) }}
                         style={{ padding: '4px 12px', borderRadius: 6, border: `1px solid ${st.bd}`, background: st.bg, color: st.fg, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>추천 : {Math.round(recBar / 1000)}K</button>
                     )
                   })()}
