@@ -521,9 +521,6 @@ export default function RateStrategyPage() {
   const [stayEnd,         setStayEnd]         = useState('')
   const [viewYear,        setViewYear]        = useState(Number(todayKST.slice(0, 4)))
   const [viewMonth,       setViewMonth]       = useState(Number(todayKST.slice(5, 7)))
-  // 프로모션 달력 전용 월 (일자별/요금달력과 독립)
-  const [promoYear,       setPromoYear]       = useState(Number(todayKST.slice(0, 4)))
-  const [promoMonth,      setPromoMonth]      = useState(Number(todayKST.slice(5, 7)))
   const [saleDate,        setSaleDate]        = useState<string>(getKSTDateString())
   const saleDateRef = useRef<HTMLDivElement>(null)  // 숨긴 FormDatePicker 트리거용
   const tabOuterRef = useRef<HTMLDivElement>(null)  // 슬라이딩 탭 컨테이너
@@ -963,21 +960,7 @@ export default function RateStrategyPage() {
     setStayStart(start); setStayEnd(end)
   }, [calcMonthRange])
 
-  // 프로모션 달력 전용 월 네비게이션 (독립)
-  const promoPrev = useCallback(() => {
-    let y = promoYear, m = promoMonth - 1
-    if (m === 0) { y -= 1; m = 12 }
-    setPromoYear(y); setPromoMonth(m)
-  }, [promoYear, promoMonth])
-  const promoNext = useCallback(() => {
-    let y = promoYear, m = promoMonth + 1
-    if (m === 13) { y += 1; m = 1 }
-    setPromoYear(y); setPromoMonth(m)
-  }, [promoYear, promoMonth])
-  const promoToday = useCallback(() => {
-    const kst = getKSTDateString()
-    setPromoYear(Number(kst.slice(0, 4))); setPromoMonth(Number(kst.slice(5, 7)))
-  }, [])
+  // 프로모션 달력 월 네비는 상단 통합 타이틀(viewYear/viewMonth)로 공유 — 전용 상태 제거
 
   const handleStayStartChange = useCallback((v: string) => {
     setStayStart(v)
@@ -1299,24 +1282,6 @@ export default function RateStrategyPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
-  // 통합 월 헤더 — 각 탭 상단 (Daily BAR Rate 헤더와 동일 스타일). 스펙 CSS 변수는 프로젝트 실제 변수로 매핑
-  const monthHeader = (y: number, m: number, onPrev: () => void, onNext: () => void) => (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 18px', background: 'var(--color-bg-secondary)', borderRadius: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button onClick={onPrev} style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', fontSize: 18, cursor: 'pointer' }}>‹</button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
-            <span style={{ fontSize: 15, fontWeight: 500, color: '#00E5A0' }}>{m}월</span>
-            <span style={{ fontSize: 10, fontWeight: 500, color: '#00E5A0' }}>{String(y).slice(2)}년</span>
-          </div>
-          <span style={{ color: 'var(--color-border-default)', fontSize: 14 }}>|</span>
-          <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)' }}>Rate Strategy</span>
-        </div>
-        <button onClick={onNext} style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', fontSize: 18, cursor: 'pointer' }}>›</button>
-      </div>
-    </div>
-  )
-
   const filterDivider = (
     <div style={{ width: 1, height: 32, background: 'var(--color-border-default)', flexShrink: 0, alignSelf: 'flex-end', marginBottom: 1 }} />
   )
@@ -1325,11 +1290,20 @@ export default function RateStrategyPage() {
     <div className="space-y-6 animate-fade-in">
       {/* ── 헤더 ── */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
-        {/* 좌측: 타이틀 (판매기준일·월 네비는 DayPanel 헤더로 이동) */}
+        {/* 좌측: 타이틀 — ‹ {월} {년} | Rate Strategy › (전체 탭 공통 월 네비) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 500, color: 'var(--color-text-primary)' }}>
-            Rate Strategy
-          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={prevMonth} style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: 0 }}>‹</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
+                <span style={{ fontSize: 15, fontWeight: 500, color: '#00E5A0' }}>{viewMonth}월</span>
+                <span style={{ fontSize: 10, fontWeight: 500, color: '#00E5A0' }}>{String(viewYear).slice(2)}년</span>
+              </div>
+              <span style={{ color: 'var(--color-border-default)', fontSize: 14 }}>|</span>
+              <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)' }}>Rate Strategy</span>
+            </div>
+            <button onClick={nextMonth} style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: 0 }}>›</button>
+          </div>
 
           {/* 숨긴 FormDatePicker — DayPanel 판매기준일 클릭(onOpenSaleDatePicker)이 .click() 으로 트리거.
               화면엔 안 보이지만 실제 날짜 선택 메커니즘이라 유지 필요. */}
@@ -1426,8 +1400,8 @@ export default function RateStrategyPage() {
       {/* ── 일자별 탭 (list) ── */}
       <div style={{ display: activeTab === 'list' ? undefined : 'none' }} className="space-y-6">
 
-      {/* 통합 월 헤더 */}
-      {monthHeader(viewYear, viewMonth, prevMonth, nextMonth)}
+      {/* 탭 타이틀 */}
+      <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)' }}>일자 요금</div>
 
       {/* ── 필터 바 (1줄) ── */}
       <div className="flex items-end flex-wrap gap-2 px-4 py-3 rounded-xl"
@@ -2118,14 +2092,14 @@ export default function RateStrategyPage() {
       {/* ── 프로모션 달력 탭 ── */}
       {activeTab === 'promo-cal' && (
         <div style={{ height: 'calc(100vh - 210px)', minHeight: 400, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {monthHeader(promoYear, promoMonth, promoPrev, promoNext)}
+          <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)' }}>프로모션 달력</div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <PromoCalendarView
-              year={promoYear}
-              month={promoMonth}
-              onPrevMonth={promoPrev}
-              onNextMonth={promoNext}
-              onToday={promoToday}
+              year={viewYear}
+              month={viewMonth}
+              onPrevMonth={prevMonth}
+              onNextMonth={nextMonth}
+              onToday={rateToday}
             />
           </div>
         </div>
@@ -2134,7 +2108,7 @@ export default function RateStrategyPage() {
       {/* ── 요금 달력 (항상 마운트 — 일자 상세 모달을 어느 탭에서든 표시) ── */}
       <div style={activeTab === 'rate-cal' ? { minHeight: 400 } : undefined}>
         {activeTab === 'rate-cal' && (
-          <div style={{ marginBottom: 10 }}>{monthHeader(viewYear, viewMonth, prevMonth, nextMonth)}</div>
+          <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 10 }}>요금 달력</div>
         )}
         <RateCalendarView
           year={viewYear}
