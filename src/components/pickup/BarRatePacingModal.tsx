@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { X, Pencil } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { DateContext } from '@/contexts/DateContext'
 import { useFcstDateContext } from '@/contexts/FcstDateContext'
 import AdrSimulatorModal from '@/components/rate-strategy/AdrSimulatorModal'
 import PacingDeltaModal from './PacingDeltaModal'
@@ -27,6 +28,8 @@ interface BarRatePacingModalProps {
 export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, roomCount, showRateEdit = false }: BarRatePacingModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const chartRef  = useRef<any>(null)
+  // x축 종료일 = 전역 OTB Date Picker 값 (없으면 stayDate 폴백). stayDate 는 데이터 조회용.
+  const otbDate = useContext(DateContext)?.otbDate || stayDate
   // 점유율 막대 클릭 → 전날 대비 증감 모달 (현재/전날 스냅샷)
   const [deltaSnap, setDeltaSnap] = useState<{ cur: string; prev: string } | null>(null)
   // 요금 수정 → AdrSimulatorModal
@@ -85,26 +88,34 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
     },
   })
 
-  // 데이터 가공 — 스냅샷 라벨 + 점유율 + BAR Rate forward-fill
+  // 데이터 가공 — x축 고정 30일 그리드(otbDate-30 ~ otbDate) 위에 스냅샷 매핑
   const chart = useMemo(() => {
-    const labels = pacing.map(p => {
-      const d = new Date(p.update_date)
-      return `${d.getMonth() + 1}/${d.getDate()}`
+    const p2 = (n: number) => String(n).padStart(2, '0')
+    // 고정 x축: otbDate(OTB Date Picker) 기준 -30일 ~ otbDate (31 포인트)
+    const [gy, gm, gd] = otbDate.split('-').map(Number)
+    const gridDates: string[] = []
+    for (let i = 30; i >= 0; i--) {
+      const d = new Date(gy, gm - 1, gd - i)
+      gridDates.push(`${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`)
+    }
+    const pacingByDate = new Map(pacing.map(p => [String(p.update_date).slice(0, 10), p]))
+    const labels = gridDates.map(ds => { const d = new Date(ds); return `${d.getMonth() + 1}/${d.getDate()}` })
+    // 스냅샷 없는 날짜 → null (막대 미표시)
+    const occData = gridDates.map(ds => {
+      const p = pacingByDate.get(ds)
+      return p ? (roomCount > 0 ? Math.round((p.otb_nights / roomCount) * 100) : 0) : null
     })
-    const occData = pacing.map(p => (roomCount > 0 ? Math.round((p.otb_nights / roomCount) * 100) : 0))
-    const rateData = pacing.map(p => {
-      const snap = p.update_date
-      // 1) 변경 이력이 있으면 forward-fill
+    // BAR Rate forward-fill — 그리드 날짜 기준(스냅샷 유무 무관하게 선 연속)
+    const rateData = gridDates.map(ds => {
       if (rateHist.length > 0) {
-        const applied = rateHist.filter(h => h.changed_date <= snap)
+        const applied = rateHist.filter(h => h.changed_date <= ds)
         if (applied.length > 0) return applied[applied.length - 1].new_rate
         return rateHist[0].old_rate   // 첫 변경 이전
       }
-      // 2) 이력이 없으면 s02 현재 요금으로 평탄선 (fallback, null이면 미표시)
-      return currentRate
+      return currentRate   // 이력 없으면 s02 현재 요금 평탄선 (null이면 미표시)
     })
-    return { labels, occData, rateData }
-  }, [pacing, rateHist, currentRate, roomCount])
+    return { labels, occData, rateData, gridDates }
+  }, [pacing, rateHist, currentRate, roomCount, otbDate])
 
   // 고유 요금대 → 색 매핑 (구간별 색상 전환용)
   const rateTiers = useMemo(() => {
@@ -145,8 +156,9 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
       ctx.fillStyle = '#999'
       ctx.textAlign = 'center'
       meta.data.forEach((bar: any, i: number) => {
-        const pct = Math.round(c.data.datasets[0].data[i] ?? 0)
-        ctx.fillText(`${pct}%`, bar.x, bar.y - 4)
+        const raw = c.data.datasets[0].data[i]
+        if (raw == null) return   // 스냅샷 없는 날짜는 라벨 미표시
+        ctx.fillText(`${Math.round(raw)}%`, bar.x, bar.y - 4)
       })
       ctx.restore()
     },
@@ -234,10 +246,12 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
           interaction: { mode: 'index', intersect: false },
           onClick: (_e: any, els: any[]) => {
             if (!els.length) return
-            const i = els[0].index
-            if (i <= 0) return   // 첫 스냅샷은 전날 없음 → 무시
-            const cur  = pacing[i]?.update_date
-            const prev = pacing[i - 1]?.update_date
+            const date = chart.gridDates[els[0].index]
+            // 그리드 날짜 → 실제 스냅샷 인덱스 (전날 대비 delta는 실제 연속 스냅샷 기준)
+            const idx = pacing.findIndex(p => String(p.update_date).slice(0, 10) === date)
+            if (idx <= 0) return   // 스냅샷 없거나 첫 스냅샷 → 무시
+            const cur  = pacing[idx]?.update_date
+            const prev = pacing[idx - 1]?.update_date
             if (!cur || !prev) return
             setDeltaSnap({ cur, prev })
           },
