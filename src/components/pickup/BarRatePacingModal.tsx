@@ -1,11 +1,10 @@
 'use client'
 
-import { useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { X, Pencil } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { DateContext } from '@/contexts/DateContext'
 import { useFcstDateContext } from '@/contexts/FcstDateContext'
 import AdrSimulatorModal from '@/components/rate-strategy/AdrSimulatorModal'
 import PacingDeltaModal from './PacingDeltaModal'
@@ -28,8 +27,6 @@ interface BarRatePacingModalProps {
 export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, roomCount, showRateEdit = false }: BarRatePacingModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const chartRef  = useRef<any>(null)
-  // x축 종료일 = 전역 OTB Date Picker 값 (없으면 stayDate 폴백). stayDate 는 데이터 조회용.
-  const otbDate = useContext(DateContext)?.otbDate || stayDate
   // 점유율 막대 클릭 → 전날 대비 증감 모달 (현재/전날 스냅샷)
   const [deltaSnap, setDeltaSnap] = useState<{ cur: string; prev: string } | null>(null)
   // 요금 수정 → AdrSimulatorModal
@@ -88,34 +85,25 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
     },
   })
 
-  // 데이터 가공 — x축 고정 30일 그리드(otbDate-30 ~ otbDate) 위에 스냅샷 매핑
+  // 데이터 가공 — 실제 수집된 update_date(스냅샷)만 렌더 (없는 날짜는 X축에서 제외)
   const chart = useMemo(() => {
-    const p2 = (n: number) => String(n).padStart(2, '0')
-    // 고정 x축: otbDate(OTB Date Picker) 기준 -30일 ~ otbDate (31 포인트)
-    const [gy, gm, gd] = otbDate.split('-').map(Number)
-    const gridDates: string[] = []
-    for (let i = 30; i >= 0; i--) {
-      const d = new Date(gy, gm - 1, gd - i)
-      gridDates.push(`${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`)
-    }
-    const pacingByDate = new Map(pacing.map(p => [String(p.update_date).slice(0, 10), p]))
-    const labels = gridDates.map(ds => { const d = new Date(ds); return `${d.getMonth() + 1}/${d.getDate()}` })
-    // 스냅샷 없는 날짜 → null (막대 미표시)
-    const occData = gridDates.map(ds => {
-      const p = pacingByDate.get(ds)
-      return p ? (roomCount > 0 ? Math.round((p.otb_nights / roomCount) * 100) : 0) : null
+    const labels = pacing.map(p => {
+      const d = new Date(p.update_date)
+      return `${d.getMonth() + 1}/${d.getDate()}`   // KST 기준 M/D
     })
-    // BAR Rate forward-fill — 그리드 날짜 기준(스냅샷 유무 무관하게 선 연속)
-    const rateData = gridDates.map(ds => {
+    const occData = pacing.map(p => (roomCount > 0 ? Math.round((p.otb_nights / roomCount) * 100) : 0))
+    // BAR Rate forward-fill — 각 스냅샷 시점의 적용 요금
+    const rateData = pacing.map(p => {
+      const snap = p.update_date
       if (rateHist.length > 0) {
-        const applied = rateHist.filter(h => h.changed_date <= ds)
+        const applied = rateHist.filter(h => h.changed_date <= snap)
         if (applied.length > 0) return applied[applied.length - 1].new_rate
         return rateHist[0].old_rate   // 첫 변경 이전
       }
       return currentRate   // 이력 없으면 s02 현재 요금 평탄선 (null이면 미표시)
     })
-    return { labels, occData, rateData, gridDates }
-  }, [pacing, rateHist, currentRate, roomCount, otbDate])
+    return { labels, occData, rateData }
+  }, [pacing, rateHist, currentRate, roomCount])
 
   // 고유 요금대 → 색 매핑 (구간별 색상 전환용)
   const rateTiers = useMemo(() => {
@@ -246,12 +234,10 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
           interaction: { mode: 'index', intersect: false },
           onClick: (_e: any, els: any[]) => {
             if (!els.length) return
-            const date = chart.gridDates[els[0].index]
-            // 그리드 날짜 → 실제 스냅샷 인덱스 (전날 대비 delta는 실제 연속 스냅샷 기준)
-            const idx = pacing.findIndex(p => String(p.update_date).slice(0, 10) === date)
-            if (idx <= 0) return   // 스냅샷 없거나 첫 스냅샷 → 무시
-            const cur  = pacing[idx]?.update_date
-            const prev = pacing[idx - 1]?.update_date
+            const i = els[0].index
+            if (i <= 0) return   // 첫 스냅샷은 전날 없음 → 무시
+            const cur  = pacing[i]?.update_date
+            const prev = pacing[i - 1]?.update_date
             if (!cur || !prev) return
             setDeltaSnap({ cur, prev })
           },
@@ -341,8 +327,11 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
 
         {/* 차트 */}
         <div style={{ padding: '10px 16px 8px', flex: 1, minHeight: 0 }}>
-          {/* 데이터 유무와 무관하게 항상 고정 30일 축 렌더 (빈 날짜는 null → 빈 칸) */}
-          <canvas ref={canvasRef} />
+          {pacing.length === 0 ? (
+            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#555' }}>No data</div>
+          ) : (
+            <canvas ref={canvasRef} />
+          )}
         </div>
 
         {/* 범례 — OTB OCC + 요금대별 색상 */}
