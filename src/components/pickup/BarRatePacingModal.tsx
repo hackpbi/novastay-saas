@@ -234,7 +234,7 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
                 borderColor: (ctx: any) => pointColors[ctx.p1DataIndex] ?? BAR_GOLD,
               },
               tension: 0,
-              spanGaps: true,
+              spanGaps: false,   // 스냅샷 없는 날짜(null)는 선 끊김
               yAxisID: 'yBar',
               order: 0,
             } as any,
@@ -341,11 +341,8 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
 
         {/* 차트 */}
         <div style={{ padding: '10px 16px 8px', flex: 1, minHeight: 0 }}>
-          {pacing.length === 0 ? (
-            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#555' }}>No data</div>
-          ) : (
-            <canvas ref={canvasRef} />
-          )}
+          {/* 데이터 유무와 무관하게 항상 고정 30일 축 렌더 (빈 날짜는 null → 빈 칸) */}
+          <canvas ref={canvasRef} />
         </div>
 
         {/* 범례 — OTB OCC + 요금대별 색상 */}
