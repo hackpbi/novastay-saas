@@ -730,6 +730,7 @@ export default function DashboardPage() {
 
       {/* ── Header ── */}
       <div className="mb-6">
+        {/* 1행: 타이틀 + 픽업요약 (로딩중이면 빈칸) */}
         <div className="flex items-center justify-between mb-1" style={{ gap: 12 }}>
           <div className="flex items-center gap-1.5">
             <button
@@ -753,6 +754,41 @@ export default function DashboardPage() {
               ›
             </button>
           </div>
+          {!pickupLoading && (
+            <p className="text-base" style={{ color: 'var(--color-text-secondary)', letterSpacing: '0.06em' }}>
+              [{(() => { const [, mm, dd] = otbDate.split('-'); return `${Number(mm)}/${Number(dd)}` })()}{' '}
+              {pickupDays > 0 ? (
+                <span style={{ color: 'var(--color-accent-primary)' }}>
+                  {pickupDays}일
+                </span>
+              ) : (
+                <span style={{ color: 'var(--color-accent-primary)' }}>당일</span>
+              )}
+              {' '}픽업]{' '}객실{' '}
+              <button
+                onClick={() => setMonthlyPickupSegOpen(true)}
+                title="월별 픽업 추이 보기"
+                style={{ color: totalPuNights >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
+              >
+                {(() => { const { num, unit } = formatPuParts(totalPuNights, 'nights'); return <>{num}{unit}</> })()}
+              </button>
+              ,{' '}매출{' '}
+              <button
+                onClick={() => setMonthlyPickupSegOpen(true)}
+                title="월별 픽업 추이 보기"
+                style={{ color: totalPuRevenue >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
+              >
+                {(() => { const { num } = formatPuParts(totalPuRevenue, 'currency'); return <>{num}백만 원</> })()}
+              </button>
+              {' '}[{String(months[0].year).slice(2)}년 {months[0].month}월~{String(months[months.length - 1].year).slice(2)}년 {months[months.length - 1].month}월]
+            </p>
+          )}
+        </div>
+        {/* 2행: 로딩인디케이터(조건부) + 액션버튼 3개 우측 정렬 */}
+        <div className="flex items-center justify-end" style={{ gap: 8 }}>
+          {pickupLoading && (
+            <div className="h-5 w-80 rounded animate-pulse mr-auto" style={{ background: 'var(--color-bg-tertiary)' }} />
+          )}
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <button
               onClick={() => setActualBudgetModal(true)}
@@ -789,37 +825,6 @@ export default function DashboardPage() {
             </button>
           </div>
         </div>
-        {pickupLoading ? (
-          <div className="h-5 w-80 rounded animate-pulse" style={{ background: 'var(--color-bg-tertiary)' }} />
-        ) : (
-          <p className="text-base" style={{ color: 'var(--color-text-secondary)', letterSpacing: '0.06em' }}>
-            [{(() => { const [, mm, dd] = otbDate.split('-'); return `${Number(mm)}/${Number(dd)}` })()}{' '}
-            {pickupDays > 0 ? (
-              <span style={{ color: 'var(--color-accent-primary)' }}>
-                {pickupDays}일
-              </span>
-            ) : (
-              <span style={{ color: 'var(--color-accent-primary)' }}>당일</span>
-            )}
-            {' '}픽업]{' '}객실{' '}
-            <button
-              onClick={() => setMonthlyPickupSegOpen(true)}
-              title="월별 픽업 추이 보기"
-              style={{ color: totalPuNights >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
-            >
-              {(() => { const { num, unit } = formatPuParts(totalPuNights, 'nights'); return <>{num}{unit}</> })()}
-            </button>
-            ,{' '}매출{' '}
-            <button
-              onClick={() => setMonthlyPickupSegOpen(true)}
-              title="월별 픽업 추이 보기"
-              style={{ color: totalPuRevenue >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
-            >
-              {(() => { const { num } = formatPuParts(totalPuRevenue, 'currency'); return <>{num}백만 원</> })()}
-            </button>
-            {' '}[{String(months[0].year).slice(2)}년 {months[0].month}월~{String(months[months.length - 1].year).slice(2)}년 {months[months.length - 1].month}월]
-          </p>
-        )}
       </div>
 
 
