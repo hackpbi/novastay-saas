@@ -789,41 +789,6 @@ export default function DashboardPage() {
           {pickupLoading && (
             <div className="h-5 w-80 rounded animate-pulse mr-auto" style={{ background: 'var(--color-bg-tertiary)' }} />
           )}
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            <button
-              onClick={() => setActualBudgetModal(true)}
-              style={{ display:'inline-flex', alignItems:'center', gap:6, background:'transparent', border:'1px solid rgba(255,255,255,0.15)', borderRadius:8, padding:'6px 14px', fontSize:12, color:'rgba(255,255,255,0.6)', cursor:'pointer', transition:'all 0.15s', whiteSpace:'nowrap', height:34 }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor='#00E5A0'; e.currentTarget.style.color='#00E5A0' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor='rgba(255,255,255,0.15)'; e.currentTarget.style.color='rgba(255,255,255,0.6)' }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
-              </svg>
-              월별 현황
-            </button>
-            <button
-              onClick={() => setGmReportOpen(true)}
-              style={{ display:'inline-flex', alignItems:'center', gap:6, background:'rgba(0,229,160,0.12)', border:'1px solid rgba(0,229,160,0.4)', borderRadius:8, padding:'6px 14px', fontSize:12, color:'#00E5A0', cursor:'pointer', transition:'all 0.15s', whiteSpace:'nowrap', height:34 }}
-              onMouseEnter={e => { e.currentTarget.style.background='rgba(0,229,160,0.22)'; e.currentTarget.style.borderColor='#00E5A0' }}
-              onMouseLeave={e => { e.currentTarget.style.background='rgba(0,229,160,0.12)'; e.currentTarget.style.borderColor='rgba(0,229,160,0.4)' }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
-              </svg>
-              데일리 리포트
-            </button>
-            <button
-              onClick={() => setClosingReportOpen(true)}
-              style={{ display:'inline-flex', alignItems:'center', gap:6, background:'transparent', border:'1px solid rgba(255,255,255,0.15)', borderRadius:8, padding:'6px 14px', fontSize:12, color:'rgba(255,255,255,0.6)', cursor:'pointer', transition:'all 0.15s', whiteSpace:'nowrap', height:34 }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor='#00E5A0'; e.currentTarget.style.color='#00E5A0' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor='rgba(255,255,255,0.15)'; e.currentTarget.style.color='rgba(255,255,255,0.6)' }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/>
-              </svg>
-              마감 보고서
-            </button>
-          </div>
         </div>
       </div>
 
@@ -849,6 +814,41 @@ export default function DashboardPage() {
               />
             ))}
           </div>
+        </div>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <button
+            onClick={() => setActualBudgetModal(true)}
+            style={{ display:'inline-flex', alignItems:'center', gap:6, background:'transparent', border:'1px solid rgba(255,255,255,0.15)', borderRadius:8, padding:'6px 14px', fontSize:12, color:'rgba(255,255,255,0.6)', cursor:'pointer', transition:'all 0.15s', whiteSpace:'nowrap', height:34 }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor='#00E5A0'; e.currentTarget.style.color='#00E5A0' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor='rgba(255,255,255,0.15)'; e.currentTarget.style.color='rgba(255,255,255,0.6)' }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+            </svg>
+            월별 현황
+          </button>
+          <button
+            onClick={() => setGmReportOpen(true)}
+            style={{ display:'inline-flex', alignItems:'center', gap:6, background:'rgba(0,229,160,0.12)', border:'1px solid rgba(0,229,160,0.4)', borderRadius:8, padding:'6px 14px', fontSize:12, color:'#00E5A0', cursor:'pointer', transition:'all 0.15s', whiteSpace:'nowrap', height:34 }}
+            onMouseEnter={e => { e.currentTarget.style.background='rgba(0,229,160,0.22)'; e.currentTarget.style.borderColor='#00E5A0' }}
+            onMouseLeave={e => { e.currentTarget.style.background='rgba(0,229,160,0.12)'; e.currentTarget.style.borderColor='rgba(0,229,160,0.4)' }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+            </svg>
+            데일리 리포트
+          </button>
+          <button
+            onClick={() => setClosingReportOpen(true)}
+            style={{ display:'inline-flex', alignItems:'center', gap:6, background:'transparent', border:'1px solid rgba(255,255,255,0.15)', borderRadius:8, padding:'6px 14px', fontSize:12, color:'rgba(255,255,255,0.6)', cursor:'pointer', transition:'all 0.15s', whiteSpace:'nowrap', height:34 }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor='#00E5A0'; e.currentTarget.style.color='#00E5A0' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor='rgba(255,255,255,0.15)'; e.currentTarget.style.color='rgba(255,255,255,0.6)' }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/>
+            </svg>
+            마감 보고서
+          </button>
         </div>
       </div>
 
