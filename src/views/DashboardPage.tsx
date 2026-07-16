@@ -739,17 +739,17 @@ export default function DashboardPage() {
               <button
                 onClick={() => setPage(p => Math.max(0, p - 1))}
                 disabled={page === 0}
-                style={{ background: 'transparent', border: 'none', cursor: page === 0 ? 'not-allowed' : 'pointer', color: page === 0 ? 'rgba(255,255,255,0.2)' : 'var(--color-text-primary)', padding: '0 4px', fontSize: 16 }}
+                style={{ background: 'transparent', border: 'none', cursor: page === 0 ? 'not-allowed' : 'pointer', color: page === 0 ? 'rgba(255,255,255,0.2)' : 'var(--color-text-primary)', padding: '0 4px', fontSize: 22 }}
               >
                 ‹
               </button>
-              <span className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+              <span className="text-xl font-semibold" style={{ color: 'var(--color-text-primary)' }}>
                 {months[0]?.month}월 {String(months[0]?.year ?? '').slice(2)}년 &mdash; {months[months.length - 1]?.month}월 {String(months[months.length - 1]?.year ?? '').slice(2)}년
               </span>
               <button
                 onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                 disabled={page === totalPages - 1}
-                style={{ background: 'transparent', border: 'none', cursor: page === totalPages - 1 ? 'not-allowed' : 'pointer', color: page === totalPages - 1 ? 'rgba(255,255,255,0.2)' : 'var(--color-text-primary)', padding: '0 4px', fontSize: 16 }}
+                style={{ background: 'transparent', border: 'none', cursor: page === totalPages - 1 ? 'not-allowed' : 'pointer', color: page === totalPages - 1 ? 'rgba(255,255,255,0.2)' : 'var(--color-text-primary)', padding: '0 4px', fontSize: 22 }}
               >
                 ›
               </button>
