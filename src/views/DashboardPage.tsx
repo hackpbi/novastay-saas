@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { ArrowUp, ArrowDown, AlignJustify, User, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowUp, ArrowDown, AlignJustify, User } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { usePickupData } from '@/hooks/usePickupData'
 import { useOtbData } from '@/hooks/useOtbData'
@@ -731,9 +731,30 @@ export default function DashboardPage() {
       {/* ── Header ── */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-1" style={{ gap: 12 }}>
-          <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text-primary)', margin: 0 }}>
-            대시보드
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text-primary)', margin: 0 }}>
+              대시보드
+            </h1>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+                disabled={page === 0}
+                style={{ background: 'transparent', border: 'none', cursor: page === 0 ? 'not-allowed' : 'pointer', color: page === 0 ? 'rgba(255,255,255,0.2)' : 'var(--color-text-primary)', padding: '0 4px', fontSize: 16 }}
+              >
+                ‹
+              </button>
+              <span className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                {months[0]?.month}월 {String(months[0]?.year ?? '').slice(2)}년 &mdash; {months[months.length - 1]?.month}월 {String(months[months.length - 1]?.year ?? '').slice(2)}년
+              </span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                disabled={page === totalPages - 1}
+                style={{ background: 'transparent', border: 'none', cursor: page === totalPages - 1 ? 'not-allowed' : 'pointer', color: page === totalPages - 1 ? 'rgba(255,255,255,0.2)' : 'var(--color-text-primary)', padding: '0 4px', fontSize: 16 }}
+              >
+                ›
+              </button>
+            </div>
+          </div>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <button
               onClick={() => setActualBudgetModal(true)}
@@ -808,10 +829,6 @@ export default function DashboardPage() {
       {/* ── Month range navigator ── */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <span className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-            {months[0]?.month}월 &mdash; {months[months.length - 1]?.month}월
-          </span>
-          <span className="text-xs text-brand-dimmed font-mono">{months[0]?.year}년</span>
           <div className="flex items-center gap-1">
             {Array.from({ length: totalPages }).map((_, i) => (
               <button
@@ -829,27 +846,6 @@ export default function DashboardPage() {
               />
             ))}
           </div>
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setPage(p => Math.max(0, p - 1))}
-            disabled={page === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-brand-muted hover:text-brand-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150"
-            style={{ border: '1px solid var(--control-border)' }}
-          >
-            <ChevronLeft size={13} />
-            이전
-          </button>
-          <button
-            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-            disabled={page === totalPages - 1}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-brand-muted hover:text-brand-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150"
-            style={{ border: '1px solid var(--control-border)' }}
-          >
-            다음
-            <ChevronRight size={13} />
-          </button>
         </div>
       </div>
 
