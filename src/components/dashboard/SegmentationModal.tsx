@@ -409,13 +409,6 @@ export default function SegmentationModal({
   }, [schema])
 
   // ─── 우측 Account Pickup 패널 데이터 ───────────────────────────────────────────
-  console.log('[PICKUP PARAMS]', {
-    hotelId: currentHotel?.id,
-    otbDate,
-    vsDate: vsOtbDate,
-    year: curYear,
-    month: curMonth,
-  })
   const { data: accountPickupRows = [] } = useAccountPickupData({
     hotelId:     currentHotel?.id ?? '',
     otbDate:     otbDate ?? '',
@@ -427,7 +420,6 @@ export default function SegmentationModal({
   })
 
   const accountList = useMemo(() => {
-    console.log('[DEBUG]', selectedSeg?.codes, accountPickupRows.length, (accountPickupRows as Array<{ segmentation: string }>).slice(0,3).map(r => r.segmentation))
     if (!selectedSeg) return []
     return (accountPickupRows as Array<{ account_name: string; segmentation: string; otb_nights: number; vs_nights: number; otb_revenue: number; vs_revenue: number }>)
       .filter(r => selectedSeg.codes.includes(r.segmentation))

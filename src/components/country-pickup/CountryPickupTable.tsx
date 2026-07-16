@@ -62,13 +62,10 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
   if (isPastMonth && lyData) {
     const lyMap = lyData.reduce((m, r) => {
       const k = r.country
-      // country별 ly는 모든 행에 동일한 값이 들어오므로 첫 번째 행만 사용
-      if (!m[k]) {
-        m[k] = {
-          nights:  r.ly_nights  ?? 0,
-          revenue: r.ly_revenue ?? 0,
-        }
-      }
+      // country별 += 누적 (RPC가 segmentation×account_name 단위로 반환하므로)
+      if (!m[k]) m[k] = { nights: 0, revenue: 0 }
+      m[k].nights  += r.ly_nights  ?? 0
+      m[k].revenue += r.ly_revenue ?? 0
       return m
     }, {} as Record<string, { nights: number; revenue: number }>)
     for (const a of aggregated) {

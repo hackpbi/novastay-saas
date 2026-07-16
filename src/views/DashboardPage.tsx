@@ -1,9 +1,10 @@
 ﻿'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { ArrowUp, ArrowDown, AlignJustify, User } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { usePickupData } from '@/hooks/usePickupData'
+import { usePickupData, type PickupRow } from '@/hooks/usePickupData'
 import { useOtbData } from '@/hooks/useOtbData'
 import { useLyPacing, type LyPacingMode } from '@/hooks/useLyPacing'
 import SegmentationModal          from '@/components/dashboard/SegmentationModal'
@@ -145,6 +146,242 @@ function formatPuParts(n: number, type: 'nights' | 'currency'): { num: string; u
   return { num: `${sign}${n.toLocaleString('ko-KR')}`, unit: '' }
 }
 
+// ── 이벤트 뱃지 (c06_calendar) ───────────────────────────────────────────────────
+type EventGroup = {
+  name:      string
+  startDate: string   // 'YYYY-MM-DD'
+  endDate:   string   // 'YYYY-MM-DD'
+  dates:     string[]
+  isPast:    boolean  // otbDate 기준 모든 날짜가 이전이면 true
+}
+// 괄호 () 안 텍스트 추출 (없으면 null) — PickupMonthCard 기준
+const extractParenText = (event: string): string | null => {
+  const m = event.match(/\(([^)]+)\)/)
+  return m ? m[1].trim() : null
+}
+// 뱃지 날짜 라벨: 단일 M/D · 복수(같은 달) M/D~D · 복수(다른 달) M/D~M/D
+const eventRangeLabel = (g: EventGroup) => {
+  const [, sM, sD] = g.startDate.split('-').map(Number)
+  const [, eM, eD] = g.endDate.split('-').map(Number)
+  if (g.startDate === g.endDate) return `${sM}/${sD}`
+  return sM === eM ? `${sM}/${sD}~${eD}` : `${sM}/${sD}~${eM}/${eD}`
+}
+
+// ── 이벤트 hover 툴팁 ─────────────────────────────────────────────────────────────
+const DOW_KR = ['일', '월', '화', '수', '목', '금', '토']
+
+type DayAggEntry = { otbN: number; otbR: number; vsN: number; vsR: number }
+
+// 이벤트 뱃지 + hover 툴팁 — 뱃지 스타일은 Phase 1(민트/블루) 유지, 툴팁은 PickupMonthCard 이식.
+// 카드 overflow-hidden 잘림 방지를 위해 툴팁만 createPortal + position:fixed 로 렌더.
+function EventBadge({ group, pickupRows, roomCount }: { group: EventGroup; pickupRows: PickupRow[]; roomCount: number }) {
+  const [hovered, setHovered] = useState(false)
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
+  const [barData, setBarData] = useState<Record<string, { cur: number | null }>>({})
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const { currentHotel } = useHotel()
+  const hotelId = currentHotel?.id ?? ''
+
+  const dayAgg = useMemo(() => {
+    const map: Record<string, DayAggEntry> = {}
+    for (const r of pickupRows) {
+      if (!group.dates.includes(r.business_date)) continue
+      let a = map[r.business_date]
+      if (!a) { a = { otbN: 0, otbR: 0, vsN: 0, vsR: 0 }; map[r.business_date] = a }
+      a.otbN += r.otb_nights ?? 0;     a.otbR += r.otb_revenue ?? 0
+      a.vsN  += r.vs_otb_nights ?? 0;  a.vsR  += r.vs_otb_revenue ?? 0
+    }
+    return map
+  }, [pickupRows, group.dates])
+
+  // 미래 이벤트만 hover 시 BAR 현재값(s02_rate_detail) fetch
+  useEffect(() => {
+    if (!hovered || group.isPast || !hotelId || group.dates.length === 0) return
+    let cancelled = false
+    ;(async () => {
+      // BAR 현재값 — s02_rate_detail (GMDailyReportModal 패턴: change>single>base)
+      const PRIORITY: Record<string, number> = { change: 3, single: 2, base: 1 }
+      const barByDate: Record<string, number> = {}
+      const prioByDate: Record<string, number> = {}
+      try {
+        const { data: rateRows, error } = await (supabase as any)
+          .from('s02_rate_detail').select('stay_date, date_type, new_rate')
+          .eq('hotel_id', hotelId).in('stay_date', group.dates)
+          .in('date_type', ['change', 'single', 'base'])
+        if (!error) {
+          for (const r of rateRows ?? []) {
+            const p = PRIORITY[r.date_type] ?? 0
+            if (barByDate[r.stay_date] === undefined || p > prioByDate[r.stay_date]) {
+              barByDate[r.stay_date] = r.new_rate; prioByDate[r.stay_date] = p
+            }
+          }
+        }
+      } catch { /* 무시 → cur null */ }
+      if (cancelled) return
+      const next: Record<string, { cur: number | null }> = {}
+      for (const date of group.dates) {
+        next[date] = { cur: barByDate[date] != null ? Math.round(barByDate[date] / 1000) : null }
+      }
+      setBarData(next)
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hovered])
+
+  const openTip = () => {
+    const r = wrapRef.current?.getBoundingClientRect()
+    if (r) setPos({ top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) })
+    setHovered(true)
+  }
+
+  const label   = eventRangeLabel(group)
+  const isPast  = group.isPast
+  const puTotal = pickupRows.filter(r => group.dates.includes(r.business_date)).reduce((s, r) => s + (r.pu_nights ?? 0), 0)
+
+  // 과거 기간 합계 (dayAgg 집계). 전년(LY)은 소스 없어 —
+  const pastSummary = (() => {
+    let totOtbN = 0, totOtbR = 0
+    for (const d of group.dates) { const a = dayAgg[d]; if (a) { totOtbN += a.otbN; totOtbR += a.otbR } }
+    const avail = roomCount * group.dates.length
+    return {
+      avgOcc:   avail > 0 ? (totOtbN / avail * 100).toFixed(1) : null,
+      avgAdr:   totOtbN > 0 ? Math.round(totOtbR / totOtbN / 1000) : null,
+      totalRev: totOtbR > 0 ? (totOtbR / 1e6).toFixed(1) : null,
+    }
+  })()
+
+  // 날짜 수 기반 동적 폭: 날짜당 130px, 최소 400 · 미래 상한 700 / 과거 상한 450
+  const tipWidth = isPast
+    ? Math.min(450, Math.max(400, group.dates.length * 130))
+    : Math.min(700, Math.max(400, group.dates.length * 130))
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
+      onMouseEnter={openTip} onMouseLeave={() => setHovered(false)}>
+      {group.isPast ? (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(91,141,239,0.1)', border: '0.5px solid rgba(91,141,239,0.3)', borderRadius: 20, padding: '4px 10px 4px 8px', fontSize: 12, color: '#5B8DEF', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          마감 · {group.name} {label}
+        </div>
+      ) : (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(0,229,160,0.1)', border: '0.5px solid rgba(0,229,160,0.3)', borderRadius: 20, padding: '4px 10px 4px 8px', fontSize: 12, color: '#00E5A0', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          {group.name} {label}
+          {puTotal !== 0 && (
+            <span style={{ fontSize: 11, fontWeight: 600, background: '#00E5A0', color: '#0a0a0a', borderRadius: 10, padding: '1px 6px' }}>
+              {puTotal > 0 ? `+${puTotal}` : puTotal}
+            </span>
+          )}
+        </div>
+      )}
+
+      {hovered && pos && createPortal(
+        <div style={{
+          position: 'fixed', top: pos.top, right: pos.right, zIndex: 99999, width: tipWidth,
+          borderRadius: 10, overflow: 'hidden',
+          background: `radial-gradient(ellipse 70% 60% at 95% 100%, rgba(91,141,239,0.1) 0%, transparent 70%), #141414`,
+          border: '0.5px solid rgba(91,141,239,0.3)',
+          borderLeft: '3px solid #5B8DEF',
+          boxShadow: '0 6px 20px rgba(0,0,0,0.6)', pointerEvents: 'none',
+        }}>
+          {/* 헤더 */}
+          <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '0.5px solid rgba(255,255,255,0.05)' }}>
+            <span style={{ fontSize: 13, fontWeight: 500, color: '#fff' }}>{group.name}</span>
+            <span style={{ fontSize: 10, background: 'rgba(91,141,239,0.1)', border: '0.5px solid rgba(91,141,239,0.3)', color: '#5B8DEF', borderRadius: 20, padding: '2px 8px' }}>
+              {label} · {group.dates.length}일
+            </span>
+          </div>
+
+          {/* 날짜별 그리드 */}
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${group.dates.length}, 1fr)` }}>
+            {group.dates.map(date => {
+              const row = dayAgg[date]
+              const hasPu = !!row && row.vsN !== row.otbN
+              const currOcc = row && roomCount ? (row.otbN / roomCount * 100).toFixed(1) : null
+              const prevOcc = row && roomCount ? (row.vsN / roomCount * 100).toFixed(1) : null
+              const adr = row && row.otbN ? Math.round(row.otbR / row.otbN / 1000) : null
+              const rev = row && row.otbR ? (row.otbR / 1e6).toFixed(1) : null
+              const puOcc = row && roomCount ? ((row.otbN - row.vsN) / roomCount * 100).toFixed(1) : null
+              const dd = new Date(date)
+              const dLabel = `${dd.getMonth() + 1}/${dd.getDate()} ${DOW_KR[dd.getDay()]}`
+              return (
+                <div key={date} style={{ padding: '11px 14px', borderRight: '0.5px solid rgba(255,255,255,0.04)' }}>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)', marginBottom: 7 }}>{dLabel}</div>
+                  {!isPast && hasPu ? (
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 5 }}>
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>{prevOcc}%</span>
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.12)' }}>›</span>
+                      <span style={{ fontSize: 14, fontWeight: 500, color: '#5B8DEF' }}>{currOcc ?? '—'}%</span>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 14, fontWeight: 500, color: '#5B8DEF', textAlign: 'right', marginBottom: 5 }}>{currOcc ?? '—'}%</div>
+                  )}
+                  <div style={{ height: 5, background: 'rgba(255,255,255,0.07)', borderRadius: 3, marginBottom: 9, position: 'relative' }}>
+                    {!isPast && hasPu && (
+                      <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${prevOcc}%`, background: 'rgba(255,255,255,0.18)', borderRadius: 3 }} />
+                    )}
+                    <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${currOcc ?? 0}%`, background: '#5B8DEF', borderRadius: 3 }} />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)' }}>ADR</span>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{adr ? `${adr}k` : '—'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)' }}>REV</span>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{rev ? `${rev}M` : '—'}</span>
+                  </div>
+                  {!isPast && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)' }}>픽업</span>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: hasPu ? '#5B8DEF' : 'rgba(255,255,255,0.18)' }}>
+                        {hasPu && puOcc ? `+${puOcc}%` : '—'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* 하단 — 미래: BAR·추천 / 과거: 기간 합계 요약 */}
+          {!isPast ? (
+            <div style={{ borderTop: '0.5px solid rgba(255,255,255,0.05)', display: 'grid', gridTemplateColumns: `repeat(${group.dates.length},1fr)`, background: 'rgba(0,0,0,0.15)' }}>
+              {group.dates.map(date => {
+                const bar = barData[date]
+                return (
+                  <div key={date} style={{ padding: '8px 14px', borderRight: '0.5px solid rgba(255,255,255,0.04)' }}>
+                    <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginBottom: 5 }}>BAR</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ fontSize: 13, color: '#5B8DEF' }}>{bar?.cur ? `${bar.cur}k` : '—'}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div style={{ borderTop: '0.5px solid rgba(255,255,255,0.05)', display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', background: 'rgba(0,0,0,0.15)' }}>
+              <div style={{ padding: '8px 14px', borderRight: '0.5px solid rgba(255,255,255,0.04)' }}>
+                <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginBottom: 3 }}>기간 합계 OCC</div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>{pastSummary.avgOcc ?? '—'}%</div>
+                <div style={{ fontSize: 10, color: 'rgba(91,141,239,0.6)', marginTop: 2 }}>전년 —</div>
+              </div>
+              <div style={{ padding: '8px 14px', borderRight: '0.5px solid rgba(255,255,255,0.04)' }}>
+                <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginBottom: 3 }}>평균 ADR</div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>{pastSummary.avgAdr != null ? `${pastSummary.avgAdr}k` : '—'}</div>
+                <div style={{ fontSize: 10, color: 'rgba(91,141,239,0.6)', marginTop: 2 }}>전년 —</div>
+              </div>
+              <div style={{ padding: '8px 14px' }}>
+                <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginBottom: 3 }}>합계 REV</div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>{pastSummary.totalRev != null ? `${pastSummary.totalRev}M` : '—'}</div>
+                <div style={{ fontSize: 10, color: 'rgba(91,141,239,0.6)', marginTop: 2 }}>전년 —</div>
+              </div>
+            </div>
+          )}
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
 // ─── Sub-components ─────────────────────────────────────────────────────────────
 
 function ChangeTag({ value, unit, onClick }: { value: number; unit: string; onClick?: () => void }) {
@@ -280,7 +517,7 @@ function getAchievementColor(pct: number | null): string {
 
 // ─── Month Card ─────────────────────────────────────────────────────────────────
 
-function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSegClick, onAccountClick, pickupNights, onLyClick, onAchievementClick, lyMode, onLyModeToggle }: {
+function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSegClick, onAccountClick, pickupNights, onLyClick, onAchievementClick, lyMode, onLyModeToggle, events = [], pickupRows = [] }: {
   data:             MonthData
   stats:            MonthStats
   loading:          boolean
@@ -294,6 +531,8 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
   onAchievementClick?:     (year: number, month: number) => void
   lyMode:           'v1' | 'v2'
   onLyModeToggle:   () => void
+  events?:          EventGroup[]
+  pickupRows?:      PickupRow[]
 }) {
   const { year, month, occ, adr, rev, forecast, budget, pu, rmAction } = data
 
@@ -324,12 +563,21 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
           className="pointer-events-none absolute -top-6 -left-6 w-28 h-28 rounded-full opacity-20"
           style={{ background: `radial-gradient(circle, var(--card-header-glow-color) 0%, transparent 70%)` }}
         />
-        <div className="relative flex items-end gap-1.5">
-          <span className="font-bold leading-none" style={{ fontSize: 54, color: 'var(--color-text-primary)' }}>
-            {month}
-          </span>
-          <span className="text-lg font-medium text-brand-muted mb-1.5">월</span>
-          <span className="text-xs font-medium text-brand-dimmed mb-2 ml-0.5">{year}</span>
+        <div className="relative flex items-end justify-between gap-1.5">
+          <div className="flex items-end gap-1.5">
+            <span className="font-bold leading-none" style={{ fontSize: 54, color: 'var(--color-text-primary)' }}>
+              {month}
+            </span>
+            <span className="text-lg font-medium text-brand-muted mb-1.5">월</span>
+            <span className="text-xs font-medium text-brand-dimmed mb-2 ml-0.5">{year}</span>
+          </div>
+          {events.length > 0 && (
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 6 }}>
+              {events.map(ev => (
+                <EventBadge key={ev.startDate + ev.name} group={ev} pickupRows={pickupRows} roomCount={roomCount} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -720,6 +968,52 @@ export default function DashboardPage() {
   const totalPages    = Math.ceil(months.length / PAGE_SIZE)
   const visibleMonths = months.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
 
+  // ── 이벤트(c06_calendar) — 카드 6개월 범위 fetch → 같은 이름·연속 날짜 병합 ──
+  const eventRangeStart = months.length ? `${months[0].year}-${String(months[0].month).padStart(2, '0')}-01` : ''
+  const eventRangeEnd = (() => {
+    if (!months.length) return ''
+    const last = months[months.length - 1]
+    const end  = new Date(last.year, last.month, 0)   // 마지막 달 말일
+    return `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`
+  })()
+  const { data: calEventRows = [] } = useQuery({
+    queryKey: ['dash_cal_events', eventRangeStart, eventRangeEnd],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('c06_calendar')
+        .select('date, event')
+        .gte('date', eventRangeStart)
+        .lte('date', eventRangeEnd)
+        .not('event', 'is', null)
+        .ilike('event', '%(%)%')
+        .order('date', { ascending: true })
+      if (error) { console.error('[Dashboard] c06 events error:', error); return [] }
+      return data ?? []
+    },
+    enabled: !!eventRangeStart && !!eventRangeEnd,
+    staleTime: 60 * 60 * 1000,
+  })
+  const eventGroups: EventGroup[] = useMemo(() => {
+    // 연속 날짜를 하나의 그룹으로 (PickupMonthCard groupConsecutiveEvents 동일 로직)
+    const rows = (calEventRows as Array<{ date: string; event: string }>)
+      .filter(r => r.event && extractParenText(r.event))
+      .sort((a, b) => a.date.localeCompare(b.date))
+    const groups: EventGroup[] = []
+    let cur: EventGroup | null = null
+    for (const row of rows) {
+      const paren = extractParenText(row.event)!   // 뱃지 표시 이름 = 괄호 안 텍스트
+      if (!cur) {
+        cur = { name: paren, startDate: row.date, endDate: row.date, dates: [row.date], isPast: false }
+      } else {
+        const diff = (new Date(row.date).getTime() - new Date(cur.endDate).getTime()) / 86400000
+        if (diff <= 1) { cur.endDate = row.date; cur.dates.push(row.date) }
+        else { groups.push(cur); cur = { name: paren, startDate: row.date, endDate: row.date, dates: [row.date], isPast: false } }
+      }
+    }
+    if (cur) groups.push(cur)
+    return groups.map(g => ({ ...g, isPast: otbDate ? g.dates.every(d => d < otbDate) : false }))
+  }, [calEventRows, otbDate])
+
   // otbDate 변경 시 페이지 초기화
   useEffect(() => {
     setPage(0)
@@ -736,119 +1030,236 @@ export default function DashboardPage() {
             <button
               onClick={() => setPage(p => Math.max(0, p - 1))}
               disabled={page === 0}
-              style={{ background: 'transparent', border: 'none', cursor: page === 0 ? 'not-allowed' : 'pointer', color: page === 0 ? 'rgba(255,255,255,0.2)' : 'var(--color-text-primary)', padding: '0 4px', fontSize: 30 }}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 2,
+                background: 'none',
+                border: 'none',
+                cursor: page === 0 ? 'default' : 'pointer',
+                padding: '4px 10px',
+                borderRadius: 6,
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => {
+                if (page !== 0) e.currentTarget.style.background = 'rgba(0,229,160,0.1)'
+              }}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}
             >
-              ‹
+              <span className="arr-char" style={{
+                fontSize: 20,
+                lineHeight: 1,
+                transition: 'color 0.15s',
+                color: page === 0 ? 'rgba(255,255,255,0.1)' : '#00E5A0',
+              }}>‹</span>
+              <span className="arr-hint" style={{
+                fontSize: 9,
+                letterSpacing: '0.03em',
+                transition: 'color 0.15s',
+                whiteSpace: 'nowrap',
+                color: page === 0 ? 'rgba(255,255,255,0.08)' : '#00E5A0',
+              }}>이전</span>
             </button>
             <h1 className="font-semibold" style={{ color: 'var(--color-text-primary)', margin: 0, fontSize: 30 }}>
-              대시보드
+              대시보드_
             </h1>
-            <span className="font-semibold" style={{ color: 'var(--color-text-primary)', fontSize: 30 }}>
-              {months[0]?.month}월 {String(months[0]?.year ?? '').slice(2)}년 &mdash; {months[months.length - 1]?.month}월 {String(months[months.length - 1]?.year ?? '').slice(2)}년
+            <span className="font-semibold" style={{ color: '#00E5A0', fontSize: 30 }}>
+              {months[0]?.month}월 <span style={{ fontSize: '0.7em' }}>{String(months[0]?.year ?? '').slice(2)}년</span>
+              <span style={{ margin: '0 4px' }}>&mdash;</span>
+              {months[months.length - 1]?.month}월 <span style={{ fontSize: '0.7em' }}>{String(months[months.length - 1]?.year ?? '').slice(2)}년</span>
             </span>
             <button
               onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
               disabled={page === totalPages - 1}
-              style={{ background: 'transparent', border: 'none', cursor: page === totalPages - 1 ? 'not-allowed' : 'pointer', color: page === totalPages - 1 ? 'rgba(255,255,255,0.2)' : 'var(--color-text-primary)', padding: '0 4px', fontSize: 30 }}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 2,
+                background: 'none',
+                border: 'none',
+                cursor: page === totalPages - 1 ? 'default' : 'pointer',
+                padding: '4px 10px',
+                borderRadius: 6,
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => {
+                if (page !== totalPages - 1) e.currentTarget.style.background = 'rgba(0,229,160,0.1)'
+              }}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}
             >
-              ›
+              <span className="arr-char" style={{
+                fontSize: 20,
+                lineHeight: 1,
+                transition: 'color 0.15s',
+                color: page === totalPages - 1 ? 'rgba(255,255,255,0.1)' : '#00E5A0',
+              }}>›</span>
+              <span className="arr-hint" style={{
+                fontSize: 9,
+                letterSpacing: '0.03em',
+                transition: 'color 0.15s',
+                whiteSpace: 'nowrap',
+                color: page === totalPages - 1 ? 'rgba(255,255,255,0.08)' : '#00E5A0',
+              }}>다음</span>
             </button>
           </div>
           {!pickupLoading && (
-            <p className="text-base" style={{ color: 'var(--color-text-secondary)', letterSpacing: '0.06em' }}>
-              [{(() => { const [, mm, dd] = otbDate.split('-'); return `${Number(mm)}/${Number(dd)}` })()}{' '}
-              {pickupDays > 0 ? (
-                <span style={{ color: 'var(--color-accent-primary)' }}>
-                  {pickupDays}일
-                </span>
-              ) : (
-                <span style={{ color: 'var(--color-accent-primary)' }}>당일</span>
-              )}
-              {' '}픽업]{' '}객실{' '}
-              <button
-                onClick={() => setMonthlyPickupSegOpen(true)}
-                title="월별 픽업 추이 보기"
-                style={{ color: totalPuNights >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
-              >
-                {(() => { const { num, unit } = formatPuParts(totalPuNights, 'nights'); return <>{num}{unit}</> })()}
-              </button>
-              ,{' '}매출{' '}
-              <button
-                onClick={() => setMonthlyPickupSegOpen(true)}
-                title="월별 픽업 추이 보기"
-                style={{ color: totalPuRevenue >= 0 ? '#00A86B' : '#E53E3E', fontWeight: 600, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }}
-              >
-                {(() => { const { num } = formatPuParts(totalPuRevenue, 'currency'); return <>{num}백만 원</> })()}
-              </button>
-              {' '}[{String(months[0].year).slice(2)}년 {months[0].month}월~{String(months[months.length - 1].year).slice(2)}년 {months[months.length - 1].month}월]
-            </p>
-          )}
-        </div>
-        {/* 2행: 로딩인디케이터(조건부) + 액션버튼 3개 우측 정렬 */}
-        <div className="flex items-center justify-end" style={{ gap: 8 }}>
-          {pickupLoading && (
-            <div className="h-5 w-80 rounded animate-pulse mr-auto" style={{ background: 'var(--color-bg-tertiary)' }} />
+            <button
+              onClick={() => setMonthlyPickupSegOpen(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 13,
+                background: 'none',
+                border: 'none',
+                borderRadius: 20,
+                padding: '8px 16px 8px 13px',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                fontFamily: 'inherit',
+              }}
+            >
+              <span style={{
+                width: 9, height: 9, borderRadius: '50%',
+                background: '#00E5A0', flexShrink: 0,
+                boxShadow: '0 0 0 2px rgba(0,229,160,0.2)',
+              }} />
+              <span style={{ fontSize: 15, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+                {(() => { const [, mm, dd] = otbDate.split('-'); return `${Number(mm)}/${Number(dd)}` })()}{' '}
+                {pickupDays > 0 ? `${pickupDays}일` : '당일'} 픽업 ·{' '}
+                {(() => { const { num, unit } = formatPuParts(totalPuNights, 'nights'); return `${num}${unit}` })()}{' '}
+                {(() => { const { num, unit } = formatPuParts(totalPuRevenue, 'currency'); return `${num}${unit === 'M' ? '백만' : unit}` })()} ·{' '}
+                {months[0].month}월~{months[months.length - 1].month}월
+              </span>
+              <span style={{
+                fontSize: 13, fontWeight: 500,
+                color: 'rgba(0,229,160,0.6)',
+                display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0,
+              }}>
+                상세 ›
+              </span>
+            </button>
           )}
         </div>
       </div>
 
 
 
-      {/* ── Month range navigator ── */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-1">
-            {Array.from({ length: totalPages }).map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setPage(i)}
-                className="rounded-full transition-all duration-200"
-                style={{
-                  width:      i === page ? 20 : 6,
-                  height:     6,
-                  background: i === page
-                    ? 'var(--color-accent-primary)'
-                    : 'var(--dot-inactive)',
-                }}
-                aria-label={`페이지 ${i + 1}`}
-              />
-            ))}
+      {/* 카드 위 액션 행 — 아이콘 3개 (우측) */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* 월별 현황 (아이콘 전용) */}
+          <div style={{ position: 'relative', display: 'inline-flex' }}
+            onMouseEnter={e => { const tip = e.currentTarget.querySelector('.btn-tip') as HTMLElement | null; if (tip) tip.style.opacity = '1' }}
+            onMouseLeave={e => { const tip = e.currentTarget.querySelector('.btn-tip') as HTMLElement | null; if (tip) tip.style.opacity = '0' }}
+          >
+            <button
+              onClick={() => setActualBudgetModal(true)}
+              title="월별 현황"
+              style={{
+                width: 34, height: 34, borderRadius: 7,
+                border: '0.5px solid rgba(255,255,255,0.12)',
+                background: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#00E5A0',
+                transition: 'border-color 0.15s, color 0.15s, background 0.15s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = '#00E5A0'
+                e.currentTarget.style.background = 'rgba(0,229,160,0.08)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'
+                e.currentTarget.style.background = 'none'
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="12" width="4" height="9"/><rect x="10" y="8" width="4" height="13"/><rect x="17" y="4" width="4" height="17"/>
+              </svg>
+            </button>
+            <span className="btn-tip" style={{
+              position: 'absolute', bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)',
+              background: '#1e1e1e', border: '0.5px solid rgba(255,255,255,0.15)',
+              color: 'rgba(255,255,255,0.7)', fontSize: 10, padding: '3px 8px',
+              borderRadius: 4, whiteSpace: 'nowrap', pointerEvents: 'none',
+              opacity: 0, transition: 'opacity 0.15s',
+            }}>월별 현황</span>
           </div>
-        </div>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-          <button
-            onClick={() => setActualBudgetModal(true)}
-            style={{ display:'inline-flex', alignItems:'center', gap:6, background:'transparent', border:'1px solid rgba(255,255,255,0.15)', borderRadius:8, padding:'6px 14px', fontSize:12, color:'rgba(255,255,255,0.6)', cursor:'pointer', transition:'all 0.15s', whiteSpace:'nowrap', height:34 }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor='#00E5A0'; e.currentTarget.style.color='#00E5A0' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor='rgba(255,255,255,0.15)'; e.currentTarget.style.color='rgba(255,255,255,0.6)' }}
+          {/* 데일리 리포트 (아이콘 전용) */}
+          <div style={{ position: 'relative', display: 'inline-flex' }}
+            onMouseEnter={e => { const tip = e.currentTarget.querySelector('.btn-tip') as HTMLElement | null; if (tip) tip.style.opacity = '1' }}
+            onMouseLeave={e => { const tip = e.currentTarget.querySelector('.btn-tip') as HTMLElement | null; if (tip) tip.style.opacity = '0' }}
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
-            </svg>
-            월별 현황
-          </button>
-          <button
-            onClick={() => setGmReportOpen(true)}
-            style={{ display:'inline-flex', alignItems:'center', gap:6, background:'rgba(0,229,160,0.12)', border:'1px solid rgba(0,229,160,0.4)', borderRadius:8, padding:'6px 14px', fontSize:12, color:'#00E5A0', cursor:'pointer', transition:'all 0.15s', whiteSpace:'nowrap', height:34 }}
-            onMouseEnter={e => { e.currentTarget.style.background='rgba(0,229,160,0.22)'; e.currentTarget.style.borderColor='#00E5A0' }}
-            onMouseLeave={e => { e.currentTarget.style.background='rgba(0,229,160,0.12)'; e.currentTarget.style.borderColor='rgba(0,229,160,0.4)' }}
+            <button
+              onClick={() => setGmReportOpen(true)}
+              title="데일리 리포트"
+              style={{
+                width: 34, height: 34, borderRadius: 7,
+                border: '0.5px solid rgba(255,255,255,0.12)',
+                background: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#00E5A0',
+                transition: 'border-color 0.15s, color 0.15s, background 0.15s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = '#00E5A0'
+                e.currentTarget.style.background = 'rgba(0,229,160,0.08)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'
+                e.currentTarget.style.background = 'none'
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+              </svg>
+            </button>
+            <span className="btn-tip" style={{
+              position: 'absolute', bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)',
+              background: '#1e1e1e', border: '0.5px solid rgba(255,255,255,0.15)',
+              color: 'rgba(255,255,255,0.7)', fontSize: 10, padding: '3px 8px',
+              borderRadius: 4, whiteSpace: 'nowrap', pointerEvents: 'none',
+              opacity: 0, transition: 'opacity 0.15s',
+            }}>데일리 리포트</span>
+          </div>
+          {/* 마감 보고서 (아이콘 전용) */}
+          <div style={{ position: 'relative', display: 'inline-flex' }}
+            onMouseEnter={e => { const tip = e.currentTarget.querySelector('.btn-tip') as HTMLElement | null; if (tip) tip.style.opacity = '1' }}
+            onMouseLeave={e => { const tip = e.currentTarget.querySelector('.btn-tip') as HTMLElement | null; if (tip) tip.style.opacity = '0' }}
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
-            </svg>
-            데일리 리포트
-          </button>
-          <button
-            onClick={() => setClosingReportOpen(true)}
-            style={{ display:'inline-flex', alignItems:'center', gap:6, background:'transparent', border:'1px solid rgba(255,255,255,0.15)', borderRadius:8, padding:'6px 14px', fontSize:12, color:'rgba(255,255,255,0.6)', cursor:'pointer', transition:'all 0.15s', whiteSpace:'nowrap', height:34 }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor='#00E5A0'; e.currentTarget.style.color='#00E5A0' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor='rgba(255,255,255,0.15)'; e.currentTarget.style.color='rgba(255,255,255,0.6)' }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/>
-            </svg>
-            마감 보고서
-          </button>
+            <button
+              onClick={() => setClosingReportOpen(true)}
+              title="마감 보고서"
+              style={{
+                width: 34, height: 34, borderRadius: 7,
+                border: '0.5px solid rgba(255,255,255,0.12)',
+                background: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#00E5A0',
+                transition: 'border-color 0.15s, color 0.15s, background 0.15s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = '#00E5A0'
+                e.currentTarget.style.background = 'rgba(0,229,160,0.08)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'
+                e.currentTarget.style.background = 'none'
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>
+              </svg>
+            </button>
+            <span className="btn-tip" style={{
+              position: 'absolute', bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)',
+              background: '#1e1e1e', border: '0.5px solid rgba(255,255,255,0.15)',
+              color: 'rgba(255,255,255,0.7)', fontSize: 10, padding: '3px 8px',
+              borderRadius: 4, whiteSpace: 'nowrap', pointerEvents: 'none',
+              opacity: 0, transition: 'opacity 0.15s',
+            }}>마감 보고서</span>
+          </div>
         </div>
       </div>
 
@@ -876,6 +1287,8 @@ export default function DashboardPage() {
             pickupNights={getMonthPickup(m.year, m.month)}
             lyMode={lyMode}
             onLyModeToggle={() => setLyMode(prev => prev === 'v1' ? 'v2' : 'v1')}
+            events={eventGroups.filter(g => { const [gy, gm] = g.startDate.split('-').map(Number); return gy === m.year && gm === m.month })}
+            pickupRows={pickupData.filter(r => { const d = new Date(r.business_date); return d.getFullYear() === m.year && d.getMonth() + 1 === m.month })}
           />
         ))}
       </div>

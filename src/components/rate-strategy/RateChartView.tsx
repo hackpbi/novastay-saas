@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useFcstDateContext } from '@/contexts/FcstDateContext'
 import { toLocalYMD } from '@/utils/dateLocal'
 import { getKSTDateString } from './BaseCalendar'
 
@@ -21,6 +22,12 @@ export function RateChartView({ hotelId, otbDate, vsOtbDate, onDayClick }: RateC
   const chartRef  = useRef<any>(null)
   const listenersCleanupRef = useRef<(() => void) | null>(null)
   const [offset,  setOffset]  = useState(0)
+
+  // FCST OCC 깃발 마크 토글 (기본 ON) — 플러그인은 ref로 최신값 참조
+  const { fcstDate } = useFcstDateContext()
+  const [showFcst, setShowFcst] = useState(true)
+  const showFcstRef = useRef(showFcst)
+  const fcstMapRef  = useRef<Record<string, number>>({})
 
   // BAR Rate 조회 — 오늘부터 60일
   const today    = getKSTDateString()
@@ -90,6 +97,39 @@ export function RateChartView({ hotelId, otbDate, vsOtbDate, onDayClick }: RateC
     enabled: !!hotelId,
   })
   const roomCount = hotelInfo?.room_count ?? 0
+
+  // ── FCST 일별 (get_forecast_daily, 글로벌 fcstDate 스냅샷) — 차트 전체 구간 ──
+  const { data: fcstRows = [] } = useQuery({
+    queryKey: ['chart-fcst', hotelId, fcstDate, today, endDate],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('get_forecast_daily', {
+        p_hotel_id:    hotelId,
+        p_start_date:  today,
+        p_end_date:    endDate,
+        p_update_date: fcstDate,       // 글로벌 FCST date picker 값
+      })
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: !!hotelId && !!fcstDate,
+  })
+
+  // fcstMap: business_date → FCST OCC% (forecast_nights / roomCount)
+  const fcstMap = useMemo(() => {
+    if (!roomCount) return {} as Record<string, number>
+    const m: Record<string, number> = {}
+    for (const r of fcstRows as any[]) {
+      m[r.business_date] = Math.round((Number(r.forecast_nights ?? 0) / roomCount) * 100)
+    }
+    return m
+  }, [fcstRows, roomCount])
+
+  // 토글/데이터 변경 → 플러그인 ref 동기화 후 재드로우
+  useEffect(() => {
+    showFcstRef.current = showFcst
+    fcstMapRef.current  = fcstMap
+    chartRef.current?.update('none')
+  }, [showFcst, fcstMap])
 
   // occMap: business_date → occ% = 합산 otb_nights / roomCount * 100
   const occMap = useMemo(() => {
@@ -287,6 +327,24 @@ export function RateChartView({ hotelId, otbDate, vsOtbDate, onDayClick }: RateC
               ctx.textBaseline = 'middle'
               ctx.fillText(label, x, y)
             }
+
+            // FCST OCC 깃발 마크 (yOcc 스케일 위, 폴대 + 오른쪽 삼각)
+            if (showFcstRef.current) {
+              const fcstOcc = fcstMapRef.current[d.dateStr]
+              const yOcc = chart.scales['yOcc']
+              if (fcstOcc != null && yOcc) {
+                const fy = yOcc.getPixelForValue(fcstOcc)
+                ctx.save()
+                ctx.fillStyle   = '#00E5A0'
+                ctx.strokeStyle = '#00E5A0'
+                ctx.lineWidth   = 1.5
+                ctx.lineCap     = 'round'
+                ctx.globalAlpha = 0.95
+                ctx.beginPath(); ctx.moveTo(x, fy); ctx.lineTo(x, fy + 11); ctx.stroke()
+                ctx.beginPath(); ctx.moveTo(x, fy); ctx.lineTo(x + 8, fy + 4); ctx.lineTo(x, fy + 8); ctx.closePath(); ctx.fill()
+                ctx.restore()
+              }
+            }
           })
           ctx.restore()
         },
@@ -374,6 +432,8 @@ export function RateChartView({ hotelId, otbDate, vsOtbDate, onDayClick }: RateC
                 const occ   = d.occ   != null ? `${d.occ}%`  : '—'
                 const adr   = d.adr   != null ? `${d.adr}K`  : '—'
                 const bar   = d.bar   != null ? `${d.bar}K`  : '—'
+                const fcstOcc = (showFcstRef.current && fcstMapRef.current[d.dateStr] != null)
+                  ? `${fcstMapRef.current[d.dateStr]}%` : null
                 const fit   = d.fit   != null ? (d.fit   >= 0 ? `+${d.fit}`   : `${d.fit}`)   + '실' : '—'
                 const group = d.group != null ? (d.group >= 0 ? `+${d.group}` : `${d.group}`) + '실' : '—'
 
@@ -392,6 +452,10 @@ export function RateChartView({ hotelId, otbDate, vsOtbDate, onDayClick }: RateC
                       <div style="font-size:9px;color:#555;text-transform:uppercase;letter-spacing:.05em">BAR</div>
                       <div style="font-size:13px;font-weight:500;color:#00E5A0">${bar}</div>
                     </div>
+                    ${fcstOcc ? `<div>
+                      <div style="font-size:9px;color:#555;text-transform:uppercase;letter-spacing:.05em">FCST</div>
+                      <div style="font-size:13px;font-weight:500;color:#00E5A0">${fcstOcc}</div>
+                    </div>` : ''}
                   </div>
                   <div style="height:0.5px;background:#333;margin-bottom:6px"></div>
                   <div style="font-size:9px;color:#555;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Pick-Up</div>
@@ -538,6 +602,16 @@ export function RateChartView({ hotelId, otbDate, vsOtbDate, onDayClick }: RateC
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ width: 20, height: 2, background: '#00E5A0', display: 'inline-block' }} />
             BAR Rate
+          </span>
+          {/* FCST OCC 깃발 마크 토글 */}
+          <span
+            onClick={() => setShowFcst(v => !v)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none' }}
+          >
+            <span style={{ position: 'relative', width: 30, height: 16, borderRadius: 16, background: showFcst ? '#00E5A0' : '#333', transition: 'background 0.2s', flexShrink: 0, display: 'inline-block' }}>
+              <span style={{ position: 'absolute', width: 12, height: 12, top: 2, left: showFcst ? 16 : 2, borderRadius: '50%', background: '#fff', transition: 'left 0.2s' }} />
+            </span>
+            FCST OCC
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

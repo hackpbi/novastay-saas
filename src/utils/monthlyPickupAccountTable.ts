@@ -127,8 +127,8 @@ export function buildMonthlyPickupAccountTable(args: {
     const acctName   = parts[1]
     const mk         = parts[2]
 
-    // 최소 하나 이상 활동 있는 row만 포함
-    if (Math.abs(st.otbNights - st.vsNights) === 0 && Math.abs(st.otbRevenue - st.vsRevenue) === 0) continue
+    // 픽업이 0이어도 OTB(또는 기준) 데이터가 있으면 표시 — 완전히 빈 row만 제외
+    if (st.otbNights === 0 && st.otbRevenue === 0 && st.vsNights === 0 && st.vsRevenue === 0) continue
 
     const meta: CodeMeta = codeMeta.get(segCode) ?? {
       parentName:       null,

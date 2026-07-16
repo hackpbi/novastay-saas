@@ -52,7 +52,7 @@ module.exports = {
         },
       },
       fontFamily: {
-        sans: ['"DM Sans"', 'Inter', 'sans-serif'],
+        sans: ['Pretendard', '"DM Sans"', 'Inter', 'sans-serif'],
         mono: ['"DM Mono"', '"JetBrains Mono"', 'monospace'],
       },
       borderRadius: {

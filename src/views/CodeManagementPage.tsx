@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Plus, Upload, Download, Trash2,
-  Search, RefreshCw, Loader2, X, Save,
+  Search, RefreshCw, Loader2, X, Save, AlertTriangle,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
@@ -46,6 +46,14 @@ const PRIMARY: Record<TableKey, string> = {
   c02_room_nos:             'room_no',
   c03_market_codes:         'market_code',
   c04_reservation_statuses: 'rsvn_status_code',
+}
+
+// 탭별 검색 드롭다운 대상 컬럼
+const SEARCH_COLUMNS: Record<TableKey, string[]> = {
+  c01_room_types:           ['room_type_code', 'room_type_description'],
+  c02_room_nos:             ['room_no', 'room_type_code'],
+  c03_market_codes:         ['market_code', 'segmentation', 'market_code_description'],
+  c04_reservation_statuses: ['rsvn_status_code', 'rsvn_status_description'],
 }
 
 const DEFAULT_FORM: Record<TableKey, Record<string, any>> = {
@@ -141,6 +149,20 @@ function ActiveBadge({ v }: { v: boolean }) {
   )
 }
 
+function PackageBadge({ v }: { v: boolean }) {
+  return v ? (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium"
+      style={{ background: 'var(--accent-badge-bg)', border: '1px solid var(--accent-badge-border)', color: 'var(--color-accent-primary)' }}>
+      <span className="w-1.5 h-1.5 rounded-full bg-accent-primary" />패키지
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium text-brand-dimmed"
+      style={{ border: '1px solid var(--color-border-default)' }}>
+      <span className="w-1.5 h-1.5 rounded-full bg-brand-dimmed" />미사용
+    </span>
+  )
+}
+
 // ── Excel template download ────────────────────────────────────────────────────
 
 function downloadTemplate(tableKey: TableKey) {
@@ -180,6 +202,7 @@ const COLUMNS: Record<TableKey, Col[]> = {
     { key: 'sorting3',                label: '분류3' },
     { key: 'sorting4',                label: '분류4' },
     { key: 'sorting5',                label: '분류5' },
+    { key: 'use_package', label: '패키지', render: row => <PackageBadge v={row.use_package} /> },
     { key: 'is_active', label: '활성', render: row => <ActiveBadge v={row.is_active} /> },
   ],
   c04_reservation_statuses: [
@@ -202,12 +225,645 @@ const COLUMNS: Record<TableKey, Col[]> = {
   ],
 }
 
+// ── 유사 어카운트 이름 비교 (외부 라이브러리 없이 직접 구현) ──────────────────────
+function normAccName(s: any): string {
+  return String(s ?? '')
+    .replace(/\s+/g, '')                        // 공백 제거
+    .replace(/㈜/g, '')                         // ㈜
+    .replace(/\(\s*주\s*\)|\(\s*구\s*\)/g, '')   // (주) (구)
+    .replace(/[()\-·.,'"]/g, '')                // 특수문자
+    .toLowerCase()
+}
+function levDist(a: string, b: string): number {
+  const m = a.length, n = b.length
+  if (m === 0) return n
+  if (n === 0) return m
+  const dp = Array.from({ length: m + 1 }, (_, i) => i)
+  for (let j = 1; j <= n; j++) {
+    let prev = dp[0]
+    dp[0] = j
+    for (let i = 1; i <= m; i++) {
+      const tmp = dp[i]
+      dp[i] = Math.min(dp[i] + 1, dp[i - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1))
+      prev = tmp
+    }
+  }
+  return dp[m]
+}
+function isSimilarName(na: string, nb: string): boolean {
+  if (!na || !nb) return false
+  if (na === nb) return true
+  if (na.includes(nb) || nb.includes(na)) return true
+  const maxLen = Math.max(na.length, nb.length)
+  return levDist(na, nb) <= maxLen * 0.2
+}
+
+// ── 어카운트 관리 탭 (c10_account_aliases) — 인라인 편집 ──────────────────────────
+
+function AccountAliasTab({ hotelId }: { hotelId: string }) {
+  const [rows,    setRows]    = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [searchQ, setSearchQ] = useState('')
+  const [dropdownOpen, setDropdownOpen] = useState(false)   // 검색 드롭다운
+  const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set())   // 멀티 선택 → 해당 항목만 표시
+  const searchBoxRef = useRef<HTMLDivElement | null>(null)
+  const [editId,  setEditId]  = useState<string | null>(null)   // '__new__' = 추가 행
+  const [buf,     setBuf]     = useState<{ account_no: string; original_name: string; display_name: string }>(
+    { account_no: '', original_name: '', display_name: '' }
+  )
+  const rowRef    = useRef<HTMLTableRowElement | null>(null)
+  const savingRef = useRef(false)
+  // 미등록 어카운트 감지
+  const [unregLoading, setUnregLoading] = useState(false)
+  const [unregRows,    setUnregRows]    = useState<any[]>([])
+  const [unregOpen,    setUnregOpen]    = useState(false)
+  const [toast,        setToast]        = useState<string | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // 유사 어카운트 찾기
+  const [simLoading, setSimLoading] = useState(false)
+  const [simPairs,   setSimPairs]   = useState<{ a: any; b: any }[]>([])
+  const [simOpen,    setSimOpen]    = useState(false)
+  // 검색 실행 여부 (초기 진입 시 빈 테이블)
+  const [searched, setSearched] = useState(false)
+  // 일괄 저장: 기존 행 인라인 편집 변경분 누적 (id → 필드)
+  const [edited, setEdited] = useState<Record<string, { account_no: string; original_name: string; display_name: string }>>({})
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false)
+  const [saving, setSaving] = useState(false)
+  // 정렬 (기본: PMS 원본명 오름차순)
+  const [sortKey, setSortKey] = useState<'account_no' | 'original_name' | 'display_name' | 'is_active'>('original_name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  // 셀 인라인 편집 (contenteditable — 가로폭 유지)
+  const [cellEdit,   setCellEdit]   = useState<{ id: string; field: 'account_no' | 'original_name' | 'display_name' } | null>(null)
+  const cellRef     = useRef<HTMLSpanElement | null>(null)
+  const cellInitRef = useRef<string>('')
+
+  const fetchRows = useCallback(async () => {
+    if (!hotelId) return
+    setLoading(true)
+    const { data } = await (supabase as any)
+      .from('c10_account_aliases')
+      .select('*')
+      .eq('hotel_id', hotelId)
+      .order('original_name', { ascending: true })
+    setRows(data ?? [])
+    setEdited({})            // 새 조회 시 미저장 변경분 초기화
+    setSelectedIds(new Set()) // 선택 필터 초기화 → 전체 목록
+    setDropdownOpen(false)
+    setSearched(true)
+    setLoading(false)
+  }, [hotelId])
+
+  // ⚠️ 자동 fetch 제거 — "검색" 버튼 클릭 시에만 조회
+
+  // 편집 변경분 반영된 표시용 행
+  const merged = rows.map(r => (edited[r.id] ? { ...r, ...edited[r.id], __dirty: true } : r))
+
+  // 테이블: 선택 항목들만 표시 (없으면 전체)
+  const filtered = selectedIds.size > 0 ? merged.filter(r => selectedIds.has(r.id)) : merged
+  const toggleSuggestion = (id: string) => setSelectedIds(prev => {
+    const next = new Set(prev)
+    next.has(id) ? next.delete(id) : next.add(id)
+    return next
+  })
+
+  // 검색 드롭다운 제안 (original_name / display_name / account_no 포함, 대소문자 무시, 최대 10건)
+  const suggestions = searchQ
+    ? merged.filter(r => {
+        const q = searchQ.toLowerCase()
+        return (r.original_name ?? '').toLowerCase().includes(q)
+          || (r.display_name ?? '').toLowerCase().includes(q)
+          || String(r.account_no ?? '').toLowerCase().includes(q)
+      }).slice(0, 10)
+    : []
+
+  const sorted = [...filtered].sort((a, b) => {
+    const cmp = sortKey === 'is_active'
+      ? (a.is_active ? 1 : 0) - (b.is_active ? 1 : 0)
+      : String(a[sortKey] ?? '').localeCompare(String(b[sortKey] ?? ''), 'ko')
+    return sortDir === 'asc' ? cmp : -cmp
+  })
+
+  function toggleSort(key: typeof sortKey) {
+    if (sortKey === key) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortKey(key); setSortDir('asc') }
+  }
+  const sortIcon = (key: typeof sortKey) => (sortKey === key ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '')
+
+  function startAdd() {
+    setEditId('__new__')
+    setBuf({ account_no: '', original_name: '', display_name: '' })
+  }
+  function cancelEdit() {
+    savingRef.current = false
+    setEditId(null)
+  }
+  async function saveEdit() {
+    if (savingRef.current || editId == null) return
+    // original_name / display_name 필수 — 없으면 저장 불가 (편집 종료)
+    if (!buf.original_name.trim() || !buf.display_name.trim()) { cancelEdit(); return }
+    savingRef.current = true
+    try {
+      if (editId === '__new__') {
+        // 신규는 즉시 INSERT (일괄 저장 대상은 기존 행 UPDATE)
+        const { data } = await (supabase as any).from('c10_account_aliases').insert({
+          hotel_id:      hotelId,
+          account_no:    buf.account_no.trim() || null,
+          original_name: buf.original_name.trim(),
+          display_name:  buf.display_name.trim(),
+          is_active:     true,
+        }).select().single()
+        if (data) setRows(prev => [data, ...prev])   // 재조회 없이 로컬 반영 (미저장 편집 보존)
+        setSearched(true)
+        // 방금 등록한 항목을 미등록 배너에서 제거
+        setUnregRows(prev => prev.filter(u => String(u.account_no ?? '') !== buf.account_no.trim()))
+      } else {
+        // 기존 행: 변경분 누적 (즉시 저장 X → "저장" 버튼으로 일괄 UPDATE)
+        const id = editId
+        const next = { account_no: buf.account_no.trim(), original_name: buf.original_name.trim(), display_name: buf.display_name.trim() }
+        setEdited(prev => ({ ...prev, [id]: next }))
+      }
+    } finally {
+      setEditId(null)
+      savingRef.current = false
+    }
+  }
+  async function toggleActive(r: any) {
+    // 즉시 UPDATE + 로컬 반영 (재조회 X → 미저장 편집 보존)
+    await (supabase as any).from('c10_account_aliases').update({ is_active: !r.is_active }).eq('id', r.id)
+    setRows(prev => prev.map(x => (x.id === r.id ? { ...x, is_active: !r.is_active } : x)))
+  }
+  async function del(id: string) {
+    await (supabase as any).from('c10_account_aliases').delete().eq('id', id)
+    setRows(prev => prev.filter(x => x.id !== id))
+    setEdited(prev => { const n = { ...prev }; delete n[id]; return n })
+  }
+
+  // 일괄 저장 (누적된 기존 행 변경분 UPDATE)
+  const editedIds = Object.keys(edited)
+  async function saveAll() {
+    if (editedIds.length === 0 || saving) return
+    setSaving(true)
+    try {
+      for (const id of editedIds) {
+        const e = edited[id]
+        await (supabase as any).from('c10_account_aliases').update({
+          account_no:    e.account_no.trim() || null,
+          original_name: e.original_name.trim(),
+          display_name:  e.display_name.trim(),
+        }).eq('id', id)
+      }
+    } finally {
+      setShowSaveConfirm(false)
+      setSaving(false)
+      fetchRows()   // 저장 후 변경 내역 초기화 + 새로고침
+    }
+  }
+
+  // ── 셀 contenteditable 편집 ──
+  function startCellEdit(id: string, field: 'account_no' | 'original_name' | 'display_name', val: string) {
+    if (cellEdit?.id === id && cellEdit?.field === field) return
+    cellInitRef.current = val ?? ''
+    setCellEdit({ id, field })
+  }
+  function revertCellEdit() { setCellEdit(null) }
+  function saveCellEdit() {
+    if (!cellEdit || !cellRef.current) return
+    const val = (cellRef.current.textContent ?? '').trim()
+    const { id, field } = cellEdit
+    // 필수(원본명/표시명) 비면 저장 불가 → 되돌림
+    if ((field === 'original_name' || field === 'display_name') && !val) { setCellEdit(null); return }
+    const row = merged.find(x => x.id === id)
+    if (row) {
+      const base: Record<string, string> = {
+        account_no:    row.account_no ?? '',
+        original_name: row.original_name ?? '',
+        display_name:  row.display_name ?? '',
+      }
+      base[field] = val
+      setEdited(prev => ({ ...prev, [id]: base as { account_no: string; original_name: string; display_name: string } }))
+    }
+    setCellEdit(null)
+  }
+  function handleCellKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter')  { e.preventDefault(); saveCellEdit() }
+    if (e.key === 'Escape') { e.preventDefault(); revertCellEdit() }
+  }
+
+  // 셀 렌더 (편집 중이면 contenteditable + ✓/↩, 아니면 텍스트)
+  const renderCell = (r: any, field: 'account_no' | 'original_name' | 'display_name') => {
+    const editing = cellEdit?.id === r.id && cellEdit?.field === field
+    if (!editing) return <span>{r[field] ?? '-'}</span>
+    const btn: React.CSSProperties = { background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13, lineHeight: 1 }
+    return (
+      <span className="inline-flex items-center gap-2">
+        <span
+          ref={cellRef}
+          contentEditable
+          suppressContentEditableWarning
+          onKeyDown={handleCellKeyDown}
+          onClick={e => e.stopPropagation()}
+          style={{ borderBottom: '1.5px solid #00E5A0', outline: 'none', minWidth: 20, display: 'inline-block', color: 'var(--color-text-primary)' }}
+        />
+        <button title="저장"      onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); saveCellEdit() }}   style={{ ...btn, color: '#00E5A0' }}>✓</button>
+        <button title="되돌리기"  onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); revertCellEdit() }} style={{ ...btn, color: 'var(--color-text-muted)' }}>↩</button>
+      </span>
+    )
+  }
+
+  // 토스트 (경량, 2.5초 자동 소멸)
+  function showToast(msg: string) {
+    setToast(msg)
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), 2500)
+  }
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current) }, [])
+
+  // 검색 드롭다운 — input 바깥 클릭 시 닫힘
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) setDropdownOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [])
+
+  // 셀 편집 진입 시 텍스트 세팅 + 포커스 + 커서 끝으로
+  useEffect(() => {
+    if (cellEdit && cellRef.current) {
+      cellRef.current.textContent = cellInitRef.current
+      cellRef.current.focus()
+      const range = document.createRange()
+      range.selectNodeContents(cellRef.current); range.collapse(false)
+      const sel = window.getSelection(); sel?.removeAllRanges(); sel?.addRange(range)
+    }
+  }, [cellEdit])
+
+  // 미등록 어카운트 확인 (get_unregistered_accounts RPC)
+  async function checkUnregistered() {
+    if (!hotelId || unregLoading) return
+    setUnregLoading(true)
+    try {
+      const { data } = await (supabase as any).rpc('get_unregistered_accounts', { p_hotel_id: hotelId })
+      const list = (data ?? []) as any[]
+      setUnregRows(list)
+      if (list.length === 0) { setUnregOpen(false); showToast('미등록 어카운트 없음') }
+      else setUnregOpen(true)
+    } finally {
+      setUnregLoading(false)
+    }
+  }
+
+  // 미등록 항목 → 메인 목록 최상단 인라인 편집 행(값 자동 채움)
+  function addFromUnreg(u: any) {
+    setEditId('__new__')
+    setBuf({
+      account_no:    u.account_no != null ? String(u.account_no) : '',
+      original_name: u.account_name ?? '',
+      display_name:  u.account_name ?? '',
+    })
+  }
+
+  // 유사 어카운트 쌍 찾기 (로드된 목록 대상, 전처리 후 비교)
+  function findSimilar() {
+    if (simLoading) return
+    setSimLoading(true)
+    setTimeout(() => {
+      const norms = rows.map(r => ({ r, n: normAccName(r.original_name) }))
+      const pairs: { a: any; b: any }[] = []
+      for (let i = 0; i < norms.length; i++) {
+        for (let j = i + 1; j < norms.length; j++) {
+          if (isSimilarName(norms[i].n, norms[j].n)) pairs.push({ a: norms[i].r, b: norms[j].r })
+        }
+      }
+      setSimPairs(pairs)
+      setSimOpen(pairs.length > 0)
+      if (pairs.length === 0) showToast('유사 어카운트 없음')
+      setSimLoading(false)
+    }, 0)
+  }
+
+  // 두 항목 display_name 을 원본명A 기준으로 통일 → 일괄 저장 state 누적 (즉시 저장 X)
+  function unifyPair(a: any, b: any) {
+    const target = a.original_name ?? ''
+    setEdited(prev => {
+      const next = { ...prev }
+      for (const row of [a, b]) {
+        const cur = merged.find(x => x.id === row.id) ?? row
+        next[row.id] = {
+          account_no:    cur.account_no ?? '',
+          original_name: cur.original_name ?? '',
+          display_name:  target,
+        }
+      }
+      return next
+    })
+  }
+
+  // 행 바깥으로 포커스 이동 시 저장 (같은 행 내 셀 이동은 유지)
+  function handleRowBlur() {
+    setTimeout(() => {
+      if (rowRef.current && !rowRef.current.contains(document.activeElement)) saveEdit()
+    }, 0)
+  }
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter')  { e.preventDefault(); saveEdit() }
+    if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
+  }
+
+  const editInput = (field: 'account_no' | 'original_name' | 'display_name', placeholder: string, focus?: boolean) => (
+    <input
+      autoFocus={focus}
+      value={buf[field]}
+      placeholder={placeholder}
+      onChange={e => setBuf(prev => ({ ...prev, [field]: e.target.value }))}
+      onKeyDown={handleKeyDown}
+      onFocus={onFocus}
+      onBlur={e => { onBlur(e); handleRowBlur() }}
+      onClick={e => e.stopPropagation()}
+      className={inputCls}
+      style={inputStyle}
+    />
+  )
+
+  const editRowEl = (key: string) => (
+    <tr key={key} ref={rowRef} style={{ borderBottom: '1px solid var(--color-border-subtle)', background: 'var(--color-bg-secondary)' }}>
+      <td className="px-4 py-2">{editInput('account_no', '(선택)')}</td>
+      <td className="px-4 py-2">{editInput('original_name', 'PMS 원본명', true)}</td>
+      <td className="px-4 py-2">{editInput('display_name', '표시명')}</td>
+      <td className="px-4 py-3" />
+      <td className="px-4 py-3" />
+    </tr>
+  )
+
+  return (
+    <>
+      {/* Toolbar */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <div className="relative" ref={searchBoxRef}>
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none" />
+            <input
+              value={searchQ}
+              onChange={e => { const v = e.target.value; setSearchQ(v); setDropdownOpen(v.length > 0); if (v === '') setSelectedIds(new Set()) }}
+              onFocus={e => { onFocus(e); if (searchQ) setDropdownOpen(true) }}
+              onBlur={e => { onBlur(e); if (selectedIds.size > 0) e.currentTarget.style.border = '1px solid #00E5A0' }}
+              placeholder="어카운트 검색..."
+              className={`${inputCls} pl-9 w-56`}
+              style={{ ...inputStyle, ...(selectedIds.size > 0 ? { border: '1px solid #00E5A0' } : {}) }}
+            />
+            {dropdownOpen && suggestions.length > 0 && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 9999, minWidth: 280, background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, overflow: 'hidden', boxShadow: 'var(--shadow-elevated)' }}>
+                {suggestions.map(s => {
+                  const on = selectedIds.has(s.id)
+                  return (
+                    <div key={s.id}
+                      onClick={() => toggleSuggestion(s.id)}
+                      className="px-3 py-2 cursor-pointer text-sm flex items-center gap-2"
+                      style={{ color: '#ddd', whiteSpace: 'nowrap', background: on ? 'rgba(0,229,160,0.1)' : 'transparent' }}
+                      onMouseEnter={e => { if (!on) e.currentTarget.style.background = '#252525' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = on ? 'rgba(0,229,160,0.1)' : 'transparent' }}>
+                      <input type="checkbox" readOnly checked={on} className="rounded pointer-events-none" style={{ accentColor: '#00E5A0' }} />
+                      <span style={{ color: '#888', minWidth: 70, fontSize: 12 }}>{s.account_no ?? '-'}</span>
+                      <span>{s.original_name ?? '-'}</span>
+                      <span style={{ color: '#666' }}>·</span>
+                      <span style={{ color: '#00E5A0' }}>{s.display_name ?? '-'}</span>
+                    </div>
+                  )
+                })}
+                <div onClick={() => setSelectedIds(new Set())}
+                  className="px-3 py-2 text-xs cursor-pointer text-center"
+                  style={{ color: '#888', borderTop: '1px solid #333' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#252525')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                  선택 초기화
+                </div>
+              </div>
+            )}
+          </div>
+          {selectedIds.size > 0 && (
+            <span className="text-xs font-medium whitespace-nowrap" style={{ color: '#00E5A0' }}>{selectedIds.size}건 선택</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={fetchRows} disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border hover:opacity-80 transition-opacity disabled:opacity-50"
+            style={{ borderColor: 'var(--color-border-default)', color: 'var(--color-text-secondary)' }}>
+            {loading ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
+            검색
+          </button>
+          <button onClick={checkUnregistered} disabled={unregLoading}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border hover:opacity-80 transition-opacity disabled:opacity-50"
+            style={{ borderColor: 'var(--color-border-default)', color: 'var(--color-text-secondary)' }}>
+            {unregLoading ? <Loader2 size={13} className="animate-spin" /> : <AlertTriangle size={13} />}
+            미등록 확인
+          </button>
+          <button onClick={findSimilar} disabled={simLoading}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border hover:opacity-80 transition-opacity disabled:opacity-50"
+            style={{ borderColor: 'var(--color-border-default)', color: 'var(--color-text-secondary)' }}>
+            {simLoading ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
+            유사 찾기
+          </button>
+          <button onClick={() => setShowSaveConfirm(true)} disabled={editedIds.length === 0}
+            className="flex items-center gap-1.5 rounded-full py-2 px-4 text-sm font-semibold transition-all"
+            style={{ background: 'var(--gradient-cta)', color: '#0A0A0A', boxShadow: 'var(--accent-btn-glow)', opacity: editedIds.length === 0 ? 0.4 : 1, cursor: editedIds.length === 0 ? 'default' : 'pointer' }}>
+            <Save size={13} />저장{editedIds.length > 0 ? ` (${editedIds.length})` : ''}
+          </button>
+          <button onClick={startAdd}
+            className="flex items-center gap-1.5 rounded-full py-2 px-4 text-sm font-semibold hover:-translate-y-0.5 transition-all"
+            style={{ background: 'var(--gradient-cta)', color: '#0A0A0A', boxShadow: 'var(--accent-btn-glow)' }}>
+            <Plus size={13} />추가
+          </button>
+        </div>
+      </div>
+
+      {/* 미등록 어카운트 배너 */}
+      {unregRows.length > 0 && (
+        <div style={{ borderRadius: 12, border: '1px solid rgba(245,158,11,0.3)', overflow: 'hidden' }}>
+          <div onClick={() => setUnregOpen(o => !o)}
+            className="flex items-center justify-between px-4 py-3 cursor-pointer"
+            style={{ background: 'rgba(245,158,11,0.10)' }}>
+            <span className="text-sm font-medium" style={{ color: '#F59E0B' }}>⚠️ 미등록 어카운트 {unregRows.length}건</span>
+            <span style={{ color: '#F59E0B', fontSize: 12 }}>{unregOpen ? '접기 ▲' : '펼치기 ▼'}</span>
+          </div>
+          {unregOpen && (
+            <div style={{ borderTop: '1px solid rgba(245,158,11,0.2)', background: 'var(--color-bg-surface)' }}>
+              {unregRows.map((u, i) => (
+                <div key={`${u.account_no ?? ''}-${i}`}
+                  className="flex items-center justify-between px-4 py-2"
+                  style={{ borderBottom: i < unregRows.length - 1 ? '1px solid var(--color-border-subtle)' : 'none' }}>
+                  <div className="flex items-center gap-3 text-sm">
+                    <span style={{ color: 'var(--color-text-muted)', minWidth: 90 }}>{u.account_no ?? '-'}</span>
+                    <span style={{ color: 'var(--color-text-primary)' }}>{u.account_name ?? '-'}</span>
+                  </div>
+                  <button onClick={() => addFromUnreg(u)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border hover:opacity-80 transition-opacity"
+                    style={{ borderColor: 'rgba(245,158,11,0.4)', color: '#F59E0B' }}>
+                    <Plus size={12} />추가
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 유사 어카운트 배너 */}
+      {simPairs.length > 0 && (
+        <div style={{ borderRadius: 12, border: '1px solid rgba(245,158,11,0.3)', overflow: 'hidden' }}>
+          <div onClick={() => setSimOpen(o => !o)}
+            className="flex items-center justify-between px-4 py-3 cursor-pointer"
+            style={{ background: 'rgba(245,158,11,0.10)' }}>
+            <span className="text-sm font-medium" style={{ color: '#F59E0B' }}>🔍 유사 어카운트 {simPairs.length}쌍 발견</span>
+            <span style={{ color: '#F59E0B', fontSize: 12 }}>{simOpen ? '접기 ▲' : '펼치기 ▼'}</span>
+          </div>
+          {simOpen && (
+            <div style={{ borderTop: '1px solid rgba(245,158,11,0.2)', background: 'var(--color-bg-surface)' }}>
+              {simPairs.map((p, i) => (
+                <div key={`${p.a.id}-${p.b.id}-${i}`}
+                  className="flex items-center justify-between px-4 py-2"
+                  style={{ borderBottom: i < simPairs.length - 1 ? '1px solid var(--color-border-subtle)' : 'none' }}>
+                  <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-text-primary)' }}>
+                    <span>{p.a.original_name ?? '-'}</span>
+                    <span style={{ color: 'var(--color-text-muted)' }}>↔</span>
+                    <span>{p.b.original_name ?? '-'}</span>
+                  </div>
+                  <button onClick={() => unifyPair(p.a, p.b)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border hover:opacity-80 transition-opacity"
+                    style={{ borderColor: 'rgba(245,158,11,0.4)', color: '#F59E0B' }}>
+                    display_name 통일
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Table */}
+      <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--color-border-default)' }}>
+        <table className="w-full text-sm">
+          <thead>
+            <tr style={{ background: 'var(--color-bg-tertiary)', borderBottom: '1px solid var(--color-border-default)' }}>
+              {([
+                { key: 'account_no',    label: 'Account No' },
+                { key: 'original_name', label: 'PMS 원본명' },
+                { key: 'display_name',  label: '표시명' },
+                { key: 'is_active',     label: '활성' },
+              ] as { key: typeof sortKey; label: string }[]).map(h => (
+                <th key={h.key} onClick={() => toggleSort(h.key)}
+                  className="px-4 py-3 text-left text-[11px] font-semibold text-brand-muted uppercase tracking-wider cursor-pointer select-none">
+                  {h.label}{sortIcon(h.key)}
+                </th>
+              ))}
+              <th className="px-4 py-3 w-12" />
+            </tr>
+          </thead>
+          <tbody>
+            {editId === '__new__' && editRowEl('__new__')}
+            {loading ? (
+              <tr><td colSpan={5} className="px-4 py-12 text-center">
+                <div className="flex items-center justify-center gap-2 text-brand-muted">
+                  <RefreshCw size={14} className="animate-spin" /><span className="text-sm">불러오는 중...</span>
+                </div>
+              </td></tr>
+            ) : (!searched && editId !== '__new__') ? (
+              <tr><td colSpan={5} className="px-4 py-12 text-center">
+                <p className="text-sm text-brand-muted">검색 버튼을 눌러 어카운트를 조회하세요.</p>
+              </td></tr>
+            ) : (sorted.length === 0 && editId !== '__new__') ? (
+              <tr><td colSpan={5} className="px-4 py-12 text-center">
+                <p className="text-sm text-brand-muted">데이터가 없습니다. 추가 버튼을 눌러 시작하세요.</p>
+              </td></tr>
+            ) : sorted.map(r => {
+              const baseBg = r.__dirty ? 'rgba(0,229,160,0.08)' : 'var(--color-bg-surface)'   // 변경 저장된 행 민트
+              return (
+                <tr key={r.id}
+                  className="transition-colors"
+                  style={{ borderBottom: '1px solid var(--color-border-subtle)', background: baseBg }}
+                  onMouseEnter={e => { if (!r.__dirty) e.currentTarget.style.background = 'var(--color-bg-secondary)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = baseBg }}>
+                  <td className="px-4 py-3 cursor-text" style={{ color: 'var(--color-text-primary)' }}
+                    onClick={() => startCellEdit(r.id, 'account_no', r.account_no ?? '')}>{renderCell(r, 'account_no')}</td>
+                  <td className="px-4 py-3 cursor-text" style={{ color: 'var(--color-text-primary)' }}
+                    onClick={() => startCellEdit(r.id, 'original_name', r.original_name ?? '')}>{renderCell(r, 'original_name')}</td>
+                  <td className="px-4 py-3 cursor-text" style={{ color: 'var(--color-text-primary)' }}
+                    onClick={() => startCellEdit(r.id, 'display_name', r.display_name ?? '')}>{renderCell(r, 'display_name')}</td>
+                  <td className="px-4 py-3">
+                    <span onClick={() => toggleActive(r)} className="inline-flex cursor-pointer"><ActiveBadge v={r.is_active} /></span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <button onClick={() => del(r.id)}
+                      className="p-1.5 rounded-lg text-brand-dimmed transition-all"
+                      style={{ border: '1px solid transparent' }}
+                      onMouseEnter={e => { e.currentTarget.style.border = '1px solid var(--negative-border)'; e.currentTarget.style.background = 'var(--negative-bg)'; e.currentTarget.style.color = '#FC8181' }}
+                      onMouseLeave={e => { e.currentTarget.style.border = '1px solid transparent'; e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '' }}>
+                      <Trash2 size={13} />
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* 저장 확인 모달 (변경 내역 일괄 UPDATE) */}
+      {showSaveConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { if (!saving) setShowSaveConfirm(false) }} />
+          <div className="relative w-full max-w-md rounded-2xl bg-bg-secondary overflow-hidden max-h-[80vh] flex flex-col"
+            style={{ border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-elevated)' }}>
+            <div className="px-6 py-4 shrink-0" style={{ borderBottom: '1px solid var(--color-border-default)' }}>
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>변경 내역 저장 ({editedIds.length}건)</p>
+            </div>
+            <div className="overflow-y-auto px-6 py-4 space-y-2">
+              {editedIds.map(id => {
+                const e = edited[id]
+                return (
+                  <div key={id} className="text-sm flex items-center gap-2" style={{ color: 'var(--color-text-primary)' }}>
+                    <span style={{ color: 'var(--color-text-muted)', minWidth: 80 }}>{e.account_no || '-'}</span>
+                    <span>{e.original_name}</span>
+                    <span style={{ color: 'var(--color-text-muted)' }}>→</span>
+                    <span style={{ color: 'var(--color-accent-primary)' }}>{e.display_name}</span>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="flex items-center justify-between px-6 py-4 shrink-0" style={{ borderTop: '1px solid var(--color-border-default)' }}>
+              <button onClick={() => setShowSaveConfirm(false)} disabled={saving}
+                className="px-4 py-2 rounded-lg text-sm text-brand-muted hover:text-brand-text transition-colors disabled:opacity-60"
+                style={{ border: '1px solid var(--color-border-default)' }}>취소</button>
+              <button onClick={saveAll} disabled={saving}
+                className="flex items-center gap-1.5 rounded-full py-2 px-5 text-sm font-semibold hover:-translate-y-0.5 disabled:opacity-60 transition-all"
+                style={{ background: 'var(--gradient-cta)', color: '#0A0A0A', boxShadow: 'var(--accent-btn-glow)' }}>
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}저장
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 토스트 */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 60,
+          background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-default)', borderRadius: 10,
+          padding: '10px 16px', fontSize: 13, color: 'var(--color-text-primary)', boxShadow: 'var(--shadow-elevated)',
+        }}>
+          {toast}
+        </div>
+      )}
+    </>
+  )
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function CodeManagementPage() {
   const router = useRouter()
   const { currentHotel } = useHotel()
   const [activeTab,     setActiveTab]     = useState<TableKey>('c01_room_types')
+  const [view,          setView]          = useState<'code' | 'account'>('code')   // 어카운트 관리 탭 분기
   const [rows,          setRows]          = useState<any[]>([])
   const [loading,       setLoading]       = useState(false)
   const [searchQ,       setSearchQ]       = useState('')
@@ -225,6 +881,11 @@ export default function CodeManagementPage() {
   const [uploading,     setUploading]     = useState(false)
   const [roomTypeCodes, setRoomTypeCodes] = useState<string[]>([])
   const uploadRef = useRef<HTMLInputElement>(null)
+  // 검색 버튼 / 드롭다운 (멀티 선택)
+  const [searched,     setSearched]     = useState(false)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set())
+  const searchBoxRef = useRef<HTMLDivElement | null>(null)
 
   // ── Data fetch ──────────────────────────────────────────────────────────────
 
@@ -237,16 +898,32 @@ export default function CodeManagementPage() {
       .eq('hotel_id', currentHotel.id)
       .order(PRIMARY[activeTab])
     setRows(data ?? [])
+    setSelectedIds(new Set())
+    setDropdownOpen(false)
+    setSearched(true)
     setLoading(false)
   }, [activeTab, currentHotel])
 
+  // 탭 변경 시 초기화 (자동 fetch 제거 — "검색" 버튼 클릭 시에만 조회)
   useEffect(() => {
     setSelected(new Set())
     setSearchQ('')
     setUploadErrors([])
     setUploadSuccess(null)
-    fetchData()
-  }, [fetchData])
+    setRows([])
+    setSelectedIds(new Set())
+    setDropdownOpen(false)
+    setSearched(false)
+  }, [activeTab, currentHotel])
+
+  // 검색 드롭다운 — input 바깥 클릭 시 닫힘
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) setDropdownOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [])
 
   // c02 용 room_type_code 목록 로드
   useEffect(() => {
@@ -265,11 +942,21 @@ export default function CodeManagementPage() {
 
   // ── Filtered rows ───────────────────────────────────────────────────────────
 
-  const filteredRows = rows.filter(row => {
-    if (!searchQ) return true
-    const pk = PRIMARY[activeTab]
-    return row[pk]?.toString().toLowerCase().includes(searchQ.toLowerCase())
+  // 테이블: 선택 항목들만 표시 (없으면 전체)
+  const filteredRows = selectedIds.size > 0 ? rows.filter(row => selectedIds.has(row.id)) : rows
+  const toggleSuggestion = (id: string) => setSelectedIds(prev => {
+    const next = new Set(prev)
+    next.has(id) ? next.delete(id) : next.add(id)
+    return next
   })
+
+  // 검색 드롭다운 제안 (탭별 컬럼, 대소문자 무시, 최대 10건)
+  const suggestions = searchQ
+    ? rows.filter(row => {
+        const q = searchQ.toLowerCase()
+        return SEARCH_COLUMNS[activeTab].some(c => String(row[c] ?? '').toLowerCase().includes(q))
+      }).slice(0, 10)
+    : []
 
   // ── Modal helpers ───────────────────────────────────────────────────────────
 
@@ -350,6 +1037,12 @@ export default function CodeManagementPage() {
     setSelected(new Set())
     setShowBulkDel(false)
     setDeleting(false)
+    fetchData()
+  }
+
+  // use_package badge 즉시 토글 (마켓 코드 탭)
+  async function togglePackage(row: any) {
+    await (supabase as any).from(activeTab).update({ use_package: !row.use_package }).eq('id', row.id)
     fetchData()
   }
 
@@ -444,19 +1137,28 @@ export default function CodeManagementPage() {
 
       {/* Tabs */}
       <div className="flex" style={{ borderBottom: '1px solid var(--color-border-default)' }}>
-        {TABS.map(tab => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-            className="px-5 py-3 text-sm font-medium transition-colors"
-            style={
-              activeTab === tab.key
-                ? { color: 'var(--color-accent-primary)', borderBottom: '2px solid var(--color-accent-primary)', marginBottom: -1 }
-                : { color: 'var(--color-text-muted)',    borderBottom: '2px solid transparent',                marginBottom: -1 }
-            }>
-            {tab.label}
-          </button>
-        ))}
+        {[...TABS, { key: 'c10_account_aliases' as const, label: '어카운트 관리' }].map(tab => {
+          const isAccount = tab.key === 'c10_account_aliases'
+          const isActive  = isAccount ? view === 'account' : (view === 'code' && activeTab === tab.key)
+          return (
+            <button key={tab.key}
+              onClick={() => { if (isAccount) setView('account'); else { setView('code'); setActiveTab(tab.key as TableKey) } }}
+              className="px-5 py-3 text-sm font-medium transition-colors"
+              style={
+                isActive
+                  ? { color: 'var(--color-accent-primary)', borderBottom: '2px solid var(--color-accent-primary)', marginBottom: -1 }
+                  : { color: 'var(--color-text-muted)',    borderBottom: '2px solid transparent',                marginBottom: -1 }
+              }>
+              {tab.label}
+            </button>
+          )
+        })}
       </div>
 
+      {view === 'account' ? (
+        <AccountAliasTab hotelId={currentHotel?.id ?? ''} />
+      ) : (
+      <>
       {/* Upload result */}
       {uploadSuccess && (
         <div className="px-4 py-3 rounded-lg text-sm"
@@ -476,17 +1178,49 @@ export default function CodeManagementPage() {
 
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="relative">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none" />
-          <input
-            value={searchQ}
-            onChange={e => setSearchQ(e.target.value)}
-            placeholder="코드 검색..."
-            className={`${inputCls} pl-9 w-56`}
-            style={inputStyle}
-            onFocus={onFocus}
-            onBlur={onBlur}
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative" ref={searchBoxRef}>
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none" />
+            <input
+              value={searchQ}
+              onChange={e => { const v = e.target.value; setSearchQ(v); setDropdownOpen(v.length > 0); if (v === '') setSelectedIds(new Set()) }}
+              onFocus={e => { onFocus(e); if (searchQ) setDropdownOpen(true) }}
+              onBlur={e => { onBlur(e); if (selectedIds.size > 0) e.currentTarget.style.border = '1px solid #00E5A0' }}
+              placeholder="코드 검색..."
+              className={`${inputCls} pl-9 w-56`}
+              style={{ ...inputStyle, ...(selectedIds.size > 0 ? { border: '1px solid #00E5A0' } : {}) }}
+            />
+            {dropdownOpen && suggestions.length > 0 && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 9999, minWidth: 280, background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, overflow: 'hidden', boxShadow: 'var(--shadow-elevated)' }}>
+                {suggestions.map(s => {
+                  const on = selectedIds.has(s.id)
+                  return (
+                    <div key={s.id}
+                      onClick={() => toggleSuggestion(s.id)}
+                      className="px-3 py-2 cursor-pointer text-sm flex items-center gap-2"
+                      style={{ color: '#ddd', whiteSpace: 'nowrap', background: on ? 'rgba(0,229,160,0.1)' : 'transparent' }}
+                      onMouseEnter={e => { if (!on) e.currentTarget.style.background = '#252525' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = on ? 'rgba(0,229,160,0.1)' : 'transparent' }}>
+                      <input type="checkbox" readOnly checked={on} className="rounded pointer-events-none" style={{ accentColor: '#00E5A0' }} />
+                      {SEARCH_COLUMNS[activeTab].map((c, i) => (
+                        <span key={c} style={i === 0 ? { color: '#fff', minWidth: 70 } : { color: '#888' }}>{String(s[c] ?? '-')}</span>
+                      ))}
+                    </div>
+                  )
+                })}
+                <div onClick={() => setSelectedIds(new Set())}
+                  className="px-3 py-2 text-xs cursor-pointer text-center"
+                  style={{ color: '#888', borderTop: '1px solid #333' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#252525')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                  선택 초기화
+                </div>
+              </div>
+            )}
+          </div>
+          {selectedIds.size > 0 && (
+            <span className="text-xs font-medium whitespace-nowrap" style={{ color: '#00E5A0' }}>{selectedIds.size}건 선택</span>
+          )}
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -501,6 +1235,12 @@ export default function CodeManagementPage() {
             className="p-2 rounded-lg text-brand-muted hover:text-brand-text transition-colors"
             style={{ border: '1px solid var(--color-border-default)' }}>
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button onClick={fetchData} disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border hover:opacity-80 transition-opacity disabled:opacity-50"
+            style={{ borderColor: 'var(--color-border-default)', color: 'var(--color-text-secondary)' }}>
+            {loading ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
+            검색
           </button>
           <button onClick={() => downloadTemplate(activeTab)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border hover:opacity-80 transition-opacity"
@@ -545,6 +1285,10 @@ export default function CodeManagementPage() {
                   <RefreshCw size={14} className="animate-spin" /><span className="text-sm">불러오는 중...</span>
                 </div>
               </td></tr>
+            ) : !searched ? (
+              <tr><td colSpan={cols.length + 2} className="px-4 py-12 text-center">
+                <p className="text-sm text-brand-muted">검색 버튼을 눌러 조회하세요.</p>
+              </td></tr>
             ) : filteredRows.length === 0 ? (
               <tr><td colSpan={cols.length + 2} className="px-4 py-12 text-center">
                 <p className="text-sm text-brand-muted">데이터가 없습니다. 추가 버튼을 눌러 시작하세요.</p>
@@ -559,11 +1303,17 @@ export default function CodeManagementPage() {
                   <input type="checkbox" checked={selected.has(row.id)} onChange={() => toggleSelect(row.id)}
                     className="rounded cursor-pointer" style={{ accentColor: 'var(--color-accent-primary)' }} />
                 </td>
-                {cols.map(c => (
-                  <td key={c.key} className="px-4 py-3" style={{ color: 'var(--color-text-primary)' }}>
-                    {c.render ? c.render(row) : (row[c.key] ?? '-')}
-                  </td>
-                ))}
+                {cols.map(c => {
+                  const isPkg = c.key === 'use_package'
+                  return (
+                    <td key={c.key}
+                      className={`px-4 py-3${isPkg ? ' cursor-pointer' : ''}`}
+                      style={{ color: 'var(--color-text-primary)' }}
+                      onClick={isPkg ? (e) => { e.stopPropagation(); togglePackage(row) } : undefined}>
+                      {c.render ? c.render(row) : (row[c.key] ?? '-')}
+                    </td>
+                  )
+                })}
                 <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                   <button
                     onClick={() => setDeleteTarget(row.id)}
@@ -587,6 +1337,8 @@ export default function CodeManagementPage() {
           </tbody>
         </table>
       </div>
+      </>
+      )}
 
       {/* ── Add / Edit Modal ── */}
       {showModal && (
