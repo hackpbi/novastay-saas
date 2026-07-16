@@ -450,8 +450,10 @@ export default function SegmentationModal({
             otbRn:   r.otb_nights,
             otbRev:  r.otb_revenue,
           })
-      // 픽업이 0이어도 OTB가 있으면 표시
-      .filter(a => a.otbRn !== 0 || a.otbRev !== 0 || a.diffRn !== 0 || a.diffRev !== 0)
+      // OTB 모드: OTB 실판매 기준 / 픽업 모드: 픽업(R/N) 0인 어카운트 숨김
+      .filter(a => selectedSeg?.viewMode === 'otb'
+        ? (a.otbRn !== 0 || a.otbRev !== 0)
+        : (a.diffRn !== 0 || a.diffRev !== 0))
       .sort((a, b) => b.diffRn - a.diffRn)
   }, [selectedSeg, accountPickupRows])
 
