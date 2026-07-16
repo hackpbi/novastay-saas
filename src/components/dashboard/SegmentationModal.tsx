@@ -409,6 +409,13 @@ export default function SegmentationModal({
   }, [schema])
 
   // ─── 우측 Account Pickup 패널 데이터 ───────────────────────────────────────────
+  console.log('[PICKUP PARAMS]', {
+    hotelId: currentHotel?.id,
+    otbDate,
+    vsDate: vsOtbDate,
+    year: curYear,
+    month: curMonth,
+  })
   const { data: accountPickupRows = [] } = useAccountPickupData({
     hotelId:     currentHotel?.id ?? '',
     otbDate:     otbDate ?? '',
@@ -420,6 +427,7 @@ export default function SegmentationModal({
   })
 
   const accountList = useMemo(() => {
+    console.log('[DEBUG]', selectedSeg?.codes, accountPickupRows.length, (accountPickupRows as Array<{ segmentation: string }>).slice(0,3).map(r => r.segmentation))
     if (!selectedSeg) return []
     return (accountPickupRows as Array<{ account_name: string; segmentation: string; otb_nights: number; vs_nights: number; otb_revenue: number; vs_revenue: number }>)
       .filter(r => selectedSeg.codes.includes(r.segmentation))
@@ -429,6 +437,8 @@ export default function SegmentationModal({
             diffRn:  r.otb_nights,                                         // 현재 OTB 실판매
             diffAdr: r.otb_nights > 0 ? Math.round(r.otb_revenue / r.otb_nights) : 0,
             diffRev: r.otb_revenue,
+            otbRn:   r.otb_nights,
+            otbRev:  r.otb_revenue,
           }
         : {
             name:    r.account_name,
@@ -437,8 +447,11 @@ export default function SegmentationModal({
               ? Math.round((r.otb_revenue / r.otb_nights) - (r.vs_nights ? r.vs_revenue / r.vs_nights : 0))
               : 0,
             diffRev: r.otb_revenue - r.vs_revenue,
+            otbRn:   r.otb_nights,
+            otbRev:  r.otb_revenue,
           })
-      .filter(a => a.diffRn !== 0 || a.diffRev !== 0)
+      // 픽업이 0이어도 OTB가 있으면 표시
+      .filter(a => a.otbRn !== 0 || a.otbRev !== 0 || a.diffRn !== 0 || a.diffRev !== 0)
       .sort((a, b) => b.diffRn - a.diffRn)
   }, [selectedSeg, accountPickupRows])
 
