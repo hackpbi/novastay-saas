@@ -181,6 +181,7 @@ function EventBadge({ group, pickupRows, roomCount }: { group: EventGroup; picku
   const wrapRef = useRef<HTMLDivElement>(null)
   const { currentHotel } = useHotel()
   const hotelId = currentHotel?.id ?? ''
+  const { otbDate } = useDateContext()
 
   const dayAgg = useMemo(() => {
     const map: Record<string, DayAggEntry> = {}
@@ -277,15 +278,15 @@ function EventBadge({ group, pickupRows, roomCount }: { group: EventGroup; picku
         <div style={{
           position: 'fixed', top: pos.top, right: pos.right, zIndex: 99999, width: tipWidth,
           borderRadius: 10, overflow: 'hidden',
-          background: `radial-gradient(ellipse 70% 60% at 95% 100%, rgba(91,141,239,0.1) 0%, transparent 70%), #141414`,
-          border: '0.5px solid rgba(91,141,239,0.3)',
-          borderLeft: '3px solid #5B8DEF',
+          background: `radial-gradient(ellipse 70% 60% at 95% 100%, rgba(0,229,160,0.1) 0%, transparent 70%), #141414`,
+          border: '0.5px solid rgba(0,229,160,0.3)',
+          borderLeft: '3px solid #00E5A0',
           boxShadow: '0 6px 20px rgba(0,0,0,0.6)', pointerEvents: 'none',
         }}>
           {/* 헤더 */}
           <div style={{ padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '0.5px solid rgba(255,255,255,0.05)' }}>
             <span style={{ fontSize: 13, fontWeight: 500, color: '#fff' }}>{group.name}</span>
-            <span style={{ fontSize: 10, background: 'rgba(91,141,239,0.1)', border: '0.5px solid rgba(91,141,239,0.3)', color: '#5B8DEF', borderRadius: 20, padding: '2px 8px' }}>
+            <span style={{ fontSize: 10, background: 'rgba(0,229,160,0.1)', border: '0.5px solid rgba(0,229,160,0.3)', color: '#00E5A0', borderRadius: 20, padding: '2px 8px' }}>
               {label} · {group.dates.length}일
             </span>
           </div>
@@ -302,23 +303,24 @@ function EventBadge({ group, pickupRows, roomCount }: { group: EventGroup; picku
               const puOcc = row && roomCount ? ((row.otbN - row.vsN) / roomCount * 100).toFixed(1) : null
               const dd = new Date(date)
               const dLabel = `${dd.getMonth() + 1}/${dd.getDate()} ${DOW_KR[dd.getDay()]}`
+              const before = !!otbDate && date < otbDate
               return (
-                <div key={date} style={{ padding: '11px 14px', borderRight: '0.5px solid rgba(255,255,255,0.04)' }}>
+                <div key={date} style={{ padding: '11px 14px', borderRight: '0.5px solid rgba(255,255,255,0.04)', ...(before ? { filter: 'grayscale(1)', opacity: 0.4 } : {}) }}>
                   <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)', marginBottom: 7 }}>{dLabel}</div>
                   {!isPast && hasPu ? (
                     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 5 }}>
                       <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>{prevOcc}%</span>
                       <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.12)' }}>›</span>
-                      <span style={{ fontSize: 14, fontWeight: 500, color: '#5B8DEF' }}>{currOcc ?? '—'}%</span>
+                      <span style={{ fontSize: 14, fontWeight: 500, color: '#00E5A0' }}>{currOcc ?? '—'}%</span>
                     </div>
                   ) : (
-                    <div style={{ fontSize: 14, fontWeight: 500, color: '#5B8DEF', textAlign: 'right', marginBottom: 5 }}>{currOcc ?? '—'}%</div>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: '#00E5A0', textAlign: 'right', marginBottom: 5 }}>{currOcc ?? '—'}%</div>
                   )}
                   <div style={{ height: 5, background: 'rgba(255,255,255,0.07)', borderRadius: 3, marginBottom: 9, position: 'relative' }}>
                     {!isPast && hasPu && (
                       <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${prevOcc}%`, background: 'rgba(255,255,255,0.18)', borderRadius: 3 }} />
                     )}
-                    <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${currOcc ?? 0}%`, background: '#5B8DEF', borderRadius: 3 }} />
+                    <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${currOcc ?? 0}%`, background: '#00E5A0', boxShadow: '0 0 6px rgba(0,229,160,0.6)', borderRadius: 3 }} />
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                     <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)' }}>ADR</span>
@@ -331,7 +333,7 @@ function EventBadge({ group, pickupRows, roomCount }: { group: EventGroup; picku
                   {!isPast && (
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)' }}>픽업</span>
-                      <span style={{ fontSize: 11, fontWeight: 500, color: hasPu ? '#5B8DEF' : 'rgba(255,255,255,0.18)' }}>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: hasPu ? '#00E5A0' : 'rgba(255,255,255,0.18)' }}>
                         {hasPu && puOcc ? `+${puOcc}%` : '—'}
                       </span>
                     </div>
@@ -346,11 +348,12 @@ function EventBadge({ group, pickupRows, roomCount }: { group: EventGroup; picku
             <div style={{ borderTop: '0.5px solid rgba(255,255,255,0.05)', display: 'grid', gridTemplateColumns: `repeat(${group.dates.length},1fr)`, background: 'rgba(0,0,0,0.15)' }}>
               {group.dates.map(date => {
                 const bar = barData[date]
+                const before = !!otbDate && date < otbDate
                 return (
-                  <div key={date} style={{ padding: '8px 14px', borderRight: '0.5px solid rgba(255,255,255,0.04)' }}>
+                  <div key={date} style={{ padding: '8px 14px', borderRight: '0.5px solid rgba(255,255,255,0.04)', ...(before ? { filter: 'grayscale(1)', opacity: 0.4 } : {}) }}>
                     <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginBottom: 5 }}>BAR</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <span style={{ fontSize: 13, color: '#5B8DEF' }}>{bar?.cur ? `${bar.cur}k` : '—'}</span>
+                      <span style={{ fontSize: 13, color: '#00E5A0' }}>{bar?.cur ? `${bar.cur}k` : '—'}</span>
                     </div>
                   </div>
                 )
@@ -361,17 +364,17 @@ function EventBadge({ group, pickupRows, roomCount }: { group: EventGroup; picku
               <div style={{ padding: '8px 14px', borderRight: '0.5px solid rgba(255,255,255,0.04)' }}>
                 <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginBottom: 3 }}>기간 합계 OCC</div>
                 <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>{pastSummary.avgOcc ?? '—'}%</div>
-                <div style={{ fontSize: 10, color: 'rgba(91,141,239,0.6)', marginTop: 2 }}>전년 —</div>
+                <div style={{ fontSize: 10, color: 'rgba(0,229,160,0.6)', marginTop: 2 }}>전년 —</div>
               </div>
               <div style={{ padding: '8px 14px', borderRight: '0.5px solid rgba(255,255,255,0.04)' }}>
                 <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginBottom: 3 }}>평균 ADR</div>
                 <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>{pastSummary.avgAdr != null ? `${pastSummary.avgAdr}k` : '—'}</div>
-                <div style={{ fontSize: 10, color: 'rgba(91,141,239,0.6)', marginTop: 2 }}>전년 —</div>
+                <div style={{ fontSize: 10, color: 'rgba(0,229,160,0.6)', marginTop: 2 }}>전년 —</div>
               </div>
               <div style={{ padding: '8px 14px' }}>
                 <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginBottom: 3 }}>합계 REV</div>
                 <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>{pastSummary.totalRev != null ? `${pastSummary.totalRev}M` : '—'}</div>
-                <div style={{ fontSize: 10, color: 'rgba(91,141,239,0.6)', marginTop: 2 }}>전년 —</div>
+                <div style={{ fontSize: 10, color: 'rgba(0,229,160,0.6)', marginTop: 2 }}>전년 —</div>
               </div>
             </div>
           )}
@@ -388,7 +391,7 @@ function ChangeTag({ value, unit, onClick }: { value: number; unit: string; onCl
   const pos = value >= 0
   const inner = (
     <span
-      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[12px] font-semibold leading-none ${
+      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[13px] font-semibold leading-none ${
         pos ? 'text-status-positive' : 'text-status-negative'
       }`}
       style={{
@@ -416,7 +419,7 @@ function ChangeTag({ value, unit, onClick }: { value: number; unit: string; onCl
 function SubMetric({ label, value }: { label: string; value: number }) {
   const pos = value >= 0
   return (
-    <span className="text-[10px] whitespace-nowrap" style={{ opacity: 0.65 }}>
+    <span className="text-[11px] whitespace-nowrap" style={{ opacity: 0.65 }}>
       <span className="text-brand-dimmed">{label} </span>
       <span className={pos ? 'text-status-positive' : 'text-status-negative'}>
         {pos ? '▲' : '▼'}{Math.abs(value)}%
@@ -425,11 +428,12 @@ function SubMetric({ label, value }: { label: string; value: number }) {
   )
 }
 
-function MetricRow({ label, value, metric, subValue, tooltip, yoyOverride, yoyLoading, onLyClick, modeLabelNode }: {
+function MetricRow({ label, value, metric, subValue, unitLabel, tooltip, yoyOverride, yoyLoading, onLyClick, modeLabelNode }: {
   label:          string
   value:          string
   metric:         MetricData
   subValue?:      string
+  unitLabel?:     string
   tooltip?:       string
   yoyOverride?:   { value: number | null; unit: string; fitPct?: number | null; grpPct?: number | null; showFitGrp?: boolean }
   yoyLoading?:    boolean
@@ -438,26 +442,31 @@ function MetricRow({ label, value, metric, subValue, tooltip, yoyOverride, yoyLo
 }) {
   return (
     <div
-      className="flex items-center justify-between py-3 last:border-0"
+      className="flex items-center justify-between py-[18px] last:border-0"
       style={{ borderBottom: '1px solid var(--divider-color)' }}
     >
-      <div className="flex items-baseline gap-2">
-        <span className="text-[11px] font-semibold text-brand-dimmed tracking-widest w-12 shrink-0 whitespace-nowrap">
-          {label}
-        </span>
-        <div className="flex flex-col" title={tooltip}>
-          <span
-            className="font-mono font-bold leading-none"
-            style={{ color: 'var(--color-text-primary)', cursor: tooltip ? 'help' : 'default' }}
-          >
-            <FmtVal val={value} numSize={26} />
-          </span>
-          {subValue && (
-            <span className="text-[10px] text-brand-dimmed mt-0.5">{subValue}</span>
+      <div className="flex items-center gap-2">
+        <div className="w-12 shrink-0 flex flex-col" style={{ gap: 2, alignSelf: 'center', marginTop: 4 }}>
+          <span className="text-[11px] font-semibold text-brand-dimmed tracking-widest whitespace-nowrap">{label}</span>
+          {unitLabel && (
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', whiteSpace: 'nowrap' }}>{unitLabel}</span>
           )}
         </div>
+        <div className="flex flex-col" title={tooltip}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span
+              className="font-mono font-bold leading-none"
+              style={{ color: 'var(--color-text-primary)', cursor: tooltip ? 'help' : 'default', letterSpacing: '0.05em' }}
+            >
+              <FmtVal val={value} numSize={29} />
+            </span>
+            {subValue && (
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>{subValue}</span>
+            )}
+          </div>
+        </div>
       </div>
-      <div className="flex flex-col items-end gap-y-0.5 shrink-0 ml-2">
+      <div className="flex flex-col items-end gap-y-[5px] shrink-0 ml-2">
         {modeLabelNode}
         {yoyLoading ? (
           <span className="text-[11px] text-brand-dimmed">-</span>
@@ -498,11 +507,11 @@ function fmtFcOcc(n: number | null | undefined): string {
 }
 function fmtFcAdr(n: number | null | undefined): string {
   if (n == null) return '-'
-  return `${Math.round(n / 1000)}k`
+  return `${Math.round(n / 1000)}`
 }
 function fmtFcRevenue(n: number | null | undefined): string {
   if (n == null) return '-'
-  return `${(n / 1_000_000).toFixed(1)}M`
+  return `${(n / 1_000_000).toFixed(1)}`
 }
 function fmtFcPct(n: number | null): string {
   if (n == null) return '-'
@@ -542,8 +551,8 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
   // occ, adr, rev are mock data used as fallback; stats holds live OTB values
 
   const occValue = loading ? '-' : roomCount === 0 ? '-' : `${stats.occ.toFixed(1)}%`
-  const adrValue = loading ? '-' : formatCurrency(stats.adr)
-  const revValue = loading ? '-' : formatCurrency(stats.rev)
+  const adrValue = loading ? '-' : formatCurrency(stats.adr).replace(/k$/, '')
+  const revValue = loading ? '-' : formatCurrency(stats.rev).replace(/M$/, '')
 
   const fitPct = yoyStats.byGroup.find(g => g.group === 'fit')?.varPct ?? null
   const grpPct = yoyStats.byGroup.find(g => g.group === 'group')?.varPct ?? null
@@ -600,7 +609,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
           modeLabelNode={
             <span
               onClick={onLyModeToggle}
-              className="text-[9px] cursor-pointer transition-colors"
+              className="text-[10px] cursor-pointer transition-colors"
               style={{ color: 'rgba(255,255,255,0.4)', borderBottom: '1px dashed rgba(255,255,255,0.3)' }}
               onMouseEnter={e => { (e.currentTarget as HTMLSpanElement).style.color = 'rgba(255,255,255,0.7)'; (e.currentTarget as HTMLSpanElement).style.borderBottomColor = 'rgba(255,255,255,0.5)' }}
               onMouseLeave={e => { (e.currentTarget as HTMLSpanElement).style.color = 'rgba(255,255,255,0.4)'; (e.currentTarget as HTMLSpanElement).style.borderBottomColor = 'rgba(255,255,255,0.3)' }}
@@ -622,7 +631,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
           yoyLoading={yoyLoading}
           onLyClick={onLyClick ? () => onLyClick(year, month) : undefined}
           modeLabelNode={
-            <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
+            <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
               {lyMode === 'v1' ? '전년 동일자' : '전년 동기간'}
             </span>
           }
@@ -642,7 +651,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
           yoyLoading={yoyLoading}
           onLyClick={onLyClick ? () => onLyClick(year, month) : undefined}
           modeLabelNode={
-            <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
+            <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
               {lyMode === 'v1' ? '전년 동일자' : '전년 동기간'}
             </span>
           }
@@ -658,25 +667,25 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
         <div style={{ display: 'grid', gridTemplateColumns: '58px 1fr 1fr 1fr', gap: '8px 10px', alignItems: 'center' }}>
           {/* 헤더 */}
           <div />
-          {['점유율', '객단가', '매출'].map(h => (
-            <div key={h} style={{ fontSize: 9, color: 'var(--brand-dimmed)', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>{h}</div>
-          ))}
+          <div style={{ fontSize: 10, color: 'var(--brand-dimmed)', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>점유율</div>
+          <div style={{ fontSize: 10, color: 'var(--brand-dimmed)', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>객단가</div>
+          <div style={{ fontSize: 10, color: 'var(--brand-dimmed)', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>매출</div>
           {/* FCST 행 */}
-          <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)' }}>전망</div>
-          <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}>{fmtFcOcc(forecast?.occ)}</div>
-          <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}><FmtVal val={fmtFcAdr(forecast?.adr)} numSize={14} /></div>
-          <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}><FmtVal val={fmtFcRevenue(forecast?.revenue)} numSize={14} /></div>
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--brand-dimmed)' }}>전망</div>
+          <div className="font-mono" style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}>{fmtFcOcc(forecast?.occ)}</div>
+          <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}><FmtVal val={fmtFcAdr(forecast?.adr)} numSize={16} /></div>
+          <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}><FmtVal val={fmtFcRevenue(forecast?.revenue)} numSize={16} /></div>
           {/* BUDGET 행 */}
-          <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)' }}>목표</div>
-          <div className="font-mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}>{fmtFcOcc(budget?.occ)}</div>
-          <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}><FmtVal val={fmtFcAdr(budget?.adr)} numSize={14} /></div>
-          <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}><FmtVal val={fmtFcRevenue(budget?.revenue)} numSize={14} /></div>
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--brand-dimmed)' }}>목표</div>
+          <div className="font-mono" style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}>{fmtFcOcc(budget?.occ)}</div>
+          <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}><FmtVal val={fmtFcAdr(budget?.adr)} numSize={16} /></div>
+          <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}><FmtVal val={fmtFcRevenue(budget?.revenue)} numSize={16} /></div>
           {/* 달성 행 */}
           {(['달성', achievementOcc, achievementAdr, achievementRev] as const).map((val, i) => {
             const borderTop = '1px solid var(--color-border-default)'
             const pt = '7px'
             if (i === 0) return (
-              <div key="달성" style={{ fontSize: 10, fontWeight: 500, color: 'var(--brand-dimmed)', borderTop, paddingTop: pt }}>달성</div>
+              <div key="달성" style={{ fontSize: 12, fontWeight: 500, color: 'var(--brand-dimmed)', borderTop, paddingTop: pt }}>달성</div>
             )
             const pct = val as number | null
             const clickable = pct !== null && !!onAchievementClick
@@ -688,7 +697,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
                 title={clickable ? 'FCST vs BUDGET 비교 보기' : undefined}
                 className="font-mono"
                 style={{
-                  fontSize: 12, fontWeight: 600, textAlign: 'right',
+                  fontSize: 14, fontWeight: 600, textAlign: 'right',
                   color: getAchievementColor(pct),
                   borderTop, paddingTop: pt,
                   background: 'transparent', border: 'none',
@@ -779,6 +788,7 @@ const PAGE_SIZE = 3
 
 export default function DashboardPage() {
   const [page, setPage]     = useState(0)
+  const [titleShifting, setTitleShifting] = useState(false)
   const [lyMode, setLyMode] = useState<LyPacingMode>('v1')
   const [segModal,     setSegModal]     = useState<{ open: boolean; year?: number; month?: number }>({ open: false })
   const [actualBudgetModal, setActualBudgetModal] = useState(false)
@@ -1019,8 +1029,16 @@ export default function DashboardPage() {
     setPage(0)
   }, [otbDate])
 
+  // 이전 버튼 표시 전환 시 타이틀 잠깐 흐려지며 밀림 (B타입)
+  const isPrevDisabled = page === 0
+  useEffect(() => {
+    setTitleShifting(true)
+    const timer = setTimeout(() => setTitleShifting(false), 350)
+    return () => clearTimeout(timer)
+  }, [isPrevDisabled])
+
   return (
-    <div className="space-y-5 animate-fade-in">
+    <div className="animate-fade-in">
 
       {/* ── Header ── */}
       <div className="mb-6">
@@ -1038,9 +1056,19 @@ export default function DashboardPage() {
                 background: 'none',
                 border: 'none',
                 cursor: page === 0 ? 'default' : 'pointer',
-                padding: '4px 10px',
                 borderRadius: 6,
-                transition: 'background 0.15s',
+                overflow: 'hidden',
+                maxWidth: isPrevDisabled ? 0 : 60,
+                opacity: isPrevDisabled ? 0 : 1,
+                transform: `translateX(${isPrevDisabled ? -10 : 0}px)`,
+                padding: isPrevDisabled ? '4px 0' : '4px 8px',
+                pointerEvents: isPrevDisabled ? 'none' : 'auto',
+                transition: [
+                  'max-width 0.35s ease',
+                  'opacity 0.25s ease',
+                  'transform 0.35s ease',
+                  'padding 0.35s ease',
+                ].join(', '),
               }}
               onMouseEnter={e => {
                 if (page !== 0) e.currentTarget.style.background = 'rgba(0,229,160,0.1)'
@@ -1061,13 +1089,12 @@ export default function DashboardPage() {
                 color: page === 0 ? 'rgba(255,255,255,0.08)' : '#00E5A0',
               }}>이전</span>
             </button>
-            <h1 className="font-semibold" style={{ color: 'var(--color-text-primary)', margin: 0, fontSize: 30 }}>
+            <h1 className="font-semibold" style={{ color: 'var(--color-text-primary)', margin: 0, fontSize: 32, letterSpacing: '0.04em', transition: 'opacity 0.2s ease, transform 0.35s ease', opacity: titleShifting ? 0.5 : 1, transform: titleShifting ? 'translateX(4px)' : 'translateX(0)' }}>
               대시보드_
             </h1>
-            <span className="font-semibold" style={{ color: '#00E5A0', fontSize: 30 }}>
-              {months[0]?.month}월 <span style={{ fontSize: '0.7em' }}>{String(months[0]?.year ?? '').slice(2)}년</span>
-              <span style={{ margin: '0 4px' }}>&mdash;</span>
-              {months[months.length - 1]?.month}월 <span style={{ fontSize: '0.7em' }}>{String(months[months.length - 1]?.year ?? '').slice(2)}년</span>
+            <span className="font-semibold" style={{ color: '#00E5A0', fontSize: 32, letterSpacing: '0.04em', transition: 'opacity 0.2s ease, transform 0.35s ease', opacity: titleShifting ? 0.5 : 1, transform: titleShifting ? 'translateX(4px)' : 'translateX(0)' }}>
+              {visibleMonths[0]?.month}월~{visibleMonths[visibleMonths.length - 1]?.month}월
+              <span style={{ fontSize: '0.7em', marginLeft: 2 }}>{String(visibleMonths[0]?.year ?? '').slice(2)}년</span>
             </span>
             <button
               onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
@@ -1104,51 +1131,9 @@ export default function DashboardPage() {
               }}>다음</span>
             </button>
           </div>
-          {!pickupLoading && (
-            <button
-              onClick={() => setMonthlyPickupSegOpen(true)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 13,
-                background: 'none',
-                border: 'none',
-                borderRadius: 20,
-                padding: '8px 16px 8px 13px',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                fontFamily: 'inherit',
-              }}
-            >
-              <span style={{
-                width: 9, height: 9, borderRadius: '50%',
-                background: '#00E5A0', flexShrink: 0,
-                boxShadow: '0 0 0 2px rgba(0,229,160,0.2)',
-              }} />
-              <span style={{ fontSize: 15, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
-                {(() => { const [, mm, dd] = otbDate.split('-'); return `${Number(mm)}/${Number(dd)}` })()}{' '}
-                {pickupDays > 0 ? `${pickupDays}일` : '당일'} 픽업 ·{' '}
-                {(() => { const { num, unit } = formatPuParts(totalPuNights, 'nights'); return `${num}${unit}` })()}{' '}
-                {(() => { const { num, unit } = formatPuParts(totalPuRevenue, 'currency'); return `${num}${unit === 'M' ? '백만' : unit}` })()} ·{' '}
-                {months[0].month}월~{months[months.length - 1].month}월
-              </span>
-              <span style={{
-                fontSize: 13, fontWeight: 500,
-                color: 'rgba(0,229,160,0.6)',
-                display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0,
-              }}>
-                상세 ›
-              </span>
-            </button>
-          )}
-        </div>
-      </div>
-
-
-
-      {/* 카드 위 액션 행 — 아이콘 3개 (우측) */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {/* 월별 현황 (아이콘 전용) */}
           <div style={{ position: 'relative', display: 'inline-flex' }}
             onMouseEnter={e => { const tip = e.currentTarget.querySelector('.btn-tip') as HTMLElement | null; if (tip) tip.style.opacity = '1' }}
@@ -1159,18 +1144,16 @@ export default function DashboardPage() {
               title="월별 현황"
               style={{
                 width: 34, height: 34, borderRadius: 7,
-                border: '0.5px solid rgba(255,255,255,0.12)',
+                border: 'none',
                 background: 'none', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 color: '#00E5A0',
-                transition: 'border-color 0.15s, color 0.15s, background 0.15s',
+                transition: 'color 0.15s, background 0.15s',
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.borderColor = '#00E5A0'
                 e.currentTarget.style.background = 'rgba(0,229,160,0.08)'
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'
                 e.currentTarget.style.background = 'none'
               }}
             >
@@ -1179,7 +1162,7 @@ export default function DashboardPage() {
               </svg>
             </button>
             <span className="btn-tip" style={{
-              position: 'absolute', bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)',
+              position: 'absolute', right: 'calc(100% + 6px)', top: '50%', transform: 'translateY(-50%)', zIndex: 99999,
               background: '#1e1e1e', border: '0.5px solid rgba(255,255,255,0.15)',
               color: 'rgba(255,255,255,0.7)', fontSize: 10, padding: '3px 8px',
               borderRadius: 4, whiteSpace: 'nowrap', pointerEvents: 'none',
@@ -1196,18 +1179,16 @@ export default function DashboardPage() {
               title="데일리 리포트"
               style={{
                 width: 34, height: 34, borderRadius: 7,
-                border: '0.5px solid rgba(255,255,255,0.12)',
+                border: 'none',
                 background: 'none', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 color: '#00E5A0',
-                transition: 'border-color 0.15s, color 0.15s, background 0.15s',
+                transition: 'color 0.15s, background 0.15s',
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.borderColor = '#00E5A0'
                 e.currentTarget.style.background = 'rgba(0,229,160,0.08)'
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'
                 e.currentTarget.style.background = 'none'
               }}
             >
@@ -1216,7 +1197,7 @@ export default function DashboardPage() {
               </svg>
             </button>
             <span className="btn-tip" style={{
-              position: 'absolute', bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)',
+              position: 'absolute', right: 'calc(100% + 6px)', top: '50%', transform: 'translateY(-50%)', zIndex: 99999,
               background: '#1e1e1e', border: '0.5px solid rgba(255,255,255,0.15)',
               color: 'rgba(255,255,255,0.7)', fontSize: 10, padding: '3px 8px',
               borderRadius: 4, whiteSpace: 'nowrap', pointerEvents: 'none',
@@ -1233,18 +1214,16 @@ export default function DashboardPage() {
               title="마감 보고서"
               style={{
                 width: 34, height: 34, borderRadius: 7,
-                border: '0.5px solid rgba(255,255,255,0.12)',
+                border: 'none',
                 background: 'none', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 color: '#00E5A0',
-                transition: 'border-color 0.15s, color 0.15s, background 0.15s',
+                transition: 'color 0.15s, background 0.15s',
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.borderColor = '#00E5A0'
                 e.currentTarget.style.background = 'rgba(0,229,160,0.08)'
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'
                 e.currentTarget.style.background = 'none'
               }}
             >
@@ -1253,12 +1232,65 @@ export default function DashboardPage() {
               </svg>
             </button>
             <span className="btn-tip" style={{
-              position: 'absolute', bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)',
+              position: 'absolute', right: 'calc(100% + 6px)', top: '50%', transform: 'translateY(-50%)', zIndex: 99999,
               background: '#1e1e1e', border: '0.5px solid rgba(255,255,255,0.15)',
               color: 'rgba(255,255,255,0.7)', fontSize: 10, padding: '3px 8px',
               borderRadius: 4, whiteSpace: 'nowrap', pointerEvents: 'none',
               opacity: 0, transition: 'opacity 0.15s',
             }}>마감 보고서</span>
+          </div>
+            </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+              {!pickupLoading && (
+                <button
+                  onClick={() => setMonthlyPickupSegOpen(true)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 13,
+                    background: 'none',
+                    border: 'none',
+                    borderRadius: 20,
+                    padding: '8px 16px 8px 13px',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <span style={{
+                    width: 9, height: 9, borderRadius: '50%',
+                    background: '#00E5A0', flexShrink: 0,
+                    boxShadow: '0 0 0 2px rgba(0,229,160,0.2)',
+                  }} />
+                  <span style={{ fontSize: 14, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+                    {(() => { const [, mm, dd] = otbDate.split('-'); return `${Number(mm)}/${Number(dd)}` })()}{' '}
+                    {pickupDays > 0 ? `${pickupDays}일` : '당일'} 픽업 ·{' '}
+                    {(() => { const { num, unit } = formatPuParts(totalPuNights, 'nights'); return `${num}${unit}` })()}{' '}
+                    {(() => { const { num, unit } = formatPuParts(totalPuRevenue, 'currency'); return `${num}${unit === 'M' ? '백만' : unit}` })()}
+                  </span>
+                  <span style={{
+                    fontSize: 14, fontWeight: 500,
+                    color: 'rgba(0,229,160,0.6)',
+                    display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0,
+                  }}>
+                    상세 ›
+                  </span>
+                </button>
+              )}
+              <div style={{ width: '0.5px', height: 16, background: 'rgba(255,255,255,0.15)' }} />
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                fontSize: 14,
+                color: '#00E5A0',
+                letterSpacing: '0.02em',
+                whiteSpace: 'nowrap',
+              }}>
+                  [ 단위 : % · 실 · 천원 · 백만원 ]
+              </span>
+            </div>
           </div>
         </div>
       </div>
