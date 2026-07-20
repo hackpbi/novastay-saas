@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useMarketSchema } from '@/hooks/useMarketSchema'
-import { usePickupData } from '@/hooks/usePickupData'
+import type { PickupRow } from '@/hooks/usePickupData'
 import MarketPickupDayModal from '@/components/market-pickup/MarketPickupDayModal'
 
 const DOW_KR = ['일', '월', '화', '수', '목', '금', '토']
@@ -17,19 +17,19 @@ const BAR_OPACITY = 0.05      // 기존 Bar 슬라이더 기본값 (5%)
 const LABEL_OPACITY = 0.40    // 기존 Label 슬라이더 기본값 (40%)
 
 export default function PickDetailChart({
-  hotelId, otbDate, vsOtbDate, viewYear, viewMonth, roomCount,
+  hotelId, otbDate, vsOtbDate, viewYear, viewMonth, roomCount, pickupRows,
 }: {
-  hotelId:   string
-  otbDate:   string
-  vsOtbDate: string
-  viewYear:  number
-  viewMonth: number   // 1-based (PickDetailPage)
-  roomCount: number
+  hotelId:    string
+  otbDate:    string
+  vsOtbDate:  string
+  viewYear:   number
+  viewMonth:  number   // 1-based (PickDetailPage)
+  roomCount:  number
+  pickupRows: PickupRow[]   // 부모(PickDetailPage)에서 fetch한 데이터
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const chartRef  = useRef<any>(null)
   const { data: schema = [] } = useMarketSchema()
-  const { data: pickupRows } = usePickupData()
 
   // 표시 월 (0-based로 통일 — 모달의 modalMonth와 동일 의미)
   const modalYear  = viewYear
@@ -39,7 +39,7 @@ export default function PickDetailChart({
   const [lyOn,        setLyOn]        = useState(true)
   const [lyPeriod,    setLyPeriod]    = useState(true)
   const [showLyFinal, setShowLyFinal] = useState(true)
-  const [showLyOtb,   setShowLyOtb]   = useState(false)
+  const [showLyOtb,   setShowLyOtb]   = useState(true)
   const [showPickup,  setShowPickup]  = useState(true)
   const lyMode: 'none' | 'day' | 'period' = !lyOn ? 'none' : (lyPeriod ? 'period' : 'day')
   const [showOccLabel, setShowOccLabel] = useState(true)
@@ -155,25 +155,28 @@ export default function PickDetailChart({
     return arr
   }, [lyCalRows, modalYear, modalMonth, lyLastDay, lyMode])
   const { data: lyOccArr } = useQuery({
-    queryKey: ['pd-ly-occ', hotelId, modalYear, modalMonth, lyMode, lyDateByDay.join(',')],
+    queryKey: ['pd-ly-occ', hotelId, modalYear, modalMonth, lyMode, lyDateByDay.join(','), roomCount],
     enabled: lyMode !== 'none' && !!hotelId && lyDateByDay.length > 0,
     queryFn: async () => {
+      // 동기간(yoy_match) 날짜에 실적이 없을 수 있어 동일자(-1년)도 함께 조회해 폴백 (period 모드 전년마감 누락 방지)
+      const simpleDates = Array.from({ length: lyLastDay }, (_, i) => `${modalYear - 1}-${lyPad(modalMonth + 1)}-${lyPad(i + 1)}`)
+      const queryDates = Array.from(new Set([...lyDateByDay, ...simpleDates]))
       const { data } = await (supabase as any)
         .from('a01_actual_daily').select('business_date, nights')
-        .eq('hotel_id', hotelId).in('business_date', lyDateByDay)
+        .eq('hotel_id', hotelId).in('business_date', queryDates)
       const map = new Map<string, number>()
       for (const r of (data ?? []) as { business_date: string; nights: number }[]) {
         map.set(r.business_date, (map.get(r.business_date) ?? 0) + (r.nights ?? 0))
       }
-      return lyDateByDay.map(ly => {
-        const n = map.get(ly)
+      return lyDateByDay.map((ly, i) => {
+        const n = map.get(ly) ?? map.get(simpleDates[i])   // 동기간 실적 없으면 동일자 폴백
         return n != null && roomCount > 0 ? Math.round((n / roomCount) * 100) : null
       })
     },
   })
   const lyOccData = lyOccArr ?? LY_EMPTY
   const { data: lyOtbArr } = useQuery({
-    queryKey: ['pd-ly-otb', hotelId, otbDate, modalYear, modalMonth, lyMode],
+    queryKey: ['pd-ly-otb', hotelId, otbDate, modalYear, modalMonth, lyMode, roomCount],
     enabled: lyMode !== 'none' && !!hotelId && !!otbDate,
     queryFn: async () => {
       const rpc = lyMode === 'day' ? 'get_ly_pacing_data' : 'get_ly_pacing_data_v2'
@@ -213,6 +216,10 @@ export default function PickDetailChart({
       const todayDate = today.getDate()
       const curY = modalYear, curM = modalMonth + 1
       const isTodayMonth = curY === todayYear && curM === todayMonth
+      // OTB date 해당 일자 바 파란색 강조 (해당 월일 때만)
+      const otbD = otbDate ? new Date(otbDate) : null
+      const isOtbMonth = !!otbD && otbD.getFullYear() === modalYear && otbD.getMonth() === modalMonth
+      const otbDay = otbD ? otbD.getDate() : -1
       const dayTotal = (i: number) => (pickupBySegment[i] ?? []).reduce((s, r) => s + r.rn, 0)
 
       const eventPlugin = {
@@ -379,8 +386,8 @@ export default function PickDetailChart({
               type: 'bar',
               label: 'OCC%',
               data: occData,
-              backgroundColor: () => `rgba(180,180,180,${BAR_OPACITY})`,
-              borderColor: () => `rgba(180,180,180,${Math.min(BAR_OPACITY + 0.05, 1)})`,
+              backgroundColor: (ctx: any) => (isOtbMonth && daily[ctx.dataIndex]?.day === otbDay ? '#5B8DEF' : `rgba(180,180,180,${BAR_OPACITY})`),
+              borderColor: (ctx: any) => (isOtbMonth && daily[ctx.dataIndex]?.day === otbDay ? '#5B8DEF' : `rgba(180,180,180,${Math.min(BAR_OPACITY + 0.05, 1)})`),
               borderWidth: 1,
               borderRadius: 2,
               yAxisID: 'yOcc',

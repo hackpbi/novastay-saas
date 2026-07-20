@@ -1,14 +1,13 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import { usePickupData } from '@/hooks/usePickupData'
 import { useMarketSchema } from '@/hooks/useMarketSchema'
-import MarketPickupMonthBlock, { type SegGroup } from '@/components/market-pickup/MarketPickupMonthBlock'
-import MarketPickupDayModal from '@/components/market-pickup/MarketPickupDayModal'
 import PickDetailChart from '@/components/pickup/PickDetailChart'
 
 export default function PickDetailPage() {
@@ -75,41 +74,60 @@ export default function PickDetailPage() {
     }, 300)
   }
 
-  // ── 세그먼트 그룹 + 선택 상태 (MarketPickupPage 동일 패턴) ───────────────────────
-  const groups: SegGroup[] = useMemo(() => {
-    const mains = schema.filter(s => s.level === 'main' && s.parent_id === null).sort((a, b) => a.order_index - b.order_index)
-    return mains
-      .map(main => ({
-        id: main.id,
-        name: main.name,
-        segs: schema
-          .filter(c => c.parent_id === main.id)
-          .sort((a, b) => a.order_index - b.order_index)
-          .map(c => ({ id: c.id, name: c.name, color: c.bg_dark_color ?? '#888888', lightColor: c.bg_light_color, fontDarkColor: c.font_dark_color, isBold: c.is_bold, codes: c.segmentation ?? [] })),
-      }))
-      .filter(g => g.segs.length > 0)
+  // ── 세그 코드 → display name (schema: main 직속 자식 세그 segmentation 코드 → 세그 이름) ──
+  const codeToName = useMemo(() => {
+    const mainIds = new Set(schema.filter(s => s.level === 'main' && s.parent_id === null).map(s => s.id))
+    const map = new Map<string, string>()
+    for (const s of schema) {
+      if (s.parent_id && mainIds.has(s.parent_id)) {
+        for (const code of (s.segmentation ?? [])) map.set(code, s.name)
+      }
+    }
+    return map
   }, [schema])
-  const allSegIds = useMemo(() => new Set(groups.flatMap(g => g.segs.map(s => s.id))), [groups])
-  const [selectedSegs, setSelectedSegs] = useState<Record<string, Set<string>>>({})
-  const resolveSelected = (mk: string) => selectedSegs[mk] ?? allSegIds
-  const onToggleSeg = (mk: string, segId: string) => {
-    setSelectedSegs(prev => {
-      const cur = new Set(prev[mk] ?? allSegIds)
-      if (cur.has(segId)) cur.delete(segId)
-      else cur.add(segId)
-      return { ...prev, [mk]: cur }
-    })
-  }
+  const segDisplayName = (code: string) => codeToName.get(code) ?? code
 
-  // 섹션 헤더 블록 바 클릭 → 일자별 픽업 상세 모달
-  const [dayModal, setDayModal] = useState<{ day: number; defaultTab: 'pickup' | 'otb' } | null>(null)
+  // ── 현재 월 rows ───────────────────────────────────────────────────────────────
+  const monthRows = useMemo(() => (pickupRows ?? []).filter(r => {
+    const d = new Date(r.business_date)
+    return d.getFullYear() === viewYear && (d.getMonth() + 1) === viewMonth
+  }), [pickupRows, viewYear, viewMonth])
 
-  const month0   = viewMonth - 1   // MarketPickupMonthBlock은 0-based month
-  const monthKey = `${viewYear}-${month0}`
+  // 세그별 픽업(칩) — HOU 제외, segmentation별 pu_nights 합산, sorting1 정렬, pu_nights !== 0
+  const segChips = useMemo(() => {
+    const segMap = new Map<string, { pu_nights: number; sorting1: string | null }>()
+    for (const r of monthRows) {
+      if (r.segmentation === 'HOU') continue
+      const ex = segMap.get(r.segmentation)
+      if (ex) ex.pu_nights += r.pu_nights
+      else segMap.set(r.segmentation, { pu_nights: r.pu_nights, sorting1: r.sorting1 })
+    }
+    return Array.from(segMap.entries())
+      .filter(([, v]) => v.pu_nights !== 0)
+      .sort((a, b) => Number(a[1].sorting1 ?? 999) - Number(b[1].sorting1 ?? 999))
+  }, [monthRows])
+
+  // 세그별 어카운트 집계 (칩 hover 툴팁용) — HOU 제외, pu=0 제외, |pu| 내림차순
+  const segAccountMap = useMemo(() => {
+    const map = new Map<string, { name: string; pu: number }[]>()
+    for (const r of monthRows) {
+      if (r.segmentation === 'HOU') continue
+      if (r.pu_nights === 0) continue
+      const list = map.get(r.segmentation) ?? []
+      const existing = list.find(a => a.name === r.account_name)
+      if (existing) existing.pu += r.pu_nights
+      else list.push({ name: r.account_name, pu: r.pu_nights })
+      map.set(r.segmentation, list)
+    }
+    map.forEach((list, key) => { map.set(key, list.sort((a, b) => Math.abs(b.pu) - Math.abs(a.pu))) })
+    return map
+  }, [monthRows])
+
+  const [tooltip, setTooltip] = useState<{ segCode: string; x: number; y: number } | null>(null)
 
   return (
     <div style={{ height: 'calc(100vh - 104px)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', overflow: 'hidden' }}>
-      {/* 헤더 행 — 좌: 월 네비게이션 / 우: 세그 헤더 */}
+      {/* 헤더 행 — 좌: 월 네비게이션 / 우: 세그 칩 행 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexShrink: 0, marginBottom: 12 }}>
         {/* 좌 — 월 네비게이션 (dashboard5 패턴) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -127,12 +145,12 @@ export default function PickDetailPage() {
             background: 'none', border: 'none', cursor: 'pointer',
           }}
         >
-          <span style={{ fontSize: 22, color: '#00E5A0', lineHeight: 1 }}>‹</span>
+          <span style={{ fontSize: 29, color: '#00E5A0', lineHeight: 1 }}>‹</span>
           <span style={{ fontSize: 11, color: 'rgba(0,229,160,0.6)', letterSpacing: '0.03em' }}>이전</span>
         </button>
 
         <span style={{
-          fontSize: 19, fontWeight: 500, color: '#fff', letterSpacing: '0.04em',
+          fontSize: 24, fontWeight: 500, color: '#fff', letterSpacing: '0.04em',
           transition: 'opacity 0.2s ease, transform 0.35s ease',
           opacity: titleShifting ? 0.5 : 1,
           transform: titleShifting ? 'translateX(4px)' : 'translateX(0)',
@@ -152,30 +170,36 @@ export default function PickDetailPage() {
             padding: '4px 10px', borderRadius: 6,
           }}
         >
-          <span style={{ fontSize: 22, color: '#00E5A0', lineHeight: 1 }}>›</span>
+          <span style={{ fontSize: 29, color: '#00E5A0', lineHeight: 1 }}>›</span>
           <span style={{ fontSize: 11, color: 'rgba(0,229,160,0.6)', letterSpacing: '0.03em' }}>다음</span>
         </button>
         </div>
 
-        {/* 우 — 세그 헤더 (Segment 필터 + Picked up 칩 + 픽업 합계, 테두리/바/History·Detail 없음) */}
-        <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
-          <MarketPickupMonthBlock
-            year={viewYear}
-            month={month0}
-            monthKey={monthKey}
-            pickupRows={pickupRows}
-            groups={groups}
-            selected={resolveSelected(monthKey)}
-            onToggleSeg={(segId) => onToggleSeg(monthKey, segId)}
-            onBarClick={(day, defaultTab) => setDayModal({ day, defaultTab })}
-            onOpenDetail={() => {}}
-            roomCount={roomCount}
-            allSegIds={allSegIds}
-            isDayModalOpen={!!dayModal}
-            showActions={false}
-            showBar={false}
-            showBorder={false}
-          />
+        {/* 우 — 세그 칩 행 (Segment 필터 표시 + Picked up 칩 + 픽업 합계) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', minWidth: 0 }}>
+          <span style={{ fontSize: 11, color: '#555' }}>픽업</span>
+
+          {/* 세그별 칩 — pu_nights >= 0 민트 / < 0 빨강 */}
+          {segChips.map(([segCode, { pu_nights }]) => (
+            <div
+              key={segCode}
+              style={{ position: 'relative', display: 'inline-flex' }}
+              onMouseEnter={e => { const rect = e.currentTarget.getBoundingClientRect(); setTooltip({ segCode, x: rect.left, y: rect.bottom + 6 }) }}
+              onMouseLeave={() => setTooltip(null)}
+            >
+              <span style={{
+                display: 'inline-flex', alignItems: 'center',
+                background: 'transparent',
+                border: `0.5px solid ${pu_nights >= 0 ? '#00E5A0' : '#E24B4A'}`,
+                borderRadius: 20, padding: '3px 10px',
+                fontSize: 11,
+                color: pu_nights >= 0 ? '#00E5A0' : '#E24B4A',
+                whiteSpace: 'nowrap', cursor: 'default',
+              }}>
+                {segDisplayName(segCode)} {pu_nights >= 0 ? '+' : ''}{Math.round(pu_nights)}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -193,25 +217,41 @@ export default function PickDetailPage() {
           viewYear={viewYear}
           viewMonth={viewMonth}
           roomCount={roomCount}
+          pickupRows={pickupRows}
         />
       </div>
 
-      {/* 섹션 헤더 바 클릭 → 일자별 픽업 상세 모달 */}
-      <MarketPickupDayModal
-        open={!!dayModal}
-        onClose={() => setDayModal(null)}
-        year={viewYear}
-        month={month0}
-        day={dayModal?.day ?? 1}
-        schema={schema}
-        pickupRows={pickupRows}
-        roomCount={roomCount}
-        defaultTab={dayModal?.defaultTab ?? 'pickup'}
-        otbDate={otbDate}
-        vsDate={vsOtbDate}
-        otbDates={[]}
-        onDateChange={() => {}}
-      />
+      {tooltip && createPortal(
+        <div style={{
+          position: 'fixed', left: tooltip.x, top: tooltip.y, zIndex: 99999,
+          background: '#1a1a1a', border: '0.5px solid #2a2a2a', borderRadius: 8,
+          padding: '8px 12px', minWidth: 160, maxWidth: 240,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.5)', pointerEvents: 'none',
+        }}>
+          <div style={{
+            fontSize: 11, color: '#00E5A0', fontWeight: 600,
+            marginBottom: 6, borderBottom: '0.5px solid #2a2a2a', paddingBottom: 4,
+          }}>
+            {segDisplayName(tooltip.segCode)}
+          </div>
+          {(segAccountMap.get(tooltip.segCode) ?? []).map(({ name, pu }) => (
+            <div key={name} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '2px 0', gap: 12,
+            }}>
+              <span style={{ fontSize: 11, color: '#aaa', flex: 1, overflow: 'hidden',
+                textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {name}
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 600, flexShrink: 0,
+                color: pu >= 0 ? '#00E5A0' : '#E24B4A' }}>
+                {pu >= 0 ? '+' : ''}{Math.round(pu)}
+              </span>
+            </div>
+          ))}
+        </div>,
+        document.body
+      )}
     </div>
   )
 }
