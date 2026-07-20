@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X } from 'lucide-react'
 import { useDateContext } from '@/contexts/DateContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import DatePicker from '@/components/DatePicker'
@@ -29,10 +28,6 @@ const DOUBLE = '1px solid rgba(0,229,160,0.3)'
 
 // ─── Format helpers ────────────────────────────────────────────────────────────
 
-function formatYYYYMM(key: string): string {
-  return key.replace('-', '.')
-}
-
 function Dash() { return <span style={{ color: 'var(--brand-dimmed)' }}>—</span> }
 function GapDash() { return <span style={{ color: 'rgba(255,255,255,0.4)' }}>—</span> }
 
@@ -40,13 +35,13 @@ function FmtNights({ n }: { n: number }) {
   if (n === 0) return <Dash />
   return <>{n.toLocaleString('ko-KR')}</>
 }
-function FmtAdr({ n }: { n: number }) {
+function FmtAdr({ n, unit = '천원' }: { n: number; unit?: '천원' | '원' }) {
   if (Math.abs(n) < 500) return <Dash />
-  return <>{Math.round(n / 1000)}k</>
+  return <>{unit === '천원' ? Math.round(n / 1000).toLocaleString() : Math.round(n).toLocaleString()}</>
 }
-function FmtRevenue({ n }: { n: number }) {
+function FmtRevenue({ n, unit = '백만원' }: { n: number; unit?: '원' | '천원' | '백만원' }) {
   if (Math.abs(n) < 50_000) return <Dash />
-  return <>{(n / 1_000_000).toFixed(1)}M</>
+  return <>{unit === '백만원' ? (n / 1_000_000).toFixed(1) : unit === '천원' ? Math.round(n / 1000).toLocaleString() : Math.round(n).toLocaleString()}</>
 }
 function FmtGapNights({ n, fontColor }: { n: number; fontColor?: string }) {
   if (n === 0) return <GapDash />
@@ -54,19 +49,19 @@ function FmtGapNights({ n, fontColor }: { n: number; fontColor?: string }) {
   const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{n.toLocaleString('ko-KR')}</span>
 }
-function FmtGapAdr({ n, fontColor }: { n: number; fontColor?: string }) {
+function FmtGapAdr({ n, fontColor, unit = '천원' }: { n: number; fontColor?: string; unit?: '천원' | '원' }) {
   if (Math.abs(n) < 500) return <GapDash />
-  const k = Math.round(n / 1000)
-  const sign = k > 0 ? '+' : ''
-  const color = k > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
-  return <span style={{ color }}>{sign}{k}k</span>
-}
-function FmtGapRevenue({ n, fontColor }: { n: number; fontColor?: string }) {
-  if (Math.abs(n) < 50_000) return <Dash />
-  const m = (n / 1_000_000).toFixed(1)
   const sign = n > 0 ? '+' : ''
   const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
-  return <span style={{ color }}>{sign}{m}M</span>
+  const text = unit === '천원' ? Math.round(n / 1000).toLocaleString() : Math.round(n).toLocaleString()
+  return <span style={{ color }}>{sign}{text}</span>
+}
+function FmtGapRevenue({ n, fontColor, unit = '백만원' }: { n: number; fontColor?: string; unit?: '원' | '천원' | '백만원' }) {
+  if (Math.abs(n) < 50_000) return <Dash />
+  const sign = n > 0 ? '+' : ''
+  const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
+  const text = unit === '백만원' ? (n / 1_000_000).toFixed(1) : unit === '천원' ? Math.round(n / 1000).toLocaleString() : Math.round(n).toLocaleString()
+  return <span style={{ color }}>{sign}{text}</span>
 }
 function FmtOcc({ n }: { n: number }) {
   if (Math.abs(n) < 0.1) return <Dash />
@@ -92,7 +87,7 @@ function FmtGapRevpar({ n, fontColor }: { n: number; fontColor?: string }) {
 
 // ─── Cell group components ─────────────────────────────────────────────────────
 
-function MonthCells({ m, clickable, onGapClick, onOtbClick, onLyClick, bg, gapColor, gapBold, otbSelected, lySelected }: {
+function MonthCells({ m, clickable, onGapClick, onOtbClick, onLyClick, bg, gapColor, gapBold, otbSelected, lySelected, adrUnit, revUnit }: {
   m: LyComparisonMonthly
   clickable: boolean
   onGapClick?: () => void
@@ -103,6 +98,8 @@ function MonthCells({ m, clickable, onGapClick, onOtbClick, onLyClick, bg, gapCo
   gapBold?: boolean
   otbSelected?: boolean
   lySelected?: boolean
+  adrUnit?: '천원' | '원'
+  revUnit?: '원' | '천원' | '백만원'
 }) {
   const cursor = clickable ? 'pointer' : 'default'
   const c: React.CSSProperties = { ...tdBase, textAlign: 'right', background: bg, cursor: onOtbClick ? 'pointer' : 'default' }
@@ -111,16 +108,16 @@ function MonthCells({ m, clickable, onGapClick, onOtbClick, onLyClick, bg, gapCo
     <>
       {/* OTB */}
       <td className="font-mono" style={{ ...c, borderLeft: otbSelected ? '3px solid #00E5A0' : BORDER }} onClick={onOtbClick}><FmtNights n={m.otb.nights} /></td>
-      <td className="font-mono" style={c} onClick={onOtbClick}><FmtAdr n={m.otb.adr} /></td>
-      <td className="font-mono" style={{ ...c, borderRight: DOUBLE }} onClick={onOtbClick}><FmtRevenue n={m.otb.revenue} /></td>
+      <td className="font-mono" style={c} onClick={onOtbClick}><FmtAdr n={m.otb.adr} unit={adrUnit} /></td>
+      <td className="font-mono" style={{ ...c, borderRight: DOUBLE }} onClick={onOtbClick}><FmtRevenue n={m.otb.revenue} unit={revUnit} /></td>
       {/* LY */}
       <td className="font-mono" style={{ ...c, borderLeft: lySelected ? '3px solid #00E5A0' : BORDER }} onClick={onLyClick}><FmtNights n={m.ly.nights} /></td>
-      <td className="font-mono" style={c} onClick={onLyClick}><FmtAdr n={m.ly.adr} /></td>
-      <td className="font-mono" style={{ ...c, borderRight: DOUBLE }} onClick={onLyClick}><FmtRevenue n={m.ly.revenue} /></td>
+      <td className="font-mono" style={c} onClick={onLyClick}><FmtAdr n={m.ly.adr} unit={adrUnit} /></td>
+      <td className="font-mono" style={{ ...c, borderRight: DOUBLE }} onClick={onLyClick}><FmtRevenue n={m.ly.revenue} unit={revUnit} /></td>
       {/* GAP */}
       <td className="font-mono" style={g} onClick={onGapClick}><FmtGapNights n={m.gap.nights} fontColor={gapColor} /></td>
-      <td className="font-mono" style={g} onClick={onGapClick}><FmtGapAdr n={m.gap.adr} fontColor={gapColor} /></td>
-      <td className="font-mono" style={g} onClick={onGapClick}><FmtGapRevenue n={m.gap.revenue} fontColor={gapColor} /></td>
+      <td className="font-mono" style={g} onClick={onGapClick}><FmtGapAdr n={m.gap.adr} fontColor={gapColor} unit={adrUnit} /></td>
+      <td className="font-mono" style={g} onClick={onGapClick}><FmtGapRevenue n={m.gap.revenue} fontColor={gapColor} unit={revUnit} /></td>
     </>
   )
 }
@@ -134,20 +131,6 @@ function Skeleton() {
         <div key={i} className="animate-pulse rounded" style={{ height: 30, background: 'var(--color-bg-tertiary)' }} />
       ))}
     </div>
-  )
-}
-
-// ─── Nav button helper ─────────────────────────────────────────────────────────
-
-function NavBtn({ onClick, disabled, children }: { onClick: () => void; disabled: boolean; children: React.ReactNode }) {
-  return (
-    <button onClick={onClick} disabled={disabled} style={{
-      background: 'transparent', border: '1px solid var(--color-border-default)', borderRadius: 6,
-      padding: '4px 8px', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1,
-      color: 'var(--color-text-secondary)', display: 'inline-flex', alignItems: 'center',
-    }}>
-      {children}
-    </button>
   )
 }
 
@@ -167,10 +150,13 @@ export default function LyComparisonSegModal({
   const isDark                                           = theme === 'dark'
   const { data: schema, loading: schemaLoading }         = useMarketSchema()
   const [mode, setMode]                                  = useState<LyPacingMode>('v1')
-  const [tooltip, setTooltip]                            = useState<{ visible: boolean; x: number; y: number; text: string }>({ visible: false, x: 0, y: 0, text: '' })
   const { data: lyPacing, loading: lyLoading }           = useLyPacing(mode)
   const lyMatchUpdateDate = lyPacing?.[0]?.ly_match_update_date ?? null
   const [currentMonthIndex, setCurrentMonthIndex]        = useState(0)
+  const [titleShifting, setTitleShifting]                = useState(false)
+  const [showUnitSetting, setShowUnitSetting]            = useState(false)
+  const [adrUnit, setAdrUnit]                            = useState<'천원' | '원'>('천원')
+  const [revUnit, setRevUnit]                            = useState<'원' | '천원' | '백만원'>('백만원')
   // 우측 Account 증감 패널: 선택된 세그먼트
   const [selectedSeg, setSelectedSeg] = useState<{ label: string; codes: string[]; viewMode: 'otb' | 'ly' | 'gap' } | null>(null)
 
@@ -217,6 +203,24 @@ export default function LyComparisonSegModal({
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [open, onClose])
+
+  // 월 전환 시 타이틀 잠깐 흐려지며 밀림 (B타입)
+  useEffect(() => {
+    setTitleShifting(true)
+    const timer = setTimeout(() => setTitleShifting(false), 350)
+    return () => clearTimeout(timer)
+  }, [currentMonthIndex])
+
+  // 단위 설정 패널 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!showUnitSetting) return
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('.unit-setting-wrap')) setShowUnitSetting(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showUnitSetting])
 
   const currentMonthKey = monthKeys[currentMonthIndex] ?? ''
 
@@ -274,107 +278,153 @@ export default function LyComparisonSegModal({
     gap: { nights: 0, adr: 0, revenue: 0 },
   }
 
+  const currentMonth = currentMonthKey ? currentMonthKey.slice(5, 7) : ''
+  const currentYear  = currentMonthKey ? currentMonthKey.slice(0, 4) : ''
+  const isFirst      = currentMonthIndex === 0
+  const isLast       = currentMonthIndex >= monthKeys.length - 1
+
+  const scaleAdr = (val: number) =>
+    adrUnit === '천원' ? String(Math.round(val / 1000)) : Math.round(val).toLocaleString()
+  const scaleRev = (val: number) =>
+    revUnit === '백만원' ? (val / 1_000_000).toFixed(1)
+    : revUnit === '천원' ? Math.round(val / 1000).toLocaleString()
+    : Math.round(val).toLocaleString()
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose} />
 
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-[1400px]"
-        style={{ maxHeight: '88vh', overflow: 'hidden', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
+        style={{ maxHeight: '88vh', overflow: 'hidden', background: '#0a0a0a', border: '0.5px solid rgba(0,229,160,0.2)', borderLeft: '1.5px solid #00E5A0', borderRadius: 10, boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 shrink-0" style={{ borderBottom: BORDER }}>
-          {/* Left: title */}
-          <div>
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-              전년 동기간 비교
-            </h2>
-          </div>
+        <div className="flex items-center justify-between px-6 pt-2 pb-1 shrink-0" style={{ borderBottom: BORDER }}>
+          {/* Left: title + E스타일 화살표 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            {/* ‹ 이전 버튼 — B타입 애니메이션 */}
+            <button
+              onClick={() => setCurrentMonthIndex(i => Math.max(0, i - 1))}
+              disabled={isFirst}
+              style={{
+                overflow: 'hidden',
+                maxWidth: isFirst ? 0 : 60,
+                opacity: isFirst ? 0 : 1,
+                transform: `translateX(${isFirst ? -10 : 0}px)`,
+                padding: isFirst ? '4px 0' : '4px 10px',
+                pointerEvents: isFirst ? 'none' : 'auto',
+                transition: 'max-width 0.35s ease, opacity 0.25s ease, transform 0.35s ease, padding 0.35s ease',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                background: 'none', border: 'none', cursor: 'pointer', borderRadius: 6,
+              }}
+            >
+              <span style={{ fontSize: 18, color: '#00E5A0', lineHeight: 1 }}>‹</span>
+              <span style={{ fontSize: 9, color: 'rgba(0,229,160,0.6)', letterSpacing: '0.03em' }}>이전</span>
+            </button>
 
-          {/* Center: month nav */}
-          {monthKeys.length > 0 && (
-            <div className="flex items-center gap-3">
-              <NavBtn onClick={() => setCurrentMonthIndex(i => Math.max(0, i - 1))} disabled={currentMonthIndex === 0}>
-                <ChevronLeft size={14} />
-              </NavBtn>
-              <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-text-primary)', minWidth: 80, textAlign: 'center' }}>
-                {formatYYYYMM(currentMonthKey)}
+            {/* 타이틀 */}
+            <span style={{
+              fontSize: 16, fontWeight: 500, color: '#fff', letterSpacing: '0.04em',
+              transition: 'opacity 0.2s ease, transform 0.35s ease',
+              opacity: titleShifting ? 0.5 : 1,
+              transform: titleShifting ? 'translateX(4px)' : 'translateX(0)',
+            }}>
+              전년 동기간_
+              <span style={{ color: '#00E5A0' }}>
+                {currentMonth}월 <span style={{ fontSize: '0.7em' }}>{String(currentYear).slice(-2)}년</span>
               </span>
-              <NavBtn onClick={() => setCurrentMonthIndex(i => Math.min(monthKeys.length - 1, i + 1))} disabled={currentMonthIndex === monthKeys.length - 1}>
-                <ChevronRight size={14} />
-              </NavBtn>
-            </div>
-          )}
+            </span>
+
+            {/* › 다음 버튼 */}
+            <button
+              onClick={() => setCurrentMonthIndex(i => Math.min(monthKeys.length - 1, i + 1))}
+              disabled={isLast}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                background: 'none', border: 'none',
+                cursor: isLast ? 'default' : 'pointer',
+                padding: '4px 10px', borderRadius: 6,
+              }}
+            >
+              <span style={{ fontSize: 18, color: isLast ? 'rgba(255,255,255,0.1)' : '#00E5A0', lineHeight: 1 }}>›</span>
+              <span style={{ fontSize: 9, color: isLast ? 'rgba(255,255,255,0.08)' : 'rgba(0,229,160,0.6)', letterSpacing: '0.03em' }}>다음</span>
+            </button>
+          </div>
 
           {/* Right: mode toggle + close */}
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => selectedSeg
-                ? onAccountDrillDown?.(selectedSeg.codes, currentMonthKey, selectedSeg.label)
-                : onAccountDrillDown?.([], currentMonthKey, '')
-              }
-              style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', background: 'transparent', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', whiteSpace: 'nowrap' }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#00E5A0'; e.currentTarget.style.color = '#00E5A0' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.color = 'rgba(255,255,255,0.5)' }}
-            >
-              전체 어카운트 보기
-            </button>
-            <div style={{ display: 'inline-flex', borderRadius: 999, border: '1px solid rgba(255,255,255,0.12)' }}>
-              {(['v1', 'v2'] as LyPacingMode[]).map((m, i) => (
-                <div
-                  key={m}
-                  style={{
-                    display:      'inline-flex',
-                    alignItems:   'center',
-                    gap:          4,
-                    padding:      '4px 8px 4px 10px',
-                    borderRight:  i === 0 ? '1px solid rgba(255,255,255,0.12)' : 'none',
-                    background:   mode === m ? 'rgba(0,229,160,0.15)' : 'transparent',
-                    borderRadius: i === 0 ? '999px 0 0 999px' : '0 999px 999px 0',
-                  }}
-                >
-                  <button
-                    onClick={() => setMode(m)}
-                    style={{
-                      padding:    0,
-                      fontSize:   11,
-                      fontWeight: 600,
-                      cursor:     'pointer',
-                      border:     'none',
-                      background: 'transparent',
-                      whiteSpace: 'nowrap',
-                      color:      mode === m ? '#00E5A0' : 'rgba(255,255,255,0.35)',
-                      transition: 'color 0.15s',
-                    }}
-                    onMouseEnter={e => { if (mode !== m) (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.6)' }}
-                    onMouseLeave={e => { if (mode !== m) (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.35)' }}
-                  >
-                    {m === 'v1' ? '전년 동일자' : '전년 동기간'}
-                  </button>
-                  <div
-                    style={{ display: 'inline-flex', alignItems: 'center', cursor: 'default' }}
-                    onMouseEnter={e => {
-                      const rect = e.currentTarget.getBoundingClientRect()
-                      setTooltip({
-                        visible: true,
-                        x: rect.left + rect.width / 2,
-                        y: rect.bottom + 8,
-                        text: m === 'v1'
-                          ? `오늘 일자 기준 작년 OTB 현황\n예) 오늘 ${otbDate ?? '-'} OTB → 작년 ${lyMatchUpdateDate ?? '-'} OTB`
-                          : `오늘 일자 기준 작년 OTB 및 일자별 요일·공휴일 매칭\n예) 오늘 ${otbDate ?? '-'} OTB → 작년 ${lyMatchUpdateDate ?? '-'} OTB`,
-                      })
-                    }}
-                    onMouseLeave={() => setTooltip(prev => ({ ...prev, visible: false }))}
-                  >
-                    <div style={{
-                      width: 14, height: 14, borderRadius: '50%',
-                      border: '1px solid rgba(255,255,255,0.3)',
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 10, color: 'rgba(255,255,255,0.4)', flexShrink: 0,
-                    }}>?</div>
+            {/* 단위 설정 */}
+            <div className="unit-setting-wrap" style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShowUnitSetting(v => !v)}
+                style={{
+                  width: 30, height: 30, borderRadius: 6,
+                  border: showUnitSetting
+                    ? '0.5px solid #00E5A0'
+                    : '0.5px solid rgba(255,255,255,0.15)',
+                  background: showUnitSetting ? 'rgba(0,229,160,0.1)' : 'none',
+                  cursor: 'pointer',
+                  color: showUnitSetting ? '#00E5A0' : 'rgba(255,255,255,0.4)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="1.8"
+                  strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+              </button>
+
+              {showUnitSetting && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+                  background: '#1a1a1a',
+                  border: '0.5px solid rgba(0,229,160,0.25)',
+                  borderRadius: 8, padding: '12px 14px', width: 210,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                  zIndex: 9999,
+                }}>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginBottom: 10, letterSpacing: '0.04em' }}>
+                    단위 설정
+                  </div>
+
+                  {/* ADR */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>객단가</span>
+                    <div style={{ display: 'flex', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 5, overflow: 'hidden' }}>
+                      {(['원', '천원'] as const).map(u => (
+                        <button key={u} onClick={() => setAdrUnit(u)} style={{
+                          padding: '3px 8px', fontSize: 10, border: 'none', cursor: 'pointer',
+                          fontFamily: 'inherit', whiteSpace: 'nowrap',
+                          background: adrUnit === u ? '#00E5A0' : 'transparent',
+                          color: adrUnit === u ? '#0a0a0a' : 'rgba(255,255,255,0.35)',
+                          fontWeight: adrUnit === u ? 500 : 400,
+                        }}>{u}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.07)', margin: '8px 0' }} />
+
+                  {/* REV */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>매출</span>
+                    <div style={{ display: 'flex', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 5, overflow: 'hidden' }}>
+                      {(['원', '천원', '백만원'] as const).map(u => (
+                        <button key={u} onClick={() => setRevUnit(u)} style={{
+                          padding: '3px 8px', fontSize: 10, border: 'none', cursor: 'pointer',
+                          fontFamily: 'inherit', whiteSpace: 'nowrap',
+                          background: revUnit === u ? '#00E5A0' : 'transparent',
+                          color: revUnit === u ? '#0a0a0a' : 'rgba(255,255,255,0.35)',
+                          fontWeight: revUnit === u ? 500 : 400,
+                        }}>{u}</button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              ))}
+              )}
             </div>
             <button onClick={onClose} className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1" aria-label="닫기">
               <X size={22} />
@@ -405,7 +455,20 @@ export default function LyComparisonSegModal({
                       </div>
                     </th>
                     <th colSpan={3} style={{ ...thBase, textAlign: 'center', borderRight: DOUBLE, height: 42, verticalAlign: 'middle' }}>
-                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', marginBottom: 3 }}>작년 OTB</div>
+                      <div
+                        onClick={() => setMode(mode === 'v1' ? 'v2' : 'v1')}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          cursor: 'pointer', padding: '2px 8px', borderRadius: 4,
+                          transition: 'background 0.15s', marginBottom: 3,
+                          color: 'rgba(255,255,255,0.5)',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,229,160,0.1)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)' }}>{mode === 'v1' ? '전년 동일자 OTB' : '전년 동기간 OTB'}</span>
+                        <span style={{ fontSize: 10, color: 'rgba(0,229,160,0.5)' }}>⇄</span>
+                      </div>
                       <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>{lyMatchUpdateDate ?? '-'}</div>
                     </th>
                     <th colSpan={3} style={{ ...thBase, textAlign: 'center', height: 42, verticalAlign: 'middle' }}>
@@ -453,6 +516,8 @@ export default function LyComparisonSegModal({
                         <MonthCells
                           m={m}
                           clickable={clickable}
+                          adrUnit={adrUnit}
+                          revUnit={revUnit}
                           otbSelected={selectedSeg?.label === row.name && selectedSeg?.viewMode === 'otb'}
                           lySelected={selectedSeg?.label === row.name && selectedSeg?.viewMode === 'ly'}
                           bg={baseBg}
@@ -476,14 +541,14 @@ export default function LyComparisonSegModal({
                     {sumMonth ? (
                       <>
                         <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderLeft: BORDER }}><FmtNights n={sumMonth.otb.nights} /></td>
-                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtAdr n={sumMonth.otb.adr} /></td>
-                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderRight: DOUBLE }}><FmtRevenue n={sumMonth.otb.revenue} /></td>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtAdr n={sumMonth.otb.adr} unit={adrUnit} /></td>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderRight: DOUBLE }}><FmtRevenue n={sumMonth.otb.revenue} unit={revUnit} /></td>
                         <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtNights n={sumMonth.ly.nights} /></td>
-                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtAdr n={sumMonth.ly.adr} /></td>
-                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderRight: DOUBLE }}><FmtRevenue n={sumMonth.ly.revenue} /></td>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtAdr n={sumMonth.ly.adr} unit={adrUnit} /></td>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderRight: DOUBLE }}><FmtRevenue n={sumMonth.ly.revenue} unit={revUnit} /></td>
                         <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtGapNights n={sumMonth.gap.nights} fontColor="var(--color-text-primary)" /></td>
-                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtGapAdr n={sumMonth.gap.adr} fontColor="var(--color-text-primary)" /></td>
-                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtGapRevenue n={sumMonth.gap.revenue} fontColor="var(--color-text-primary)" /></td>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtGapAdr n={sumMonth.gap.adr} fontColor="var(--color-text-primary)" unit={adrUnit} /></td>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtGapRevenue n={sumMonth.gap.revenue} fontColor="var(--color-text-primary)" unit={revUnit} /></td>
                       </>
                     ) : <td colSpan={9} />}
                   </tr>
@@ -520,7 +585,7 @@ export default function LyComparisonSegModal({
         </div>
 
         {/* 우측 Account 증감 패널 */}
-        <div style={{ width: 320, flexShrink: 0, borderLeft: '1px solid rgba(0,229,160,0.2)', display: 'flex', flexDirection: 'column', background: '#0a0a0a', alignSelf: 'flex-start', maxHeight: 'calc(88vh - 120px)', overflow: 'hidden' }}>
+        <div style={{ width: 340, flexShrink: 0, border: '0.5px solid rgba(0,229,160,0.15)', borderLeft: '0.5px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', background: 'radial-gradient(ellipse 80% 60% at 100% 100%, rgba(0,229,160,0.1) 0%, transparent 70%), #000000', alignSelf: 'stretch', maxHeight: 'calc(88vh - 120px)', overflow: 'auto' }}>
           <div style={{ padding: '10px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>Account 증감</div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
@@ -558,35 +623,16 @@ export default function LyComparisonSegModal({
                     {a.valRn === 0 ? '—' : (isGap && a.valRn > 0 ? '+' : '') + a.valRn}
                   </span>
                   <span style={{ fontSize: 11, color: isGap ? (a.valAdr > 0 ? '#00E5A0' : a.valAdr < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)') : '#fff', width: 52, textAlign: 'right' }}>
-                    {a.valAdr === 0 ? '—' : (isGap && a.valAdr > 0 ? '+' : '') + (Math.abs(a.valAdr) >= 1000 ? Math.round(a.valAdr / 1000) + 'k' : a.valAdr)}
+                    {a.valAdr === 0 ? '—' : (isGap && a.valAdr > 0 ? '+' : '') + scaleAdr(a.valAdr)}
                   </span>
                   <span style={{ fontSize: 11, color: isGap ? (a.valRev > 0 ? '#00E5A0' : a.valRev < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)') : '#fff', width: 56, textAlign: 'right' }}>
-                    {a.valRev === 0 ? '—' : (isGap && a.valRev > 0 ? '+' : '') + (a.valRev / 1_000_000).toFixed(1) + 'M'}
+                    {a.valRev === 0 ? '—' : (isGap && a.valRev > 0 ? '+' : '') + scaleRev(a.valRev)}
                   </span>
                 </div>
               </div>
               )
             })}
           </div>
-          {accountList.length > 0 && (() => {
-            const isGap    = selectedSeg?.viewMode === 'gap'
-            const totalRn  = accountList.reduce((s, a) => s + a.valRn, 0)
-            const totalRev = accountList.reduce((s, a) => s + a.valRev, 0)
-            return (
-            <div style={{ padding: '7px 14px', borderTop: '1px solid rgba(0,229,160,0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', flex: 1 }}>합계</span>
-              <div style={{ display: 'flex', flexShrink: 0 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: isGap ? (totalRn > 0 ? '#00E5A0' : totalRn < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)') : '#fff', width: 40, textAlign: 'right' }}>
-                  {(isGap && totalRn > 0 ? '+' : '') + totalRn}
-                </span>
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', width: 52, textAlign: 'right' }}>—</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: isGap ? (totalRev > 0 ? '#00E5A0' : totalRev < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)') : '#fff', width: 56, textAlign: 'right' }}>
-                  {(isGap && totalRev > 0 ? '+' : '') + (totalRev / 1_000_000).toFixed(1) + 'M'}
-                </span>
-              </div>
-            </div>
-            )
-          })()}
         </div>
         </div>
 
@@ -595,31 +641,9 @@ export default function LyComparisonSegModal({
           <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>
             {onAccountDrillDown ? 'GAP 셀 클릭 → Account 보기' : ''}
           </span>
-          <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>ESC로 닫기</span>
+          <span style={{ fontSize: 11, color: '#00E5A0', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>단위 : 실 · {adrUnit} · {revUnit}</span>
         </div>
       </div>
-      {tooltip.visible && createPortal(
-        <div style={{
-          position:     'fixed',
-          left:         tooltip.x,
-          top:          tooltip.y,
-          transform:    'translateX(-50%)',
-          zIndex:       9999,
-          width:        192,
-          background:   '#1a1a1a',
-          border:       '1px solid rgba(255,255,255,0.1)',
-          borderRadius: 6,
-          padding:      8,
-          fontSize:     11,
-          color:        'rgba(255,255,255,0.7)',
-          whiteSpace:   'pre-line',
-          lineHeight:   1.5,
-          pointerEvents: 'none',
-        }}>
-          {tooltip.text}
-        </div>,
-        document.body
-      )}
     </div>
   )
 }

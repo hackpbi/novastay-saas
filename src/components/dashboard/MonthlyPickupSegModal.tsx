@@ -46,7 +46,7 @@ function FmtPickupAdr({ n, fontColor, unit = '천원' }: { n: number; fontColor?
   if (Math.abs(n) < 500) return <Dash fontColor={fontColor} />
   const sign  = n > 0 ? '+' : ''
   const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
-  const text  = unit === '천원' ? Math.round(n / 1000).toLocaleString() : n.toLocaleString()
+  const text  = unit === '천원' ? Math.round(n / 1000).toLocaleString() : Math.round(n).toLocaleString()
   return <span style={{ color }}>{sign}{text}</span>
 }
 function FmtPickupRevenue({ n, fontColor, unit = '백만원' }: { n: number; fontColor?: string; unit?: '원' | '천원' | '백만원' }) {
@@ -55,7 +55,7 @@ function FmtPickupRevenue({ n, fontColor, unit = '백만원' }: { n: number; fon
   const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   const text  = unit === '백만원' ? (n / 1_000_000).toFixed(1)
               : unit === '천원'   ? Math.round(n / 1000).toLocaleString()
-              : n.toLocaleString()
+              : Math.round(n).toLocaleString()
   return <span style={{ color }}>{sign}{text}</span>
 }
 function FmtOcc({ n }: { n: number }) {
@@ -242,14 +242,14 @@ export default function MonthlyPickupSegModal({
   const fmtAdr = (val: number) => {
     if (val === 0) return '—'
     if (adrUnit === '천원') return `${val > 0 ? '+' : ''}${Math.round(val / 1000)}`
-    return `${val > 0 ? '+' : ''}${val.toLocaleString()}`  // 원
+    return `${val > 0 ? '+' : ''}${Math.round(val).toLocaleString()}`  // 원 — 소수점 없음
   }
   const fmtRev = (val: number) => {
     if (val === 0) return '—'
     const sign = val > 0 ? '+' : ''
     if (revUnit === '백만원') return `${sign}${(val / 1_000_000).toFixed(1)}`
     if (revUnit === '천원')   return `${sign}${Math.round(val / 1000).toLocaleString()}`
-    return `${sign}${val.toLocaleString()}`  // 원
+    return `${sign}${Math.round(val).toLocaleString()}`  // 원 — 소수점 없음
   }
 
   return (
@@ -265,7 +265,7 @@ export default function MonthlyPickupSegModal({
         style={{ maxHeight: '88vh', background: '#0a0a0a', border: '0.5px solid rgba(0,229,160,0.2)', borderLeft: '1.5px solid #00E5A0', borderRadius: 10, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
-        <div className="px-6 pt-1 pb-1 shrink-0" style={{ borderBottom: `1px solid ${BORDER.split(' ').pop()}` }}>
+        <div className="px-6 pt-3 pb-1 shrink-0" style={{ borderBottom: `1px solid ${BORDER.split(' ').pop()}` }}>
           {/* 1줄: 제목 + 페이지네이션 + X */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
@@ -290,10 +290,10 @@ export default function MonthlyPickupSegModal({
                 <span style={{ fontSize: 18, lineHeight: 1, transition: 'color 0.15s', color: pageIndex === 0 ? 'rgba(255,255,255,0.1)' : '#00E5A0' }}>‹</span>
                 <span style={{ fontSize: 9, letterSpacing: '0.03em', transition: 'color 0.15s', whiteSpace: 'nowrap', color: pageIndex === 0 ? 'rgba(255,255,255,0.08)' : '#00E5A0' }}>이전</span>
               </button>
-              <span className="font-semibold" style={{ color: 'var(--color-text-primary)', fontSize: 20, letterSpacing: '0.02em', transition: 'opacity 0.2s ease, transform 0.35s ease', opacity: titleShifting ? 0.5 : 1, transform: titleShifting ? 'translateX(4px)' : 'translateX(0)' }}>
+              <span className="font-semibold" style={{ color: 'var(--color-text-primary)', fontSize: 15, letterSpacing: '0.02em', transition: 'opacity 0.2s ease, transform 0.35s ease', opacity: titleShifting ? 0.5 : 1, transform: titleShifting ? 'translateX(4px)' : 'translateX(0)' }}>
                 월별 픽업_
               </span>
-              <span className="font-semibold" style={{ color: '#00E5A0', fontSize: 20, letterSpacing: '0.02em', transition: 'opacity 0.2s ease, transform 0.35s ease', opacity: titleShifting ? 0.5 : 1, transform: titleShifting ? 'translateX(4px)' : 'translateX(0)' }}>
+              <span className="font-semibold" style={{ color: '#00E5A0', fontSize: 15, letterSpacing: '0.02em', transition: 'opacity 0.2s ease, transform 0.35s ease', opacity: titleShifting ? 0.5 : 1, transform: titleShifting ? 'translateX(4px)' : 'translateX(0)' }}>
                 {startMonth}월<span style={{ fontSize: '0.7em', marginLeft: 2 }}>{startYY}년</span> ~ {endMonth}월<span style={{ fontSize: '0.7em', marginLeft: 2 }}>{endYY}년</span>
               </span>
               <button
@@ -313,41 +313,8 @@ export default function MonthlyPickupSegModal({
               </button>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={onClose}
-                className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1"
-                aria-label="닫기"
-              >
-                <X size={22} />
-              </button>
-            </div>
-          </div>
-          {/* 2줄: DatePicker(좌) + 월별/합계 토글(우) */}
-          <div className="flex items-center justify-between mt-1">
-            <div className="flex items-center gap-2">
-              <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} accent bare availableDates={otbDates} />
-              <DatePicker label="vs OTB" value={vsOtbDate} onChange={setVsOtbDate} bare availableDates={otbDates.filter(d => d < otbDate)} />
-              <span style={{ fontSize: 11, color: 'var(--brand-dimmed)', whiteSpace: 'nowrap' }}>
-                {days > 0 ? `${days}일간` : '당일'} 픽업 현황
-              </span>
-            </div>
-            <div className="flex items-center gap-2 self-stretch">
-            <button
-              onClick={() => onPickupCellClick?.(selectedSeg?.codes ?? [], selectedSeg?.monthKey || null, selectedSeg?.label ?? '')}
-              style={{
-                fontSize: 11,
-                padding: '3px 10px',
-                borderRadius: 6,
-                border: '1px solid rgba(255,255,255,0.2)',
-                background: 'transparent',
-                color: 'rgba(255,255,255,0.5)',
-                cursor: 'pointer',
-              }}
-            >
-              전체 어카운트 픽업
-            </button>
             {/* 월별/합계 토글 (현재 월별) */}
-            <div className="flex rounded-md overflow-hidden self-stretch" style={{ border: '1px solid var(--color-border-default)', background: 'var(--color-bg-elevated)' }}>
+            <div className="flex rounded-md overflow-hidden self-stretch" style={{ height: 30, border: '1px solid var(--color-border-default)', background: 'var(--color-bg-elevated)' }}>
               <button
                 className="px-2.5 text-xs transition-colors"
                 style={{ background: 'var(--color-accent-primary)', color: '#0A0A0A' }}
@@ -397,9 +364,9 @@ export default function MonthlyPickupSegModal({
 
                   {/* ADR */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>객단가 (ADR)</span>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>객단가</span>
                     <div style={{ display: 'flex', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 5, overflow: 'hidden' }}>
-                      {(['천원', '원'] as const).map(u => (
+                      {(['원', '천원'] as const).map(u => (
                         <button key={u} onClick={() => setAdrUnit(u)} style={{
                           padding: '3px 8px', fontSize: 10, border: 'none', cursor: 'pointer',
                           fontFamily: 'inherit', whiteSpace: 'nowrap',
@@ -415,7 +382,7 @@ export default function MonthlyPickupSegModal({
 
                   {/* REV */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>매출 (REV)</span>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>매출</span>
                     <div style={{ display: 'flex', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 5, overflow: 'hidden' }}>
                       {(['원', '천원', '백만원'] as const).map(u => (
                         <button key={u} onClick={() => setRevUnit(u)} style={{
@@ -431,6 +398,13 @@ export default function MonthlyPickupSegModal({
                 </div>
               )}
             </div>
+            <button
+              onClick={onClose}
+              className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1"
+              aria-label="닫기"
+            >
+              <X size={22} />
+            </button>
             </div>
           </div>
         </div>
@@ -452,7 +426,7 @@ export default function MonthlyPickupSegModal({
                   <tr>
                     <th style={{ ...thBase, textAlign: 'left', borderRight: BORDER }} rowSpan={2}>세그먼트</th>
                     {visibleMonths.map(mk => (
-                      <th key={mk} colSpan={3} style={{ ...thBase, textAlign: 'center', color: '#00E5A0', ...MONTH_SEP, borderRight: BORDER }}>
+                      <th key={mk} colSpan={3} style={{ ...thBase, fontSize: 12, textAlign: 'center', color: '#00E5A0', ...MONTH_SEP, borderRight: BORDER }}>
                         {mk.slice(5, 7)}월
                         <span style={{ fontSize: '0.7em', marginLeft: 2 }}>{mk.slice(2, 4)}년</span>
                       </th>
@@ -539,7 +513,7 @@ export default function MonthlyPickupSegModal({
         </div>
 
         {/* 우측 Account Pickup 패널 */}
-        <div style={{ width: 340, flexShrink: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto', background: 'radial-gradient(ellipse 80% 60% at 100% 100%, rgba(0,229,160,0.1) 0%, transparent 70%), #161616', border: '0.5px solid rgba(0,229,160,0.15)', borderLeft: '0.5px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ width: 340, flexShrink: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto', background: 'radial-gradient(ellipse 80% 60% at 100% 100%, rgba(0,229,160,0.1) 0%, transparent 70%), #000000', border: '0.5px solid rgba(0,229,160,0.15)', borderLeft: '0.5px solid rgba(255,255,255,0.06)' }}>
           <div className="px-3 pt-3 pb-2 shrink-0" style={{ borderBottom: BORDER }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>어카운트 픽업</div>
             <div style={{ fontSize: 10, color: 'var(--brand-dimmed)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -556,10 +530,13 @@ export default function MonthlyPickupSegModal({
             </div>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'thin' }}>
-            {accountList.length === 0 ? (
-              <div style={{ fontSize: 11, color: 'var(--brand-dimmed)', padding: 12 }}>
-                {selectedSeg ? '픽업 데이터가 없습니다.' : ''}
+            {!selectedSeg ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 6, color: 'rgba(255,255,255,0.2)', fontSize: 11 }}>
+                <span style={{ fontSize: 18 }}>👆</span>
+                <span>세그먼트를 클릭하세요</span>
               </div>
+            ) : accountList.length === 0 ? (
+              <div style={{ fontSize: 11, color: 'var(--brand-dimmed)', padding: 12 }}>픽업 데이터가 없습니다.</div>
             ) : accountList.map((a, i) => (
               <div
                 key={`${a.name}-${i}`}
@@ -587,10 +564,14 @@ export default function MonthlyPickupSegModal({
 
         {/* Footer */}
         <div className="flex justify-between px-6 py-3 shrink-0" style={{ borderTop: BORDER }}>
-          <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>
-            {onPickupCellClick ? 'Pickup 셀 클릭 → Account 보기' : ''}
-          </span>
-          <span style={{ fontSize: 11, color: '#00E5A0', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>단위 : 실 · 천원 · 백만원</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} accent bare availableDates={otbDates} />
+            <DatePicker label="vs OTB" value={vsOtbDate} onChange={setVsOtbDate} bare availableDates={otbDates.filter(d => d < otbDate)} />
+            <span style={{ fontSize: 11, color: 'var(--brand-dimmed)', whiteSpace: 'nowrap' }}>
+              {days > 0 ? `${days}일간` : '당일'} 픽업 현황
+            </span>
+          </div>
+          <span style={{ fontSize: 11, color: '#00E5A0', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>단위 : 실 · {adrUnit} · {revUnit}</span>
         </div>
       </div>
     </div>

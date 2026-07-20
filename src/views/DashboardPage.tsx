@@ -247,7 +247,7 @@ function EventBadge({ group, pickupRows, roomCount }: { group: EventGroup; picku
     return {
       avgOcc:   avail > 0 ? (totOtbN / avail * 100).toFixed(1) : null,
       avgAdr:   totOtbN > 0 ? Math.round(totOtbR / totOtbN / 1000) : null,
-      totalRev: totOtbR > 0 ? (totOtbR / 1e6).toFixed(1) : null,
+      avgRev:   totOtbR > 0 ? (totOtbR / group.dates.length / 1e6).toFixed(1) : null,
     }
   })()
 
@@ -323,11 +323,11 @@ function EventBadge({ group, pickupRows, roomCount }: { group: EventGroup; picku
                     <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${currOcc ?? 0}%`, background: '#00E5A0', boxShadow: '0 0 6px rgba(0,229,160,0.6)', borderRadius: 3 }} />
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)' }}>ADR</span>
+                    <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)' }}>객단가</span>
                     <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{adr ? `${adr}k` : '—'}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)' }}>REV</span>
+                    <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)' }}>매출</span>
                     <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{rev ? `${rev}M` : '—'}</span>
                   </div>
                   {!isPast && (
@@ -362,20 +362,14 @@ function EventBadge({ group, pickupRows, roomCount }: { group: EventGroup; picku
           ) : (
             <div style={{ borderTop: '0.5px solid rgba(255,255,255,0.05)', display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', background: 'rgba(0,0,0,0.15)' }}>
               <div style={{ padding: '8px 14px', borderRight: '0.5px solid rgba(255,255,255,0.04)' }}>
-                <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginBottom: 3 }}>기간 합계 OCC</div>
-                <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>{pastSummary.avgOcc ?? '—'}%</div>
-                <div style={{ fontSize: 10, color: 'rgba(0,229,160,0.6)', marginTop: 2 }}>전년 —</div>
-              </div>
+                <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginBottom: 3 }}>기간 평균 점유율</div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>{pastSummary.avgOcc ?? '—'}%</div>              </div>
               <div style={{ padding: '8px 14px', borderRight: '0.5px solid rgba(255,255,255,0.04)' }}>
-                <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginBottom: 3 }}>평균 ADR</div>
-                <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>{pastSummary.avgAdr != null ? `${pastSummary.avgAdr}k` : '—'}</div>
-                <div style={{ fontSize: 10, color: 'rgba(0,229,160,0.6)', marginTop: 2 }}>전년 —</div>
-              </div>
+                <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginBottom: 3 }}>평균 객단가</div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>{pastSummary.avgAdr != null ? `${pastSummary.avgAdr}k` : '—'}</div>              </div>
               <div style={{ padding: '8px 14px' }}>
-                <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginBottom: 3 }}>합계 REV</div>
-                <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>{pastSummary.totalRev != null ? `${pastSummary.totalRev}M` : '—'}</div>
-                <div style={{ fontSize: 10, color: 'rgba(0,229,160,0.6)', marginTop: 2 }}>전년 —</div>
-              </div>
+                <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginBottom: 3 }}>평균 매출</div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>{pastSummary.avgRev != null ? `${pastSummary.avgRev}M` : '—'}</div>              </div>
             </div>
           )}
         </div>,
@@ -397,6 +391,15 @@ function ChangeTag({ value, unit, onClick }: { value: number; unit: string; onCl
       style={{
         background: pos ? 'var(--accent-badge-bg)' : 'var(--negative-bg)',
         border:     `1px solid ${pos ? 'var(--accent-badge-border)' : 'var(--negative-border)'}`,
+        transition: 'all 0.15s',
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.borderColor = pos ? 'rgba(0,229,160,0.7)' : 'rgba(226,75,74,0.7)'
+        e.currentTarget.style.background  = pos ? 'rgba(0,229,160,0.18)' : 'rgba(226,75,74,0.18)'
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.borderColor = pos ? 'var(--accent-badge-border)' : 'var(--negative-border)'
+        e.currentTarget.style.background  = pos ? 'var(--accent-badge-bg)' : 'var(--negative-bg)'
       }}
     >
       {pos ? '▲' : '▼'}&nbsp;{Math.abs(value)}{unit}
@@ -407,9 +410,7 @@ function ChangeTag({ value, unit, onClick }: { value: number; unit: string; onCl
     <button
       onClick={onClick}
       title="전년 동기간 비교 보기"
-      style={{ background: 'transparent', border: 'none', padding: '2px 4px', cursor: 'pointer', borderRadius: 4, transition: 'background 0.15s', display: 'inline-flex' }}
-      onMouseEnter={e => e.currentTarget.style.background = 'var(--color-bg-elevated)'}
-      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+      style={{ background: 'transparent', border: 'none', padding: '2px 4px', cursor: 'pointer', borderRadius: 4, display: 'inline-flex' }}
     >
       {inner}
     </button>
@@ -526,7 +527,7 @@ function getAchievementColor(pct: number | null): string {
 
 // ─── Month Card ─────────────────────────────────────────────────────────────────
 
-function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSegClick, onAccountClick, pickupNights, onLyClick, onAchievementClick, lyMode, onLyModeToggle, events = [], pickupRows = [] }: {
+function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSegClick, onAccountClick, pickupNights, onLyClick, onAchievementClick, lyMode, onLyModeToggle, events = [], pickupRows = [], adrUnit = '천원', revUnit = '백만원' }: {
   data:             MonthData
   stats:            MonthStats
   loading:          boolean
@@ -542,8 +543,20 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
   onLyModeToggle:   () => void
   events?:          EventGroup[]
   pickupRows?:      PickupRow[]
+  adrUnit?:         '천원' | '원'
+  revUnit?:         '원' | '천원' | '백만원'
 }) {
   const { year, month, occ, adr, rev, forecast, budget, pu, rmAction } = data
+
+  const fmtAdr = (val: number) => {
+    if (adrUnit === '원') return Math.round(val * 1000).toLocaleString()
+    return Math.round(val).toString()  // 천원 (기존)
+  }
+  const fmtRev = (val: number) => {
+    if (revUnit === '원') return Math.round(val * 1_000_000).toLocaleString()
+    if (revUnit === '천원') return Math.round(val * 1000).toLocaleString()
+    return val.toFixed(1)  // 백만원 (기존)
+  }
 
   const achievementOcc = forecast?.occ && budget?.occ ? (forecast.occ / budget.occ) * 100 : null
   const achievementAdr = forecast?.adr && budget?.adr ? (forecast.adr / budget.adr) * 100 : null
@@ -551,8 +564,8 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
   // occ, adr, rev are mock data used as fallback; stats holds live OTB values
 
   const occValue = loading ? '-' : roomCount === 0 ? '-' : `${stats.occ.toFixed(1)}%`
-  const adrValue = loading ? '-' : formatCurrency(stats.adr).replace(/k$/, '')
-  const revValue = loading ? '-' : formatCurrency(stats.rev).replace(/M$/, '')
+  const adrValue = loading ? '-' : fmtAdr(stats.adr / 1000)
+  const revValue = loading ? '-' : fmtRev(stats.rev / 1_000_000)
 
   const fitPct = yoyStats.byGroup.find(g => g.group === 'fit')?.varPct ?? null
   const grpPct = yoyStats.byGroup.find(g => g.group === 'group')?.varPct ?? null
@@ -560,8 +573,8 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
 
   return (
     <div
-      className="flex flex-col rounded-2xl bg-bg-surface overflow-hidden"
-      style={{ border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
+      className="flex flex-col rounded-2xl overflow-hidden"
+      style={{ background: '#000000', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
     >
       {/* ── Month header ── */}
       <div
@@ -578,7 +591,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
               {month}
             </span>
             <span className="text-lg font-medium text-brand-muted mb-1.5">월</span>
-            <span className="text-xs font-medium text-brand-dimmed mb-2 ml-0.5">{year}</span>
+            <span className="text-xs font-medium text-brand-dimmed mb-2 ml-0.5">{String(year).slice(-2)}년</span>
           </div>
           {events.length > 0 && (
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 6 }}>
@@ -588,10 +601,14 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
             </div>
           )}
         </div>
+        <div style={{ height: 1, background: 'linear-gradient(90deg, #00E5A0, transparent)', marginTop: 8, marginBottom: 4 }} />
       </div>
 
       {/* ── OCC / ADR / REV ── */}
       <div className="px-5 pb-1">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 1, height: 38, background: 'linear-gradient(180deg,#00E5A0,transparent)', flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
         <MetricRow
           label="점유율"
           value={occValue}
@@ -618,6 +635,12 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
             </span>
           }
         />
+          </div>
+        </div>
+        <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.05)' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 1, height: 32, background: 'linear-gradient(180deg,#00E5A0,transparent)', flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
         <MetricRow
           label="객단가"
           value={adrValue}
@@ -636,6 +659,12 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
             </span>
           }
         />
+          </div>
+        </div>
+        <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.05)' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 1, height: 32, background: 'linear-gradient(180deg,#00E5A0,transparent)', flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
         <MetricRow
           label="매출"
           value={revValue}
@@ -656,6 +685,8 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
             </span>
           }
         />
+          </div>
+        </div>
       </div>
 
 
@@ -794,6 +825,20 @@ export default function DashboardPage() {
   const [actualBudgetModal, setActualBudgetModal] = useState(false)
   const [gmReportOpen, setGmReportOpen] = useState(false)
   const [closingReportOpen, setClosingReportOpen] = useState(false)
+  const [showUnitSetting, setShowUnitSetting] = useState(false)
+  const [adrUnit, setAdrUnit] = useState<'천원' | '원'>('천원')
+  const [revUnit, setRevUnit] = useState<'원' | '천원' | '백만원'>('백만원')
+
+  // 단위 설정 패널 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!showUnitSetting) return
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('.unit-setting-wrap')) setShowUnitSetting(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showUnitSetting])
   const [monthlyPickupSegOpen,       setMonthlyPickupSegOpen]       = useState(false)
   const [pickupViewMode,             setPickupViewMode]             = useState<'monthly' | 'total'>('total')
   const [forecastBudgetModal,        setForecastBudgetModal]        = useState<{
@@ -1239,6 +1284,84 @@ export default function DashboardPage() {
               opacity: 0, transition: 'opacity 0.15s',
             }}>마감 보고서</span>
           </div>
+          {/* 단위 설정 */}
+          <div className="unit-setting-wrap" style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowUnitSetting(v => !v)}
+              style={{
+                width: 32, height: 32, borderRadius: 20,
+                border: showUnitSetting ? '0.5px solid #00E5A0' : 'none',
+                background: showUnitSetting ? 'rgba(0,229,160,0.1)' : 'none',
+                cursor: 'pointer',
+                color: '#00E5A0',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = '#00E5A0'
+                e.currentTarget.style.background = 'rgba(0,229,160,0.08)'
+              }}
+              onMouseLeave={e => {
+                if (!showUnitSetting) {
+                  e.currentTarget.style.border = 'none'
+                  e.currentTarget.style.background = 'none'
+                }
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="1.8"
+                strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+            </button>
+
+            {showUnitSetting && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+                background: '#1a1a1a',
+                border: '0.5px solid rgba(0,229,160,0.25)',
+                borderRadius: 8, padding: '12px 14px', width: 210,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                zIndex: 9999,
+              }}>
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginBottom: 10, letterSpacing: '0.04em' }}>
+                  단위 설정
+                </div>
+                {/* 객단가 */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>객단가</span>
+                  <div style={{ display: 'flex', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 5, overflow: 'hidden' }}>
+                    {(['원', '천원'] as const).map(u => (
+                      <button key={u} onClick={() => setAdrUnit(u)} style={{
+                        padding: '3px 8px', fontSize: 10, border: 'none', cursor: 'pointer',
+                        fontFamily: 'inherit', whiteSpace: 'nowrap',
+                        background: adrUnit === u ? '#00E5A0' : 'transparent',
+                        color: adrUnit === u ? '#0a0a0a' : 'rgba(255,255,255,0.35)',
+                        fontWeight: adrUnit === u ? 500 : 400,
+                      }}>{u}</button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.07)', margin: '8px 0' }} />
+                {/* 매출 */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>매출</span>
+                  <div style={{ display: 'flex', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 5, overflow: 'hidden' }}>
+                    {(['원', '천원', '백만원'] as const).map(u => (
+                      <button key={u} onClick={() => setRevUnit(u)} style={{
+                        padding: '3px 8px', fontSize: 10, border: 'none', cursor: 'pointer',
+                        fontFamily: 'inherit', whiteSpace: 'nowrap',
+                        background: revUnit === u ? '#00E5A0' : 'transparent',
+                        color: revUnit === u ? '#0a0a0a' : 'rgba(255,255,255,0.35)',
+                        fontWeight: revUnit === u ? 500 : 400,
+                      }}>{u}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
             </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
@@ -1321,6 +1444,8 @@ export default function DashboardPage() {
             onLyModeToggle={() => setLyMode(prev => prev === 'v1' ? 'v2' : 'v1')}
             events={eventGroups.filter(g => { const [gy, gm] = g.startDate.split('-').map(Number); return gy === m.year && gm === m.month })}
             pickupRows={pickupData.filter(r => { const d = new Date(r.business_date); return d.getFullYear() === m.year && d.getMonth() + 1 === m.month })}
+            adrUnit={adrUnit}
+            revUnit={revUnit}
           />
         ))}
       </div>

@@ -181,10 +181,12 @@ export function buildMonthlyPickupAccountTable(args: {
 
   // Step E: group monthlyTotals / totalPickup 계산 + rows 정렬
   for (const g of groupMap.values()) {
-    // row totalPickup
+    // row totalPickup: 해당 그룹(세그먼트)의 monthlyPickup 월별 합계 (세그 스코프 유지)
     for (const row of g.rows) {
-      const raw = acctTotalRaw.get(row.account_name) ?? emptyRaw()
-      row.totalPickup = toCell(raw)
+      const nights  = Object.values(row.monthlyPickup).reduce((s, c) => s + (c?.pickupNights  ?? 0), 0)
+      const revenue = Object.values(row.monthlyPickup).reduce((s, c) => s + (c?.pickupRevenue ?? 0), 0)
+      const adr     = nights > 0 ? revenue / nights : 0
+      row.totalPickup = { pickupNights: nights, pickupAdr: adr, pickupRevenue: revenue }
     }
 
     // rows 정렬: totalPickup.pickupNights 절대값 내림차순

@@ -31,10 +31,6 @@ const BORDER = '1px solid var(--divider-color)'
 
 // ─── Format helpers ────────────────────────────────────────────────────────────
 
-function formatYYYYMM(key: string): string {
-  return key.replace('-', '.')
-}
-
 function Dash({ fontColor }: { fontColor?: string }) {
   return <span style={{ color: fontColor ?? 'var(--brand-dimmed)' }}>—</span>
 }
@@ -47,20 +43,22 @@ function FmtPickupNights({ n, fontColor }: { n: number; fontColor?: string }) {
   return <span style={{ color }}>{sign}{n.toLocaleString('ko-KR')}</span>
 }
 
-function FmtPickupAdr({ n, fontColor }: { n: number; fontColor?: string }) {
+function FmtPickupAdr({ n, fontColor, unit = '천원' }: { n: number; fontColor?: string; unit?: '천원' | '원' }) {
   if (Math.abs(n) < 500) return <Dash fontColor={fontColor} />
-  const k     = Math.round(n / 1000)
-  const sign  = k > 0 ? '+' : ''
-  const color = k > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
-  return <span style={{ color }}>{sign}{k}k</span>
-}
-
-function FmtPickupRevenue({ n, fontColor }: { n: number; fontColor?: string }) {
-  if (Math.abs(n) < 50_000) return <Dash fontColor={fontColor} />
-  const m     = (n / 1_000_000).toFixed(1)
   const sign  = n > 0 ? '+' : ''
   const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
-  return <span style={{ color }}>{sign}{m}M</span>
+  const text  = unit === '천원' ? Math.round(n / 1000).toLocaleString() : Math.round(n).toLocaleString()
+  return <span style={{ color }}>{sign}{text}</span>
+}
+
+function FmtPickupRevenue({ n, fontColor, unit = '백만원' }: { n: number; fontColor?: string; unit?: '원' | '천원' | '백만원' }) {
+  if (Math.abs(n) < 50_000) return <Dash fontColor={fontColor} />
+  const sign  = n > 0 ? '+' : ''
+  const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
+  const text  = unit === '백만원' ? (n / 1_000_000).toFixed(1)
+              : unit === '천원'   ? Math.round(n / 1000).toLocaleString()
+              : Math.round(n).toLocaleString()
+  return <span style={{ color }}>{sign}{text}</span>
 }
 
 function FmtOcc({ n, fontColor }: { n: number; fontColor?: string }) {
@@ -92,12 +90,14 @@ function Skeleton() {
 
 // ─── Month cell group (전체 합계용) ───────────────────────────────────────────────
 
-function TotalCells({ cell, clickable, onClick, fontColor, selected }: {
+function TotalCells({ cell, clickable, onClick, fontColor, selected, adrUnit, revUnit }: {
   cell:      MonthlyPickupCell
   clickable: boolean
   onClick?:  () => void
   fontColor?: string
   selected?: boolean
+  adrUnit?:  '천원' | '원'
+  revUnit?:  '원' | '천원' | '백만원'
 }) {
   const cursor = clickable ? 'pointer' : 'default'
   const td: React.CSSProperties = { ...tdBase, textAlign: 'right', cursor }
@@ -107,10 +107,10 @@ function TotalCells({ cell, clickable, onClick, fontColor, selected }: {
         <FmtPickupNights n={cell.pickupNights} fontColor={fontColor} />
       </td>
       <td className="font-mono" style={{ ...td, borderRight: BORDER }} onClick={onClick}>
-        <FmtPickupAdr n={cell.pickupAdr} fontColor={fontColor} />
+        <FmtPickupAdr n={cell.pickupAdr} fontColor={fontColor} unit={adrUnit} />
       </td>
       <td className="font-mono" style={{ ...td, borderRight: BORDER }} onClick={onClick}>
-        <FmtPickupRevenue n={cell.pickupRevenue} fontColor={fontColor} />
+        <FmtPickupRevenue n={cell.pickupRevenue} fontColor={fontColor} unit={revUnit} />
       </td>
     </>
   )
@@ -132,6 +132,9 @@ export default function MonthlyPickupSegTotalModal({
   const { otbDate, vsOtbDate, otbDates, setOtbDate, setVsOtbDate } = useDateContext()
   // 우측 패널: 선택된 세그먼트 (대분류 이름 클릭 시 set)
   const [selectedSeg, setSelectedSeg] = useState<{ label: string; codes: string[]; monthKey: string } | null>(null)
+  const [showUnitSetting, setShowUnitSetting] = useState(false)
+  const [adrUnit, setAdrUnit] = useState<'천원' | '원'>('천원')
+  const [revUnit, setRevUnit] = useState<'원' | '천원' | '백만원'>('백만원')
   const days = otbDate && vsOtbDate
     ? Math.round((new Date(otbDate).getTime() - new Date(vsOtbDate).getTime()) / 86400000)
     : 0
@@ -202,13 +205,38 @@ export default function MonthlyPickupSegTotalModal({
     return () => window.removeEventListener('keydown', handler)
   }, [open, onClose])
 
+  // 단위 설정 패널 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!showUnitSetting) return
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('.unit-setting-wrap')) setShowUnitSetting(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showUnitSetting])
+
   if (!open) return null
 
-  const startLabel = monthKeys.length > 0 ? formatYYYYMM(monthKeys[0]) : ''
-  const endLabel   = monthKeys.length > 0 ? formatYYYYMM(monthKeys[monthKeys.length - 1]) : ''
+  const rangeStart = monthKeys.length > 0 ? monthKeys[0] : ''
+  const rangeEnd   = monthKeys.length > 0 ? monthKeys[monthKeys.length - 1] : ''
+  const startMonth = rangeStart ? rangeStart.slice(5, 7) : ''
+  const startYear  = rangeStart ? rangeStart.slice(0, 4) : ''
+  const endMonth   = rangeEnd   ? rangeEnd.slice(5, 7)   : ''
+  const endYear    = rangeEnd   ? rangeEnd.slice(0, 4)   : ''
 
-  const totalRn  = accountList.reduce((s, a) => s + a.diffRn,  0)
-  const totalRev = accountList.reduce((s, a) => s + a.diffRev, 0)
+  const fmtAdr = (val: number) => {
+    if (val === 0) return '—'
+    if (adrUnit === '천원') return `${val > 0 ? '+' : ''}${Math.round(val / 1000)}`
+    return `${val > 0 ? '+' : ''}${Math.round(val).toLocaleString()}`  // 원 — 소수점 없음
+  }
+  const fmtRev = (val: number) => {
+    if (val === 0) return '—'
+    const sign = val > 0 ? '+' : ''
+    if (revUnit === '백만원') return `${sign}${(val / 1_000_000).toFixed(1)}`
+    if (revUnit === '천원')   return `${sign}${Math.round(val / 1000).toLocaleString()}`
+    return `${sign}${Math.round(val).toLocaleString()}`  // 원 — 소수점 없음
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center p-4" style={{ paddingTop: 80 }}>
@@ -220,59 +248,25 @@ export default function MonthlyPickupSegTotalModal({
 
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col"
-        style={{ width: 1100, maxWidth: '92vw', maxHeight: '79vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
+        style={{ width: 1100, maxWidth: '92vw', maxHeight: '79vh', background: '#0a0a0a', border: '0.5px solid rgba(0,229,160,0.2)', borderLeft: '1.5px solid #00E5A0', borderRadius: 10, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
-        <div className="px-6 pt-1 pb-1 shrink-0" style={{ borderBottom: `1px solid ${BORDER.split(' ').pop()}` }}>
+        <div className="px-6 pt-3 pb-1 shrink-0" style={{ borderBottom: `1px solid ${BORDER.split(' ').pop()}` }}>
           {/* 1줄: 제목 + 닫기 */}
           <div className="flex items-center justify-between">
             <div className="flex items-baseline gap-2">
-              <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-text-primary)' }}>
-                6개월 픽업
-              </span>
-              {startLabel && endLabel && (
-                <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>
-                  ({startLabel} ~ {endLabel})
+              <span style={{ fontSize: 15, fontWeight: 500, color: '#fff', letterSpacing: '0.04em' }}>
+                총 픽업_
+                <span style={{ color: '#00E5A0' }}>
+                  {startMonth}월 <span style={{ fontSize: '0.7em' }}>{String(startYear).slice(-2)}년</span>
+                  {' ~ '}
+                  {endMonth}월 <span style={{ fontSize: '0.7em' }}>{String(endYear).slice(-2)}년</span>
                 </span>
-              )}
-            </div>
-            <button
-              onClick={onClose}
-              className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1"
-              aria-label="닫기"
-            >
-              <X size={22} />
-            </button>
-          </div>
-          {/* 2줄: DatePicker(좌) + 월별/합계 토글(우) */}
-          <div className="flex items-center justify-between mt-1">
-            <div className="flex items-center gap-2">
-              <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} accent bare availableDates={otbDates} />
-              <DatePicker label="vs OTB" value={vsOtbDate} onChange={setVsOtbDate} bare availableDates={otbDates.filter(d => d < otbDate)} />
-              <span style={{ fontSize: 11, color: 'var(--brand-dimmed)', whiteSpace: 'nowrap' }}>
-                {days > 0 ? `${days}일간` : '당일'} 픽업 현황
               </span>
             </div>
-            <div className="flex items-center gap-2 self-stretch">
-            <button
-              onClick={() => onPickupCellClick?.(selectedSeg?.codes ?? [], null, selectedSeg?.label ?? '')}
-              style={{
-                fontSize: 11,
-                padding: '3px 10px',
-                borderRadius: 6,
-                border: '1px solid rgba(255,255,255,0.2)',
-                background: 'transparent',
-                color: 'rgba(255,255,255,0.5)',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#00E5A0'; e.currentTarget.style.color = '#00E5A0' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.color = 'rgba(255,255,255,0.5)' }}
-            >
-              전체 어카운트 픽업
-            </button>
+            <div className="flex items-center gap-2">
             {/* 월별/합계 토글 (현재 합계) */}
-            <div className="flex rounded-md overflow-hidden self-stretch" style={{ border: '1px solid var(--color-border-default)', background: 'var(--color-bg-elevated)' }}>
+            <div className="flex rounded-md overflow-hidden self-stretch" style={{ height: 30, border: '1px solid var(--color-border-default)', background: 'var(--color-bg-elevated)' }}>
               <button
                 onClick={() => onSwitchToMonthly?.()}
                 className="px-2.5 text-xs transition-colors"
@@ -283,6 +277,86 @@ export default function MonthlyPickupSegTotalModal({
                 style={{ background: 'var(--color-accent-primary)', color: '#0A0A0A' }}
               >합계</button>
             </div>
+            {/* 단위 설정 */}
+            <div className="unit-setting-wrap" style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShowUnitSetting(v => !v)}
+                style={{
+                  width: 30, height: 30, borderRadius: 6,
+                  border: showUnitSetting
+                    ? '0.5px solid #00E5A0'
+                    : '0.5px solid rgba(255,255,255,0.15)',
+                  background: showUnitSetting ? 'rgba(0,229,160,0.1)' : 'none',
+                  cursor: 'pointer',
+                  color: showUnitSetting ? '#00E5A0' : 'rgba(255,255,255,0.4)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="1.8"
+                  strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+              </button>
+
+              {showUnitSetting && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+                  background: '#1a1a1a',
+                  border: '0.5px solid rgba(0,229,160,0.25)',
+                  borderRadius: 8, padding: '12px 14px', width: 210,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                  zIndex: 9999,
+                }}>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginBottom: 10, letterSpacing: '0.04em' }}>
+                    단위 설정
+                  </div>
+
+                  {/* ADR */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>객단가</span>
+                    <div style={{ display: 'flex', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 5, overflow: 'hidden' }}>
+                      {(['원', '천원'] as const).map(u => (
+                        <button key={u} onClick={() => setAdrUnit(u)} style={{
+                          padding: '3px 8px', fontSize: 10, border: 'none', cursor: 'pointer',
+                          fontFamily: 'inherit', whiteSpace: 'nowrap',
+                          background: adrUnit === u ? '#00E5A0' : 'transparent',
+                          color: adrUnit === u ? '#0a0a0a' : 'rgba(255,255,255,0.35)',
+                          fontWeight: adrUnit === u ? 500 : 400,
+                        }}>{u}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.07)', margin: '8px 0' }} />
+
+                  {/* REV */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>매출</span>
+                    <div style={{ display: 'flex', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 5, overflow: 'hidden' }}>
+                      {(['원', '천원', '백만원'] as const).map(u => (
+                        <button key={u} onClick={() => setRevUnit(u)} style={{
+                          padding: '3px 8px', fontSize: 10, border: 'none', cursor: 'pointer',
+                          fontFamily: 'inherit', whiteSpace: 'nowrap',
+                          background: revUnit === u ? '#00E5A0' : 'transparent',
+                          color: revUnit === u ? '#0a0a0a' : 'rgba(255,255,255,0.35)',
+                          fontWeight: revUnit === u ? 500 : 400,
+                        }}>{u}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={onClose}
+              className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1"
+              aria-label="닫기"
+            >
+              <X size={22} />
+            </button>
             </div>
           </div>
         </div>
@@ -348,6 +422,8 @@ export default function MonthlyPickupSegTotalModal({
                           selected={selectedSeg?.label === row.name}
                           fontColor={isDark ? row.fontDarkColor ?? undefined : row.fontLightColor ?? undefined}
                           onClick={clickable ? () => setSelectedSeg({ label: row.name, codes: row.segmentationCodes, monthKey: monthKeys[0] ?? '' }) : undefined}
+                          adrUnit={adrUnit}
+                          revUnit={revUnit}
                         />
                       </tr>
                     )
@@ -358,7 +434,7 @@ export default function MonthlyPickupSegTotalModal({
                   {/* 합계 */}
                   <tr style={{ borderTop: '2px solid var(--color-accent-primary)', background: '#111111' }}>
                     <td style={{ ...tdBase, paddingLeft: 12, fontWeight: 600, color: 'var(--color-text-primary)', borderRight: BORDER }}>합계 (HOU 제외)</td>
-                    <TotalCells cell={summary.grandTotal} clickable={false} />
+                    <TotalCells cell={summary.grandTotal} clickable={false} adrUnit={adrUnit} revUnit={revUnit} />
                   </tr>
                   {/* OCC */}
                   <tr style={{ borderTop: BORDER, background: '#111111' }}>
@@ -381,7 +457,7 @@ export default function MonthlyPickupSegTotalModal({
         </div>
 
         {/* 우측 Account Pickup 패널 */}
-        <div style={{ width: 420, flexShrink: 0, borderLeft: '0.5px solid rgba(0,229,160,0.2)', display: 'flex', flexDirection: 'column', background: '#0a0a0a' }}>
+        <div style={{ width: 420, flexShrink: 0, borderLeft: '0.5px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', background: 'radial-gradient(ellipse 80% 60% at 100% 100%, rgba(0,229,160,0.1) 0%, transparent 70%), #000000' }}>
           <div style={{ padding: '10px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>어카운트 픽업</div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
@@ -398,10 +474,13 @@ export default function MonthlyPickupSegTotalModal({
             </div>
           </div>
           <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
-            {accountList.length === 0 ? (
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', padding: 12 }}>
-                {selectedSeg ? '픽업 데이터가 없습니다.' : ''}
+            {!selectedSeg ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 6, color: 'rgba(255,255,255,0.2)', fontSize: 11 }}>
+                <span style={{ fontSize: 18 }}>👆</span>
+                <span>세그먼트를 클릭하세요</span>
               </div>
+            ) : accountList.length === 0 ? (
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', padding: 12 }}>픽업 데이터가 없습니다.</div>
             ) : accountList.map((a, i) => (
               <div key={`${a.name}-${i}`} style={{ padding: '6px 14px', borderBottom: '0.5px solid #1a1a1a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>
@@ -412,39 +491,28 @@ export default function MonthlyPickupSegTotalModal({
                     {a.diffRn === 0 ? '—' : (a.diffRn > 0 ? '+' : '') + a.diffRn}
                   </span>
                   <span style={{ fontSize: 11, color: a.diffAdr > 0 ? '#00E5A0' : a.diffAdr < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 60, textAlign: 'right' }}>
-                    {a.diffAdr === 0 ? '—' : (a.diffAdr > 0 ? '+' : '') + (Math.abs(a.diffAdr) >= 1000 ? Math.round(a.diffAdr / 1000) + 'k' : a.diffAdr)}
+                    {fmtAdr(a.diffAdr)}
                   </span>
                   <span style={{ fontSize: 11, color: a.diffRev > 0 ? '#00E5A0' : a.diffRev < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 64, textAlign: 'right' }}>
-                    {a.diffRev === 0 ? '—' : (a.diffRev > 0 ? '+' : '') + (a.diffRev / 1_000_000).toFixed(1) + 'M'}
+                    {fmtRev(a.diffRev)}
                   </span>
                 </div>
               </div>
             ))}
           </div>
-          {/* 합계 */}
-          {accountList.length > 0 && (
-            <div style={{ padding: '7px 14px', borderTop: '1px solid rgba(0,229,160,0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', flex: 1 }}>합계</span>
-              <div style={{ display: 'flex', flexShrink: 0 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: totalRn > 0 ? '#00E5A0' : totalRn < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 48, textAlign: 'right' }}>
-                  {totalRn === 0 ? '—' : (totalRn > 0 ? '+' : '') + totalRn}
-                </span>
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', width: 60, textAlign: 'right' }}>—</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: totalRev > 0 ? '#00E5A0' : totalRev < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)', width: 64, textAlign: 'right' }}>
-                  {totalRev === 0 ? '—' : (totalRev > 0 ? '+' : '') + (totalRev / 1_000_000).toFixed(1) + 'M'}
-                </span>
-              </div>
-            </div>
-          )}
         </div>
         </div>
 
         {/* Footer */}
         <div className="flex justify-between px-6 py-3 shrink-0" style={{ borderTop: BORDER }}>
-          <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>
-            {onPickupCellClick ? 'Pickup 셀 클릭 → Account 보기' : ''}
-          </span>
-          <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>ESC로 닫기</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} accent bare availableDates={otbDates} />
+            <DatePicker label="vs OTB" value={vsOtbDate} onChange={setVsOtbDate} bare availableDates={otbDates.filter(d => d < otbDate)} />
+            <span style={{ fontSize: 11, color: 'var(--brand-dimmed)', whiteSpace: 'nowrap' }}>
+              {days > 0 ? `${days}일간` : '당일'} 픽업 현황
+            </span>
+          </div>
+          <span style={{ fontSize: 11, color: '#00E5A0', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>단위 : 실 · {adrUnit} · {revUnit}</span>
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useDateContext } from '@/contexts/DateContext'
 import { useHotel } from '@/contexts/HotelContext'
@@ -22,11 +22,11 @@ function Dash({ fontColor }: { fontColor?: string }) {
 function FmtNights({ n, fontColor }: { n: number; fontColor?: string }) {
   return n === 0 ? <Dash fontColor={fontColor} /> : <span style={{ color: fontColor }}>{n.toLocaleString('ko-KR')}</span>
 }
-function FmtAdr({ n, fontColor }: { n: number; fontColor?: string }) {
-  return n === 0 ? <Dash fontColor={fontColor} /> : <span style={{ color: fontColor }}>{Math.round(n / 1000)}<span style={{ fontSize: '0.7em', marginLeft: 1 }}>k</span></span>
+function FmtAdr({ n, fontColor, unit = '천원' }: { n: number; fontColor?: string; unit?: '천원' | '원' }) {
+  return n === 0 ? <Dash fontColor={fontColor} /> : <span style={{ color: fontColor }}>{unit === '천원' ? Math.round(n / 1000).toLocaleString() : Math.round(n).toLocaleString()}</span>
 }
-function FmtRev({ n, fontColor }: { n: number; fontColor?: string }) {
-  return n === 0 ? <Dash fontColor={fontColor} /> : <span style={{ color: fontColor }}>{(n / 1_000_000).toFixed(1)}<span style={{ fontSize: '0.7em', marginLeft: 1 }}>M</span></span>
+function FmtRev({ n, fontColor, unit = '백만원' }: { n: number; fontColor?: string; unit?: '원' | '천원' | '백만원' }) {
+  return n === 0 ? <Dash fontColor={fontColor} /> : <span style={{ color: fontColor }}>{unit === '백만원' ? (n / 1_000_000).toFixed(1) : unit === '천원' ? Math.round(n / 1000).toLocaleString() : Math.round(n).toLocaleString()}</span>
 }
 // Pickup(Δ) — 양수 fontColor(없으면 흰색), 음수 red, 0/Dash fontColor
 function DeltaNights({ v, fontColor }: { v: number; fontColor?: string }) {
@@ -34,18 +34,20 @@ function DeltaNights({ v, fontColor }: { v: number; fontColor?: string }) {
   const color = v > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{v > 0 ? '+' : ''}{v.toLocaleString('ko-KR')}</span>
 }
-function DeltaAdr({ v, fontColor }: { v: number; fontColor?: string }) {
+function DeltaAdr({ v, fontColor, unit = '천원' }: { v: number; fontColor?: string; unit?: '천원' | '원' }) {
   if (v === 0) return <Dash fontColor={fontColor} />
   const k = Math.round(v / 1000)
   if (k === 0) return <Dash fontColor={fontColor} />
   const color = k > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
-  return <span style={{ color }}>{k > 0 ? '+' : ''}{k}<span style={{ fontSize: '0.7em', marginLeft: 1 }}>k</span></span>
+  const text = unit === '천원' ? Math.round(v / 1000).toLocaleString() : Math.round(v).toLocaleString()
+  return <span style={{ color }}>{k > 0 ? '+' : ''}{text}</span>
 }
-function DeltaRev({ v, fontColor }: { v: number; fontColor?: string }) {
+function DeltaRev({ v, fontColor, unit = '백만원' }: { v: number; fontColor?: string; unit?: '원' | '천원' | '백만원' }) {
   if (v === 0) return <Dash fontColor={fontColor} />
   const m = v / 1_000_000
   const color = m > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
-  return <span style={{ color }}>{m > 0 ? '+' : ''}{m.toFixed(1)}<span style={{ fontSize: '0.7em', marginLeft: 1 }}>M</span></span>
+  const text = unit === '백만원' ? m.toFixed(1) : unit === '천원' ? Math.round(v / 1000).toLocaleString() : Math.round(v).toLocaleString()
+  return <span style={{ color }}>{m > 0 ? '+' : ''}{text}</span>
 }
 
 // ─── StatCard ──────────────────────────────────────────────────────────────────
@@ -110,13 +112,15 @@ function getSegCodes(row: SegTableRow, schema: MarketSchemaRow[]): string[] {
 
 // ─── DataRow ──────────────────────────────────────────────────────────────────
 
-function DataRow({ row, schema, houRowIds, onSelect, selectedLabel, selectedViewMode }: {
+function DataRow({ row, schema, houRowIds, onSelect, selectedLabel, selectedViewMode, adrUnit, revUnit }: {
   row:               SegTableRow
   schema:            MarketSchemaRow[]
   houRowIds:         Set<string>
   onSelect?:         (segCodes: string[], label: string, viewMode: 'otb' | 'pickup') => void
   selectedLabel?:    string
   selectedViewMode?: 'otb' | 'pickup'
+  adrUnit?:          '천원' | '원'
+  revUnit?:          '원' | '천원' | '백만원'
 }) {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
@@ -158,19 +162,19 @@ function DataRow({ row, schema, houRowIds, onSelect, selectedLabel, selectedView
         <FmtNights n={row.otbNights} fontColor={rowColor} />
       </td>
       <td className="font-mono" onClick={handleOtbSelect} style={{ ...tdBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, background: baseBg, cursor: selectable ? 'pointer' : 'default' }}>
-        <FmtAdr n={row.otbAdr} fontColor={rowColor} />
+        <FmtAdr n={row.otbAdr} fontColor={rowColor} unit={adrUnit} />
       </td>
       <td className="font-mono" onClick={handleOtbSelect} style={{ ...tdBase, textAlign: 'right', minWidth: NUM_COL_MIN, borderLeft: GRID, background: baseBg, cursor: selectable ? 'pointer' : 'default' }}>
-        <FmtRev n={row.otbRevenue} fontColor={rowColor} />
+        <FmtRev n={row.otbRevenue} fontColor={rowColor} unit={revUnit} />
       </td>
       <td className="font-mono" style={puTd({ borderLeft: isSelected && selectedViewMode === 'pickup' ? '3px solid #00E5A0' : DOUBLE_GROUP })} onClick={handlePickupSelect}>
         <DeltaNights v={row.puNights} fontColor={rowColor} />
       </td>
       <td className="font-mono" style={puTd({ borderLeft: GRID })} onClick={handlePickupSelect}>
-        <DeltaAdr v={row.puAdr} fontColor={rowColor} />
+        <DeltaAdr v={row.puAdr} fontColor={rowColor} unit={adrUnit} />
       </td>
       <td className="font-mono" style={puTd({ borderLeft: GRID })} onClick={handlePickupSelect}>
-        <DeltaRev v={row.puRevenue} fontColor={rowColor} />
+        <DeltaRev v={row.puRevenue} fontColor={rowColor} unit={revUnit} />
       </td>
     </tr>
   )
@@ -178,7 +182,7 @@ function DataRow({ row, schema, houRowIds, onSelect, selectedLabel, selectedView
 
 // ─── DataTable ─────────────────────────────────────────────────────────────────
 
-function DataTable({ rows, summary, schema, houRowIds, onSelect, selectedLabel, selectedViewMode, year, month, day, roomCount, curYear, curMonth, onPrevMonth, onNextMonth, canPrevMonth, canNextMonth }: {
+function DataTable({ rows, summary, schema, houRowIds, onSelect, selectedLabel, selectedViewMode, year, month, day, roomCount, adrUnit, revUnit }: {
   rows:               SegTableRow[]
   summary:            SegTableSummary
   schema:             MarketSchemaRow[]
@@ -190,12 +194,8 @@ function DataTable({ rows, summary, schema, houRowIds, onSelect, selectedLabel, 
   month:              number
   day?:               number
   roomCount:          number
-  curYear:            number
-  curMonth:           number
-  onPrevMonth:        () => void
-  onNextMonth:        () => void
-  canPrevMonth:       boolean
-  canNextMonth:       boolean
+  adrUnit?:           '천원' | '원'
+  revUnit?:           '원' | '천원' | '백만원'
 }) {
   const daysInMonth = new Date(year, month, 0).getDate()
   const days        = day !== undefined ? 1 : daysInMonth
@@ -226,30 +226,6 @@ function DataTable({ rows, summary, schema, houRowIds, onSelect, selectedLabel, 
     <div>
       <table className="w-full text-xs" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
         <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
-          {/* 0줄: 월 네비게이션 — 표 상단 가운데 */}
-          {day === undefined && (
-            <tr>
-              <th colSpan={7} style={{ ...thBase, height: 36, verticalAlign: 'top', padding: 0, borderBottom: GRID }}>
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
-                  <button
-                    onClick={onPrevMonth} disabled={!canPrevMonth}
-                    style={{ background: 'transparent', border: '1px solid var(--color-border-default)', borderRadius: 6, padding: '2px 4px', display: 'flex', alignItems: 'center', cursor: canPrevMonth ? 'pointer' : 'not-allowed', opacity: canPrevMonth ? 1 : 0.35, color: 'var(--color-text-secondary)' }}
-                  >
-                    <ChevronLeft size={13} />
-                  </button>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)', textTransform: 'none', letterSpacing: 'normal', whiteSpace: 'nowrap' }}>
-                    {curYear}년 {curMonth}월
-                  </span>
-                  <button
-                    onClick={onNextMonth} disabled={!canNextMonth}
-                    style={{ background: 'transparent', border: '1px solid var(--color-border-default)', borderRadius: 6, padding: '2px 4px', display: 'flex', alignItems: 'center', cursor: canNextMonth ? 'pointer' : 'not-allowed', opacity: canNextMonth ? 1 : 0.35, color: 'var(--color-text-secondary)' }}
-                  >
-                    <ChevronRight size={13} />
-                  </button>
-                </div>
-              </th>
-            </tr>
-          )}
           {/* 1줄: 섹션 헤더 */}
           <tr>
             <th rowSpan={2} style={{ ...thBase, textAlign: 'left', borderBottom: GRID_HEAD, verticalAlign: 'middle' }}>세그먼트</th>
@@ -281,6 +257,8 @@ function DataTable({ rows, summary, schema, houRowIds, onSelect, selectedLabel, 
               onSelect={onSelect}
               selectedLabel={selectedLabel}
               selectedViewMode={selectedViewMode}
+              adrUnit={adrUnit}
+              revUnit={revUnit}
             />
           ))}
         </tbody>
@@ -292,19 +270,19 @@ function DataTable({ rows, summary, schema, houRowIds, onSelect, selectedLabel, 
               <FmtNights n={summary.totalNights} />
             </td>
             <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right', borderLeft: GRID }}>
-              <FmtAdr n={summary.totalAdr} />
+              <FmtAdr n={summary.totalAdr} unit={adrUnit} />
             </td>
             <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right', borderLeft: GRID }}>
-              <FmtRev n={summary.totalRevenue} />
+              <FmtRev n={summary.totalRevenue} unit={revUnit} />
             </td>
             <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right', borderLeft: DOUBLE_GROUP }}>
               <DeltaNights v={summary.puNights} />
             </td>
             <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right', borderLeft: GRID }}>
-              <DeltaAdr v={summary.puAdr} />
+              <DeltaAdr v={summary.puAdr} unit={adrUnit} />
             </td>
             <td className="font-mono" style={{ ...sumTdBase, textAlign: 'right', borderLeft: GRID }}>
-              <DeltaRev v={summary.puRevenue} />
+              <DeltaRev v={summary.puRevenue} unit={revUnit} />
             </td>
           </tr>
           <tr style={{ borderTop: GRID }}>
@@ -358,6 +336,10 @@ export default function SegmentationModal({
   const [selectedSeg, setSelectedSeg] = useState<{ label: string; codes: string[]; viewMode: 'otb' | 'pickup' } | null>(null)
   const [curYear,  setCurYear]  = useState(year)
   const [curMonth, setCurMonth] = useState(month)
+  const [titleShifting, setTitleShifting] = useState(false)
+  const [showUnitSetting, setShowUnitSetting] = useState(false)
+  const [adrUnit, setAdrUnit] = useState<'천원' | '원'>('천원')
+  const [revUnit, setRevUnit] = useState<'원' | '천원' | '백만원'>('백만원')
 
   // 모달이 열릴 때 동기화 + 내부 AccountModal 초기화
   useEffect(() => {
@@ -464,9 +446,38 @@ export default function SegmentationModal({
     return () => window.removeEventListener('keydown', handler)
   }, [open, onClose])
 
+  // 월 전환 시 타이틀 잠깐 흐려지며 밀림 (B타입)
+  useEffect(() => {
+    setTitleShifting(true)
+    const timer = setTimeout(() => setTitleShifting(false), 350)
+    return () => clearTimeout(timer)
+  }, [curYear, curMonth])
+
+  // 단위 설정 패널 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!showUnitSetting) return
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('.unit-setting-wrap')) setShowUnitSetting(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showUnitSetting])
+
   if (!open) return null
 
   const error = schemaError
+
+  const isFirst    = !canGoPrev
+  const isLast     = !canGoNext
+  const titleMonth = String(curMonth).padStart(2, '0')
+
+  const scaleAdr = (val: number) =>
+    adrUnit === '천원' ? String(Math.round(val / 1000)) : Math.round(val).toLocaleString()
+  const scaleRev = (val: number) =>
+    revUnit === '백만원' ? (val / 1_000_000).toFixed(1)
+    : revUnit === '천원' ? Math.round(val / 1000).toLocaleString()
+    : Math.round(val).toLocaleString()
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -478,36 +489,137 @@ export default function SegmentationModal({
 
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-[1200px]"
-        style={{ maxHeight: '88vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
+        style={{ maxHeight: '88vh', background: '#0a0a0a', border: '0.5px solid rgba(0,229,160,0.2)', borderLeft: '1.5px solid #00E5A0', borderRadius: 10, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
-        <div className="px-6 py-3 shrink-0 flex items-center gap-3" style={{ borderBottom: '1px solid var(--divider-color)' }}>
-          <h2 className="text-base font-semibold shrink-0" style={{ color: 'var(--color-text-primary)' }}>
-            세그먼트별 픽업
-          </h2>
-          <div className="flex items-center gap-2">
-            <DatePicker
-              label="OTB"
-              value={otbDate}
-              onChange={setOtbDate}
-              availableDates={otbDates}
-              accent
-              bare
-            />
-            <DatePicker
-              label="VS OTB"
-              value={vsOtbDate}
-              onChange={setVsOtbDate}
-              availableDates={otbDates.filter(d => d < otbDate)}
-              bare
-            />
-            <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>
-              {day !== undefined
-                ? `${curYear}년 ${curMonth}월 ${day}일`
-                : `${days === 0 ? '당일' : `${days}일간`} 픽업`}
+        <div className="px-6 pt-1 pb-1 shrink-0 flex items-center gap-3" style={{ borderBottom: '1px solid var(--divider-color)' }}>
+          <div className="shrink-0" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            {/* ‹ 이전 버튼 — B타입 애니메이션 */}
+            {day === undefined && (
+              <button
+                onClick={goPrev}
+                disabled={isFirst}
+                style={{
+                  overflow: 'hidden',
+                  maxWidth: isFirst ? 0 : 60,
+                  opacity: isFirst ? 0 : 1,
+                  transform: `translateX(${isFirst ? -10 : 0}px)`,
+                  padding: isFirst ? '4px 0' : '4px 10px',
+                  pointerEvents: isFirst ? 'none' : 'auto',
+                  transition: 'max-width 0.35s ease, opacity 0.25s ease, transform 0.35s ease, padding 0.35s ease',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                  background: 'none', border: 'none', cursor: 'pointer', borderRadius: 6,
+                }}
+              >
+                <span style={{ fontSize: 18, color: '#00E5A0', lineHeight: 1 }}>‹</span>
+                <span style={{ fontSize: 9, color: 'rgba(0,229,160,0.6)', letterSpacing: '0.03em' }}>이전</span>
+              </button>
+            )}
+
+            {/* 타이틀 */}
+            <span style={{
+              fontSize: 15, fontWeight: 500, color: '#fff', letterSpacing: '0.04em',
+              transition: 'opacity 0.2s ease, transform 0.35s ease',
+              opacity: titleShifting ? 0.5 : 1,
+              transform: titleShifting ? 'translateX(4px)' : 'translateX(0)',
+            }}>
+              세그먼트별 픽업_
+              <span style={{ color: '#00E5A0' }}>
+                {titleMonth}월 <span style={{ fontSize: '0.7em' }}>{String(curYear).slice(-2)}년</span>
+              </span>
             </span>
+
+            {/* › 다음 버튼 */}
+            {day === undefined && (
+              <button
+                onClick={goNext}
+                disabled={isLast}
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                  background: 'none', border: 'none',
+                  cursor: isLast ? 'default' : 'pointer',
+                  padding: '4px 10px', borderRadius: 6,
+                }}
+              >
+                <span style={{ fontSize: 18, color: isLast ? 'rgba(255,255,255,0.1)' : '#00E5A0', lineHeight: 1 }}>›</span>
+                <span style={{ fontSize: 9, color: isLast ? 'rgba(255,255,255,0.08)' : 'rgba(0,229,160,0.6)', letterSpacing: '0.03em' }}>다음</span>
+              </button>
+            )}
           </div>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            {/* 단위 설정 */}
+            <div className="unit-setting-wrap" style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShowUnitSetting(v => !v)}
+                style={{
+                  width: 30, height: 30, borderRadius: 6,
+                  border: showUnitSetting
+                    ? '0.5px solid #00E5A0'
+                    : '0.5px solid rgba(255,255,255,0.15)',
+                  background: showUnitSetting ? 'rgba(0,229,160,0.1)' : 'none',
+                  cursor: 'pointer',
+                  color: showUnitSetting ? '#00E5A0' : 'rgba(255,255,255,0.4)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="1.8"
+                  strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+              </button>
+
+              {showUnitSetting && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+                  background: '#1a1a1a',
+                  border: '0.5px solid rgba(0,229,160,0.25)',
+                  borderRadius: 8, padding: '12px 14px', width: 210,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                  zIndex: 9999,
+                }}>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginBottom: 10, letterSpacing: '0.04em' }}>
+                    단위 설정
+                  </div>
+
+                  {/* ADR */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>객단가</span>
+                    <div style={{ display: 'flex', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 5, overflow: 'hidden' }}>
+                      {(['원', '천원'] as const).map(u => (
+                        <button key={u} onClick={() => setAdrUnit(u)} style={{
+                          padding: '3px 8px', fontSize: 10, border: 'none', cursor: 'pointer',
+                          fontFamily: 'inherit', whiteSpace: 'nowrap',
+                          background: adrUnit === u ? '#00E5A0' : 'transparent',
+                          color: adrUnit === u ? '#0a0a0a' : 'rgba(255,255,255,0.35)',
+                          fontWeight: adrUnit === u ? 500 : 400,
+                        }}>{u}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.07)', margin: '8px 0' }} />
+
+                  {/* REV */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>매출</span>
+                    <div style={{ display: 'flex', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 5, overflow: 'hidden' }}>
+                      {(['원', '천원', '백만원'] as const).map(u => (
+                        <button key={u} onClick={() => setRevUnit(u)} style={{
+                          padding: '3px 8px', fontSize: 10, border: 'none', cursor: 'pointer',
+                          fontFamily: 'inherit', whiteSpace: 'nowrap',
+                          background: revUnit === u ? '#00E5A0' : 'transparent',
+                          color: revUnit === u ? '#0a0a0a' : 'rgba(255,255,255,0.35)',
+                          fontWeight: revUnit === u ? 500 : 400,
+                        }}>{u}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             <button onClick={onClose} className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1" aria-label="닫기">
               <X size={22} />
             </button>
@@ -536,49 +648,28 @@ export default function SegmentationModal({
                 month={curMonth}
                 day={day}
                 roomCount={roomCount}
-                curYear={curYear}
-                curMonth={curMonth}
-                onPrevMonth={goPrev}
-                onNextMonth={goNext}
-                canPrevMonth={canGoPrev}
-                canNextMonth={canGoNext}
+                adrUnit={adrUnit}
+                revUnit={revUnit}
               />
             )}
           </div>
 
           {/* 우측 Account Pickup 패널 */}
-          <div style={{ width: 300, flexShrink: 0, borderLeft: '1px solid var(--divider-color)', display: 'flex', flexDirection: 'column', background: '#0a0a0a', minHeight: 0 }}>
+          <div style={{ width: 300, flexShrink: 0, borderLeft: '0.5px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', background: 'radial-gradient(ellipse 80% 60% at 100% 100%, rgba(0,229,160,0.1) 0%, transparent 70%), #000000', minHeight: 0 }}>
             <div className="px-3 pt-3 pb-2 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#FFC850' }}>어카운트 픽업</div>
               <div style={{ fontSize: 10, color: 'var(--brand-dimmed)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {selectedSeg ? `${selectedSeg.label} · ${curYear}.${String(curMonth).padStart(2, '0')} · ${selectedSeg.viewMode === 'otb' ? '현재 OTB' : '픽업 객실 기준'}` : '세그먼트를 클릭하세요'}
               </div>
-              <button
-                onClick={() => {
-                  if (!selectedSeg) return
-                  if (onPickupCellClick) onPickupCellClick(selectedSeg.codes, selectedSeg.label, curYear, curMonth)
-                  else setAccountModalSeg({ segCodes: selectedSeg.codes, label: selectedSeg.label })
-                }}
-                disabled={!selectedSeg}
-                style={{
-                  fontSize: 10,
-                  padding: '3px 8px',
-                  borderRadius: 6,
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  background: 'transparent',
-                  color: selectedSeg ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)',
-                  cursor: selectedSeg ? 'pointer' : 'default',
-                  marginTop: 4,
-                }}
-              >
-                전체 어카운트 보기
-              </button>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'thin' }}>
-              {accountList.length === 0 ? (
-                <div style={{ fontSize: 11, color: 'var(--brand-dimmed)', padding: 12 }}>
-                  {selectedSeg ? '픽업 데이터가 없습니다.' : ''}
+              {!selectedSeg ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 6, color: 'rgba(255,255,255,0.2)', fontSize: 11 }}>
+                  <span style={{ fontSize: 18 }}>👆</span>
+                  <span>세그먼트를 클릭하세요</span>
                 </div>
+              ) : accountList.length === 0 ? (
+                <div style={{ fontSize: 11, color: 'var(--brand-dimmed)', padding: 12 }}>픽업 데이터가 없습니다.</div>
               ) : (
                 <>
                   {/* 리스트 헤더 */}
@@ -605,13 +696,13 @@ export default function SegmentationModal({
                         </span>
                         <span className="font-mono" style={{ fontSize: 11, color: isOtb ? (a.diffAdr < 0 ? '#E24B4A' : '#fff') : (a.diffAdr >= 0 ? '#00E5A0' : '#E24B4A'), width: 56, textAlign: 'right' }}>
                           {isOtb
-                            ? (a.diffAdr === 0 ? '—' : <>{Math.round(a.diffAdr / 1000)}<span style={{ fontSize: '0.7em', marginLeft: 1 }}>k</span></>)
-                            : (a.diffAdr === 0 ? '—' : <>{(a.diffAdr > 0 ? '+' : '') + Math.round(a.diffAdr / 1000)}<span style={{ fontSize: '0.7em', marginLeft: 1 }}>k</span></>)}
+                            ? (a.diffAdr === 0 ? '—' : scaleAdr(a.diffAdr))
+                            : (a.diffAdr === 0 ? '—' : (a.diffAdr > 0 ? '+' : '') + scaleAdr(a.diffAdr))}
                         </span>
                         <span className="font-mono" style={{ fontSize: 11, color: isOtb ? (a.diffRev < 0 ? '#E24B4A' : '#fff') : (a.diffRev >= 0 ? '#00E5A0' : '#E24B4A'), width: 60, textAlign: 'right' }}>
                           {isOtb
-                            ? (a.diffRev === 0 ? '—' : <>{(a.diffRev / 1_000_000).toFixed(1)}<span style={{ fontSize: '0.7em', marginLeft: 1 }}>M</span></>)
-                            : (a.diffRev === 0 ? '—' : <>{(a.diffRev >= 0 ? '+' : '') + (a.diffRev / 1_000_000).toFixed(1)}<span style={{ fontSize: '0.7em', marginLeft: 1 }}>M</span></>)}
+                            ? (a.diffRev === 0 ? '—' : scaleRev(a.diffRev))
+                            : (a.diffRev === 0 ? '—' : (a.diffRev >= 0 ? '+' : '') + scaleRev(a.diffRev))}
                         </span>
                       </div>
                     </div>
@@ -623,9 +714,31 @@ export default function SegmentationModal({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end px-6 py-3 shrink-0" style={{ borderTop: '1px solid var(--divider-color)' }}>
-          <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>
-            세그먼트 · Pickup 셀 클릭 → 우측 Account Pickup · ESC로 닫기
+        <div className="flex justify-between px-6 py-3 shrink-0" style={{ borderTop: '1px solid var(--divider-color)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <DatePicker
+              label="OTB"
+              value={otbDate}
+              onChange={setOtbDate}
+              availableDates={otbDates}
+              accent
+              bare
+            />
+            <DatePicker
+              label="VS OTB"
+              value={vsOtbDate}
+              onChange={setVsOtbDate}
+              availableDates={otbDates.filter(d => d < otbDate)}
+              bare
+            />
+            <span className="text-xs" style={{ color: 'var(--brand-dimmed)' }}>
+              {day !== undefined
+                ? `${curYear}년 ${curMonth}월 ${day}일`
+                : `${days === 0 ? '당일' : `${days}일간`} 픽업`}
+            </span>
+          </div>
+          <span style={{ fontSize: 11, color: '#00E5A0', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>
+            단위 : 실 · {adrUnit} · {revUnit}
           </span>
         </div>
       </div>
