@@ -2,18 +2,14 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import { usePickupData } from '@/hooks/usePickupData'
 import { useMarketSchema } from '@/hooks/useMarketSchema'
-import DatePicker from '@/components/DatePicker'
 import MarketPickupMonthBlock, { type SegGroup } from '@/components/market-pickup/MarketPickupMonthBlock'
 import MarketPickupDayModal from '@/components/market-pickup/MarketPickupDayModal'
 import PickupChartModal from '@/components/pickup/PickupChartModal'
-
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 export default function MarketPickupPage() {
   const { currentHotel } = useHotel()
@@ -38,6 +34,9 @@ export default function MarketPickupPage() {
   // ── 3개월 구간 (KST 오늘 기준 + monthOffset) ─────────────────────────────────
   const now = new Date()
   const [monthOffset, setMonthOffset] = useState(0)
+  const [slideDir, setSlideDir]       = useState<'left' | 'right' | null>(null)
+  const [isAnimating, setIsAnimating] = useState(false)
+  const [titleShifting, setTitleShifting] = useState(false)
   const months = useMemo(
     () => [0, 1].map(i => {
       const d = new Date(now.getFullYear(), now.getMonth() + monthOffset + i, 1)
@@ -56,6 +55,35 @@ export default function MarketPickupPage() {
     if (sd.getFullYear() < otbYear || (sd.getFullYear() === otbYear && sd.getMonth() < otbMonth)) setMonthOffset(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [otbDate])
+
+  // 월 이동 시 타이틀 shift 애니메이션 (스르륵)
+  useEffect(() => {
+    setTitleShifting(true)
+    const timer = setTimeout(() => setTitleShifting(false), 350)
+    return () => clearTimeout(timer)
+  }, [monthOffset])
+
+  // 월 이동 — 슬라이드 애니메이션 (연속 클릭 방지)
+  const handlePrev = () => {
+    if (isPrevDisabled || isAnimating) return
+    setSlideDir('right')   // 이전 = 오른쪽에서 슬라이드 인
+    setIsAnimating(true)
+    setTimeout(() => {
+      setMonthOffset(p => p - 2)
+      setIsAnimating(false)
+      setSlideDir(null)
+    }, 300)
+  }
+  const handleNext = () => {
+    if (isAnimating) return
+    setSlideDir('left')    // 다음 = 왼쪽에서 슬라이드 인
+    setIsAnimating(true)
+    setTimeout(() => {
+      setMonthOffset(p => p + 2)
+      setIsAnimating(false)
+      setSlideDir(null)
+    }, 300)
+  }
 
   // ── 세그먼트 그룹 (main 노드 → 자식 세그) ──────────────────────────────────────
   const groups: SegGroup[] = useMemo(() => {
@@ -92,52 +120,108 @@ export default function MarketPickupPage() {
   return (
     // height = 100vh − 56px(상단 헤더 h-14) − 48px(main p-6 상하) ; 좌우 패딩은 셸 main의 p-6 사용
     <div style={{ height: 'calc(100vh - 104px)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', overflow: 'hidden' }}>
-      {/* 헤더 — 제목 오른쪽에 OTB/vs DatePicker */}
+      {/* 헤더 — 제목 오른쪽에 월 네비게이션 (OTB/vs 날짜는 Global DateContext 사용) */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0, flexWrap: 'wrap' }}>
-        <h1 className="text-xl font-bold" style={{ color: 'var(--color-text-primary)', margin: 0 }}>Market Pick-up</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <DatePicker label="OTB" value={otbDate} onChange={setOtbDate} availableDates={otbDates ?? []} accent bare fontPx={13} plain />
-          <span style={{ color: '#555', fontSize: 13 }}>vs</span>
-          <DatePicker label="vs" value={vsOtbDate} onChange={setVsOtbDate} availableDates={(otbDates ?? []).filter(d => d < otbDate)} accent bare fontPx={13} plain />
-        </div>
-      </div>
-
-      {/* 월 범위 네비게이션 (2개월 단위) */}
-      <div className="flex items-center justify-between" style={{ flexShrink: 0, margin: '12px 0' }}>
-        <div className="flex items-center gap-2.5">
-          <span className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-            {MONTH_NAMES[months[0].month]} &mdash; {MONTH_NAMES[months[1].month]}
+        {/* 월 네비게이션 (기존 monthOffset 2개월 단위 재사용) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {/* 이전 (B타입 — 첫 달일 때 공간까지 사라짐) */}
+          <button
+            onClick={handlePrev}
+            style={{
+              overflow: 'hidden',
+              maxWidth: isPrevDisabled ? 0 : 60,
+              opacity: isPrevDisabled ? 0 : 1,
+              transform: `translateX(${isPrevDisabled ? -10 : 0}px)`,
+              padding: isPrevDisabled ? '4px 0' : '4px 10px',
+              pointerEvents: isPrevDisabled ? 'none' : 'auto',
+              transition: 'max-width 0.35s ease, opacity 0.25s ease, transform 0.35s ease, padding 0.35s ease',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+              background: 'none', border: 'none', cursor: 'pointer',
+            }}
+          >
+            <span style={{ fontSize: 22, color: '#00E5A0', lineHeight: 1 }}>‹</span>
+            <span style={{ fontSize: 11, color: 'rgba(0,229,160,0.6)', letterSpacing: '0.03em' }}>이전</span>
+          </button>
+          {/* 타이틀 + 월 (dashboard5 패턴 + shift 애니메이션) */}
+          <span style={{
+            fontSize: 19, fontWeight: 500, color: '#fff', letterSpacing: '0.04em',
+            transition: 'opacity 0.2s ease, transform 0.35s ease',
+            opacity: titleShifting ? 0.5 : 1,
+            transform: titleShifting ? 'translateX(4px)' : 'translateX(0)',
+          }}>
+            일자별 픽업_
+            <span style={{ color: '#00E5A0' }}>
+              {String(months[0].month + 1).padStart(2, '0')}월{' '}
+              <span style={{ fontSize: '0.7em' }}>{String(months[0].year).slice(-2)}년</span>
+            </span>
           </span>
-          <span className="text-xs text-brand-dimmed font-mono">{months[0].year}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
+          {/* 다음 (항상 표시) */}
           <button
-            onClick={() => { if (!isPrevDisabled) setMonthOffset(p => p - 2) }}
-            disabled={isPrevDisabled}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-brand-muted hover:text-brand-text disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150"
-            style={{ border: '1px solid var(--control-border)' }}
+            onClick={handleNext}
+            style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+              background: 'none', border: 'none', cursor: 'pointer',
+              padding: '4px 10px', borderRadius: 6,
+            }}
           >
-            <ChevronLeft size={13} /> Prev
-          </button>
-          <button
-            onClick={() => setMonthOffset(p => p + 2)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-brand-muted hover:text-brand-text transition-all duration-150"
-            style={{ border: '1px solid var(--control-border)' }}
-          >
-            Next <ChevronRight size={13} />
+            <span style={{ fontSize: 22, color: '#00E5A0', lineHeight: 1 }}>›</span>
+            <span style={{ fontSize: 11, color: 'rgba(0,229,160,0.6)', letterSpacing: '0.03em' }}>다음</span>
           </button>
         </div>
+        {/* Detail 버튼 (우측 끝) — onClick 추후 연결 */}
+        <button
+          onClick={() => {}}
+          style={{
+            marginLeft: 'auto',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 5,
+            background: 'transparent',
+            border: '0.5px solid rgba(255,255,255,0.15)',
+            borderRadius: 7,
+            padding: '5px 11px',
+            fontSize: 12,
+            color: 'rgba(255,255,255,0.55)',
+            cursor: 'pointer',
+            transition: 'border-color 0.15s, color 0.15s',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.borderColor = '#00E5A0'
+            e.currentTarget.style.color = '#00E5A0'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'
+            e.currentTarget.style.color = 'rgba(255,255,255,0.55)'
+          }}
+        >
+          <svg
+            width="14" height="14" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" strokeWidth="2"
+            strokeLinecap="round" strokeLinejoin="round"
+          >
+            <rect x="3" y="12" width="4" height="9" rx="1" />
+            <rect x="10" y="7" width="4" height="14" rx="1" />
+            <rect x="17" y="3" width="4" height="18" rx="1" />
+          </svg>
+          Detail
+        </button>
       </div>
 
       {/* 월 블록 — 2개 카드가 남은 공간 채움 */}
       {pickupLoading ? (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0, marginTop: 16 }}>
           {months.map(t => (
             <div key={`${t.year}-${t.month}`} className="animate-pulse rounded-2xl" style={{ flex: 1, minHeight: 0, background: 'var(--color-bg-tertiary)' }} />
           ))}
         </div>
       ) : (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0, overflow: 'hidden' }}>
+        <div style={{
+          flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0, overflow: 'hidden',
+          marginTop: 16,
+          transform: isAnimating ? `translateX(${slideDir === 'left' ? '-40px' : '40px'})` : 'translateX(0)',
+          opacity: isAnimating ? 0 : 1,
+          transition: isAnimating ? 'none' : 'transform 0.3s ease, opacity 0.3s ease',
+        }}>
           {months.map(t => {
             const monthKey = `${t.year}-${t.month}`
             return (

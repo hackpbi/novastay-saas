@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowUp, ArrowDown, AlignJustify, User } from 'lucide-react'
+import { ArrowUp, ArrowDown } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { usePickupData, type PickupRow } from '@/hooks/usePickupData'
 import { useOtbData } from '@/hooks/useOtbData'
@@ -25,6 +25,7 @@ import GMDailyReportModal from '@/components/dashboard/GMDailyReportModal'
 import MonthlyClosingReportModal from '@/components/dashboard/MonthlyClosingReportModal'
 import { useForecastMonthly, type ForecastMonthlyRow } from '@/hooks/useForecastMonthly'
 import { useBudgetMonthly, type BudgetMonthlyRow } from '@/hooks/useBudgetMonthly'
+import { useActualMonthly } from '@/hooks/useActualMonthly'
 import { supabase } from '@/lib/supabase'
 import { FmtVal } from '@/utils/FmtVal'
 
@@ -144,6 +145,21 @@ function formatPuParts(n: number, type: 'nights' | 'currency'): { num: string; u
   if (Math.abs(n) >= 1_000_000) return { num: `${sign}${(n / 1_000_000).toFixed(1)}`, unit: 'M' }
   if (Math.abs(n) >= 1_000)     return { num: `${sign}${(n / 1_000).toFixed(0)}`,     unit: 'k' }
   return { num: `${sign}${n.toLocaleString('ko-KR')}`, unit: '' }
+}
+
+// 숫자 자릿수에 따라 fontSize 자동 축소 (단위 '원' 등 긴 값 대응)
+function autoFontSize(val: string, baseSize: number): number {
+  const len = val.replace(/[^0-9]/g, '').length
+  if (len <= 6)  return baseSize
+  if (len <= 8)  return Math.round(baseSize * 0.85)
+  if (len <= 10) return Math.round(baseSize * 0.72)
+  if (len <= 12) return Math.round(baseSize * 0.60)
+  return Math.round(baseSize * 0.50)
+}
+
+// Pill 매출 표시(백만원, 소수1)
+function fmtRevPill(won: number): string {
+  return (won / 1_000_000).toFixed(1)
 }
 
 // ── 이벤트 뱃지 (c06_calendar) ───────────────────────────────────────────────────
@@ -443,7 +459,7 @@ function MetricRow({ label, value, metric, subValue, unitLabel, tooltip, yoyOver
 }) {
   return (
     <div
-      className="flex items-center justify-between py-[18px] last:border-0"
+      className="flex items-center justify-between py-[17px] last:border-0"
       style={{ borderBottom: '1px solid var(--divider-color)' }}
     >
       <div className="flex items-center gap-2">
@@ -459,7 +475,7 @@ function MetricRow({ label, value, metric, subValue, unitLabel, tooltip, yoyOver
               className="font-mono font-bold leading-none"
               style={{ color: 'var(--color-text-primary)', cursor: tooltip ? 'help' : 'default', letterSpacing: '0.05em' }}
             >
-              <FmtVal val={value} numSize={29} />
+              <FmtVal val={value} numSize={autoFontSize(value, 29)} />
             </span>
             {subValue && (
               <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>{subValue}</span>
@@ -514,20 +530,9 @@ function fmtFcRevenue(n: number | null | undefined): string {
   if (n == null) return '-'
   return `${(n / 1_000_000).toFixed(1)}`
 }
-function fmtFcPct(n: number | null): string {
-  if (n == null) return '-'
-  return `${n.toFixed(1)}%`
-}
-function getAchievementColor(pct: number | null): string {
-  if (pct === null) return 'var(--brand-dimmed)'
-  if (pct >= 100) return 'var(--color-positive)'
-  if (pct >= 95)  return '#ffc857'
-  return 'var(--color-negative)'
-}
-
 // ─── Month Card ─────────────────────────────────────────────────────────────────
 
-function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSegClick, onAccountClick, pickupNights, onLyClick, onAchievementClick, lyMode, onLyModeToggle, events = [], pickupRows = [], adrUnit = '천원', revUnit = '백만원' }: {
+function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSegClick, onAccountClick, pickupNights, onLyClick, lyMode, onLyModeToggle, events = [], pickupRows = [], adrUnit = '천원', revUnit = '백만원', lyOcc = null, lyAdr = null, lyRevenue = null }: {
   data:             MonthData
   stats:            MonthStats
   loading:          boolean
@@ -538,13 +543,15 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
   onAccountClick?:  (year: number, month: number) => void
   pickupNights:     number
   onLyClick?:              (year: number, month: number) => void
-  onAchievementClick?:     (year: number, month: number) => void
   lyMode:           'v1' | 'v2'
   onLyModeToggle:   () => void
   events?:          EventGroup[]
   pickupRows?:      PickupRow[]
   adrUnit?:         '천원' | '원'
   revUnit?:         '원' | '천원' | '백만원'
+  lyOcc?:           number | null
+  lyAdr?:           number | null
+  lyRevenue?:       number | null
 }) {
   const { year, month, occ, adr, rev, forecast, budget, pu, rmAction } = data
 
@@ -557,11 +564,37 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
     if (revUnit === '천원') return Math.round(val * 1000).toLocaleString()
     return val.toFixed(1)  // 백만원 (기존)
   }
+  // 목표및전망용 — raw원 입력 + null 처리 → 단위 설정(fmtAdr/fmtRev) 연동
+  const fmtFcAdrU = (n: number | null | undefined) => n == null ? '-' : fmtAdr(n / 1000)
+  const fmtFcRevU = (n: number | null | undefined) => n == null ? '-' : fmtRev(n / 1_000_000)
 
-  const achievementOcc = forecast?.occ && budget?.occ ? (forecast.occ / budget.occ) * 100 : null
-  const achievementAdr = forecast?.adr && budget?.adr ? (forecast.adr / budget.adr) * 100 : null
-  const achievementRev = forecast?.revenue && budget?.revenue ? (forecast.revenue / budget.revenue) * 100 : null
   // occ, adr, rev are mock data used as fallback; stats holds live OTB values
+
+  // 목표 및 전망 — vs목표(전망−목표) / vs전년(전망−전년) 대비 (OCC %p, ADR/REV는 선택 단위 기준)
+  const adrScale = (won: number | null | undefined) => won == null ? null : adrUnit === '원' ? Math.round(won) : Math.round(won / 1000)
+  const revScale = (won: number | null | undefined) => won == null ? null : revUnit === '원' ? Math.round(won) : revUnit === '천원' ? Math.round(won / 1000) : won / 1_000_000
+  const fcOccN  = forecast?.occ ?? null
+  const budOccN = budget?.occ ?? null
+  const lyOccN  = lyOcc
+  const fcAdrK  = adrScale(forecast?.adr)
+  const budAdrK = adrScale(budget?.adr)
+  const lyAdrK  = adrScale(lyAdr)
+  const fcRevM  = revScale(forecast?.revenue)
+  const budRevM = revScale(budget?.revenue)
+  const lyRevM  = revScale(lyRevenue)
+
+  const vsOcc_bud = fcOccN != null && budOccN != null ? Math.round((fcOccN - budOccN) * 10) / 10 : null
+  const vsAdr_bud = fcAdrK != null && budAdrK != null ? fcAdrK - budAdrK : null
+  const vsRev_bud = fcRevM != null && budRevM != null ? Math.round((fcRevM - budRevM) * 10) / 10 : null
+  const vsOcc_ly  = fcOccN != null && lyOccN != null ? Math.round((fcOccN - lyOccN) * 10) / 10 : null
+  const vsAdr_ly  = fcAdrK != null && lyAdrK != null ? fcAdrK - lyAdrK : null
+  const vsRev_ly  = fcRevM != null && lyRevM != null ? Math.round((fcRevM - lyRevM) * 10) / 10 : null
+
+  const vsSpan = (v: number | null, suffix: string) => (
+    <span style={{ color: v == null ? 'rgba(255,255,255,0.3)' : v >= 0 ? '#00E5A0' : '#E24B4A', fontWeight: 500 }}>
+      {v == null ? '—' : `${v >= 0 ? '+' : ''}${v}${suffix}`}
+    </span>
+  )
 
   const occValue = loading ? '-' : roomCount === 0 ? '-' : `${stats.occ.toFixed(1)}%`
   const adrValue = loading ? '-' : fmtAdr(stats.adr / 1000)
@@ -696,61 +729,62 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
           목표 및 전망
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '58px 1fr 1fr 1fr', gap: '8px 10px', alignItems: 'center' }}>
-          {/* 헤더 */}
+          {/* 헤더: 전망 / 목표 / 전년 */}
           <div />
-          <div style={{ fontSize: 10, color: 'var(--brand-dimmed)', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>점유율</div>
-          <div style={{ fontSize: 10, color: 'var(--brand-dimmed)', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>객단가</div>
-          <div style={{ fontSize: 10, color: 'var(--brand-dimmed)', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>매출</div>
-          {/* FCST 행 */}
-          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--brand-dimmed)' }}>전망</div>
+          <div style={{ fontSize: 10, color: '#00E5A0', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>전망</div>
+          <div style={{ fontSize: 10, color: 'var(--brand-dimmed)', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>목표</div>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', textAlign: 'right', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>전년마감</div>
+          {/* 점유율 행 */}
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--brand-dimmed)' }}>점유율</div>
           <div className="font-mono" style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}>{fmtFcOcc(forecast?.occ)}</div>
-          <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}><FmtVal val={fmtFcAdr(forecast?.adr)} numSize={16} /></div>
-          <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}><FmtVal val={fmtFcRevenue(forecast?.revenue)} numSize={16} /></div>
-          {/* BUDGET 행 */}
-          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--brand-dimmed)' }}>목표</div>
           <div className="font-mono" style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}>{fmtFcOcc(budget?.occ)}</div>
-          <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}><FmtVal val={fmtFcAdr(budget?.adr)} numSize={16} /></div>
-          <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}><FmtVal val={fmtFcRevenue(budget?.revenue)} numSize={16} /></div>
-          {/* 달성 행 */}
-          {(['달성', achievementOcc, achievementAdr, achievementRev] as const).map((val, i) => {
-            const borderTop = '1px solid var(--color-border-default)'
-            const pt = '7px'
-            if (i === 0) return (
-              <div key="달성" style={{ fontSize: 12, fontWeight: 500, color: 'var(--brand-dimmed)', borderTop, paddingTop: pt }}>달성</div>
-            )
-            const pct = val as number | null
-            const clickable = pct !== null && !!onAchievementClick
-            return (
-              <button
-                key={i}
-                onClick={clickable ? () => onAchievementClick!(year, month) : undefined}
-                disabled={!clickable}
-                title={clickable ? 'FCST vs BUDGET 비교 보기' : undefined}
-                className="font-mono"
-                style={{
-                  fontSize: 14, fontWeight: 600, textAlign: 'right',
-                  color: getAchievementColor(pct),
-                  borderTop, paddingTop: pt,
-                  background: 'transparent', border: 'none',
-                  padding: `${pt} 6px 0`, margin: 0,
-                  cursor: clickable ? 'pointer' : 'default',
-                  borderRadius: 4, transition: 'background 0.15s',
-                }}
-                onMouseEnter={e => { if (clickable) e.currentTarget.style.background = 'var(--color-bg-elevated)' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-              >
-                {fmtFcPct(pct)}
-              </button>
-            )
-          })}
+          <div className="font-mono" style={{ fontSize: 16, fontWeight: 600, color: 'rgba(255,255,255,0.3)', textAlign: 'right' }}>{fmtFcOcc(lyOcc)}</div>
+          {/* 객단가 행 */}
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--brand-dimmed)' }}>객단가</div>
+          <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}><FmtVal val={fmtFcAdrU(forecast?.adr)} numSize={16} /></div>
+          <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}><FmtVal val={fmtFcAdrU(budget?.adr)} numSize={16} /></div>
+          <div className="font-mono" style={{ fontWeight: 600, color: 'rgba(255,255,255,0.3)', textAlign: 'right' }}><FmtVal val={fmtFcAdrU(lyAdr)} numSize={16} /></div>
+          {/* 매출 행 */}
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--brand-dimmed)' }}>매출</div>
+          <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-accent-primary)', textAlign: 'right' }}><FmtVal val={fmtFcRevU(forecast?.revenue)} numSize={autoFontSize(fmtFcRevU(forecast?.revenue), 16)} /></div>
+          <div className="font-mono" style={{ fontWeight: 600, color: 'var(--color-text-secondary)', textAlign: 'right' }}><FmtVal val={fmtFcRevU(budget?.revenue)} numSize={autoFontSize(fmtFcRevU(budget?.revenue), 16)} /></div>
+          <div className="font-mono" style={{ fontWeight: 600, color: 'rgba(255,255,255,0.3)', textAlign: 'right' }}><FmtVal val={fmtFcRevU(lyRevenue)} numSize={autoFontSize(fmtFcRevU(lyRevenue), 16)} /></div>
+        </div>
+
+        {/* vs목표 / vs전년 대비 요약 (B안 — 테이블 정렬) */}
+        <div style={{ marginTop: 8, paddingTop: 6, borderTop: '0.5px solid rgba(255,255,255,0.06)' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left', color: 'rgba(255,255,255,0.2)', fontWeight: 400, padding: '2px 0', fontSize: 9 }}></th>
+                <th style={{ textAlign: 'right', color: 'rgba(255,255,255,0.2)', fontWeight: 400, padding: '2px 4px', fontSize: 9 }}>OCC</th>
+                <th style={{ textAlign: 'right', color: 'rgba(255,255,255,0.2)', fontWeight: 400, padding: '2px 4px', fontSize: 9 }}>ADR</th>
+                <th style={{ textAlign: 'right', color: 'rgba(255,255,255,0.2)', fontWeight: 400, padding: '2px 4px', fontSize: 9 }}>REV</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ fontSize: 9, color: 'rgba(255,200,50,0.6)', padding: '3px 0', whiteSpace: 'nowrap' }}>vs목표</td>
+                <td style={{ textAlign: 'right', padding: '3px 4px' }}>{vsSpan(vsOcc_bud, 'p')}</td>
+                <td style={{ textAlign: 'right', padding: '3px 4px' }}>{vsSpan(vsAdr_bud, '')}</td>
+                <td style={{ textAlign: 'right', padding: '3px 4px' }}>{vsSpan(vsRev_bud, '')}</td>
+              </tr>
+              <tr>
+                <td style={{ fontSize: 9, color: 'rgba(0,229,160,0.5)', padding: '3px 0', whiteSpace: 'nowrap' }}>vs전년</td>
+                <td style={{ textAlign: 'right', padding: '3px 4px' }}>{vsSpan(vsOcc_ly, 'p')}</td>
+                <td style={{ textAlign: 'right', padding: '3px 4px' }}>{vsSpan(vsAdr_ly, '')}</td>
+                <td style={{ textAlign: 'right', padding: '3px 4px' }}>{vsSpan(vsRev_ly, '')}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
       {/* ── Action buttons ── */}
-      {/* group: P/U 호버 시 보조 버튼 슬라이드인 */}
-      <div className="px-4 pb-4 flex items-center group" style={{ marginTop: 14 }}>
-        {/* 메인 버튼 — 카드 전체 너비 */}
+      <div className="px-4 pb-4 flex items-center" style={{ marginTop: 14 }}>
+        {/* 메인 버튼 — 카드 전체 너비 (클릭 시 세그먼트 모달) */}
         <button
+          onClick={() => onSegClick?.(year, month)}
           className="flex-1 flex items-center justify-center gap-1.5 rounded-full py-2.5 text-[12px] font-bold transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0"
           style={{
             background: 'var(--gradient-cta)',
@@ -759,28 +793,8 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
           }}
         >
           {pickupNights >= 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
-          픽업 {pickupNights >= 0 ? '+' : ''}{pickupNights} rooms
+          픽업 {pickupNights >= 0 ? '+' : ''}{pickupNights} 객실
         </button>
-
-        {/* 보조 버튼 컨테이너 — 호버 전 숨김, 호버 시 슬라이드인 */}
-        <div className="flex items-center gap-2 overflow-hidden max-w-0 opacity-0 group-hover:max-w-[200px] group-hover:opacity-100 group-hover:ml-2 transition-all duration-300 ease-out">
-          <button
-            onClick={() => onSegClick?.(year, month)}
-            className="flex items-center gap-1 px-3 py-2.5 rounded-full text-brand-muted text-[11px] font-medium whitespace-nowrap hover:text-brand-text transition-colors duration-150"
-            style={{ border: '1px solid var(--ghost-btn-border)' }}
-          >
-            <AlignJustify size={11} />
-            Seg
-          </button>
-          <button
-            onClick={() => onAccountClick?.(year, month)}
-            className="flex items-center gap-1 px-3 py-2.5 rounded-full text-brand-muted text-[11px] font-medium whitespace-nowrap hover:text-brand-text transition-colors duration-150"
-            style={{ border: '1px solid var(--ghost-btn-border)' }}
-          >
-            <User size={11} />
-            Account
-          </button>
-        </div>
       </div>
 
       {/* ── RM Action ── */}
@@ -828,6 +842,15 @@ export default function DashboardPage() {
   const [showUnitSetting, setShowUnitSetting] = useState(false)
   const [adrUnit, setAdrUnit] = useState<'천원' | '원'>('천원')
   const [revUnit, setRevUnit] = useState<'원' | '천원' | '백만원'>('백만원')
+  const [pillIdx, setPillIdx] = useState(0)
+
+  // Pill 슬라이드 업 keyframe 주입
+  useEffect(() => {
+    const style = document.createElement('style')
+    style.textContent = `@keyframes pillSlideUp { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: translateY(0); } }`
+    document.head.appendChild(style)
+    return () => { style.remove() }
+  }, [])
 
   // 단위 설정 패널 외부 클릭 시 닫기
   useEffect(() => {
@@ -985,6 +1008,34 @@ export default function DashboardPage() {
     [budgetRows, roomCount, cardYear],
   )
 
+  // 전년 마감 (get_actual_monthly, 전년 동월 최종실적) — `year-month` 키
+  const { data: lyActualRows = [] } = useActualMonthly({
+    hotelId:  hotelId || undefined,
+    fromYear: cardYear - 1,
+    toYear:   cardYear,
+  })
+  const lyActualByMonth = useMemo(() => {
+    const acc: Record<string, { nights: number; revenue: number }> = {}
+    for (const r of lyActualRows) {
+      const key = `${r.year}-${r.month_num}`
+      if (!acc[key]) acc[key] = { nights: 0, revenue: 0 }
+      acc[key].nights  += r.actual_nights
+      acc[key].revenue += r.actual_revenue
+    }
+    const result: Record<string, { occ: number | null; adr: number | null; revenue: number | null }> = {}
+    for (const [key, v] of Object.entries(acc)) {
+      const [yStr, mStr] = key.split('-')
+      const daysInMonth  = new Date(Number(yStr), Number(mStr), 0).getDate()
+      const avail        = roomCount * daysInMonth
+      result[key] = {
+        occ:     avail > 0 && v.nights > 0 ? (v.nights / avail) * 100 : null,
+        adr:     v.nights > 0 ? Math.round(v.revenue / v.nights) : null,
+        revenue: v.revenue > 0 ? v.revenue : null,
+      }
+    }
+    return result
+  }, [lyActualRows, roomCount])
+
   function getMonthStats(year: number, month: number): MonthStats {
     const monthData = otbData.filter(row => {
       const d = new Date(row.business_date)
@@ -1022,6 +1073,32 @@ export default function DashboardPage() {
 
   const totalPages    = Math.ceil(months.length / PAGE_SIZE)
   const visibleMonths = months.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
+
+  // Pill — 픽업 있는 visible 월만 + 마지막 총합 (3초 자동 슬라이드 전환)
+  const pillItems = useMemo(() => {
+    const items: { month: number | null; puRn: number; puRev: number; isTotal?: boolean }[] = visibleMonths
+      .map(m => {
+        const mk = `${m.year}-${String(m.month).padStart(2, '0')}`
+        const rows = pickupData.filter(r => r.business_date?.startsWith(mk))
+        const puRn  = rows.reduce((s, r) => s + (r.pu_nights  ?? 0), 0)
+        const puRev = rows.reduce((s, r) => s + (r.pu_revenue ?? 0), 0)
+        if (puRn === 0) return null   // 픽업 없는 달 패스
+        return { month: m.month, puRn, puRev }
+      })
+      .filter((x): x is { month: number; puRn: number; puRev: number } => x !== null)
+    const totalPuRn  = items.reduce((s, x) => s + x.puRn,  0)
+    const totalPuRev = items.reduce((s, x) => s + x.puRev, 0)
+    if (totalPuRn > 0) items.push({ month: null, puRn: totalPuRn, puRev: totalPuRev, isTotal: true })
+    return items
+  }, [visibleMonths, pickupData])
+
+  useEffect(() => {
+    if (pillItems.length <= 1) return
+    const timer = setInterval(() => setPillIdx(i => (i + 1) % pillItems.length), 3000)
+    return () => clearInterval(timer)
+  }, [pillItems.length])
+
+  const currentPill = pillItems.length > 0 ? pillItems[pillIdx % pillItems.length] : null
 
   // ── 이벤트(c06_calendar) — 카드 6개월 범위 fetch → 같은 이름·연속 날짜 병합 ──
   const eventRangeStart = months.length ? `${months[0].year}-${String(months[0].month).padStart(2, '0')}-01` : ''
@@ -1086,9 +1163,9 @@ export default function DashboardPage() {
     <div className="animate-fade-in">
 
       {/* ── Header ── */}
-      <div className="mb-6">
+      <div className="mb-2">
         {/* 1행: 타이틀 + 픽업요약 (로딩중이면 빈칸) */}
-        <div className="flex items-center justify-between mb-1" style={{ gap: 12 }}>
+        <div className="flex items-start justify-between mb-1" style={{ gap: 12 }}>
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => setPage(p => Math.max(0, p - 1))}
@@ -1386,12 +1463,21 @@ export default function DashboardPage() {
                     background: '#00E5A0', flexShrink: 0,
                     boxShadow: '0 0 0 2px rgba(0,229,160,0.2)',
                   }} />
-                  <span style={{ fontSize: 14, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
-                    {(() => { const [, mm, dd] = otbDate.split('-'); return `${Number(mm)}/${Number(dd)}` })()}{' '}
-                    {pickupDays > 0 ? `${pickupDays}일` : '당일'} 픽업 ·{' '}
-                    {(() => { const { num, unit } = formatPuParts(totalPuNights, 'nights'); return `${num}${unit}` })()}{' '}
-                    {(() => { const { num, unit } = formatPuParts(totalPuRevenue, 'currency'); return `${num}${unit === 'M' ? '백만' : unit}` })()}
-                  </span>
+                  <div style={{ overflow: 'hidden', height: '1.4em', display: 'flex', alignItems: 'center', fontSize: 14, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+                    {currentPill ? (
+                      <div
+                        key={pillIdx}
+                        style={{ animation: 'pillSlideUp 0.35s cubic-bezier(0.4,0,0.2,1)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                      >
+                        <span style={{ color: 'rgba(255,255,255,0.35)' }}>{currentPill.isTotal ? '전체' : `${currentPill.month}월`}</span>
+                        <span>픽업 ·</span>
+                        <strong style={{ color: '#00E5A0', fontWeight: 600 }}>{currentPill.puRn >= 0 ? '+' : ''}{currentPill.puRn.toLocaleString('ko-KR')}실</strong>
+                        <span>{currentPill.puRev >= 0 ? '+' : ''}{fmtRevPill(currentPill.puRev)}백만</span>
+                      </div>
+                    ) : (
+                      <span>픽업 데이터 없음</span>
+                    )}
+                  </div>
                   <span style={{
                     fontSize: 14, fontWeight: 500,
                     color: 'rgba(0,229,160,0.6)',
@@ -1411,7 +1497,7 @@ export default function DashboardPage() {
                 letterSpacing: '0.02em',
                 whiteSpace: 'nowrap',
               }}>
-                  [ 단위 : % · 실 · 천원 · 백만원 ]
+                  [ 단위 : % · 실 · {adrUnit} · {revUnit} ]
               </span>
             </div>
           </div>
@@ -1435,10 +1521,6 @@ export default function DashboardPage() {
               const monthKey = `${year}-${String(month).padStart(2, '0')}`
               setLyComparisonSegModal({ open: true, monthKey })
             }}
-            onAchievementClick={(year, month) => {
-              const monthKey = `${year}-${String(month).padStart(2, '0')}`
-              setForecastBudgetModal({ open: true, monthKey })
-            }}
             pickupNights={getMonthPickup(m.year, m.month)}
             lyMode={lyMode}
             onLyModeToggle={() => setLyMode(prev => prev === 'v1' ? 'v2' : 'v1')}
@@ -1446,6 +1528,9 @@ export default function DashboardPage() {
             pickupRows={pickupData.filter(r => { const d = new Date(r.business_date); return d.getFullYear() === m.year && d.getMonth() + 1 === m.month })}
             adrUnit={adrUnit}
             revUnit={revUnit}
+            lyOcc={lyActualByMonth[`${m.year - 1}-${m.month}`]?.occ ?? null}
+            lyAdr={lyActualByMonth[`${m.year - 1}-${m.month}`]?.adr ?? null}
+            lyRevenue={lyActualByMonth[`${m.year - 1}-${m.month}`]?.revenue ?? null}
           />
         ))}
       </div>

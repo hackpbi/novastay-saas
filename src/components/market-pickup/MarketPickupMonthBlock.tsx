@@ -43,7 +43,7 @@ const barLabelPlugin = {
 }
 
 export default function MarketPickupMonthBlock({
-  year, month, monthKey, pickupRows, groups, selected, onToggleSeg, onBarClick, onOpenDetail, roomCount, allSegIds, isDayModalOpen,
+  year, month, monthKey, pickupRows, groups, selected, onToggleSeg, onBarClick, onOpenDetail, roomCount, allSegIds, isDayModalOpen, showActions = true, showBar = true, showBorder = true,
 }: {
   year:           number
   month:          number   // 0-based
@@ -57,6 +57,9 @@ export default function MarketPickupMonthBlock({
   roomCount:      number
   allSegIds:      Set<string>
   isDayModalOpen?: boolean
+  showActions?:   boolean   // false → History/Detail 버튼 숨김 (기본 true = 기존 동작 보존)
+  showBar?:       boolean   // false → 일별 바 차트 숨김 (기본 true = 기존 동작 보존)
+  showBorder?:    boolean   // false → 최외곽 테두리/배경/라운드 제거 (기본 true = 기존 동작 보존)
 }) {
   const month1 = month + 1
   const days   = lastDayOfMonth(year, month1)
@@ -440,7 +443,7 @@ export default function MarketPickupMonthBlock({
   }, [dailyTotals, days, month1, onBarClick, eventMap, year, month])
 
   return (
-    <div className="rounded-2xl overflow-visible" style={{ background: 'var(--color-bg-surface, var(--card-header-bg))', border: '1px solid var(--color-border-default)', height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div className="rounded-2xl overflow-visible" style={{ background: 'var(--color-bg-surface, var(--card-header-bg))', border: '1px solid var(--color-border-default)', height: '100%', display: 'flex', flexDirection: 'column', ...(showBorder === false ? { border: 'none', borderRadius: 0, background: 'transparent', padding: 0 } : {}) }}>
       {/* 월 헤더 — 월 라벨 + Segment 패널 + Picked up + KPI + History/Detail */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px 8px', flexWrap: 'wrap', flexShrink: 0 }}>
         {/* 월 라벨 */}
@@ -545,29 +548,33 @@ export default function MarketPickupMonthBlock({
         </span>
 
         {/* History / Detail */}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-          <button
-            onClick={() => setAllDaysOpen(true)}
-            style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '0.5px solid var(--color-border-default)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-          >
-            <History size={12} /> History
-          </button>
-          <button
-            onClick={onOpenDetail}
-            style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '0.5px solid var(--color-border-default)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-          >
-            <BarChart3 size={12} /> Detail
-          </button>
-        </div>
+        {showActions && (
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+            <button
+              onClick={() => setAllDaysOpen(true)}
+              style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '0.5px solid var(--color-border-default)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            >
+              <History size={12} /> History
+            </button>
+            <button
+              onClick={onOpenDetail}
+              style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '0.5px solid var(--color-border-default)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            >
+              <BarChart3 size={12} /> Detail
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 차트 */}
-      <div
-        style={{ position: 'relative', width: '100%', flex: 1, minHeight: 0, padding: '0 12px 12px' }}
-        onMouseLeave={() => { const el = document.getElementById(tooltipId); if (el) el.style.opacity = '0' }}
-      >
-        <canvas ref={canvasRef} role="img" aria-label={`${month1}월 마켓 픽업`} />
-      </div>
+      {showBar !== false && (
+        <div
+          style={{ position: 'relative', width: '100%', flex: 1, minHeight: 0, padding: '0 12px 12px' }}
+          onMouseLeave={() => { const el = document.getElementById(tooltipId); if (el) el.style.opacity = '0' }}
+        >
+          <canvas ref={canvasRef} role="img" aria-label={`${month1}월 마켓 픽업`} />
+        </div>
+      )}
 
       <MarketPickupAllDaysModal
         open={allDaysOpen}
