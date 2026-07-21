@@ -869,6 +869,9 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     return !(reportYear > limitY || (reportYear === limitY && reportMonth >= limitM))
   })()
 
+  // 프린트 — 한 틱 지연 후 호출(미리보기 미표시 방지, GMDailyReportModal 동일)
+  const handlePrint = () => { setTimeout(() => window.print(), 50) }
+
   const overlayStyle: React.CSSProperties = {
     position: 'fixed', inset: 0, background: C.overlay, zIndex: 99999,
     display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '20px 0',
@@ -938,7 +941,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                 </div>
               )}
             </div>
-            <button onClick={() => window.print()} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 5, border: `0.5px solid ${C.borderStrong}`, background: 'transparent', cursor: 'pointer', color: '#4a4a48', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <button onClick={handlePrint} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 5, border: `0.5px solid ${C.borderStrong}`, background: 'transparent', cursor: 'pointer', color: '#4a4a48', display: 'flex', alignItems: 'center', gap: 4 }}>
               🖨 출력
             </button>
             <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#898781' }}>✕</button>
