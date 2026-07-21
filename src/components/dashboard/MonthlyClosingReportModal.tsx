@@ -326,6 +326,67 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     }
   }, [curOtbData, curLyData, curBudRn, curBudRev, roomCount, curY, curM])
 
+  // ── Start→End 비교: 마감월 1일 온북 vs 마감 실적 ──
+  const startOtbDate = (() => {
+    if (!reportYear || !reportMonth) return ''
+    const first = new Date(reportYear, reportMonth - 1, 1)
+    const dow = first.getDay()   // 0=일 ... 6=토
+    const target = new Date(first)
+    if (dow === 6) target.setDate(first.getDate() - 1)        // 토 → 전날(금)
+    else if (dow === 0) target.setDate(first.getDate() + 1)   // 일 → 다음날(월)
+    return target.toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })
+  })()
+
+  // 폴백 — startOtbDate 이하 가장 가까운 실제 update_date 조회
+  const { data: startDateAvail } = useQuery({
+    queryKey: ['closing_start_date_avail', hotelId, startOtbDate],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('a02_otb_daily')
+        .select('update_date')
+        .eq('hotel_id', hotelId)
+        .lte('update_date', startOtbDate)
+        .order('update_date', { ascending: false })
+        .limit(1)
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: open && !!hotelId && !!startOtbDate,
+    staleTime: 10 * 60 * 1000,
+  })
+  const startOtbDateResolved = startDateAvail?.[0]?.update_date ?? null
+
+  const { data: startOtbData } = useQuery({
+    queryKey: ['closing_start_otb', hotelId, startOtbDateResolved, monthStart, monthEnd],
+    queryFn: async () => {
+      if (!startOtbDateResolved) return []
+      const { data, error } = await (supabase as any)
+        .from('a02_otb_daily')
+        .select('nights, room_revenue')
+        .eq('hotel_id', hotelId).eq('update_date', startOtbDateResolved)
+        .gte('business_date', monthStart).lte('business_date', monthEnd)
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: open && !!hotelId && !!startOtbDateResolved && !!monthStart && !!monthEnd,
+    staleTime: 10 * 60 * 1000,
+  })
+
+  const startKpi = useMemo(() => {
+    if (!reportYear || !reportMonth) return null
+    const daysInMonth = new Date(reportYear, reportMonth, 0).getDate()
+    const totalAvail  = daysInMonth * roomCount
+    const rn  = (startOtbData ?? []).reduce((s: number, r: any) => s + (r.nights ?? 0), 0)
+    const rev = (startOtbData ?? []).reduce((s: number, r: any) => s + (r.room_revenue ?? 0), 0)
+    return {
+      occ:       totalAvail > 0 ? Math.round((rn / totalAvail) * 1000) / 10 : 0,
+      rn,
+      adrWon:    rn > 0 ? rev / rn : 0,
+      revWon:    rev,
+      revparWon: totalAvail > 0 ? rev / totalAvail : 0,
+    }
+  }, [startOtbData, roomCount, reportYear, reportMonth])
+
   // ── KPI ──
   const kpi = useMemo(() => {
     if (!reportYear || !reportMonth) return null
@@ -678,6 +739,48 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     )
   }
 
+  // Start → End 카드 (월초 온북 vs 마감 실적)
+  const renderStartEnd = () => {
+    if (!startKpi || !kpi) return null
+    const rows = [
+      { name: '점유율', start: `${startKpi.occ}%`, end: `${kpi.act.occ}%`, diffStr: diffText(Math.round((kpi.act.occ - startKpi.occ) * 10) / 10, '%p'), diffN: kpi.act.occ - startKpi.occ },
+      { name: '객단가', start: fmtAdr(startKpi.adrWon), end: fmtAdr(kpi.act.adrWon), diffStr: sAdr(kpi.act.adrWon - startKpi.adrWon), diffN: kpi.act.adrWon - startKpi.adrWon },
+      { name: '매출',   start: fmtRev(startKpi.revWon), end: fmtRev(kpi.act.revWon), diffStr: sRev(kpi.act.revWon - startKpi.revWon), diffN: kpi.act.revWon - startKpi.revWon },
+      { name: 'RevPAR', start: fmtAdr(startKpi.revparWon), end: fmtAdr(kpi.act.revparWon), diffStr: sAdr(kpi.act.revparWon - startKpi.revparWon), diffN: kpi.act.revparWon - startKpi.revparWon },
+    ]
+    return (
+      <div style={{ border: `1.5px solid ${C.border}`, borderRadius: 10, padding: '14px 16px', marginBottom: 18 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+          <div>
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#0b0b0b' }}>Start → End</span>
+            <span style={{ fontSize: 11, color: C.textMuted, marginLeft: 6 }}>({reportMonth}월 초온북 vs 실적)</span>
+          </div>
+          <span style={{ fontSize: 9, color: C.textMuted }}>기준일 {startOtbDateResolved ?? '-'}</span>
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr>
+              <th style={{ ...th, textAlign: 'left' }}></th>
+              <th style={{ ...th, textAlign: 'right' }}>월초 온북</th>
+              <th style={{ ...th, textAlign: 'right' }}>마감 실적</th>
+              <th style={{ ...th, textAlign: 'right' }}>차이</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.name} style={{ borderBottom: i < rows.length - 1 ? `0.5px solid ${C.border}` : 'none' }}>
+                <td style={{ ...td, textAlign: 'left', fontWeight: 500 }}>{r.name}</td>
+                <td style={{ ...td, textAlign: 'right', color: C.textSecondary }}>{r.start}</td>
+                <td style={{ ...td, textAlign: 'right', fontWeight: 600 }}>{r.end}</td>
+                <td style={{ ...td, textAlign: 'right', color: diffColor(r.diffN), fontWeight: 500 }}>{r.diffStr}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
   // 다음 달 이동 가능 여부 (otbDate 전월까지)
   const canNext = (() => {
     const [maxY, maxM] = otbDate.split('-').map(Number)
@@ -793,6 +896,8 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
             {renderMiniSummary(`${reportMonth}월`, `${String(reportYear).slice(-2)}년`, '마감', '실적', kpi, C.mint)}
             {renderMiniSummary(`${curM}월`, `${String(curY).slice(-2)}년`, '온북', '온북', curKpi, '#1e2f52', curOtbDate)}
           </div>
+
+          {renderStartEnd()}
 
           {/* 비교표 */}
           <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 4, tableLayout: 'fixed' }}>
