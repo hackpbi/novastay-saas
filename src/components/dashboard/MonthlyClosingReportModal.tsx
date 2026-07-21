@@ -612,18 +612,25 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     { label: 'RevPAR',  value: fmtAdr(kpi.act.revparWon), budSub: sAdr(kpi.vsBud.revparWon), budSubN: kpi.vsBud.revparWon, sub: sAdr(kpi.vsLy.revparWon), subN: kpi.vsLy.revparWon },
   ] : []
 
-  // 마감월/온북월 미니 요약 카드 — 절대값 없이 목표비/전년비만 표시
-  const renderMiniSummary = (title: string, k: typeof kpi, borderColor: string) => {
+  // 마감월/온북월 미니 요약 카드 — 실적(온북)/목표비/전년비 표시
+  const renderMiniSummary = (
+    monthLabel: string, yearLabel: string, suffixLabel: string,
+    actLabel: string, k: typeof kpi, borderColor: string,
+  ) => {
     if (!k) return null
     const cols = [
-      { name: '점유율', vsBud: diffText(k.vsBud.occ, '%p'), vsBudN: k.vsBud.occ, vsLy: diffText(k.vsLy.occ, '%p'), vsLyN: k.vsLy.occ },
-      { name: '객단가', vsBud: sAdr(k.vsBud.adrWon), vsBudN: k.vsBud.adrWon, vsLy: sAdr(k.vsLy.adrWon), vsLyN: k.vsLy.adrWon },
-      { name: '매출',   vsBud: sRev(k.vsBud.revWon), vsBudN: k.vsBud.revWon, vsLy: sRev(k.vsLy.revWon), vsLyN: k.vsLy.revWon },
-      { name: 'RevPAR', vsBud: sAdr(k.vsBud.revparWon), vsBudN: k.vsBud.revparWon, vsLy: sAdr(k.vsLy.revparWon), vsLyN: k.vsLy.revparWon },
+      { name: '점유율', act: `${k.act.occ}%`,        vsBud: diffText(k.vsBud.occ, '%p'), vsBudN: k.vsBud.occ, vsLy: diffText(k.vsLy.occ, '%p'), vsLyN: k.vsLy.occ },
+      { name: '객단가', act: fmtAdr(k.act.adrWon),   vsBud: sAdr(k.vsBud.adrWon), vsBudN: k.vsBud.adrWon, vsLy: sAdr(k.vsLy.adrWon), vsLyN: k.vsLy.adrWon },
+      { name: '매출',   act: fmtRev(k.act.revWon),   vsBud: sRev(k.vsBud.revWon), vsBudN: k.vsBud.revWon, vsLy: sRev(k.vsLy.revWon), vsLyN: k.vsLy.revWon },
+      { name: 'RevPAR', act: fmtAdr(k.act.revparWon), vsBud: sAdr(k.vsBud.revparWon), vsBudN: k.vsBud.revparWon, vsLy: sAdr(k.vsLy.revparWon), vsLyN: k.vsLy.revparWon },
     ]
     return (
       <div style={{ border: `1.5px solid ${borderColor}`, borderRadius: 10, padding: '14px 16px' }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: '#0b0b0b', marginBottom: 10 }}>{title}</div>
+        <div style={{ marginBottom: 10 }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#0b0b0b' }}>{monthLabel}</span>
+          <span style={{ fontSize: 10, fontWeight: 600, color: '#0b0b0b' }}> {yearLabel}</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#0b0b0b' }}> {suffixLabel}</span>
+        </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr>
@@ -632,6 +639,10 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
             </tr>
           </thead>
           <tbody>
+            <tr style={{ borderBottom: `0.5px solid ${C.border}` }}>
+              <td style={{ ...td, textAlign: 'left', fontWeight: 600 }}>{actLabel}</td>
+              {cols.map(c => <td key={c.name} style={{ ...td, textAlign: 'right', fontWeight: 600, color: '#0b0b0b' }}>{c.act}</td>)}
+            </tr>
             <tr style={{ borderBottom: `0.5px solid ${C.border}` }}>
               <td style={{ ...td, textAlign: 'left', fontWeight: 500 }}>목표비</td>
               {cols.map(c => <td key={c.name} style={{ ...td, textAlign: 'right', color: diffColor(c.vsBudN), fontWeight: 500 }}>{c.vsBud}</td>)}
@@ -756,8 +767,8 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
 
           {/* 마감월 / 온북월 미니 요약 카드 2개 */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
-            {renderMiniSummary(`${reportMonth}월 ${String(reportYear).slice(-2)}년 마감`, kpi, C.mint)}
-            {renderMiniSummary(`${curM}월 ${String(curY).slice(-2)}년 온북`, curKpi, '#1e2f52')}
+            {renderMiniSummary(`${reportMonth}월`, `${String(reportYear).slice(-2)}년`, '마감', '실적', kpi, C.mint)}
+            {renderMiniSummary(`${curM}월`, `${String(curY).slice(-2)}년`, '온북', '온북', curKpi, '#1e2f52')}
           </div>
 
           {/* 비교표 */}
