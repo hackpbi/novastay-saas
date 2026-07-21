@@ -187,7 +187,8 @@
       "Bash(grep -vE \"^[-+]\\\\s*$\")",
       "Bash(grep -n \"}k\\\\`\\\\|}m\\\\`\\\\|+ 'k'\\\\|+ 'm'\\\\|'k'\\\\|'m'\\\\|\\\\\"k\\\\\"\\\\|\\\\\"m\\\\\"\\\\|pv\\(\\\\|KpiMini\\\\|FmtVal\" src/components/dashboard/GMDailyReportModal.tsx)",
       "Bash(grep -n \"}k\\\\`\\\\|}m\\\\`\\\\|+ 'k'\\\\|'#'\\\\| 'k'\\\\|\\\\\"k\\\\\"\\\\|barRate + \\\\|ctx.raw}k\\\\|ctx.raw}m\" src/components/dashboard/GMDailyReportModal.tsx)",
-      "Bash(grep -n \"\\\\${unit}\\\\|, unit }\\\\|, unit,\" src/components/dashboard/GMDailyReportModal.tsx)"
+      "Bash(grep -n \"\\\\${unit}\\\\|, unit }\\\\|, unit,\" src/components/dashboard/GMDailyReportModal.tsx)",
+      "Bash(grep -n \"flatRows\\\\|mcr-page-divider\\\\|<style>{\\\\`\\\\|mcr-report-print\" src/components/dashboard/MonthlyClosingReportModal.tsx)"
     ],
     "additionalDirectories": [
       "C:\\dev\\18_NovaStay_Saas_ver1\\.next-verify"

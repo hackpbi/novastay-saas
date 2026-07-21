@@ -694,6 +694,27 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey) }
   }, [open, onClose])
 
+  // 인쇄 스타일 동적 주입 (GMDailyReportModal과 동일한 안정적 방식 —
+  // 컴포넌트 리렌더링과 무관하게 document.head에 유지됨)
+  useEffect(() => {
+    const style = document.createElement('style')
+    style.id = 'mcr-report-print'
+    style.textContent = `
+      @media print {
+        html, body { background: #ffffff !important; }
+        @page { size: A4 portrait; margin: 12mm 14mm; }
+        .mcr-header { display: none !important; }
+        .mcr-page-divider { display: none !important; }
+        body > *:not(.mcr-overlay) { display: none !important; }
+        .mcr-overlay { position: static !important; background: transparent !important; padding: 0 !important; }
+        .mcr-content { position: static !important; box-shadow: none !important; border-radius: 0 !important; max-height: none !important; overflow: visible !important; width: 100% !important; background: #ffffff !important; }
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      }
+    `
+    document.head.appendChild(style)
+    return () => { document.getElementById('mcr-report-print')?.remove() }
+  }, [])
+
   if (!open) return null
 
   // ── 스타일 헬퍼 ──
@@ -883,18 +904,6 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
 
   const report = (
     <div className="mcr-overlay" style={overlayStyle} onClick={onClose}>
-      <style>{`
-        @media print {
-          @page { size: A4 portrait; margin: 12mm 14mm; }
-          .mcr-header { display: none !important; }
-          .mcr-page-divider { display: none !important; }
-          body > *:not(.mcr-overlay) { display: none !important; }
-          .mcr-overlay { position: static !important; background: transparent !important; padding: 0 !important; }
-          .mcr-content { position: static !important; box-shadow: none !important; border-radius: 0 !important; max-height: none !important; overflow: visible !important; width: 100% !important; }
-          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-        }
-      `}</style>
-
       <div className="mcr-content" style={contentStyle} onClick={e => e.stopPropagation()}>
 
         {/* ── 헤더 ── */}
