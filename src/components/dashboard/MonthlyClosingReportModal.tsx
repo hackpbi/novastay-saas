@@ -821,42 +821,41 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     )
   }
 
-  // 이벤트 일자 마감 미니 카드 — 기존 eventKpi 재사용 (점유율/객단가/매출만)
+  // 이벤트 일자 마감 미니 카드 — 기존 eventKpi 재사용 (그룹 통합 단일 표)
   const renderEventClosingMini = () => {
     if (eventKpi.length === 0) return null
+    const flatRows = eventKpi.flatMap(g => g.dates.map((d: any) => ({ ...d, eventName: g.name })))
+    if (flatRows.length === 0) return null
+    const moneyFs = (adrUnit === '원' || revUnit === '원') ? 9 : 10
     return (
       <div style={{ border: `1.5px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: '#0b0b0b', marginBottom: 10 }}>이벤트 일자 마감</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 240, overflowY: 'auto' }}>
-          {eventKpi.map(g => (
-            <div key={g.name}>
-              <div style={{ fontSize: 11, fontWeight: 500, color: C.textPrimary, marginBottom: 4, paddingBottom: 4, borderBottom: `0.5px solid ${C.border}` }}>{g.name}</div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, tableLayout: 'fixed' }}>
-                <colgroup>
-                  <col style={{ width: '30%' }} /><col style={{ width: '22%' }} /><col style={{ width: '24%' }} /><col style={{ width: '24%' }} />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th style={{ ...th, textAlign: 'left', padding: '2px 4px' }}>일자</th>
-                    <th style={{ ...th, textAlign: 'right', padding: '2px 4px' }}>점유율</th>
-                    <th style={{ ...th, textAlign: 'right', padding: '2px 4px' }}>객단가</th>
-                    <th style={{ ...th, textAlign: 'right', padding: '2px 4px' }}>매출</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {g.dates.map((d: any, i: number) => (
-                    <tr key={i} style={{ borderBottom: i < g.dates.length - 1 ? `0.5px solid ${C.border}` : 'none' }}>
-                      <td style={{ fontSize: 10, color: C.textPrimary, padding: '2px 4px' }}>{d.label}</td>
-                      <td style={{ fontSize: 10, color: C.blue, fontWeight: 500, textAlign: 'right', padding: '2px 4px' }}>{d.actOcc}%</td>
-                      <td style={{ fontSize: (adrUnit === '원' || revUnit === '원') ? 9 : 10, color: C.textSecondary, textAlign: 'right', padding: '2px 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fmtAdr(d.actAdrWon)}</td>
-                      <td style={{ fontSize: (adrUnit === '원' || revUnit === '원') ? 9 : 10, color: C.textSecondary, textAlign: 'right', padding: '2px 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fmtRev(d.actRevWon)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ))}
-        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: '34%' }} /><col style={{ width: '22%' }} /><col style={{ width: '22%' }} /><col style={{ width: '22%' }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th style={{ ...th, textAlign: 'left', padding: '2px 4px' }}>일자</th>
+              <th style={{ ...th, textAlign: 'right', padding: '2px 4px' }}>점유율</th>
+              <th style={{ ...th, textAlign: 'right', padding: '2px 4px' }}>객단가</th>
+              <th style={{ ...th, textAlign: 'right', padding: '2px 4px' }}>매출</th>
+            </tr>
+          </thead>
+          <tbody>
+            {flatRows.map((d: any, i: number) => (
+              <tr key={i} style={{ borderBottom: i < flatRows.length - 1 ? `0.5px solid ${C.border}` : 'none' }}>
+                <td style={{ padding: '4px 4px', verticalAlign: 'top' }}>
+                  <div style={{ fontSize: 10, color: C.textPrimary, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.label}</div>
+                  <div style={{ fontSize: 9, color: C.textMuted, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.eventName}</div>
+                </td>
+                <td style={{ fontSize: 10, color: C.blue, fontWeight: 500, textAlign: 'right', padding: '4px 4px' }}>{d.actOcc}%</td>
+                <td style={{ fontSize: moneyFs, color: C.textSecondary, textAlign: 'right', padding: '4px 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fmtAdr(d.actAdrWon)}</td>
+                <td style={{ fontSize: moneyFs, color: C.textSecondary, textAlign: 'right', padding: '4px 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fmtRev(d.actRevWon)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     )
   }
@@ -888,6 +887,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
         @media print {
           @page { size: A4 portrait; margin: 12mm 14mm; }
           .mcr-header { display: none !important; }
+          .mcr-page-divider { display: none !important; }
           body > *:not(.mcr-overlay) { display: none !important; }
           .mcr-overlay { position: static !important; background: transparent !important; padding: 0 !important; }
           .mcr-content { position: static !important; box-shadow: none !important; border-radius: 0 !important; max-height: none !important; overflow: visible !important; width: 100% !important; }
@@ -1101,6 +1101,11 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
           </div>
 
           {/* ══════════ 2페이지 — 요일별 + 이벤트 ══════════ */}
+          <div className="mcr-page-divider" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0' }}>
+            <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
+            <span style={{ fontSize: 10, color: '#898781', background: '#fff', padding: '2px 8px', borderRadius: 10, border: '0.5px solid #e1e0d9' }}>2페이지 시작</span>
+            <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
+          </div>
           <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, breakBefore: 'page' } as React.CSSProperties}>요일별 실적</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, marginBottom: 20 }}>
             {dowKpi.map(d => (
@@ -1113,6 +1118,11 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
           </div>
 
           {/* ══════════ 3페이지 — 일자별 그래프 ══════════ */}
+          <div className="mcr-page-divider" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0' }}>
+            <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
+            <span style={{ fontSize: 10, color: '#898781', background: '#fff', padding: '2px 8px', borderRadius: 10, border: '0.5px solid #e1e0d9' }}>3페이지 시작</span>
+            <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
+          </div>
           <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, breakBefore: 'page' } as React.CSSProperties}>
             일자별 OCC% & ADR
             <span style={{ fontSize: 10, color: '#898781', marginLeft: 8 }}>· 전년 포함</span>
@@ -1129,6 +1139,11 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
           </div>
 
           {/* ══════════ 4페이지 — 어카운트별 실적 ══════════ */}
+          <div className="mcr-page-divider" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0' }}>
+            <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
+            <span style={{ fontSize: 10, color: '#898781', background: '#fff', padding: '2px 8px', borderRadius: 10, border: '0.5px solid #e1e0d9' }}>4페이지 시작</span>
+            <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
+          </div>
           <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, breakBefore: 'page' } as React.CSSProperties}>세그먼트별 어카운트 실적</div>
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
