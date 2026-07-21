@@ -189,6 +189,111 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
   const calMap: Record<string, { day: string; yoy_match: string | null; event: string | null }> = {}
   calData?.forEach((r: any) => { calMap[r.date] = { day: r.day, yoy_match: r.yoy_match, event: r.event } })
 
+  // ── 온북월(otbDate가 속한 달) 요약 카드용 데이터 ──
+  const [curY, curM] = (otbDate || '2000-01-01').split('-').map(Number)
+  const curMonthStart = otbDate ? `${curY}-${String(curM).padStart(2, '0')}-01` : ''
+  const curMonthEnd   = otbDate ? new Date(curY, curM, 0).toLocaleDateString('sv', { timeZone: 'Asia/Seoul' }) : ''
+  const curLyStart = otbDate ? `${curY - 1}-${String(curM).padStart(2, '0')}-01` : ''
+  const curLyEnd   = otbDate ? new Date(curY - 1, curM, 0).toLocaleDateString('sv', { timeZone: 'Asia/Seoul' }) : ''
+
+  // 온북 OTB (a02_otb_daily, update_date=otbDate, 당월 전체 범위)
+  const { data: curOtbData } = useQuery({
+    queryKey: ['closing_cur_otb', hotelId, otbDate, curMonthStart, curMonthEnd],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('a02_otb_daily')
+        .select('nights, room_revenue')
+        .eq('hotel_id', hotelId).eq('update_date', otbDate)
+        .gte('business_date', curMonthStart).lte('business_date', curMonthEnd)
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: open && !!hotelId && !!otbDate && !!curMonthStart && !!curMonthEnd,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // 온북월 전년 실적 (a01_actual_daily)
+  const { data: curLyData } = useQuery({
+    queryKey: ['closing_cur_ly', hotelId, curLyStart, curLyEnd],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('a01_actual_daily')
+        .select('nights, room_revenue')
+        .eq('hotel_id', hotelId)
+        .gte('business_date', curLyStart).lte('business_date', curLyEnd)
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: open && !!hotelId && !!curLyStart && !!curLyEnd,
+    staleTime: 10 * 60 * 1000,
+  })
+
+  // 온북월 예산 — reportYear와 같은 해면 기존 budgetRows/budgetUpdateDate 재사용, 다르면 별도 조회
+  const sameYear = curY === reportYear
+  const { data: curBudgetDateData } = useQuery({
+    queryKey: ['closing_cur_budget_date', hotelId, curY],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('a03_budget').select('update_date')
+        .eq('hotel_id', hotelId)
+        .gte('business_date', `${curY}-01-01`).lte('business_date', `${curY}-12-31`)
+        .order('update_date', { ascending: false }).limit(1)
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: open && !sameYear && !!hotelId && !!curY,
+    staleTime: 10 * 60 * 1000,
+  })
+  const curBudgetUpdateDate = sameYear ? budgetUpdateDate : (curBudgetDateData?.[0]?.update_date ?? null)
+
+  const { data: curBudgetRowsFetched } = useQuery({
+    queryKey: ['closing_cur_budget', hotelId, curY, curBudgetUpdateDate],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .rpc('get_budget_monthly', { p_hotel_id: hotelId, p_year: curY, p_update_date: curBudgetUpdateDate })
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: open && !sameYear && !!hotelId && !!curY && !!curBudgetUpdateDate,
+    staleTime: 10 * 60 * 1000,
+  })
+  const curBudgetRows = sameYear ? budgetRows : curBudgetRowsFetched
+  const curMonthBudget = (curBudgetRows ?? []).filter((r: any) => Number(r.month_num) === curM)
+  const curBudRn  = curMonthBudget.reduce((s: number, r: any) => s + (r.budget_nights ?? 0), 0)
+  const curBudRev = curMonthBudget.reduce((s: number, r: any) => s + (r.budget_revenue ?? 0), 0)
+
+  // 온북월 KPI (kpi useMemo와 동일 계산 로직, act 값만 실적 대신 OTB 페이스)
+  const curKpi = useMemo(() => {
+    if (!curY || !curM) return null
+    const daysInMonth = new Date(curY, curM, 0).getDate()
+    const totalAvail  = daysInMonth * roomCount
+
+    const otbRn  = (curOtbData ?? []).reduce((s: number, r: any) => s + (r.nights ?? 0), 0)
+    const otbRev = (curOtbData ?? []).reduce((s: number, r: any) => s + (r.room_revenue ?? 0), 0)
+    const lyRn   = (curLyData ?? []).reduce((s: number, r: any) => s + (r.nights ?? 0), 0)
+    const lyRev  = (curLyData ?? []).reduce((s: number, r: any) => s + (r.room_revenue ?? 0), 0)
+
+    const calc = (rn: number, rev: number) => ({
+      occ:    totalAvail > 0 ? Math.round((rn / totalAvail) * 1000) / 10 : 0,
+      rn,
+      adr:    rn > 0 ? Math.round(rev / rn / 1000) : 0,
+      rev:    Math.round(rev / 1000000),
+      revpar: totalAvail > 0 ? Math.round(rev / totalAvail / 1000) : 0,
+    })
+
+    const act = calc(otbRn, otbRev)
+    const ly  = calc(lyRn, lyRev)
+    const bud = calc(curBudRn, curBudRev)
+
+    const diff = (a: number, b: number, isOcc = false) => (isOcc ? Math.round((a - b) * 10) / 10 : Math.round(a - b))
+
+    return {
+      act, ly, bud,
+      vsBud: { occ: diff(act.occ, bud.occ, true), rn: diff(act.rn, bud.rn), adr: diff(act.adr, bud.adr), rev: diff(act.rev, bud.rev), revpar: diff(act.revpar, bud.revpar) },
+      vsLy:  { occ: diff(act.occ, ly.occ, true),  rn: diff(act.rn, ly.rn),  adr: diff(act.adr, ly.adr),  rev: diff(act.rev, ly.rev),  revpar: diff(act.revpar, ly.revpar) },
+    }
+  }, [curOtbData, curLyData, curBudRn, curBudRev, roomCount, curY, curM])
+
   // ── KPI ──
   const kpi = useMemo(() => {
     if (!reportYear || !reportMonth) return null
@@ -489,6 +594,46 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     { label: 'RevPAR',  value: `${kpi.act.revpar}k`, budSub: diffText(kpi.vsBud.revpar, 'k'), budSubN: kpi.vsBud.revpar, sub: diffText(kpi.vsLy.revpar, 'k'), subN: kpi.vsLy.revpar },
   ] : []
 
+  // 상단 요약 카드 — 마감월/온북월 공용 렌더 함수
+  const renderSummaryCard = (title: string, colLabel: string, k: typeof kpi, borderColor: string) => {
+    if (!k) return null
+    const rows = [
+      { name: '점유율',  act: `${k.act.occ}%`,    ly: `${k.ly.occ}%`,    bud: `${k.bud.occ}%`,    vsLy: diffText(k.vsLy.occ, '%p'), vsLyN: k.vsLy.occ, vsBud: diffText(k.vsBud.occ, '%p'), vsBudN: k.vsBud.occ },
+      { name: '객단가',  act: `${k.act.adr}k`,    ly: `${k.ly.adr}k`,    bud: `${k.bud.adr}k`,    vsLy: diffText(k.vsLy.adr, 'k'),  vsLyN: k.vsLy.adr, vsBud: diffText(k.vsBud.adr, 'k'),  vsBudN: k.vsBud.adr },
+      { name: '매출',    act: `${k.act.rev}m`,    ly: `${k.ly.rev}m`,    bud: `${k.bud.rev}m`,    vsLy: diffText(k.vsLy.rev, 'm'),  vsLyN: k.vsLy.rev, vsBud: diffText(k.vsBud.rev, 'm'),  vsBudN: k.vsBud.rev },
+      { name: 'Rev.PAR', act: `${k.act.revpar}k`, ly: `${k.ly.revpar}k`, bud: `${k.bud.revpar}k`, vsLy: diffText(k.vsLy.revpar, 'k'), vsLyN: k.vsLy.revpar, vsBud: diffText(k.vsBud.revpar, 'k'), vsBudN: k.vsBud.revpar },
+    ]
+    return (
+      <div style={{ border: `1.5px solid ${borderColor}`, borderRadius: 10, padding: '14px 16px' }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#0b0b0b', marginBottom: 10 }}>{title}</div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+          <thead>
+            <tr>
+              <th style={{ ...th, textAlign: 'left' }}></th>
+              <th style={{ ...th, textAlign: 'right' }}>{colLabel}</th>
+              <th style={{ ...th, textAlign: 'right' }}>전년마감</th>
+              <th style={{ ...th, textAlign: 'right' }}>목표</th>
+              <th style={{ ...th, textAlign: 'right' }}>전년비</th>
+              <th style={{ ...th, textAlign: 'right' }}>목표비</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.name} style={{ borderBottom: `0.5px solid ${C.border}` }}>
+                <td style={{ ...td, textAlign: 'left', fontWeight: 500 }}>{r.name}</td>
+                <td style={{ ...td, textAlign: 'right', fontWeight: 600 }}>{renderVal(r.act, 12)}</td>
+                <td style={{ ...td, textAlign: 'right', color: C.textSecondary }}>{renderVal(r.ly, 11)}</td>
+                <td style={{ ...td, textAlign: 'right', color: C.textSecondary }}>{renderVal(r.bud, 11)}</td>
+                <td style={{ ...td, textAlign: 'right', color: diffColor(r.vsLyN), fontWeight: 500 }}>{renderVal(r.vsLy, 11)}</td>
+                <td style={{ ...td, textAlign: 'right', color: diffColor(r.vsBudN), fontWeight: 500 }}>{renderVal(r.vsBud, 11)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
   const overlayStyle: React.CSSProperties = {
     position: 'fixed', inset: 0, background: C.overlay, zIndex: 99999,
     display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '20px 0',
@@ -520,16 +665,12 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
           padding: '12px 16px', borderBottom: `0.5px solid ${C.border}`,
           background: '#fff', position: 'sticky', top: 0, zIndex: 1,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <span style={{ fontSize: 16, fontWeight: 500, color: '#0b0b0b' }}>마감 보고서</span>
-            {/* 월 선택기 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button onClick={prevMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#898781', padding: '0 4px', lineHeight: 1 }}>‹</button>
-              <span style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', minWidth: 80, textAlign: 'center' }}>
-                {reportYear}년 {reportMonth}월
-              </span>
-              <button onClick={nextMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#898781', padding: '0 4px', lineHeight: 1 }}>›</button>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={prevMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#898781', padding: '0 4px', lineHeight: 1 }}>‹</button>
+            <span style={{ fontSize: 16, fontWeight: 500, color: '#0b0b0b', whiteSpace: 'nowrap' }}>
+              마감보고서_{String(reportMonth).padStart(2, '0')}월 {String(reportYear).slice(-2)}년
+            </span>
+            <button onClick={nextMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#898781', padding: '0 4px', lineHeight: 1 }}>›</button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button onClick={() => window.print()} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 5, border: `0.5px solid ${C.borderStrong}`, background: 'transparent', cursor: 'pointer', color: '#4a4a48', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -543,6 +684,13 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
         <div style={{ padding: '24px 28px', colorScheme: 'light', background: '#fff', color: '#0b0b0b' }}>
 
           {/* ══════════ 1페이지 ══════════ */}
+
+          {/* 상단 요약 — 마감월 / 온북월 */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+            {renderSummaryCard(`${String(reportYear).slice(-2)}년 ${reportMonth}월 마감`, '마감', kpi, C.mint)}
+            {renderSummaryCard(`${String(curY).slice(-2)}년 ${curM}월 온북`, '온북', curKpi, '#1e2f52')}
+          </div>
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 20, paddingBottom: 12, borderBottom: '1.5px solid #0b0b0b' }}>
             <div>
               <div style={{ fontSize: 20, fontWeight: 600 }}>월간 마감 보고</div>
