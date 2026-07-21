@@ -729,6 +729,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
       { name: '매출',   act: fmtRev(k.act.revWon),   vsBud: sRev(k.vsBud.revWon), vsBudN: k.vsBud.revWon, vsLy: sRev(k.vsLy.revWon), vsLyN: k.vsLy.revWon },
       { name: 'RevPAR', act: fmtAdr(k.act.revparWon), vsBud: sAdr(k.vsBud.revparWon), vsBudN: k.vsBud.revparWon, vsLy: sAdr(k.vsLy.revparWon), vsLyN: k.vsLy.revparWon },
     ]
+    const moneyFs = (adrUnit === '원' || revUnit === '원') ? 10 : 12
     return (
       <div style={{ border: `1.5px solid ${borderColor}`, borderRadius: 10, padding: '14px 16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
@@ -741,7 +742,11 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
             <span style={{ fontSize: 9, color: C.textMuted, whiteSpace: 'nowrap' }}>{dateLabel}</span>
           )}
         </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: '24%' }} />
+            <col style={{ width: '19%' }} /><col style={{ width: '19%' }} /><col style={{ width: '19%' }} /><col style={{ width: '19%' }} />
+          </colgroup>
           <thead>
             <tr>
               <th style={{ ...th, textAlign: 'left' }}></th>
@@ -751,15 +756,15 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
           <tbody>
             <tr style={{ borderBottom: `0.5px solid ${C.border}` }}>
               <td style={{ ...td, textAlign: 'left', fontWeight: 600 }}>{actLabel}</td>
-              {cols.map(c => <td key={c.name} style={{ ...td, textAlign: 'right', fontWeight: 600, color: '#0b0b0b' }}>{c.act}</td>)}
+              {cols.map(c => <td key={c.name} style={{ ...td, textAlign: 'right', fontWeight: 600, color: '#0b0b0b', fontSize: c.name === '점유율' ? 12 : moneyFs, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.act}</td>)}
             </tr>
             <tr style={{ borderBottom: `0.5px solid ${C.border}` }}>
               <td style={{ ...td, textAlign: 'left', fontWeight: 500 }}>목표비</td>
-              {cols.map(c => <td key={c.name} style={{ ...td, textAlign: 'right', color: diffColor(c.vsBudN), fontWeight: 500 }}>{c.vsBud}</td>)}
+              {cols.map(c => <td key={c.name} style={{ ...td, textAlign: 'right', color: diffColor(c.vsBudN), fontWeight: 500, fontSize: c.name === '점유율' ? 12 : moneyFs, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.vsBud}</td>)}
             </tr>
             <tr>
               <td style={{ ...td, textAlign: 'left', fontWeight: 500 }}>전년비</td>
-              {cols.map(c => <td key={c.name} style={{ ...td, textAlign: 'right', color: diffColor(c.vsLyN), fontWeight: 500 }}>{c.vsLy}</td>)}
+              {cols.map(c => <td key={c.name} style={{ ...td, textAlign: 'right', color: diffColor(c.vsLyN), fontWeight: 500, fontSize: c.name === '점유율' ? 12 : moneyFs, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.vsLy}</td>)}
             </tr>
           </tbody>
         </table>
@@ -776,6 +781,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
       { name: '매출',   start: fmtRev(startKpi.revWon), end: fmtRev(kpi.act.revWon), diffStr: sRev(kpi.act.revWon - startKpi.revWon), diffN: kpi.act.revWon - startKpi.revWon },
       { name: 'RevPAR', start: fmtAdr(startKpi.revparWon), end: fmtAdr(kpi.act.revparWon), diffStr: sAdr(kpi.act.revparWon - startKpi.revparWon), diffN: kpi.act.revparWon - startKpi.revparWon },
     ]
+    const moneyFs = (adrUnit === '원' || revUnit === '원') ? 10 : 12
     return (
       <div style={{ border: `1.5px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
@@ -784,7 +790,11 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
           </div>
           <span style={{ fontSize: 9, color: C.textMuted }}>월초 기준일 : {startOtbDateResolved ?? '-'}</span>
         </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: '28%' }} />
+            <col style={{ width: '24%' }} /><col style={{ width: '24%' }} /><col style={{ width: '24%' }} />
+          </colgroup>
           <thead>
             <tr>
               <th style={{ ...th, textAlign: 'left' }}></th>
@@ -794,14 +804,17 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, i) => (
+            {rows.map((r, i) => {
+              const cellFs = r.name === '점유율' ? 12 : moneyFs
+              return (
               <tr key={r.name} style={{ borderBottom: i < rows.length - 1 ? `0.5px solid ${C.border}` : 'none' }}>
                 <td style={{ ...td, textAlign: 'left', fontWeight: 500 }}>{r.name}</td>
-                <td style={{ ...td, textAlign: 'right', color: C.textSecondary }}>{r.start}</td>
-                <td style={{ ...td, textAlign: 'right', fontWeight: 600 }}>{r.end}</td>
-                <td style={{ ...td, textAlign: 'right', color: diffColor(r.diffN), fontWeight: 500 }}>{r.diffStr}</td>
+                <td style={{ ...td, textAlign: 'right', color: C.textSecondary, fontSize: cellFs, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.start}</td>
+                <td style={{ ...td, textAlign: 'right', fontWeight: 600, fontSize: cellFs, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.end}</td>
+                <td style={{ ...td, textAlign: 'right', color: diffColor(r.diffN), fontWeight: 500, fontSize: cellFs, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.diffStr}</td>
               </tr>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -818,7 +831,10 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
           {eventKpi.map(g => (
             <div key={g.name}>
               <div style={{ fontSize: 11, fontWeight: 500, color: C.textPrimary, marginBottom: 4, paddingBottom: 4, borderBottom: `0.5px solid ${C.border}` }}>{g.name}</div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col style={{ width: '30%' }} /><col style={{ width: '22%' }} /><col style={{ width: '24%' }} /><col style={{ width: '24%' }} />
+                </colgroup>
                 <thead>
                   <tr>
                     <th style={{ ...th, textAlign: 'left', padding: '2px 4px' }}>일자</th>
@@ -832,8 +848,8 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                     <tr key={i} style={{ borderBottom: i < g.dates.length - 1 ? `0.5px solid ${C.border}` : 'none' }}>
                       <td style={{ fontSize: 10, color: C.textPrimary, padding: '2px 4px' }}>{d.label}</td>
                       <td style={{ fontSize: 10, color: C.blue, fontWeight: 500, textAlign: 'right', padding: '2px 4px' }}>{d.actOcc}%</td>
-                      <td style={{ fontSize: 10, color: C.textSecondary, textAlign: 'right', padding: '2px 4px' }}>{fmtAdr(d.actAdrWon)}</td>
-                      <td style={{ fontSize: 10, color: C.textSecondary, textAlign: 'right', padding: '2px 4px' }}>{fmtRev(d.actRevWon)}</td>
+                      <td style={{ fontSize: (adrUnit === '원' || revUnit === '원') ? 9 : 10, color: C.textSecondary, textAlign: 'right', padding: '2px 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fmtAdr(d.actAdrWon)}</td>
+                      <td style={{ fontSize: (adrUnit === '원' || revUnit === '원') ? 9 : 10, color: C.textSecondary, textAlign: 'right', padding: '2px 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fmtRev(d.actRevWon)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1011,27 +1027,31 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                   </tr>
                 </thead>
                 <tbody>
-                  {segKpi.rows.map((row: any) => (
+                  {segKpi.rows.map((row: any) => {
+                    const moneyFs = (adrUnit === '원' || revUnit === '원') ? 10 : 11
+                    const ov = { whiteSpace: 'nowrap' as const, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const }
+                    return (
                     <tr key={row.id} style={{ background: row.bgLightColor || undefined, fontWeight: row.isBold ? 600 : 400 }}>
-                      <td style={{ textAlign:'left', padding: '5px 10px 5px ' + (row.indent ? 28 : 10), borderBottom: '0.5px solid #e1e0d9', color: row.fontLightColor || '#0b0b0b' }}>
+                      <td style={{ textAlign:'left', padding: '5px 10px 5px ' + (row.indent ? 28 : 10), borderBottom: '0.5px solid #e1e0d9', color: row.fontLightColor || '#0b0b0b', ...ov }}>
                         {row.indent ? <><span style={{ color: '#898781' }}>└ </span>{row.name}</> : row.name}
                       </td>
                       {/* R/N */}
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9' }}>{row.actRn.toLocaleString()}</td>
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color:'#898781' }}>{row.budRn.toLocaleString()}</td>
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color: row.actRn - row.lyRn >= 0 ? '#1d9e75' : '#a32d2d' }}>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9', ...ov }}>{row.actRn.toLocaleString()}</td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color:'#898781', ...ov }}>{row.budRn.toLocaleString()}</td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color: row.actRn - row.lyRn >= 0 ? '#1d9e75' : '#a32d2d', ...ov }}>
                         {row.actRn - row.lyRn > 0 ? `+${(row.actRn - row.lyRn).toLocaleString()}` : (row.actRn - row.lyRn).toLocaleString()}
                       </td>
                       {/* ADR */}
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9' }}>{fmtAdr(row.actAdrWon)}</td>
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color:'#898781' }}>{fmtAdr(row.budAdrWon)}</td>
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color: row.actAdrWon - row.lyAdrWon >= 0 ? '#1d9e75' : '#a32d2d' }}>{sAdr(row.actAdrWon - row.lyAdrWon)}</td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9', fontSize: moneyFs, ...ov }}>{fmtAdr(row.actAdrWon)}</td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color:'#898781', fontSize: moneyFs, ...ov }}>{fmtAdr(row.budAdrWon)}</td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color: row.actAdrWon - row.lyAdrWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: moneyFs, ...ov }}>{sAdr(row.actAdrWon - row.lyAdrWon)}</td>
                       {/* REV */}
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9' }}>{fmtRev(row.actRevWon)}</td>
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color:'#898781' }}>{fmtRev(row.budRevWon)}</td>
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color: row.actRevWon - row.lyRevWon >= 0 ? '#1d9e75' : '#a32d2d' }}>{sRev(row.actRevWon - row.lyRevWon)}</td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9', fontSize: moneyFs, ...ov }}>{fmtRev(row.actRevWon)}</td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color:'#898781', fontSize: moneyFs, ...ov }}>{fmtRev(row.budRevWon)}</td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color: row.actRevWon - row.lyRevWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: moneyFs, ...ov }}>{sRev(row.actRevWon - row.lyRevWon)}</td>
                     </tr>
-                  ))}
+                    )
+                  })}
                   {/* 합계 (HOU 제외) */}
                   <tr style={{ background:'#eeecea', borderTop:'1px solid #c8c7c0' }}>
                     <td style={{ textAlign:'left', fontWeight: 600, padding:'5px 10px', color:'#0b0b0b' }}>{segKpi.total.seg}</td>
@@ -1040,12 +1060,12 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                     <td style={{ textAlign:'right', padding:'5px 8px', color: segKpi.total.actRn - segKpi.total.lyRn >= 0 ? '#1d9e75' : '#a32d2d' }}>
                       {segKpi.total.actRn - segKpi.total.lyRn > 0 ? `+${(segKpi.total.actRn - segKpi.total.lyRn).toLocaleString()}` : (segKpi.total.actRn - segKpi.total.lyRn).toLocaleString()}
                     </td>
-                    <td style={{ textAlign:'right', padding:'5px 8px', borderLeft:'0.5px solid #c8c7c0', fontWeight: 600 }}>{fmtAdr(segKpi.total.actAdrWon)}</td>
-                    <td style={{ textAlign:'right', padding:'5px 8px', color:'#898781' }}>{fmtAdr(segKpi.total.budAdrWon)}</td>
-                    <td style={{ textAlign:'right', padding:'5px 8px', color: segKpi.total.actAdrWon - segKpi.total.lyAdrWon >= 0 ? '#1d9e75' : '#a32d2d' }}>{sAdr(segKpi.total.actAdrWon - segKpi.total.lyAdrWon)}</td>
-                    <td style={{ textAlign:'right', padding:'5px 8px', borderLeft:'0.5px solid #c8c7c0', fontWeight: 600 }}>{fmtRev(segKpi.total.actRevWon)}</td>
-                    <td style={{ textAlign:'right', padding:'5px 8px', color:'#898781' }}>{fmtRev(segKpi.total.budRevWon)}</td>
-                    <td style={{ textAlign:'right', padding:'5px 8px', color: segKpi.total.actRevWon - segKpi.total.lyRevWon >= 0 ? '#1d9e75' : '#a32d2d' }}>{sRev(segKpi.total.actRevWon - segKpi.total.lyRevWon)}</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', borderLeft:'0.5px solid #c8c7c0', fontWeight: 600, fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtAdr(segKpi.total.actAdrWon)}</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', color:'#898781', fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtAdr(segKpi.total.budAdrWon)}</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', color: segKpi.total.actAdrWon - segKpi.total.lyAdrWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{sAdr(segKpi.total.actAdrWon - segKpi.total.lyAdrWon)}</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', borderLeft:'0.5px solid #c8c7c0', fontWeight: 600, fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtRev(segKpi.total.actRevWon)}</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', color:'#898781', fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtRev(segKpi.total.budRevWon)}</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', color: segKpi.total.actRevWon - segKpi.total.lyRevWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{sRev(segKpi.total.actRevWon - segKpi.total.lyRevWon)}</td>
                   </tr>
                   {/* 점유율 — R/N 그룹 3칸만 사용, ADR/REV 그룹은 비움 */}
                   <tr style={{ borderTop:'0.5px solid #e1e0d9' }}>
@@ -1063,9 +1083,9 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                     <td style={{ textAlign:'left', fontWeight: 500, padding:'5px 10px', color:'#0b0b0b' }}>REVPAR</td>
                     <td colSpan={3} style={{ borderLeft:'0.5px solid #e1e0d9' }} />
                     <td colSpan={3} style={{ borderLeft:'0.5px solid #e1e0d9' }} />
-                    <td style={{ textAlign:'right', padding:'5px 8px', borderLeft:'0.5px solid #e1e0d9', fontWeight: 500 }}>{fmtAdr(segKpi.revparRow.actRevparWon)}</td>
-                    <td style={{ textAlign:'right', padding:'5px 8px', color:'#898781' }}>{fmtAdr(segKpi.revparRow.budRevparWon)}</td>
-                    <td style={{ textAlign:'right', padding:'5px 8px', color: segKpi.revparRow.actRevparWon - segKpi.revparRow.lyRevparWon >= 0 ? '#1d9e75' : '#a32d2d' }}>
+                    <td style={{ textAlign:'right', padding:'5px 8px', borderLeft:'0.5px solid #e1e0d9', fontWeight: 500, fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtAdr(segKpi.revparRow.actRevparWon)}</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', color:'#898781', fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtAdr(segKpi.revparRow.budRevparWon)}</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', color: segKpi.revparRow.actRevparWon - segKpi.revparRow.lyRevparWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
                       {sAdr(segKpi.revparRow.actRevparWon - segKpi.revparRow.lyRevparWon)}
                     </td>
                   </tr>
@@ -1081,7 +1101,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
               <div key={d.day} style={{ background: C.cardBg, borderRadius: 8, padding: '10px 6px', textAlign: 'center' }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: d.isFriSat ? '#e24b4a' : C.textPrimary, marginBottom: 6 }}>{d.day}</div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: C.blue }}>{d.occ}%</div>
-                <div style={{ fontSize: 9, color: C.textMuted, marginTop: 3 }}>{fmtAdr(d.adrWon)} · {fmtRev(d.revWon)}</div>
+                <div style={{ fontSize: (adrUnit === '원' || revUnit === '원') ? 8 : 9, color: C.textMuted, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fmtAdr(d.adrWon)} · {fmtRev(d.revWon)}</div>
               </div>
             ))}
           </div>
@@ -1092,7 +1112,10 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
           ) : eventKpi.map(g => (
             <div key={g.name} style={{ background: C.cardBg, borderRadius: 8, padding: '10px 14px', marginBottom: 8, breakInside: 'avoid' } as React.CSSProperties}>
               <div style={{ fontSize: 11, fontWeight: 500, color: C.textPrimary, marginBottom: 4, paddingBottom: 4, borderBottom: `0.5px solid ${C.border}` }}>{g.name}</div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col style={{ width: '20%' }} /><col style={{ width: '15%' }} /><col style={{ width: '16%' }} /><col style={{ width: '16%' }} /><col style={{ width: '17%' }} /><col style={{ width: '16%' }} />
+                </colgroup>
                 <thead>
                   <tr>
                     <th style={{ ...th, textAlign: 'left', padding: '2px 4px' }}>일자</th>
@@ -1104,16 +1127,19 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                   </tr>
                 </thead>
                 <tbody>
-                  {g.dates.map((d: any, i: number) => (
+                  {g.dates.map((d: any, i: number) => {
+                    const evFs = (adrUnit === '원' || revUnit === '원') ? 9 : 10
+                    return (
                     <tr key={i} style={{ borderBottom: i < g.dates.length - 1 ? `0.5px solid ${C.border}` : 'none' }}>
                       <td style={{ fontSize: 10, color: C.textPrimary, padding: '2px 4px' }}>{d.label}</td>
                       <td style={{ fontSize: 10, color: C.blue, fontWeight: 500, textAlign: 'right', padding: '2px 4px' }}>{d.actOcc}%</td>
-                      <td style={{ fontSize: 10, color: C.textSecondary, textAlign: 'right', padding: '2px 4px' }}>{fmtAdr(d.actAdrWon)}</td>
-                      <td style={{ fontSize: 10, color: C.textSecondary, textAlign: 'right', padding: '2px 4px' }}>{fmtRev(d.actRevWon)}</td>
+                      <td style={{ fontSize: evFs, color: C.textSecondary, textAlign: 'right', padding: '2px 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fmtAdr(d.actAdrWon)}</td>
+                      <td style={{ fontSize: evFs, color: C.textSecondary, textAlign: 'right', padding: '2px 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fmtRev(d.actRevWon)}</td>
                       <td style={{ fontSize: 10, color: C.textMuted, textAlign: 'right', padding: '2px 4px' }}>{d.lyOcc !== null ? `${d.lyOcc}%` : '-'}</td>
-                      <td style={{ fontSize: 10, color: C.textMuted, textAlign: 'right', padding: '2px 4px' }}>{d.lyAdrWon !== null ? fmtAdr(d.lyAdrWon) : '-'}</td>
+                      <td style={{ fontSize: evFs, color: C.textMuted, textAlign: 'right', padding: '2px 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.lyAdrWon !== null ? fmtAdr(d.lyAdrWon) : '-'}</td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1137,7 +1163,10 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
 
           {/* ══════════ 4페이지 — 어카운트별 실적 ══════════ */}
           <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, breakBefore: 'page' } as React.CSSProperties}>세그먼트별 어카운트 실적</div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: '22%' }} /><col style={{ width: '12%' }} /><col style={{ width: '14%' }} /><col style={{ width: '12%' }} /><col style={{ width: '12%' }} /><col style={{ width: '12%' }} /><col style={{ width: '16%' }} />
+            </colgroup>
             <thead>
               <tr>
                 <th style={{ ...th, textAlign: 'left' }}>어카운트</th>
@@ -1155,25 +1184,29 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                   <tr key={`seg-${seg.seg}`} style={{ background: C.cardBg }}>
                     <td colSpan={7} style={{ ...td, fontWeight: 600, color: C.textPrimary, padding: '5px 6px' }}>{seg.seg}</td>
                   </tr>
-                  {seg.accounts.map(a => (
+                  {seg.accounts.map(a => {
+                    const accFs = (adrUnit === '원' || revUnit === '원') ? 10 : 11
+                    const ov = { whiteSpace: 'nowrap' as const, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const }
+                    return (
                     <tr key={`${seg.seg}-${a.acc}`} style={{ borderBottom: `0.5px solid ${C.border}` }}>
-                      <td style={{ ...td, textAlign: 'left', paddingLeft: 16 }}>{a.acc}</td>
-                      <td style={{ ...td, textAlign: 'right' }}>{a.aRn.toLocaleString()}</td>
-                      <td style={{ ...td, textAlign: 'right' }}>{fmtRev(a.aRevWon)}</td>
-                      <td style={{ ...td, textAlign: 'right', color: C.textSecondary }}>{fmtAdr(a.aAdrWon)}</td>
-                      <td style={{ ...td, textAlign: 'right', color: C.textSecondary }}>{a.lRn.toLocaleString()}</td>
-                      <td style={{ ...td, textAlign: 'right', color: diffColor(a.diffRn), fontWeight: 500 }}>{diffText(a.diffRn, '')}</td>
-                      <td style={{ ...td, textAlign: 'right', color: diffColor(a.diffRevWon), fontWeight: 500 }}>{sRev(a.diffRevWon)}</td>
+                      <td style={{ ...td, textAlign: 'left', paddingLeft: 16, ...ov }}>{a.acc}</td>
+                      <td style={{ ...td, textAlign: 'right', ...ov }}>{a.aRn.toLocaleString()}</td>
+                      <td style={{ ...td, textAlign: 'right', fontSize: accFs, ...ov }}>{fmtRev(a.aRevWon)}</td>
+                      <td style={{ ...td, textAlign: 'right', color: C.textSecondary, fontSize: accFs, ...ov }}>{fmtAdr(a.aAdrWon)}</td>
+                      <td style={{ ...td, textAlign: 'right', color: C.textSecondary, ...ov }}>{a.lRn.toLocaleString()}</td>
+                      <td style={{ ...td, textAlign: 'right', color: diffColor(a.diffRn), fontWeight: 500, ...ov }}>{diffText(a.diffRn, '')}</td>
+                      <td style={{ ...td, textAlign: 'right', color: diffColor(a.diffRevWon), fontWeight: 500, fontSize: accFs, ...ov }}>{sRev(a.diffRevWon)}</td>
                     </tr>
-                  ))}
+                    )
+                  })}
                   <tr key={`tot-${seg.seg}`} style={{ borderBottom: `1px solid ${C.borderStrong}` }}>
                     <td style={{ ...td, textAlign: 'left', fontWeight: 600, color: C.textSecondary }}>{seg.seg} 소계</td>
                     <td style={{ ...td, textAlign: 'right', fontWeight: 600 }}>{seg.total.aRn.toLocaleString()}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 600 }}>{fmtRev(seg.total.aRevWon)}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: C.textSecondary }}>{fmtAdr(seg.total.aAdrWon)}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: C.textSecondary }}>{seg.total.lRn.toLocaleString()}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: diffColor(seg.total.diffRn) }}>{diffText(seg.total.diffRn, '')}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: diffColor(seg.total.diffRevWon) }}>{sRev(seg.total.diffRevWon)}</td>
+                    <td style={{ ...td, textAlign: 'right', fontWeight: 600, fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtRev(seg.total.aRevWon)}</td>
+                    <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: C.textSecondary, fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtAdr(seg.total.aAdrWon)}</td>
+                    <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: C.textSecondary, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{seg.total.lRn.toLocaleString()}</td>
+                    <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: diffColor(seg.total.diffRn), whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{diffText(seg.total.diffRn, '')}</td>
+                    <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: diffColor(seg.total.diffRevWon), fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{sRev(seg.total.diffRevWon)}</td>
                   </tr>
                 </React.Fragment>
               ))}
@@ -1187,11 +1220,11 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                   <tr style={{ borderTop: `2px solid #0b0b0b`, background: C.cardBg }}>
                     <td style={{ ...td, textAlign: 'left', fontWeight: 700 }}>전체 합계</td>
                     <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{g.aRn.toLocaleString()}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{fmtRev(g.aRevWon)}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{g.aRn > 0 ? fmtAdr(g.aRevWon / g.aRn) : fmtAdr(0)}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: C.textSecondary }}>{g.lRn.toLocaleString()}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: diffColor(g.diffRn) }}>{diffText(g.diffRn, '')}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: diffColor(g.diffRevWon) }}>{sRev(g.diffRevWon)}</td>
+                    <td style={{ ...td, textAlign: 'right', fontWeight: 700, fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtRev(g.aRevWon)}</td>
+                    <td style={{ ...td, textAlign: 'right', fontWeight: 700, fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{g.aRn > 0 ? fmtAdr(g.aRevWon / g.aRn) : fmtAdr(0)}</td>
+                    <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: C.textSecondary, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{g.lRn.toLocaleString()}</td>
+                    <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: diffColor(g.diffRn), whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{diffText(g.diffRn, '')}</td>
+                    <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: diffColor(g.diffRevWon), fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{sRev(g.diffRevWon)}</td>
                   </tr>
                 )
               })()}
