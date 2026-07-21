@@ -348,10 +348,14 @@ const renderEventCard = (ev: EventGroup, fmtAdr: (won: number) => string, adrUni
 
 // ── 소형 표현 컴포넌트 ──────────────────────────────────────────────────────────
 function KpiMini({ label, value, dir }: { label: string; value: string; dir: string }) {
+  const len = (value ?? '').length
+  const numSize = len > 9 ? 9 : len > 6 ? 11 : 13
   return (
-    <div style={{ padding: '5px 6px', textAlign: 'center' }}>
+    <div style={{ padding: '5px 4px', textAlign: 'center', minWidth: 0, overflow: 'hidden' }}>
       <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: 13, fontWeight: 500, color: dirColor(dir) }}><FmtVal val={value} numSize={13} /></div>
+      <div style={{ fontSize: numSize, fontWeight: 500, color: dirColor(dir), whiteSpace: 'nowrap' }}>
+        <FmtVal val={value} numSize={numSize} />
+      </div>
     </div>
   )
 }
