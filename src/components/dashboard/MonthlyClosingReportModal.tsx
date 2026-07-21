@@ -751,8 +751,10 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                 <button onClick={prevMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: C.mint, padding: 0, lineHeight: 1 }}>‹</button>
                 <span style={{ fontSize: 9, color: C.textMuted, marginTop: 2 }}>이전</span>
               </div>
-              <div style={{ fontSize: 20, fontWeight: 600, color: '#0b0b0b', whiteSpace: 'nowrap' }}>
-                월간 마감 보고 _ {reportMonth}월 {String(reportYear).slice(-2)}년
+              <div style={{ whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 20, fontWeight: 600, color: '#0b0b0b' }}>월간 마감 보고 _ </span>
+                <span style={{ fontSize: 20, fontWeight: 600, color: C.mint }}>{reportMonth}월</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: C.mint }}> {String(reportYear).slice(-2)}년</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <button onClick={nextMonth} disabled={!canNext} style={{ background: 'none', border: 'none', cursor: canNext ? 'pointer' : 'default', fontSize: 22, color: canNext ? C.mint : '#c8c7c0', padding: 0, lineHeight: 1 }}>›</button>
