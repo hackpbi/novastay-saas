@@ -510,6 +510,14 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     { label: 'RevPAR',  value: fmtAdr(kpi.act.revparWon), budSub: sAdr(kpi.vsBud.revparWon), budSubN: kpi.vsBud.revparWon, sub: sAdr(kpi.vsLy.revparWon), subN: kpi.vsLy.revparWon },
   ] : []
 
+  // 다음 달 이동 가능 여부 (otbDate 전월까지)
+  const canNext = (() => {
+    const [maxY, maxM] = otbDate.split('-').map(Number)
+    const limitY = maxM === 1 ? maxY - 1 : maxY
+    const limitM = maxM === 1 ? 12 : maxM - 1
+    return !(reportYear > limitY || (reportYear === limitY && reportMonth >= limitM))
+  })()
+
   const overlayStyle: React.CSSProperties = {
     position: 'fixed', inset: 0, background: C.overlay, zIndex: 99999,
     display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '20px 0',
@@ -537,21 +545,11 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
 
         {/* ── 헤더 ── */}
         <div className="mcr-header" style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
           padding: '12px 16px', borderBottom: `0.5px solid ${C.border}`,
           background: '#fff', position: 'sticky', top: 0, zIndex: 1,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button onClick={prevMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#898781', padding: '0 4px', lineHeight: 1 }}>‹</button>
-            <span style={{ fontSize: 16, fontWeight: 500, color: '#0b0b0b', whiteSpace: 'nowrap' }}>
-              마감보고서_{String(reportMonth).padStart(2, '0')}월 {String(reportYear).slice(-2)}년
-            </span>
-            <button onClick={nextMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#898781', padding: '0 4px', lineHeight: 1 }}>›</button>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 11, color: C.mint, letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>
-              단위 : 실 · {adrUnit} · {revUnit}
-            </span>
             <div className="mcr-unit-setting-wrap" style={{ position: 'relative' }}>
               <button onClick={() => setShowUnitSetting(v => !v)} aria-label="단위 설정"
                 style={{ width: 28, height: 28, borderRadius: 6, cursor: 'pointer',
@@ -601,13 +599,22 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
 
           {/* ══════════ 1페이지 ══════════ */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 20, paddingBottom: 12, borderBottom: '1.5px solid #0b0b0b' }}>
-            <div>
-              <div style={{ fontSize: 20, fontWeight: 600 }}>월간 마감 보고</div>
-              <div style={{ fontSize: 13, color: '#898781', marginTop: 3 }}>{reportYear}년 {reportMonth}월</div>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <button onClick={prevMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: C.mint, padding: 0, lineHeight: 1 }}>‹</button>
+                <span style={{ fontSize: 9, color: C.textMuted, marginTop: 2 }}>이전</span>
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 600, color: '#0b0b0b', whiteSpace: 'nowrap' }}>
+                월간 마감 보고 _ {reportMonth}월 {String(reportYear).slice(-2)}년
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <button onClick={nextMonth} disabled={!canNext} style={{ background: 'none', border: 'none', cursor: canNext ? 'pointer' : 'default', fontSize: 22, color: canNext ? C.mint : '#c8c7c0', padding: 0, lineHeight: 1 }}>›</button>
+                <span style={{ fontSize: 9, color: C.textMuted, marginTop: 2 }}>다음</span>
+              </div>
             </div>
             <div style={{ textAlign: 'right', fontSize: 11, color: '#898781', lineHeight: 1.6 }}>
-              객실 수: {roomCount}실<br />
-              작성일: {new Date().toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })}
+              작성일: {new Date().toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })}<br />
+              <span style={{ color: C.mint }}>단위 : 실 · {adrUnit} · {revUnit}</span>
             </div>
           </div>
 
