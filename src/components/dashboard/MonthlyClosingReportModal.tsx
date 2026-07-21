@@ -631,6 +631,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
   const renderMiniSummary = (
     monthLabel: string, yearLabel: string, suffixLabel: string,
     actLabel: string, k: typeof kpi, borderColor: string,
+    dateLabel?: string,
   ) => {
     if (!k) return null
     const cols = [
@@ -641,10 +642,15 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     ]
     return (
       <div style={{ border: `1.5px solid ${borderColor}`, borderRadius: 10, padding: '14px 16px' }}>
-        <div style={{ marginBottom: 10 }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#0b0b0b' }}>{monthLabel}</span>
-          <span style={{ fontSize: 10, fontWeight: 600, color: '#0b0b0b' }}> {yearLabel}</span>
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#0b0b0b' }}> {suffixLabel}</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+          <div>
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#0b0b0b' }}>{monthLabel}</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#0b0b0b' }}> {yearLabel}</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#0b0b0b' }}> {suffixLabel}</span>
+          </div>
+          {dateLabel && (
+            <span style={{ fontSize: 9, color: C.textMuted, whiteSpace: 'nowrap' }}>{dateLabel}</span>
+          )}
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
@@ -785,7 +791,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
           {/* 마감월 / 온북월 미니 요약 카드 2개 */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
             {renderMiniSummary(`${reportMonth}월`, `${String(reportYear).slice(-2)}년`, '마감', '실적', kpi, C.mint)}
-            {renderMiniSummary(`${curM}월`, `${String(curY).slice(-2)}년`, '온북', '온북', curKpi, '#1e2f52')}
+            {renderMiniSummary(`${curM}월`, `${String(curY).slice(-2)}년`, '온북', '온북', curKpi, '#1e2f52', curOtbDate)}
           </div>
 
           {/* 비교표 */}
