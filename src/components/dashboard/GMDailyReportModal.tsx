@@ -1021,8 +1021,12 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
     return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey) }
   }, [open, onClose])
 
-  // 인쇄 스타일 동적 주입
+  // 인쇄 스타일 동적 주입 — open일 때만 (다른 리포트 모달과의 전역 충돌 방지)
   useEffect(() => {
+    if (!open) {
+      document.getElementById('gm-report-print')?.remove()
+      return
+    }
     const style = document.createElement('style')
     style.id = 'gm-report-print'
     style.textContent = `
@@ -1042,7 +1046,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
     `
     document.head.appendChild(style)
     return () => { document.getElementById('gm-report-print')?.remove() }
-  }, [])
+  }, [open])
 
   // ── 섹션 C — 이벤트 일정 DB 연결 (localOtbDate ~ 3개월 후 말일) ──
   const periodStart = (() => {

@@ -694,9 +694,12 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey) }
   }, [open, onClose])
 
-  // 인쇄 스타일 동적 주입 (GMDailyReportModal과 동일한 안정적 방식 —
-  // 컴포넌트 리렌더링과 무관하게 document.head에 유지됨)
+  // 인쇄 스타일 동적 주입 — open일 때만 (다른 리포트 모달과의 전역 충돌 방지)
   useEffect(() => {
+    if (!open) {
+      document.getElementById('mcr-report-print')?.remove()
+      return
+    }
     const style = document.createElement('style')
     style.id = 'mcr-report-print'
     style.textContent = `
@@ -713,7 +716,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     `
     document.head.appendChild(style)
     return () => { document.getElementById('mcr-report-print')?.remove() }
-  }, [])
+  }, [open])
 
   if (!open) return null
 
