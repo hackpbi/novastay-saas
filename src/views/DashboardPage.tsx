@@ -459,7 +459,7 @@ function MetricRow({ label, value, metric, subValue, unitLabel, tooltip, yoyOver
 }) {
   return (
     <div
-      className="flex items-center justify-between py-[17px] last:border-0"
+      className="flex items-center justify-between py-[14px] last:border-0"
       style={{ borderBottom: '1px solid var(--divider-color)' }}
     >
       <div className="flex items-center gap-2">
@@ -1497,7 +1497,7 @@ export default function DashboardPage() {
                 letterSpacing: '0.02em',
                 whiteSpace: 'nowrap',
               }}>
-                  [ 단위 : % · 실 · {adrUnit} · {revUnit} ]
+                  단위 : % · 실 · {adrUnit} · {revUnit}
               </span>
             </div>
           </div>

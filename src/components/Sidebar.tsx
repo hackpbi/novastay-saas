@@ -295,7 +295,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <>
       <aside
-        className="relative flex flex-col h-screen bg-bg-secondary shrink-0 transition-[width] duration-250 ease-in-out"
+        className="relative flex flex-col h-screen bg-[#000000] shrink-0 transition-[width] duration-250 ease-in-out"
         style={{ width: collapsed ? 64 : 240, borderRight: '1px solid var(--color-border-default)' }}
       >
         {/* Logo */}

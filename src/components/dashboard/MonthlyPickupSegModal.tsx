@@ -17,7 +17,7 @@ import {
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
-const PAGE_SIZE = 3
+const PAGE_SIZE = 6
 
 const thBase: React.CSSProperties = {
   fontSize: 10, fontWeight: 600, textTransform: 'uppercase',

@@ -143,7 +143,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         {/* Top bar */}
-        <header className="h-14 shrink-0 border-b border-[rgba(255,255,255,0.06)] bg-bg-secondary px-6">
+        <header className="h-14 shrink-0 border-b border-[var(--color-border-default)] bg-[#000000] px-6">
           <div className="flex items-center justify-between gap-4 h-full w-full" style={{ maxWidth: 1320 }}>
 
             {/* Left: date pickers */}
