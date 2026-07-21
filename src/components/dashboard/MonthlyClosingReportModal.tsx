@@ -209,6 +209,23 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
   const calMap: Record<string, { day: string; yoy_match: string | null; event: string | null }> = {}
   calData?.forEach((r: any) => { calMap[r.date] = { day: r.day, yoy_match: r.yoy_match, event: r.event } })
 
+  // c05_market_table_schema — 트리 구조(level/parent_id/is_bold/segmentation/색상)
+  const { data: schemaRows = [] } = useQuery({
+    queryKey: ['closing_schema', hotelId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('c05_market_table_schema')
+        .select('*')
+        .eq('hotel_id', hotelId)
+        .eq('is_active', true)
+        .order('order_index', { ascending: true })
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: open && !!hotelId,
+    staleTime: 10 * 60 * 1000,
+  })
+
   // ── 온북월(마감월의 다음 달) 요약 카드용 데이터 ──
   // 온북월 = 마감월(reportYear/reportMonth)의 다음 달
   const curY = reportMonth === 12 ? reportYear + 1 : reportYear
@@ -428,79 +445,90 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
 
   // ── 세그별 ──
   const segKpi = useMemo(() => {
-    // segmentation 기준 집계
-    const segMap: Record<string, {
-      sorting1: string
-      actRn: number; actRev: number
-      lyRn:  number; lyRev:  number
-      budRn: number; budRev: number
-    }> = {}
-
-    // 실적
-    ;(actualData ?? []).forEach((r: any) => {
-      const seg = r.segmentation ?? '기타'
-      if (!segMap[seg]) segMap[seg] = { sorting1: r.sorting1 ?? '', actRn:0, actRev:0, lyRn:0, lyRev:0, budRn:0, budRev:0 }
-      segMap[seg].actRn  += r.nights ?? 0
-      segMap[seg].actRev += r.room_revenue ?? 0
-    })
-
-    // 전년
-    ;(lyData ?? []).forEach((r: any) => {
-      const seg = r.segmentation ?? '기타'
-      if (!segMap[seg]) segMap[seg] = { sorting1: r.sorting1 ?? '', actRn:0, actRev:0, lyRn:0, lyRev:0, budRn:0, budRev:0 }
-      segMap[seg].lyRn  += r.nights ?? 0
-      segMap[seg].lyRev += r.room_revenue ?? 0
-    })
-
-    // 예산 (monthBudget: month_num 필터 후)
-    ;(monthBudget ?? []).forEach((r: any) => {
-      const seg = r.segmentation ?? '기타'
-      if (!segMap[seg]) segMap[seg] = { sorting1: r.sorting1 ?? '', actRn:0, actRev:0, lyRn:0, lyRev:0, budRn:0, budRev:0 }
-      segMap[seg].budRn  += r.budget_nights ?? 0
-      segMap[seg].budRev += r.budget_revenue ?? 0
-    })
-
-    // sorting1 기준 정렬
-    const rows = Object.entries(segMap)
-      .sort((a, b) => (a[1].sorting1).localeCompare(b[1].sorting1))
-      .map(([seg, v]) => {
-        const actAdrWon = v.actRn > 0 ? v.actRev / v.actRn : 0
-        const lyAdrWon  = v.lyRn  > 0 ? v.lyRev  / v.lyRn  : 0
-        const budAdrWon = v.budRn > 0 ? v.budRev / v.budRn : 0
-        return {
-          seg,
-          actRn:  v.actRn,
-          actAdrWon,
-          actRevWon: v.actRev,
-          lyRn:   v.lyRn,
-          lyAdrWon,
-          lyRevWon:  v.lyRev,
-          budRn:  v.budRn,
-          budAdrWon,
-          budRevWon: v.budRev,
-        }
-      })
-
-    // 합계 행
-    const tot = rows.reduce((s, r) => ({
-      actRn: s.actRn+r.actRn, actRev: s.actRev+r.actRevWon,
-      lyRn:  s.lyRn+r.lyRn,   lyRev:  s.lyRev+r.lyRevWon,
-      budRn: s.budRn+r.budRn, budRev: s.budRev+r.budRevWon,
-    }), { actRn:0, actRev:0, lyRn:0, lyRev:0, budRn:0, budRev:0 })
-
-    const totActAdrWon = tot.actRn > 0 ? tot.actRev / tot.actRn : 0
-    const totLyAdrWon  = tot.lyRn  > 0 ? tot.lyRev  / tot.lyRn  : 0
-    const totBudAdrWon = tot.budRn > 0 ? tot.budRev / tot.budRn : 0
-
-    const total = {
-      seg: '합계',
-      actRn: tot.actRn, actAdrWon: totActAdrWon, actRevWon: tot.actRev,
-      lyRn:  tot.lyRn,  lyAdrWon:  totLyAdrWon,  lyRevWon:  tot.lyRev,
-      budRn: tot.budRn, budAdrWon: totBudAdrWon, budRevWon: tot.budRev,
+    type Stats = { actRn: number; actRevWon: number; lyRn: number; lyRevWon: number; budRn: number; budRevWon: number }
+    const empty = (): Stats => ({ actRn: 0, actRevWon: 0, lyRn: 0, lyRevWon: 0, budRn: 0, budRevWon: 0 })
+    const add = (a: Stats, b: Stats) => {
+      a.actRn += b.actRn; a.actRevWon += b.actRevWon
+      a.lyRn += b.lyRn; a.lyRevWon += b.lyRevWon
+      a.budRn += b.budRn; a.budRevWon += b.budRevWon
     }
 
-    return { rows, total }
-  }, [actualData, lyData, monthBudget])
+    // 데이터 행의 segmentation(단일 코드) 기준 통계 맵
+    const codeMap = new Map<string, Stats>()
+    const ensure = (code: string) => { if (!codeMap.has(code)) codeMap.set(code, empty()); return codeMap.get(code)! }
+    ;(actualData ?? []).forEach((r: any) => { const s = ensure(r.segmentation ?? '기타'); s.actRn += r.nights ?? 0; s.actRevWon += r.room_revenue ?? 0 })
+    ;(lyData ?? []).forEach((r: any) => { const s = ensure(r.segmentation ?? '기타'); s.lyRn += r.nights ?? 0; s.lyRevWon += r.room_revenue ?? 0 })
+    ;(monthBudget ?? []).forEach((r: any) => { const s = ensure(r.segmentation ?? '기타'); s.budRn += r.budget_nights ?? 0; s.budRevWon += r.budget_revenue ?? 0 })
+
+    const aggregateCodes = (codes: string[]): Stats => {
+      const acc = empty()
+      codes.forEach(code => { const s = codeMap.get(code); if (s) add(acc, s) })
+      return acc
+    }
+
+    // schema id별 통계: mid/sub=자체 segmentation, main=자식(sub) segmentation 합산
+    const statsById = new Map<string, Stats>()
+    schemaRows.forEach((s: any) => { if (s.level !== 'main') statsById.set(s.id, aggregateCodes(s.segmentation ?? [])) })
+    schemaRows.forEach((s: any) => {
+      if (s.level === 'main') {
+        const childCodes = schemaRows.filter((c: any) => c.parent_id === s.id).flatMap((c: any) => c.segmentation ?? [])
+        statsById.set(s.id, aggregateCodes(childCodes))
+      }
+    })
+
+    // 정렬: parent_id=null 최상위(order_index순) 뒤에 main의 자식(sub) 이어붙임
+    const topLevel = schemaRows.filter((s: any) => s.parent_id === null).sort((a: any, b: any) => a.order_index - b.order_index)
+    const ordered: any[] = []
+    topLevel.forEach((top: any) => {
+      ordered.push(top)
+      if (top.level === 'main') {
+        const children = schemaRows.filter((c: any) => c.parent_id === top.id).sort((a: any, b: any) => a.order_index - b.order_index)
+        ordered.push(...children)
+      }
+    })
+
+    const rows = ordered.map((s: any) => {
+      const st = statsById.get(s.id) ?? empty()
+      return {
+        id: s.id,
+        name: s.name,
+        indent: s.level === 'sub' ? 1 : 0,
+        isBold: !!s.is_bold,
+        bgLightColor: s.bg_light_color,
+        fontLightColor: s.font_light_color,
+        actRn: st.actRn, actAdrWon: st.actRn > 0 ? st.actRevWon / st.actRn : 0, actRevWon: st.actRevWon,
+        lyRn: st.lyRn, lyAdrWon: st.lyRn > 0 ? st.lyRevWon / st.lyRn : 0, lyRevWon: st.lyRevWon,
+        budRn: st.budRn, budAdrWon: st.budRn > 0 ? st.budRevWon / st.budRn : 0, budRevWon: st.budRevWon,
+      }
+    })
+
+    // 합계 (HOU 제외) — schema에서 name === 'House Use'인 항목의 segmentation 코드 제외
+    const houCodes = schemaRows.filter((s: any) => s.name === 'House Use').flatMap((s: any) => s.segmentation ?? [])
+    const allCodesExceptHou = Array.from(codeMap.keys()).filter(code => !houCodes.includes(code))
+    const totalStats = aggregateCodes(allCodesExceptHou)
+    const total = {
+      seg: '합계 (HOU 제외)',
+      actRn: totalStats.actRn, actAdrWon: totalStats.actRn > 0 ? totalStats.actRevWon / totalStats.actRn : 0, actRevWon: totalStats.actRevWon,
+      lyRn: totalStats.lyRn, lyAdrWon: totalStats.lyRn > 0 ? totalStats.lyRevWon / totalStats.lyRn : 0, lyRevWon: totalStats.lyRevWon,
+      budRn: totalStats.budRn, budAdrWon: totalStats.budRn > 0 ? totalStats.budRevWon / totalStats.budRn : 0, budRevWon: totalStats.budRevWon,
+    }
+
+    // 점유율 / RevPAR (합계 HOU 제외 기준, 실적/목표/전년 3열)
+    const daysInMonth = reportYear && reportMonth ? new Date(reportYear, reportMonth, 0).getDate() : 0
+    const totalAvail  = daysInMonth * roomCount
+    const occRow = {
+      actOcc: totalAvail > 0 ? Math.round((totalStats.actRn / totalAvail) * 1000) / 10 : 0,
+      budOcc: totalAvail > 0 ? Math.round((totalStats.budRn / totalAvail) * 1000) / 10 : 0,
+      lyOcc:  totalAvail > 0 ? Math.round((totalStats.lyRn  / totalAvail) * 1000) / 10 : 0,
+    }
+    const revparRow = {
+      actRevparWon: totalAvail > 0 ? totalStats.actRevWon / totalAvail : 0,
+      budRevparWon: totalAvail > 0 ? totalStats.budRevWon / totalAvail : 0,
+      lyRevparWon:  totalAvail > 0 ? totalStats.lyRevWon  / totalAvail : 0,
+    }
+
+    return { rows, total, occRow, revparRow }
+  }, [actualData, lyData, monthBudget, schemaRows, roomCount, reportYear, reportMonth])
 
   // ── 요일별 ──
   const dowKpi = useMemo(() => {
@@ -983,43 +1011,64 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                   </tr>
                 </thead>
                 <tbody>
-                  {[...segKpi.rows, { ...segKpi.total, isTotal: true }].map((row: any, idx: number) => (
-                    <tr key={idx} style={row.isTotal ? { background:'#eeecea', borderTop:'1px solid #c8c7c0' } : {}}>
-                      <td style={{ textAlign:'left', fontWeight: row.isTotal ? 500 : 400, padding:'5px 10px', borderBottom: row.isTotal ? 'none' : '0.5px solid #e1e0d9', color:'#0b0b0b' }}>
-                        {row.seg}
+                  {segKpi.rows.map((row: any) => (
+                    <tr key={row.id} style={{ background: row.bgLightColor || undefined, fontWeight: row.isBold ? 600 : 400 }}>
+                      <td style={{ textAlign:'left', padding: '5px 10px 5px ' + (row.indent ? 28 : 10), borderBottom: '0.5px solid #e1e0d9', color: row.fontLightColor || '#0b0b0b' }}>
+                        {row.indent ? <><span style={{ color: '#898781' }}>└ </span>{row.name}</> : row.name}
                       </td>
                       {/* R/N */}
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom: row.isTotal ? 'none' : '0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9', fontWeight: row.isTotal ? 500 : 400 }}>
-                        {row.actRn.toLocaleString()}
-                      </td>
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom: row.isTotal ? 'none' : '0.5px solid #e1e0d9', color:'#898781' }}>
-                        {row.budRn.toLocaleString()}
-                      </td>
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom: row.isTotal ? 'none' : '0.5px solid #e1e0d9', color: row.actRn - row.lyRn >= 0 ? '#1d9e75' : '#a32d2d' }}>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9' }}>{row.actRn.toLocaleString()}</td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color:'#898781' }}>{row.budRn.toLocaleString()}</td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color: row.actRn - row.lyRn >= 0 ? '#1d9e75' : '#a32d2d' }}>
                         {row.actRn - row.lyRn > 0 ? `+${(row.actRn - row.lyRn).toLocaleString()}` : (row.actRn - row.lyRn).toLocaleString()}
                       </td>
                       {/* ADR */}
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom: row.isTotal ? 'none' : '0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9', fontWeight: row.isTotal ? 500 : 400 }}>
-                        {fmtAdr(row.actAdrWon)}
-                      </td>
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom: row.isTotal ? 'none' : '0.5px solid #e1e0d9', color:'#898781' }}>
-                        {fmtAdr(row.budAdrWon)}
-                      </td>
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom: row.isTotal ? 'none' : '0.5px solid #e1e0d9', color: row.actAdrWon - row.lyAdrWon >= 0 ? '#1d9e75' : '#a32d2d' }}>
-                        {sAdr(row.actAdrWon - row.lyAdrWon)}
-                      </td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9' }}>{fmtAdr(row.actAdrWon)}</td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color:'#898781' }}>{fmtAdr(row.budAdrWon)}</td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color: row.actAdrWon - row.lyAdrWon >= 0 ? '#1d9e75' : '#a32d2d' }}>{sAdr(row.actAdrWon - row.lyAdrWon)}</td>
                       {/* REV */}
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom: row.isTotal ? 'none' : '0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9', fontWeight: row.isTotal ? 500 : 400 }}>
-                        {fmtRev(row.actRevWon)}
-                      </td>
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom: row.isTotal ? 'none' : '0.5px solid #e1e0d9', color:'#898781' }}>
-                        {fmtRev(row.budRevWon)}
-                      </td>
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom: row.isTotal ? 'none' : '0.5px solid #e1e0d9', color: row.actRevWon - row.lyRevWon >= 0 ? '#1d9e75' : '#a32d2d' }}>
-                        {sRev(row.actRevWon - row.lyRevWon)}
-                      </td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9' }}>{fmtRev(row.actRevWon)}</td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color:'#898781' }}>{fmtRev(row.budRevWon)}</td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color: row.actRevWon - row.lyRevWon >= 0 ? '#1d9e75' : '#a32d2d' }}>{sRev(row.actRevWon - row.lyRevWon)}</td>
                     </tr>
                   ))}
+                  {/* 합계 (HOU 제외) */}
+                  <tr style={{ background:'#eeecea', borderTop:'1px solid #c8c7c0' }}>
+                    <td style={{ textAlign:'left', fontWeight: 600, padding:'5px 10px', color:'#0b0b0b' }}>{segKpi.total.seg}</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', borderLeft:'0.5px solid #c8c7c0', fontWeight: 600 }}>{segKpi.total.actRn.toLocaleString()}</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', color:'#898781' }}>{segKpi.total.budRn.toLocaleString()}</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', color: segKpi.total.actRn - segKpi.total.lyRn >= 0 ? '#1d9e75' : '#a32d2d' }}>
+                      {segKpi.total.actRn - segKpi.total.lyRn > 0 ? `+${(segKpi.total.actRn - segKpi.total.lyRn).toLocaleString()}` : (segKpi.total.actRn - segKpi.total.lyRn).toLocaleString()}
+                    </td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', borderLeft:'0.5px solid #c8c7c0', fontWeight: 600 }}>{fmtAdr(segKpi.total.actAdrWon)}</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', color:'#898781' }}>{fmtAdr(segKpi.total.budAdrWon)}</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', color: segKpi.total.actAdrWon - segKpi.total.lyAdrWon >= 0 ? '#1d9e75' : '#a32d2d' }}>{sAdr(segKpi.total.actAdrWon - segKpi.total.lyAdrWon)}</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', borderLeft:'0.5px solid #c8c7c0', fontWeight: 600 }}>{fmtRev(segKpi.total.actRevWon)}</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', color:'#898781' }}>{fmtRev(segKpi.total.budRevWon)}</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', color: segKpi.total.actRevWon - segKpi.total.lyRevWon >= 0 ? '#1d9e75' : '#a32d2d' }}>{sRev(segKpi.total.actRevWon - segKpi.total.lyRevWon)}</td>
+                  </tr>
+                  {/* 점유율 — R/N 그룹 3칸만 사용, ADR/REV 그룹은 비움 */}
+                  <tr style={{ borderTop:'0.5px solid #e1e0d9' }}>
+                    <td style={{ textAlign:'left', fontWeight: 500, padding:'5px 10px', color:'#0b0b0b' }}>점유율</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', borderLeft:'0.5px solid #e1e0d9', fontWeight: 500 }}>{segKpi.occRow.actOcc}%</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', color:'#898781' }}>{segKpi.occRow.budOcc}%</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', color: segKpi.occRow.actOcc - segKpi.occRow.lyOcc >= 0 ? '#1d9e75' : '#a32d2d' }}>
+                      {diffText(Math.round((segKpi.occRow.actOcc - segKpi.occRow.lyOcc) * 10) / 10, '%p')}
+                    </td>
+                    <td colSpan={3} style={{ borderLeft:'0.5px solid #e1e0d9' }} />
+                    <td colSpan={3} style={{ borderLeft:'0.5px solid #e1e0d9' }} />
+                  </tr>
+                  {/* REVPAR — REV 그룹 3칸만 사용, R/N/ADR 그룹은 비움 */}
+                  <tr>
+                    <td style={{ textAlign:'left', fontWeight: 500, padding:'5px 10px', color:'#0b0b0b' }}>REVPAR</td>
+                    <td colSpan={3} style={{ borderLeft:'0.5px solid #e1e0d9' }} />
+                    <td colSpan={3} style={{ borderLeft:'0.5px solid #e1e0d9' }} />
+                    <td style={{ textAlign:'right', padding:'5px 8px', borderLeft:'0.5px solid #e1e0d9', fontWeight: 500 }}>{fmtAdr(segKpi.revparRow.actRevparWon)}</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', color:'#898781' }}>{fmtAdr(segKpi.revparRow.budRevparWon)}</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', color: segKpi.revparRow.actRevparWon - segKpi.revparRow.lyRevparWon >= 0 ? '#1d9e75' : '#a32d2d' }}>
+                      {sAdr(segKpi.revparRow.actRevparWon - segKpi.revparRow.lyRevparWon)}
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
