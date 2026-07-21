@@ -1002,7 +1002,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                     <th rowSpan={2} style={{ textAlign:'left', padding:'8px 10px', fontSize:9, color:'#898781', fontWeight:500, borderBottom:'0.5px solid #e1e0d9' }}>
                       세그먼트
                     </th>
-                    {[['R/N'], ['ADR'], ['REV']].map(([label]) => (
+                    {['실적', '목표', '전년'].map(label => (
                       <th key={label} colSpan={3} style={{
                         textAlign:'center', padding:'6px 8px', fontSize:10,
                         color:'#4a4a48', fontWeight:500,
@@ -1015,7 +1015,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                   </tr>
                   {/* 소컬럼 헤더 */}
                   <tr>
-                    {['실적','목표','전년', '실적','목표','전년', '실적','목표','전년'].map((h, i) => (
+                    {['객실','객단가','매출', '객실','객단가','매출', '객실','객단가','매출'].map((h, i) => (
                       <th key={i} style={{
                         textAlign:'right', padding:'5px 8px', fontSize:9, color:'#898781', fontWeight:500,
                         borderBottom:'0.5px solid #e1e0d9',
@@ -1035,19 +1035,19 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                       <td style={{ textAlign:'left', padding: '5px 10px 5px ' + (row.indent ? 28 : 10), borderBottom: '0.5px solid #e1e0d9', color: row.fontLightColor || '#0b0b0b', ...ov }}>
                         {row.indent ? <><span style={{ color: '#898781' }}>└ </span>{row.name}</> : row.name}
                       </td>
-                      {/* R/N */}
+                      {/* 실적 */}
                       <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9', ...ov }}>{row.actRn.toLocaleString()}</td>
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color:'#898781', ...ov }}>{row.budRn.toLocaleString()}</td>
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color: row.actRn - row.lyRn >= 0 ? '#1d9e75' : '#a32d2d', ...ov }}>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', fontSize: moneyFs, ...ov }}>{fmtAdr(row.actAdrWon)}</td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', fontSize: moneyFs, ...ov }}>{fmtRev(row.actRevWon)}</td>
+                      {/* 목표 */}
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9', color:'#898781', ...ov }}>{row.budRn.toLocaleString()}</td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color:'#898781', fontSize: moneyFs, ...ov }}>{fmtAdr(row.budAdrWon)}</td>
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color:'#898781', fontSize: moneyFs, ...ov }}>{fmtRev(row.budRevWon)}</td>
+                      {/* 전년(대비 diff) */}
+                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9', color: row.actRn - row.lyRn >= 0 ? '#1d9e75' : '#a32d2d', ...ov }}>
                         {row.actRn - row.lyRn > 0 ? `+${(row.actRn - row.lyRn).toLocaleString()}` : (row.actRn - row.lyRn).toLocaleString()}
                       </td>
-                      {/* ADR */}
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9', fontSize: moneyFs, ...ov }}>{fmtAdr(row.actAdrWon)}</td>
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color:'#898781', fontSize: moneyFs, ...ov }}>{fmtAdr(row.budAdrWon)}</td>
                       <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color: row.actAdrWon - row.lyAdrWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: moneyFs, ...ov }}>{sAdr(row.actAdrWon - row.lyAdrWon)}</td>
-                      {/* REV */}
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9', fontSize: moneyFs, ...ov }}>{fmtRev(row.actRevWon)}</td>
-                      <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color:'#898781', fontSize: moneyFs, ...ov }}>{fmtRev(row.budRevWon)}</td>
                       <td style={{ textAlign:'right', padding:'5px 8px', borderBottom:'0.5px solid #e1e0d9', color: row.actRevWon - row.lyRevWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: moneyFs, ...ov }}>{sRev(row.actRevWon - row.lyRevWon)}</td>
                     </tr>
                     )
@@ -1055,36 +1055,47 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                   {/* 합계 (HOU 제외) */}
                   <tr style={{ background:'#eeecea', borderTop:'1px solid #c8c7c0' }}>
                     <td style={{ textAlign:'left', fontWeight: 600, padding:'5px 10px', color:'#0b0b0b' }}>{segKpi.total.seg}</td>
+                    {/* 실적 */}
                     <td style={{ textAlign:'right', padding:'5px 8px', borderLeft:'0.5px solid #c8c7c0', fontWeight: 600 }}>{segKpi.total.actRn.toLocaleString()}</td>
-                    <td style={{ textAlign:'right', padding:'5px 8px', color:'#898781' }}>{segKpi.total.budRn.toLocaleString()}</td>
-                    <td style={{ textAlign:'right', padding:'5px 8px', color: segKpi.total.actRn - segKpi.total.lyRn >= 0 ? '#1d9e75' : '#a32d2d' }}>
+                    <td style={{ textAlign:'right', padding:'5px 8px', fontWeight: 600, fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtAdr(segKpi.total.actAdrWon)}</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', fontWeight: 600, fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtRev(segKpi.total.actRevWon)}</td>
+                    {/* 목표 */}
+                    <td style={{ textAlign:'right', padding:'5px 8px', borderLeft:'0.5px solid #c8c7c0', color:'#898781' }}>{segKpi.total.budRn.toLocaleString()}</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', color:'#898781', fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtAdr(segKpi.total.budAdrWon)}</td>
+                    <td style={{ textAlign:'right', padding:'5px 8px', color:'#898781', fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtRev(segKpi.total.budRevWon)}</td>
+                    {/* 전년(대비 diff) */}
+                    <td style={{ textAlign:'right', padding:'5px 8px', borderLeft:'0.5px solid #c8c7c0', color: segKpi.total.actRn - segKpi.total.lyRn >= 0 ? '#1d9e75' : '#a32d2d' }}>
                       {segKpi.total.actRn - segKpi.total.lyRn > 0 ? `+${(segKpi.total.actRn - segKpi.total.lyRn).toLocaleString()}` : (segKpi.total.actRn - segKpi.total.lyRn).toLocaleString()}
                     </td>
-                    <td style={{ textAlign:'right', padding:'5px 8px', borderLeft:'0.5px solid #c8c7c0', fontWeight: 600, fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtAdr(segKpi.total.actAdrWon)}</td>
-                    <td style={{ textAlign:'right', padding:'5px 8px', color:'#898781', fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtAdr(segKpi.total.budAdrWon)}</td>
                     <td style={{ textAlign:'right', padding:'5px 8px', color: segKpi.total.actAdrWon - segKpi.total.lyAdrWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{sAdr(segKpi.total.actAdrWon - segKpi.total.lyAdrWon)}</td>
-                    <td style={{ textAlign:'right', padding:'5px 8px', borderLeft:'0.5px solid #c8c7c0', fontWeight: 600, fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtRev(segKpi.total.actRevWon)}</td>
-                    <td style={{ textAlign:'right', padding:'5px 8px', color:'#898781', fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtRev(segKpi.total.budRevWon)}</td>
                     <td style={{ textAlign:'right', padding:'5px 8px', color: segKpi.total.actRevWon - segKpi.total.lyRevWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{sRev(segKpi.total.actRevWon - segKpi.total.lyRevWon)}</td>
                   </tr>
-                  {/* 점유율 — R/N 그룹 3칸만 사용, ADR/REV 그룹은 비움 */}
+                  {/* 점유율 — 각 그룹의 "객실" 위치(1,4,7번째)에 표시 */}
                   <tr style={{ borderTop:'0.5px solid #e1e0d9' }}>
                     <td style={{ textAlign:'left', fontWeight: 500, padding:'5px 10px', color:'#0b0b0b' }}>점유율</td>
+                    {/* 실적 그룹 — 객실 위치 */}
                     <td style={{ textAlign:'right', padding:'5px 8px', borderLeft:'0.5px solid #e1e0d9', fontWeight: 500 }}>{segKpi.occRow.actOcc}%</td>
-                    <td style={{ textAlign:'right', padding:'5px 8px', color:'#898781' }}>{segKpi.occRow.budOcc}%</td>
-                    <td style={{ textAlign:'right', padding:'5px 8px', color: segKpi.occRow.actOcc - segKpi.occRow.lyOcc >= 0 ? '#1d9e75' : '#a32d2d' }}>
+                    <td colSpan={2} />
+                    {/* 목표 그룹 — 객실 위치 */}
+                    <td style={{ textAlign:'right', padding:'5px 8px', borderLeft:'0.5px solid #e1e0d9', color:'#898781' }}>{segKpi.occRow.budOcc}%</td>
+                    <td colSpan={2} />
+                    {/* 전년 그룹 — 객실 위치 */}
+                    <td style={{ textAlign:'right', padding:'5px 8px', borderLeft:'0.5px solid #e1e0d9', color: segKpi.occRow.actOcc - segKpi.occRow.lyOcc >= 0 ? '#1d9e75' : '#a32d2d' }}>
                       {diffText(Math.round((segKpi.occRow.actOcc - segKpi.occRow.lyOcc) * 10) / 10, '%p')}
                     </td>
-                    <td colSpan={3} style={{ borderLeft:'0.5px solid #e1e0d9' }} />
-                    <td colSpan={3} style={{ borderLeft:'0.5px solid #e1e0d9' }} />
+                    <td colSpan={2} />
                   </tr>
-                  {/* REVPAR — REV 그룹 3칸만 사용, R/N/ADR 그룹은 비움 */}
+                  {/* REVPAR — 각 그룹의 "매출" 위치(3,6,9번째)에 표시 */}
                   <tr>
                     <td style={{ textAlign:'left', fontWeight: 500, padding:'5px 10px', color:'#0b0b0b' }}>REVPAR</td>
-                    <td colSpan={3} style={{ borderLeft:'0.5px solid #e1e0d9' }} />
-                    <td colSpan={3} style={{ borderLeft:'0.5px solid #e1e0d9' }} />
-                    <td style={{ textAlign:'right', padding:'5px 8px', borderLeft:'0.5px solid #e1e0d9', fontWeight: 500, fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtAdr(segKpi.revparRow.actRevparWon)}</td>
+                    {/* 실적 그룹 — 매출 위치 */}
+                    <td colSpan={2} style={{ borderLeft:'0.5px solid #e1e0d9' }} />
+                    <td style={{ textAlign:'right', padding:'5px 8px', fontWeight: 500, fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtAdr(segKpi.revparRow.actRevparWon)}</td>
+                    {/* 목표 그룹 — 매출 위치 */}
+                    <td colSpan={2} style={{ borderLeft:'0.5px solid #e1e0d9' }} />
                     <td style={{ textAlign:'right', padding:'5px 8px', color:'#898781', fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtAdr(segKpi.revparRow.budRevparWon)}</td>
+                    {/* 전년 그룹 — 매출 위치 */}
+                    <td colSpan={2} style={{ borderLeft:'0.5px solid #e1e0d9' }} />
                     <td style={{ textAlign:'right', padding:'5px 8px', color: segKpi.revparRow.actRevparWon - segKpi.revparRow.lyRevparWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
                       {sAdr(segKpi.revparRow.actRevparWon - segKpi.revparRow.lyRevparWon)}
                     </td>
