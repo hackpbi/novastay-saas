@@ -975,11 +975,11 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
     style.id = 'gm-report-print'
     style.textContent = `
       @media print {
-        @page { size: A4 portrait; margin: 12mm 14mm; }
+        @page { size: A4 portrait; margin: 0; }
         body > *:not(#gm-report-print-root) { display: none !important; }
         #gm-report-print-root { position: static !important; background: none !important; overflow: visible !important; display: block !important; padding: 0 !important; }
         #gm-report-print-root .gm-a4 { width: 100% !important; max-width: none !important; box-shadow: none !important; border-radius: 0 !important; }
-        .gm-a4 { background: #ffffff !important; color: #000000 !important; }
+        .gm-a4 { background: #ffffff !important; color: #000000 !important; padding: 12mm 14mm !important; width: 100% !important; max-width: none !important; }
         .gm-a4 * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .gm-no-print { display: none !important; }
         .gm-page-break { break-before: page; }
