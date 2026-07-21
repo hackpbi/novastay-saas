@@ -1109,45 +1109,6 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
             ))}
           </div>
 
-          <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10 }}>이벤트 실적</div>
-          {eventKpi.length === 0 ? (
-            <div style={{ fontSize: 11, color: C.textMuted, padding: '8px 0' }}>해당 월 이벤트 없음</div>
-          ) : eventKpi.map(g => (
-            <div key={g.name} style={{ background: C.cardBg, borderRadius: 8, padding: '10px 14px', marginBottom: 8, breakInside: 'avoid' } as React.CSSProperties}>
-              <div style={{ fontSize: 11, fontWeight: 500, color: C.textPrimary, marginBottom: 4, paddingBottom: 4, borderBottom: `0.5px solid ${C.border}` }}>{g.name}</div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, tableLayout: 'fixed' }}>
-                <colgroup>
-                  <col style={{ width: '20%' }} /><col style={{ width: '15%' }} /><col style={{ width: '16%' }} /><col style={{ width: '16%' }} /><col style={{ width: '17%' }} /><col style={{ width: '16%' }} />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th style={{ ...th, textAlign: 'left', padding: '2px 4px' }}>일자</th>
-                    <th style={{ ...th, textAlign: 'right', padding: '2px 4px' }}>점유율</th>
-                    <th style={{ ...th, textAlign: 'right', padding: '2px 4px' }}>객단가</th>
-                    <th style={{ ...th, textAlign: 'right', padding: '2px 4px' }}>매출</th>
-                    <th style={{ ...th, textAlign: 'right', padding: '2px 4px' }}>전년 점유율</th>
-                    <th style={{ ...th, textAlign: 'right', padding: '2px 4px' }}>전년 객단가</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {g.dates.map((d: any, i: number) => {
-                    const evFs = (adrUnit === '원' || revUnit === '원') ? 9 : 10
-                    return (
-                    <tr key={i} style={{ borderBottom: i < g.dates.length - 1 ? `0.5px solid ${C.border}` : 'none' }}>
-                      <td style={{ fontSize: 10, color: C.textPrimary, padding: '2px 4px' }}>{d.label}</td>
-                      <td style={{ fontSize: 10, color: C.blue, fontWeight: 500, textAlign: 'right', padding: '2px 4px' }}>{d.actOcc}%</td>
-                      <td style={{ fontSize: evFs, color: C.textSecondary, textAlign: 'right', padding: '2px 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fmtAdr(d.actAdrWon)}</td>
-                      <td style={{ fontSize: evFs, color: C.textSecondary, textAlign: 'right', padding: '2px 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fmtRev(d.actRevWon)}</td>
-                      <td style={{ fontSize: 10, color: C.textMuted, textAlign: 'right', padding: '2px 4px' }}>{d.lyOcc !== null ? `${d.lyOcc}%` : '-'}</td>
-                      <td style={{ fontSize: evFs, color: C.textMuted, textAlign: 'right', padding: '2px 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.lyAdrWon !== null ? fmtAdr(d.lyAdrWon) : '-'}</td>
-                    </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ))}
-
           {/* ══════════ 3페이지 — 일자별 그래프 ══════════ */}
           <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, breakBefore: 'page' } as React.CSSProperties}>
             일자별 OCC% & ADR
