@@ -1160,7 +1160,7 @@ export default function DashboardPage() {
   }, [isPrevDisabled])
 
   return (
-    <div className="animate-fade-in" style={{ background: '#000000' }}>
+    <div className="animate-fade-in" style={{ background: '#000000', minHeight: '100%' }}>
 
       {/* ── Header ── */}
       <div className="mb-2">
