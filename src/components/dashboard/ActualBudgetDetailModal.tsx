@@ -273,7 +273,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
   const gapSep  = compareMode === 'budget' ? 'inset 1px 0 0 rgba(255,100,100,0.3)' : 'inset 1px 0 0 rgba(255,200,80,0.3)'
 
   // 헤더 셀 스타일
-  const th: React.CSSProperties = { fontSize: 9.5, fontWeight: 600, color: 'rgba(255,255,255,0.45)', padding: '6px 8px', textAlign: 'right', whiteSpace: 'nowrap', minWidth: 60, background: '#0a0a0a' }
+  const th: React.CSSProperties = { fontSize: 9.5, fontWeight: 600, color: 'rgba(255,255,255,0.45)', padding: '6px 8px', textAlign: 'right', whiteSpace: 'nowrap', minWidth: 60, background: '#000000' }
   const thL: React.CSSProperties = { ...th, textAlign: 'left', minWidth: 140 }
   const td: React.CSSProperties = { fontSize: 11, padding: '5px 8px', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', minWidth: 60 }
 
@@ -356,7 +356,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
       onClick={onClose}
     >
       <div
-        style={{ background: '#0a0a0a', border: '1px solid #1f1f1f', borderRadius: 14, width: compareMode === 'ly' ? '1380px' : '1080px', maxWidth: '98vw', height: 'auto', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.3s cubic-bezier(0.22,1,0.36,1)' }}
+        style={{ background: '#000000', border: '1px solid #1f1f1f', borderRadius: 14, width: compareMode === 'ly' ? '1380px' : '1080px', maxWidth: '98vw', height: 'auto', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'width 0.3s cubic-bezier(0.22,1,0.36,1)' }}
         onClick={e => e.stopPropagation()}
       >
         {/* 헤더 */}
@@ -393,7 +393,7 @@ export default function ActualBudgetDetailModal({ open, onClose, monthKey, month
             <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: 13 }}>불러오는 중…</div>
           ) : (
             <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
-              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0a0a0a' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#000000' }}>
                 <tr>
                   <th rowSpan={2} style={{ ...thL, verticalAlign: 'bottom' }}>세그먼트</th>
                   <th colSpan={3} style={{ ...th, textAlign: 'center', color: '#9fb8ff', borderBottom: '0.5px solid rgba(255,255,255,0.1)' }}>{actualLabel}</th>

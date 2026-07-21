@@ -228,7 +228,7 @@ export default function PickupRequiredModal({ open, onClose, hotelId, monthKey, 
     >
       <div
         onClick={e => e.stopPropagation()}
-        style={{ width: 760, maxWidth: '94vw', maxHeight: '88vh', background: '#0a0a0a', border: '1px solid #1e1e1e', borderRadius: 12, boxShadow: '0 8px 40px rgba(0,0,0,0.6)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+        style={{ width: 760, maxWidth: '94vw', maxHeight: '88vh', background: '#000000', border: '1px solid #1e1e1e', borderRadius: 12, boxShadow: '0 8px 40px rgba(0,0,0,0.6)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
       >
         {/* 헤더 */}
         <div style={{ padding: '14px 18px 12px', borderBottom: '0.5px solid rgba(255,255,255,0.07)', flexShrink: 0 }}>

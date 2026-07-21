@@ -497,7 +497,7 @@ export default function PickupChartModal({
                 if (!el) {
                   el = document.createElement('div')
                   el.id = 'pickup-chart-tooltip'
-                  el.style.cssText = 'position:fixed;background:#0a0a0a;border:0.5px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 14px;pointer-events:none;font-size:12px;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,0.5);z-index:99999;opacity:0;transition:opacity 0.1s;'
+                  el.style.cssText = 'position:fixed;background:#000000;border:0.5px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 14px;pointer-events:none;font-size:12px;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,0.5);z-index:99999;opacity:0;transition:opacity 0.1s;'
                   document.body.appendChild(el)
                 }
                 if (tooltip.opacity === 0) { el.style.opacity = '0'; return }
@@ -626,7 +626,7 @@ export default function PickupChartModal({
       <div className="absolute inset-0 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose} />
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col"
-        style={{ background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)', width: '85vw', maxWidth: '85vw', height: '81vh', maxHeight: '81vh' }}
+        style={{ background: '#000000', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)', width: '85vw', maxWidth: '85vw', height: '81vh', maxHeight: '81vh' }}
       >
         {/* 헤더 — 제목 + 닫기 (구분선 없음, 요약문이 바로 아래) */}
         <div className="flex items-center justify-between px-5 pt-3.5 pb-0.5 shrink-0">

@@ -436,7 +436,7 @@ export default function PickDetailChart({
                 if (!el) {
                   el = document.createElement('div')
                   el.id = 'pick-detail-tooltip'
-                  el.style.cssText = 'position:fixed;background:#0a0a0a;border:0.5px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 14px;pointer-events:none;font-size:12px;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,0.5);z-index:99999;opacity:0;transition:opacity 0.1s;'
+                  el.style.cssText = 'position:fixed;background:#000000;border:0.5px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 14px;pointer-events:none;font-size:12px;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,0.5);z-index:99999;opacity:0;transition:opacity 0.1s;'
                   document.body.appendChild(el)
                 }
                 if (tooltip.opacity === 0) { el.style.opacity = '0'; return }

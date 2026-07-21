@@ -109,7 +109,7 @@ function SegDropdown({ label, segs, selected, activeSegs, onApply }: {
         {label} <ChevronDown size={11} />
       </button>
       {open && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 200, background: '#0a0a0a', border: '0.5px solid #333', borderRadius: 8, width: 'max-content', minWidth: 200, maxWidth: 360, whiteSpace: 'nowrap', boxShadow: '0 6px 20px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 200, background: '#000000', border: '0.5px solid #333', borderRadius: 8, width: 'max-content', minWidth: 200, maxWidth: 360, whiteSpace: 'nowrap', boxShadow: '0 6px 20px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
           <div style={{ maxHeight: 260, overflowY: 'auto', padding: 6 }}>
           {segs.length === 0 ? (
             <div style={{ padding: '6px 8px', fontSize: 11, color: 'var(--color-text-secondary)' }}>없음</div>
@@ -131,7 +131,7 @@ function SegDropdown({ label, segs, selected, activeSegs, onApply }: {
           })}
           </div>
           {/* Reset / All / Done */}
-          <div style={{ display: 'flex', gap: 6, padding: '8px 10px', borderTop: '0.5px solid #333', background: '#0a0a0a' }}>
+          <div style={{ display: 'flex', gap: 6, padding: '8px 10px', borderTop: '0.5px solid #333', background: '#000000' }}>
             <button onClick={() => setTempSelected(new Set())} style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: '0.5px solid #333', background: 'transparent', color: 'var(--color-text-secondary)', fontSize: 11, cursor: 'pointer' }}>Reset</button>
             <button onClick={() => setTempSelected(new Set(segs.filter(s => activeSegs.has(s.code)).map(s => s.code)))} style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: '0.5px solid #333', background: 'transparent', color: 'var(--color-text-secondary)', fontSize: 11, cursor: 'pointer' }}>All</button>
             <button onClick={() => { onApply([...tempSelected]); setOpen(false) }} style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: 'none', background: '#00E5A0', color: '#0a0a0a', fontSize: 11, fontWeight: 500, cursor: 'pointer' }}>Done</button>

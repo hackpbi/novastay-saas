@@ -110,11 +110,11 @@ export default function TranslationsPage() {
 
   // ── 접근 권한: super_admin만 ──
   if (!profile) {
-    return <div style={{ padding: 40, color: '#888', background: '#0a0a0a', minHeight: '100vh' }}>로딩 중…</div>
+    return <div style={{ padding: 40, color: '#888', background: '#000000', minHeight: '100vh' }}>로딩 중…</div>
   }
   if (role !== 'super_admin') {
     return (
-      <div style={{ padding: 40, background: '#0a0a0a', minHeight: '100vh', color: '#fff' }}>
+      <div style={{ padding: 40, background: '#000000', minHeight: '100vh', color: '#fff' }}>
         <h1 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>접근 불가</h1>
         <p style={{ fontSize: 13, color: '#888' }}>이 페이지는 super_admin 권한만 접근할 수 있습니다.</p>
       </div>

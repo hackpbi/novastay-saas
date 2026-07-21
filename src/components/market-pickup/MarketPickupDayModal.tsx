@@ -328,8 +328,8 @@ export default function MarketPickupDayModal({
 
   // 통합 세그 테이블 렌더 — SEGMENT 1컬럼 + OTB(R/N·ADR·REV) + Pick-up(R/N·ADR·REV)
   const DIV = '#1e1e1e'   // OTB / Pick-up 세로 구분선
-  const stickyTop0 = { position: 'sticky', top: 0, background: '#0a0a0a', zIndex: 2 } as React.CSSProperties
-  const stickyTop24 = { position: 'sticky', top: 24, background: '#0a0a0a', zIndex: 2 } as React.CSSProperties
+  const stickyTop0 = { position: 'sticky', top: 0, background: '#000000', zIndex: 2 } as React.CSSProperties
+  const stickyTop24 = { position: 'sticky', top: 24, background: '#000000', zIndex: 2 } as React.CSSProperties
   const renderUnifiedTable = () => (
     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
       <thead>
@@ -385,7 +385,7 @@ export default function MarketPickupDayModal({
       </tbody>
       <tfoot>
         {/* Total 행 */}
-        <tr style={{ position: 'sticky', bottom: 0, background: '#0a0a0a' }}>
+        <tr style={{ position: 'sticky', bottom: 0, background: '#000000' }}>
           <td style={{ padding: '7px 12px', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}>Total</td>
           <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)', borderLeft: `1px solid ${DIV}` }}>{fmtOtbRn(summary.totalNights)}</td>
           <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtOtbAdr(summary.totalAdr)} numSize={11} /></td>
@@ -484,7 +484,7 @@ export default function MarketPickupDayModal({
         })}
       </tbody>
       <tfoot>
-        <tr style={{ position: 'sticky', bottom: 0, background: '#0a0a0a' }}>
+        <tr style={{ position: 'sticky', bottom: 0, background: '#000000' }}>
           <td style={{ padding: '7px 12px', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}>Total</td>
           <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)', borderLeft: `1px solid ${DIV}` }}>{fmtOtbRn(lyTotal.otbN)}</td>
           <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtOtbAdr(lyTotOtbAdr)} numSize={11} /></td>
@@ -516,7 +516,7 @@ export default function MarketPickupDayModal({
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose} />
       <div style={{
-        position: 'relative', background: '#0a0a0a',
+        position: 'relative', background: '#000000',
         border: '1px solid var(--color-border-default)',
         borderRadius: 16, display: 'flex', flexDirection: 'column',
         width: activeTab === 'ly' ? 'min(96vw, 1400px)' : 'min(96vw, 1040px)', maxHeight: '82vh',
@@ -638,7 +638,7 @@ export default function MarketPickupDayModal({
                       ) : (
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                           <thead>
-                            <tr style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)', position: 'sticky', top: 0, background: '#0a0a0a', zIndex: 1 }}>
+                            <tr style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)', position: 'sticky', top: 0, background: '#000000', zIndex: 1 }}>
                               <th style={{ textAlign: 'left', padding: '7px 12px', fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>ACCOUNT</th>
                               {heads.map(h => <th key={h} style={accHeadTh}>{h}</th>)}
                             </tr>
@@ -657,7 +657,7 @@ export default function MarketPickupDayModal({
                             ))}
                           </tbody>
                           <tfoot>
-                            <tr style={{ position: 'sticky', bottom: 0, background: '#0a0a0a' }}>
+                            <tr style={{ position: 'sticky', bottom: 0, background: '#000000' }}>
                               <td style={{ padding: '7px 12px', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.4)' }}>Total</td>
                               <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: valColor(tN), borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtN(tN)}</td>
                               <td style={{ padding: '7px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.25)', borderTop: '1px solid rgba(0,229,160,0.4)' }}>—</td>
@@ -684,7 +684,7 @@ export default function MarketPickupDayModal({
                   ) : (
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                       <thead>
-                        <tr style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)', position: 'sticky', top: 0, background: '#0a0a0a', zIndex: 1 }}>
+                        <tr style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)', position: 'sticky', top: 0, background: '#000000', zIndex: 1 }}>
                           <th style={{ textAlign: 'left', padding: '7px 12px', fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>ACCOUNT</th>
                           <th style={accHeadTh}>{selType === 'pickup' ? 'R/N' : 'OTB R/N'}</th>
                           <th style={accHeadTh}>ADR</th>
@@ -711,7 +711,7 @@ export default function MarketPickupDayModal({
                         ))}
                       </tbody>
                       <tfoot>
-                        <tr style={{ position: 'sticky', bottom: 0, background: '#0a0a0a' }}>
+                        <tr style={{ position: 'sticky', bottom: 0, background: '#000000' }}>
                           <td style={{ padding: '7px 12px', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.4)' }}>Total</td>
                           {selType === 'pickup' ? (<>
                             <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: puColor(accTotal.puNights), borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtPuRn(accTotal.puNights)}</td>

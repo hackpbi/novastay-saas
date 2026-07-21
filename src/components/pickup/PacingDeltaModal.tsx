@@ -45,8 +45,8 @@ const segBgColor   = (r: SegTableRow) =>
   r.bgDarkColor ?? (r.level === 'main' ? '#1A1F2E' : r.level === 'mid' ? '#15192A' : 'transparent')
 
 const DIV = '#1e1e1e'
-const stickyTop0  = { position: 'sticky', top: 0,  background: '#0a0a0a', zIndex: 2 } as React.CSSProperties
-const stickyTop24 = { position: 'sticky', top: 24, background: '#0a0a0a', zIndex: 2 } as React.CSSProperties
+const stickyTop0  = { position: 'sticky', top: 0,  background: '#000000', zIndex: 2 } as React.CSSProperties
+const stickyTop24 = { position: 'sticky', top: 24, background: '#000000', zIndex: 2 } as React.CSSProperties
 const segHeadTh: React.CSSProperties = { textAlign: 'right', padding: '7px 12px', fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.35)' }
 const accHeadTh: React.CSSProperties = { textAlign: 'right', padding: '7px 12px', fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }
 
@@ -261,7 +261,7 @@ export default function PacingDeltaModal({ open, onClose, hotelId, stayDate, sna
         })}
       </tbody>
       <tfoot>
-        <tr style={{ position: 'sticky', bottom: 0, background: '#0a0a0a' }}>
+        <tr style={{ position: 'sticky', bottom: 0, background: '#000000' }}>
           <td style={{ padding: '7px 12px', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}>Total</td>
           <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: prevGray, borderTop: '1px solid rgba(0,229,160,0.5)', borderLeft: `1px solid ${DIV}` }}>{fmtOtbRn(total.prevN)}</td>
           <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: prevGray, borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtOtbAdr(totPrevAdr)} numSize={numSizeS} /></td>
@@ -304,7 +304,7 @@ export default function PacingDeltaModal({ open, onClose, hotelId, stayDate, sna
 
   return createPortal(
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 100010, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 1400, maxWidth: '95vw', height: 'auto', maxHeight: '90vh', background: '#0a0a0a', borderRadius: 12, border: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 1400, maxWidth: '95vw', height: 'auto', maxHeight: '90vh', background: '#000000', borderRadius: 12, border: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* 헤더 */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -382,7 +382,7 @@ export default function PacingDeltaModal({ open, onClose, hotelId, stayDate, sna
                   ) : (
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 * fontScale }}>
                       <thead>
-                        <tr style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)', position: 'sticky', top: 0, background: '#0a0a0a', zIndex: 1 }}>
+                        <tr style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)', position: 'sticky', top: 0, background: '#000000', zIndex: 1 }}>
                           <th style={{ textAlign: 'left', padding: '7px 12px', fontSize: 10 * fontScale, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>ACCOUNT</th>
                           {accHeads.map(h => <th key={h} style={accHeadThS}>{h}</th>)}
                         </tr>

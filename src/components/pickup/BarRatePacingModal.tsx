@@ -251,7 +251,7 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
             // 이 차트에도 적용되어 BAR Rate 레이블이 새어나오는 문제 → 이 차트에선 비활성
             ...({ customDatalabels: false } as any),
             tooltip: {
-              backgroundColor: '#0a0a0a',
+              backgroundColor: '#000000',
               borderColor: 'rgba(255,255,255,0.1)',
               borderWidth: 1,
               padding: 10,
@@ -303,7 +303,7 @@ export default function BarRatePacingModal({ open, onClose, hotelId, stayDate, r
     <>
     <div style={{ position: 'fixed', inset: 0, zIndex: 100002, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }} onClick={onClose} />
-      <div style={{ position: 'relative', background: '#0a0a0a', border: '1px solid #1e1e1e', borderRadius: 16, boxShadow: '0 8px 40px rgba(0,0,0,0.6)', width: '72vw', maxWidth: 1100, height: '64vh', maxHeight: '64vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ position: 'relative', background: '#000000', border: '1px solid #1e1e1e', borderRadius: 16, boxShadow: '0 8px 40px rgba(0,0,0,0.6)', width: '72vw', maxWidth: 1100, height: '64vh', maxHeight: '64vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* 헤더 */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px 10px', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <div>

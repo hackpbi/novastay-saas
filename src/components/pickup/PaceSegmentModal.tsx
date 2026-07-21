@@ -111,7 +111,7 @@ function SegCompareTable({
         })}
       </tbody>
       <tfoot>
-        <tr style={{ position: 'sticky', bottom: 0, background: '#0a0a0a' }}>
+        <tr style={{ position: 'sticky', bottom: 0, background: '#000000' }}>
           <td style={{ padding: '7px 12px', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}>Total</td>
           <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)', borderLeft: `1px solid ${DIV}` }}>{otbFmt.rn(total.otbN)}</td>
           <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={otbFmt.adr(total.otbAdr)} numSize={11} /></td>
@@ -177,7 +177,7 @@ function AccountPanel({
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead>
-              <tr style={{ borderBottom: `0.5px solid ${DIV}`, position: 'sticky', top: 0, background: '#0a0a0a', zIndex: 1 }}>
+              <tr style={{ borderBottom: `0.5px solid ${DIV}`, position: 'sticky', top: 0, background: '#000000', zIndex: 1 }}>
                 <th style={{ textAlign: 'left', padding: '7px 12px', fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>ACCOUNT</th>
                 {heads.map(h => <th key={h} style={accHeadTh}>{h}</th>)}
               </tr>
@@ -195,7 +195,7 @@ function AccountPanel({
               ))}
             </tbody>
             <tfoot>
-              <tr style={{ position: 'sticky', bottom: 0, background: '#0a0a0a' }}>
+              <tr style={{ position: 'sticky', bottom: 0, background: '#000000' }}>
                 <td style={{ padding: '7px 12px', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.4)' }}>Total</td>
                 <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: valColor(tN), borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtN(tN)}</td>
                 <td style={{ padding: '7px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.25)', borderTop: '1px solid rgba(0,229,160,0.4)' }}>—</td>

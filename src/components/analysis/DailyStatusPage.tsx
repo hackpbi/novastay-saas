@@ -211,7 +211,7 @@ export default function DailyStatusPage() {
   )
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 104px)', background: '#0a0a0a', color: '#ccc', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 104px)', background: '#000000', color: '#ccc', overflow: 'hidden' }}>
       {/* ── 헤더 ── */}
       <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px', borderBottom: '0.5px solid #1e1e1e' }}>
         <span style={{ fontSize: 17, fontWeight: 500, color: '#fff' }}>Daily Status</span>

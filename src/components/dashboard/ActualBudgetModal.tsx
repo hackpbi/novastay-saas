@@ -309,7 +309,7 @@ export default function ActualBudgetModal({ open, onClose, hotelId, roomCount }:
       onClick={onClose}
     >
       <div
-        style={{ background: '#0a0a0a', border: '1px solid #1f1f1f', borderRadius: 14, width: '92vw', maxWidth: 1040, maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+        style={{ background: '#000000', border: '1px solid #1f1f1f', borderRadius: 14, width: '92vw', maxWidth: 1040, maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         onClick={e => e.stopPropagation()}
       >
         {/* 헤더 */}

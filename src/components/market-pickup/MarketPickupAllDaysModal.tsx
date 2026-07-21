@@ -163,7 +163,7 @@ export default function MarketPickupAllDaysModal({
       <div className="absolute inset-0 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose} />
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col"
-        style={{ background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)', width: '80.75vw', height: '76.5vh', maxWidth: '80.75vw', maxHeight: '76.5vh' }}
+        style={{ background: '#000000', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)', width: '80.75vw', height: '76.5vh', maxWidth: '80.75vw', maxHeight: '76.5vh' }}
       >
         {/* 헤더 — 제목 + 지표 토글 + 닫기 */}
         <div className="flex items-center justify-between px-5 py-3.5 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
@@ -242,15 +242,15 @@ export default function MarketPickupAllDaysModal({
             <table style={{ borderCollapse: 'collapse', fontSize: 10, tableLayout: 'auto' }}>
               <thead>
                 {/* 1행: 합계(날짜 오른쪽) + 세그먼트명 (colspan 병합) */}
-                <tr style={{ position: 'sticky', top: 0, zIndex: 3, background: '#0a0a0a' }}>
-                  <th rowSpan={2} style={{ height: 24, boxSizing: 'border-box', textAlign: 'left', color: 'var(--color-text-secondary)', fontWeight: 500, padding: '4px 6px', borderBottom: '0.5px solid #333', whiteSpace: 'nowrap', position: 'sticky', left: 0, zIndex: 4, background: '#0a0a0a' }}>날짜</th>
+                <tr style={{ position: 'sticky', top: 0, zIndex: 3, background: '#000000' }}>
+                  <th rowSpan={2} style={{ height: 24, boxSizing: 'border-box', textAlign: 'left', color: 'var(--color-text-secondary)', fontWeight: 500, padding: '4px 6px', borderBottom: '0.5px solid #333', whiteSpace: 'nowrap', position: 'sticky', left: 0, zIndex: 4, background: '#000000' }}>날짜</th>
                   <th colSpan={4} style={{ height: 24, boxSizing: 'border-box', textAlign: 'center', color: '#00E5A0', fontWeight: 600, padding: '4px 6px', borderBottom: '0.5px solid #333', borderLeft: '0.5px solid #333', borderRight: '1px solid rgba(0,229,160,0.25)' }}>합계</th>
                   {activeSegs.map(s => (
                     <th key={s.id} colSpan={METS.length} style={{ height: 24, boxSizing: 'border-box', textAlign: 'center', background: s.color || '#1a1a1a', color: s.fontDarkColor || '#fff', fontWeight: s.isBold ? 600 : 500, padding: '4px 6px', borderBottom: '0.5px solid #333', borderLeft: '0.5px solid #333', whiteSpace: 'nowrap' }}>{s.name}</th>
                   ))}
                 </tr>
                 {/* 2행: 합계 OCC/R/N/ADR/REV + 세그먼트 R/N·ADR·REV */}
-                <tr style={{ position: 'sticky', top: 24, zIndex: 3, background: '#0a0a0a' }}>
+                <tr style={{ position: 'sticky', top: 24, zIndex: 3, background: '#000000' }}>
                   {(['OCC', 'R/N', 'ADR', 'REV'] as const).map((c, ci) => (
                     <th key={`th-${c}`} style={{ textAlign: 'right', color: '#666', fontWeight: 400, padding: '3px 6px', borderBottom: '0.5px solid #333', ...(ci === 0 ? { borderLeft: '0.5px solid #333' } : {}), ...(ci === 3 ? { borderRight: '1px solid rgba(0,229,160,0.25)' } : {}) }}>{c}</th>
                   ))}
@@ -268,7 +268,7 @@ export default function MarketPickupAllDaysModal({
                   const occ = occValue(totalAgg, roomCount, viewMode)
                   return (
                     <tr key={i} style={{ borderTop: '0.5px solid #1f1f1f' }}>
-                      <td style={{ padding: '3px 6px', whiteSpace: 'nowrap', position: 'sticky', left: 0, zIndex: 1, background: '#0a0a0a' }}>
+                      <td style={{ padding: '3px 6px', whiteSpace: 'nowrap', position: 'sticky', left: 0, zIndex: 1, background: '#000000' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ color: getDayColor(dateStr) }}>{month1}/{i + 1} {WEEKDAY_KR[dow]}</span>
                           {badge && <EventDot text={badge} />}
@@ -293,8 +293,8 @@ export default function MarketPickupAllDaysModal({
                 })}
               </tbody>
               <tfoot>
-                <tr style={{ position: 'sticky', bottom: 0, background: '#0a0a0a' }}>
-                  <td style={{ padding: '4px 6px', fontWeight: 600, color: 'var(--color-text-primary)', borderTop: '0.5px solid #333', position: 'sticky', left: 0, zIndex: 1, background: '#0a0a0a' }}>합 계</td>
+                <tr style={{ position: 'sticky', bottom: 0, background: '#000000' }}>
+                  <td style={{ padding: '4px 6px', fontWeight: 600, color: 'var(--color-text-primary)', borderTop: '0.5px solid #333', position: 'sticky', left: 0, zIndex: 1, background: '#000000' }}>합 계</td>
                   {(() => {
                     const grand = sumAggs(activeSegs.flatMap(s => Array.from({ length: days }, (_, i) => segDayAgg(s, i))))
                     const occ = occValue(grand, roomCount * days, viewMode)

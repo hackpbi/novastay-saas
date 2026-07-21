@@ -171,7 +171,7 @@ export function PickupMonthSummaryModal({
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose} />
       <div style={{
-        position: 'relative', background: '#0a0a0a',
+        position: 'relative', background: '#000000',
         border: '1px solid var(--color-border-default)',
         borderRadius: 16, display: 'flex', flexDirection: 'column',
         width: 'min(92vw, 860px)', maxHeight: '82vh',
@@ -247,7 +247,7 @@ export function PickupMonthSummaryModal({
           <div style={{ width: 380, flexShrink: 0, borderRight: '0.5px solid rgba(255,255,255,0.08)', overflowY: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
               <thead>
-                <tr style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)', position: 'sticky', top: 0, background: '#0a0a0a', zIndex: 1 }}>
+                <tr style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)', position: 'sticky', top: 0, background: '#000000', zIndex: 1 }}>
                   <th style={{ textAlign: 'left', padding: '7px 12px', fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.04em' }}>SEGMENT</th>
                   <th style={segHeadTh}>{tab === 'pickup' ? 'R/N' : 'OTB R/N'}</th>
                   <th style={segHeadTh}>ADR</th>
@@ -294,7 +294,7 @@ export function PickupMonthSummaryModal({
               </tbody>
               {/* 합계 행 */}
               <tfoot>
-                <tr style={{ position: 'sticky', bottom: 0, background: '#0a0a0a' }}>
+                <tr style={{ position: 'sticky', bottom: 0, background: '#000000' }}>
                   <td style={{ padding: '7px 12px', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}>Total</td>
                   {tab === 'pickup' ? (<>
                     <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: puColor(summary.puNights), borderTop: '1px solid rgba(0,229,160,0.5)' }}>{fmtPuRn(summary.puNights)}</td>
@@ -349,7 +349,7 @@ export function PickupMonthSummaryModal({
                   ) : (
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                       <thead>
-                        <tr style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)', position: 'sticky', top: 0, background: '#0a0a0a', zIndex: 1 }}>
+                        <tr style={{ borderBottom: '0.5px solid rgba(255,255,255,0.08)', position: 'sticky', top: 0, background: '#000000', zIndex: 1 }}>
                           <th style={{ textAlign: 'left', padding: '7px 12px', fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>ACCOUNT</th>
                           <th style={accHeadTh}>{tab === 'pickup' ? 'R/N' : 'OTB R/N'}</th>
                           <th style={accHeadTh}>ADR</th>
@@ -376,7 +376,7 @@ export function PickupMonthSummaryModal({
                         ))}
                       </tbody>
                       <tfoot>
-                        <tr style={{ position: 'sticky', bottom: 0, background: '#0a0a0a' }}>
+                        <tr style={{ position: 'sticky', bottom: 0, background: '#000000' }}>
                           <td style={{ padding: '7px 12px', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.4)' }}>Total</td>
                           {tab === 'pickup' ? (<>
                             <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: puColor(accTotal.puNights), borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtPuRn(accTotal.puNights)}</td>

@@ -271,7 +271,7 @@ export function PickupTrendModal({ open, onClose, year, month, hotelId, pickupRo
       onClick={onClose}
     >
       <div
-        style={{ background: '#0a0a0a', border: '1px solid #1f1f1f', borderRadius: 12, padding: 20, width: '85vw', height: '70vh', display: 'flex', flexDirection: 'column' }}
+        style={{ background: '#000000', border: '1px solid #1f1f1f', borderRadius: 12, padding: 20, width: '85vw', height: '70vh', display: 'flex', flexDirection: 'column' }}
         onClick={e => e.stopPropagation()}
       >
         {/* 헤더 — 타이틀 + 월 네비 + 닫기 */}

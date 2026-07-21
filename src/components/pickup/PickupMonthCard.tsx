@@ -265,7 +265,7 @@ function EventBadge({ group, dayAgg, totalRooms }: { group: EventGroup; dayAgg: 
       {hovered && (
         <div style={{
           position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 500, minWidth: 280,
-          background: '#0a0a0a', border: '0.5px solid #333',
+          background: '#000000', border: '0.5px solid #333',
           borderRadius: 8, padding: '10px 12px', boxShadow: '0 6px 20px rgba(0,0,0,0.6)', pointerEvents: 'none',
         }}>
           <div style={{ fontSize: 11, fontWeight: 500, color: '#e5e5e5', marginBottom: 8, paddingBottom: 7, borderBottom: '0.5px solid #333' }}>

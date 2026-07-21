@@ -68,7 +68,7 @@ export default function MarketPickupSegDetailModal({
       <div className="absolute inset-0 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose} />
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-2xl"
-        style={{ background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)', maxHeight: '86vh' }}
+        style={{ background: '#000000', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)', maxHeight: '86vh' }}
       >
         <div className="flex items-center justify-between px-5 py-3.5 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
           <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>

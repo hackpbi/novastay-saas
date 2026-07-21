@@ -303,7 +303,7 @@ export default function MtdStatusPage() {
   const selectedStat = selectedMonth ? monthData.find(m => m.month === selectedMonth.month) ?? null : null
 
   return (
-    <div style={{ minHeight: '100%', background: '#0a0a0a', color: '#fff' }}>
+    <div style={{ minHeight: '100%', background: '#000000', color: '#fff' }}>
       <div style={{ fontSize: 22, fontWeight: 500, marginBottom: 20 }}>MTD Status</div>
 
       {/* YTD 상단 카드 2개 */}

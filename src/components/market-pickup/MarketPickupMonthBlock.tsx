@@ -341,7 +341,7 @@ export default function MarketPickupMonthBlock({
             if (!tip) {
               tip = document.createElement('div')
               tip.id = tooltipId
-              tip.style.cssText = 'position:fixed;background:#0a0a0a;border:0.5px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 14px;pointer-events:none;font-size:12px;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,0.5);z-index:99999;opacity:0;transition:opacity 0.1s;'
+              tip.style.cssText = 'position:fixed;background:#000000;border:0.5px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 14px;pointer-events:none;font-size:12px;min-width:180px;box-shadow:0 4px 16px rgba(0,0,0,0.5);z-index:99999;opacity:0;transition:opacity 0.1s;'
               document.body.appendChild(tip)
             }
             if (!elements.length) { tip.style.opacity = '0'; return }
@@ -468,7 +468,7 @@ export default function MarketPickupMonthBlock({
           {panelOpen && (
             <div style={{
               position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 200,
-              background: '#0a0a0a', border: '0.5px solid #333', borderRadius: 10, padding: 10,
+              background: '#000000', border: '0.5px solid #333', borderRadius: 10, padding: 10,
               minWidth: 240, maxHeight: 340, overflowY: 'auto', boxShadow: '0 6px 20px rgba(0,0,0,0.5)',
             }}>
               {groups.map(g => (

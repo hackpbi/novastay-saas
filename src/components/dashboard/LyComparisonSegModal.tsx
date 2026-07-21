@@ -17,7 +17,7 @@ import type { LyComparisonMonthly } from '@/utils/lyComparisonSegTable'
 const thBase: React.CSSProperties = {
   fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
   letterSpacing: '0.07em', color: 'var(--color-text-secondary)',
-  padding: '6px 10px', background: '#0a0a0a', whiteSpace: 'nowrap',
+  padding: '6px 10px', background: '#000000', whiteSpace: 'nowrap',
 }
 const tdBase: React.CSSProperties = {
   padding: '6px 10px', verticalAlign: 'middle', borderBottom: '0.5px solid rgba(255,255,255,0.06)',
@@ -296,7 +296,7 @@ export default function LyComparisonSegModal({
 
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-[1400px]"
-        style={{ maxHeight: '88vh', overflow: 'hidden', background: '#0a0a0a', border: '0.5px solid rgba(0,229,160,0.2)', borderLeft: '1.5px solid #00E5A0', borderRadius: 10, boxShadow: 'var(--shadow-card)' }}
+        style={{ maxHeight: '88vh', overflow: 'hidden', background: '#000000', border: '0.5px solid rgba(0,229,160,0.2)', borderLeft: '1.5px solid #00E5A0', borderRadius: 10, boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-2 pb-1 shrink-0" style={{ borderBottom: BORDER }}>

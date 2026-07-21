@@ -183,7 +183,8 @@
       "Bash(grep -oE \"#[0-9a-fA-F]{3,6}|rgba\\\\\\([^\\)]*\\\\\\)|'white'\" \"src/app/\\(app\\)/reports/daily/page.tsx\")",
       "Bash(cd \"c:/dev/18_NovaStay_Saas_ver1\" && grep -nE \"00E5A0|0,229,160\" \"src/app/\\(app\\)/../../views/DashboardPage.tsx\" 2>/dev/null || grep -nE \"00E5A0|0,229,160\" \"src/views/DashboardPage.tsx\")",
       "Read(//c/dev/18_NovaStay_Saas_ver1/src/views/**)",
-      "Bash(echo \"EXIT $?\")"
+      "Bash(echo \"EXIT $?\")",
+      "Bash(grep -vE \"^[-+]\\\\s*$\")"
     ],
     "additionalDirectories": [
       "C:\\dev\\18_NovaStay_Saas_ver1\\.next-verify"

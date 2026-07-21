@@ -20,7 +20,7 @@ const PAGE_SIZE = 3
 const thBase: React.CSSProperties = {
   fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
   letterSpacing: '0.07em', color: 'var(--color-text-secondary)',
-  padding: '6px 10px', background: '#0a0a0a', whiteSpace: 'nowrap',
+  padding: '6px 10px', background: '#000000', whiteSpace: 'nowrap',
 }
 const tdBase: React.CSSProperties = {
   padding: '6px 10px', verticalAlign: 'middle',
@@ -285,7 +285,7 @@ export default function MonthlyPickupAccountModal({
 
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-6xl"
-        style={{ maxHeight: '88vh', background: '#0a0a0a', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
+        style={{ maxHeight: '88vh', background: '#000000', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
         <div className="px-6 pt-1 pb-1 shrink-0" style={{ borderBottom: BORDER }}>

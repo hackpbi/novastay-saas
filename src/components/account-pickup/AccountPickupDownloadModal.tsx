@@ -214,7 +214,7 @@ export default function AccountPickupDownloadModal({ data, segmentOptions, curre
   const actionRow: React.CSSProperties = { display: 'flex', justifyContent: 'flex-end', gap: 6, padding: '8px 6px 4px', borderTop: '0.5px solid rgba(255,255,255,0.06)' }
   const actBtn: React.CSSProperties = { padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer', border: '0.5px solid rgba(255,255,255,0.1)', background: 'transparent', color: 'rgba(255,255,255,0.5)' }
   const doneBtn: React.CSSProperties = { padding: '4px 14px', borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: 'pointer', border: 'none', background: '#00E5A0', color: '#0a0a0a' }
-  const collapsedBar: React.CSSProperties = { marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 12px', borderRadius: 6, border: '0.5px solid rgba(255,255,255,0.1)', background: '#0a0a0a', cursor: 'pointer', fontSize: 11, color: '#fff' }
+  const collapsedBar: React.CSSProperties = { marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 12px', borderRadius: 6, border: '0.5px solid rgba(255,255,255,0.1)', background: '#000000', cursor: 'pointer', fontSize: 11, color: '#fff' }
 
   const checkRow = (label: string, checked: boolean, onChange: () => void) => (
     <label key={label}
@@ -231,7 +231,7 @@ export default function AccountPickupDownloadModal({ data, segmentOptions, curre
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div style={{ background: '#0a0a0a', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 12, width: 420, maxWidth: '92vw', overflow: 'hidden' }}>
+      <div style={{ background: '#000000', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 12, width: 420, maxWidth: '92vw', overflow: 'hidden' }}>
         {/* 헤더 */}
         <div style={{ padding: '14px 18px', borderBottom: '0.5px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 500, color: '#fff' }}>
@@ -252,7 +252,7 @@ export default function AccountPickupDownloadModal({ data, segmentOptions, curre
               <select
                 value={pickerYear}
                 onChange={e => { setPickerYear(Number(e.target.value)); setPickerMonths([]) }}
-                style={{ width: 100, padding: '6px 10px', borderRadius: 6, border: '0.5px solid rgba(255,255,255,0.1)', background: '#0a0a0a', color: '#fff', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}
+                style={{ width: 100, padding: '6px 10px', borderRadius: 6, border: '0.5px solid rgba(255,255,255,0.1)', background: '#000000', color: '#fff', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}
               >
                 {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
@@ -263,7 +263,7 @@ export default function AccountPickupDownloadModal({ data, segmentOptions, curre
                   style={{
                     width: '100%', padding: '6px 10px', borderRadius: 6, textAlign: 'left',
                     border: `0.5px solid ${monthDropOpen ? '#00E5A0' : 'rgba(255,255,255,0.1)'}`,
-                    background: '#0a0a0a',
+                    background: '#000000',
                     color: pickerMonths.length > 0 ? '#00E5A0' : 'rgba(255,255,255,0.4)',
                     fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   }}
@@ -279,7 +279,7 @@ export default function AccountPickupDownloadModal({ data, segmentOptions, curre
                 {monthDropOpen && (
                   <div style={{
                     position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 20,
-                    background: '#0a0a0a', border: '0.5px solid rgba(255,255,255,0.1)',
+                    background: '#000000', border: '0.5px solid rgba(255,255,255,0.1)',
                     borderRadius: 8, overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderBottom: '0.5px solid rgba(255,255,255,0.1)', background: '#141414' }}>
@@ -367,7 +367,7 @@ export default function AccountPickupDownloadModal({ data, segmentOptions, curre
             </div>
             {openDropdown !== null && (
               <div style={{ marginTop: 8, width: 'max-content', minWidth: 200, maxWidth: 360, whiteSpace: 'nowrap', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 8, overflow: 'hidden' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderBottom: '0.5px solid rgba(255,255,255,0.1)', background: '#0a0a0a' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderBottom: '0.5px solid rgba(255,255,255,0.1)', background: '#000000' }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <button onClick={() => resetGroup(openDropdown)} style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Reset</button>
                     <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 10 }}>|</span>

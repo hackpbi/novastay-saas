@@ -20,7 +20,7 @@ interface AccountComparisonModalProps {
 }
 
 // ── 디자인 토큰 (SegmentDetailModal과 동일) ──────────────────────────────────────
-const BG       = '#0a0a0a'
+const BG       = '#000000'
 const CARD     = '#141414'
 const MINT     = '#00E5A0'
 const RED      = '#E24B4A'

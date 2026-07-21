@@ -433,7 +433,7 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
                 if (!el) {
                   el = document.createElement('div')
                   el.id = 'barrate-chart-tooltip'
-                  el.style.cssText = 'position:fixed;background:#0a0a0a;border:0.5px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 14px;pointer-events:none;font-size:12px;min-width:170px;box-shadow:0 4px 16px rgba(0,0,0,0.5);z-index:100001;opacity:0;transition:opacity 0.1s;'
+                  el.style.cssText = 'position:fixed;background:#000000;border:0.5px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 14px;pointer-events:none;font-size:12px;min-width:170px;box-shadow:0 4px 16px rgba(0,0,0,0.5);z-index:100001;opacity:0;transition:opacity 0.1s;'
                   document.body.appendChild(el)
                 }
                 if (tooltip.opacity === 0) { el.style.opacity = '0'; return }
@@ -530,7 +530,7 @@ export default function BarRateModal({ open, onClose, hotelId, year, month, room
   const body = (
     <>
       {!embed && <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={onClose} />}
-      <div style={{ position: 'relative', background: 'linear-gradient(175deg, #0d1f1a 0%, #0a0a0a 40%)', border: '1px solid #1e1e1e', borderRadius: 16, boxShadow: '0 8px 40px rgba(0,0,0,0.6)', width: embed ? '100%' : '85vw', maxWidth: embed ? '100%' : '85vw', height: embed ? '100%' : '81vh', maxHeight: embed ? '100%' : '81vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ position: 'relative', background: 'linear-gradient(175deg, #0d1f1a 0%, #000000 40%)', border: '1px solid #1e1e1e', borderRadius: 16, boxShadow: '0 8px 40px rgba(0,0,0,0.6)', width: embed ? '100%' : '85vw', maxWidth: embed ? '100%' : '85vw', height: embed ? '100%' : '81vh', maxHeight: embed ? '100%' : '81vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* 헤더 — 월 네비는 embed(Rate Strategy)일 땐 상단 페이지 타이틀로 제어 → 오버레이(Meeting)에서만 표시 */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px 4px', flexShrink: 0 }}>
           {!embed ? (

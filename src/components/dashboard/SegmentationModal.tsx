@@ -85,7 +85,7 @@ function Skeleton() {
 const thBase: React.CSSProperties = {
   fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
   letterSpacing: '0.07em', color: 'var(--color-text-secondary)',
-  padding: '6px 10px', background: '#0a0a0a', whiteSpace: 'nowrap',
+  padding: '6px 10px', background: '#000000', whiteSpace: 'nowrap',
 }
 
 const GRID = '0.5px solid rgba(255,255,255,0.06)'
@@ -489,7 +489,7 @@ export default function SegmentationModal({
 
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col w-[92vw] max-w-[1200px]"
-        style={{ maxHeight: '88vh', background: '#0a0a0a', border: '0.5px solid rgba(0,229,160,0.2)', borderLeft: '1.5px solid #00E5A0', borderRadius: 10, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}
+        style={{ maxHeight: '88vh', background: '#000000', border: '0.5px solid rgba(0,229,160,0.2)', borderLeft: '1.5px solid #00E5A0', borderRadius: 10, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}
       >
         {/* Header */}
         <div className="px-6 pt-1 pb-1 shrink-0 flex items-center gap-3" style={{ borderBottom: '1px solid var(--divider-color)' }}>

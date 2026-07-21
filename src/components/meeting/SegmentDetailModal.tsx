@@ -32,7 +32,7 @@ interface SegmentDetailModalProps {
 }
 
 // ── 디자인 토큰 ──────────────────────────────────────────────────────────────────
-const BG       = '#0a0a0a'
+const BG       = '#000000'
 const CARD     = '#141414'
 const BOLD_BG  = '#0f1d18'
 const MINT     = '#00E5A0'
@@ -503,7 +503,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
   )
 
   return createPortal(
-    <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: '#0a0a0a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: '#000000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: '96%', maxWidth: 1850, height: '100vh', background: BG, borderRadius: 10, border: '1px solid #1e1e1e', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* 헤더 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 16px', borderBottom: BORDER_SUBTLE, flexShrink: 0 }}>
@@ -974,7 +974,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
                 value={inlineContent}
                 onChange={e => setInlineContent(e.target.value)}
                 placeholder="지시사항 내용..."
-                style={{ fontSize: 11, lineHeight: 1.5, padding: '6px 8px', borderRadius: 6, background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.08)', color: '#eee', outline: 'none', resize: 'none', fontFamily: 'inherit', minHeight: 44 }}
+                style={{ fontSize: 11, lineHeight: 1.5, padding: '6px 8px', borderRadius: 6, background: '#000000', border: '1px solid rgba(255,255,255,0.08)', color: '#eee', outline: 'none', resize: 'none', fontFamily: 'inherit', minHeight: 44 }}
               />
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ fontSize: 10, color: TXT3 }}>
@@ -984,7 +984,7 @@ export default function SegmentDetailModal({ open, onClose, hotelId, monthKey, p
                   value={inlineAssignee}
                   onChange={e => setInlineAssignee(e.target.value)}
                   placeholder="담당자"
-                  style={{ flex: 1, fontSize: 11, padding: '5px 8px', borderRadius: 6, background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.08)', color: '#fff', outline: 'none', fontFamily: 'inherit', minWidth: 0 }}
+                  style={{ flex: 1, fontSize: 11, padding: '5px 8px', borderRadius: 6, background: '#000000', border: '1px solid rgba(255,255,255,0.08)', color: '#fff', outline: 'none', fontFamily: 'inherit', minWidth: 0 }}
                 />
                 <button
                   onClick={async () => { await addDirective(inlineContent, inlineDate, inlineAssignee); setInlineContent(''); setInlineAssignee('') }}

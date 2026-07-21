@@ -35,7 +35,7 @@ export default function DemandCellTooltip({ data, otbDate, anchor }: {
   return (
     <div style={{
       position: 'fixed', left, top, width: TOOLTIP_W, zIndex: 1000, pointerEvents: 'none',
-      background: '#0a0a0a', border: '0.5px solid #333', borderRadius: 8, padding: '10px 12px',
+      background: '#000000', border: '0.5px solid #333', borderRadius: 8, padding: '10px 12px',
       boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
     }}>
       <div style={{ fontSize: 11, fontWeight: 600, color: '#e5e5e5', paddingBottom: 6, borderBottom: '0.5px solid #333' }}>
