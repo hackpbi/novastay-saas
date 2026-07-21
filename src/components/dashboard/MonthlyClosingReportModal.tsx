@@ -753,7 +753,6 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
           <div>
             <span style={{ fontSize: 14, fontWeight: 600, color: '#0b0b0b' }}>Start → End</span>
-            <span style={{ fontSize: 11, color: C.textMuted, marginLeft: 6 }}>({reportMonth}월 초온북 vs 실적)</span>
           </div>
           <span style={{ fontSize: 9, color: C.textMuted }}>기준일 {startOtbDateResolved ?? '-'}</span>
         </div>
