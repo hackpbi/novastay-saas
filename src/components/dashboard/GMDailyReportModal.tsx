@@ -175,6 +175,13 @@ const getYesterday = (dateStr: string): string => {
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
 }
 
+// 'YYYY-MM-DD' → 정확히 1년 전 같은 날짜 (전년동일자용, yoy_match 미사용)
+const oneYearBefore = (dateStr: string): string => {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const dt = new Date(y - 1, m - 1, d)
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+}
+
 // otbDates 목록 중 기준일 바로 이전(update_date) 날짜
 function getPrevOtbDate(otbDates: string[], currentOtbDate: string): string {
   const sorted = [...otbDates].sort()   // 오름차순
@@ -469,6 +476,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
   const [showUnitSetting, setShowUnitSetting] = useState(false)
   const [adrUnit, setAdrUnit] = useState<'원' | '천원'>('천원')
   const [revUnit, setRevUnit] = useState<'원' | '천원' | '백만원'>('백만원')
+  const [lyMode, setLyMode] = useState<'match' | 'date'>('match')   // 전년대비 기준: match=전년동기간(yoy_match) / date=전년동일자(-1년)
   // 단위 설정 패널 외부 클릭 시 닫기
   useEffect(() => {
     if (!showUnitSetting) return
@@ -602,7 +610,9 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
     enabled: open && !!yesterday,
     staleTime: 60 * 60 * 1000,
   })
-  const lyDate: string | null = calendarData?.yoy_match ?? null
+  const lyDate: string | null = lyMode === 'date'
+    ? (yesterday ? oneYearBefore(yesterday) : null)
+    : (calendarData?.yoy_match ?? null)
 
   // LY 실적 (a01_actual_daily, yoy_match 날짜)
   const { data: lyData = [] } = useQuery({
@@ -724,7 +734,9 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
     enabled: open && !!localOtbDate,
     staleTime: 60 * 60 * 1000,
   })
-  const todayYoyMatch: string | null = todayCalendar?.yoy_match ?? null
+  const todayYoyMatch: string | null = lyMode === 'date'
+    ? (localOtbDate ? oneYearBefore(localOtbDate) : null)
+    : (todayCalendar?.yoy_match ?? null)
 
   // 당일 LY (a01_actual_daily, business_date=yoy_match)
   const { data: todayLyData } = useQuery({
@@ -812,7 +824,16 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
     enabled: open && chartDays.length > 0,
     staleTime: 60 * 60 * 1000,
   })
-  const chartLyDates: string[] = (chartCalData ?? []).map((r: any) => r.yoy_match).filter(Boolean)
+  const chartLyDateMap: Record<string, string> = {}
+  chartDays.forEach(date => {
+    if (lyMode === 'date') {
+      chartLyDateMap[date] = oneYearBefore(date)
+    } else {
+      const cal = (chartCalData ?? []).find((r: any) => r.date === date)
+      if (cal?.yoy_match) chartLyDateMap[date] = cal.yoy_match
+    }
+  })
+  const chartLyDates: string[] = Object.values(chartLyDateMap)
 
   // LY OCC (a01_actual_daily, yoy_match)
   const { data: chartLyData } = useQuery({
@@ -881,7 +902,8 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
       const otbOcc  = roomCount > 0 ? Math.round((otbRn / roomCount) * 1000) / 10 : 0
       const adrWon  = otbRn > 0 ? otbRev / otbRn : 0   // raw 원
       const cal     = calMap[date]
-      const lyRn    = cal?.yoy_match ? (lyMap[cal.yoy_match] ?? 0) : 0
+      const lyKey   = chartLyDateMap[date]
+      const lyRn    = lyKey ? (lyMap[lyKey] ?? 0) : 0
       const lyOcc   = roomCount > 0 && lyRn > 0 ? Math.round((lyRn / roomCount) * 1000) / 10 : null
       const barRateWon = barMap[date] ? barMap[date] : null   // raw 원
       const occColor = otbOcc >= 80 ? '#2a78d6' : otbOcc >= 60 ? '#eda100' : '#e24b4a'
@@ -892,7 +914,8 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
       const isToday   = date === localOtbDate
       return { date, dateLabel, day, isFriSat, isToday, isPast, isActual, otbOcc, adrWon, barRateWon, lyOcc, occColor }
     })
-  }, [chartDays, chartOtbData, chartActualData, chartCalData, chartLyData, chartBarData, roomCount, localOtbDate, otbY, otbM])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chartDays, chartOtbData, chartActualData, chartCalData, chartLyData, chartBarData, roomCount, localOtbDate, otbY, otbM, chartLyDateMap])
 
   // ── 3페이지 — OCC & BAR Rate 차트 (D+0 ~ D+44, 15일 × 3) ──
   const chart1Ref  = useRef<HTMLCanvasElement>(null)
@@ -1021,6 +1044,10 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
   }, [])
 
   // ── 섹션 C — 이벤트 일정 DB 연결 (localOtbDate ~ 3개월 후 말일) ──
+  const periodStart = (() => {
+    const [py, pm] = (localOtbDate || '2000-01-01').split('-').map(Number)
+    return `${py}-${String(pm).padStart(2, '0')}-01`   // 당월 1일
+  })()
   const periodEnd = (() => {
     const [py, pm] = (localOtbDate || '2000-01-01').split('-').map(Number)
     const end = new Date(py, pm - 1 + 3, 0)   // 당월 포함 3개월 후 말일
@@ -1029,21 +1056,23 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
 
   // 이벤트 캘린더 (c06_calendar) — 괄호( )를 포함한 event만 유효 이벤트로 사용
   const { data: calendarEvents } = useQuery({
-    queryKey: ['gm_events_calendar', localOtbDate, periodEnd],
+    queryKey: ['gm_events_calendar', periodStart, periodEnd],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('c06_calendar').select('date, day, event, is_holiday, yoy_match')
-        .gte('date', localOtbDate).lte('date', periodEnd)
+        .gte('date', periodStart).lte('date', periodEnd)
         .not('event', 'is', null).order('date', { ascending: true })
       if (error) { console.error('[GMReport] c06_calendar events error:', error); return [] }
       // 괄호 안 텍스트가 실제 이벤트명 → 괄호 없는 값(null/빈값/텍스트 "null"/광복절 등)은 제외
       return (data ?? []).filter((r: any) => r.event && r.event.includes('(') && r.event.includes(')'))
     },
-    enabled: open && !!localOtbDate,
+    enabled: open && !!periodStart,
     staleTime: 60 * 60 * 1000,
   })
   const eventDates: string[]   = (calendarEvents ?? []).map((r: any) => r.date)
-  const lyEventDates: string[] = (calendarEvents ?? []).map((r: any) => r.yoy_match).filter(Boolean)
+  const lyEventDates: string[] = (calendarEvents ?? []).map((r: any) =>
+    lyMode === 'date' ? oneYearBefore(r.date) : r.yoy_match
+  ).filter(Boolean)
 
   // OTB (localOtbDate 기준) — 이벤트 날짜별 OCC/ADR
   const { data: eventOtbData = [] } = useQuery({
@@ -1135,9 +1164,10 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
       const otbRn  = otb?.nights ?? 0
       const otbRev = otb?.revenue ?? 0
       const vsRn   = vsMap[ev.date] ?? 0
-      const hasLy  = !!ev.yoy_match && lyMap[ev.yoy_match] != null
+      const evLyDate = lyMode === 'date' ? oneYearBefore(ev.date) : ev.yoy_match
+      const hasLy  = !!evLyDate && lyMap[evLyDate] != null
       const otbOcc = otb && roomCount > 0 ? Math.round((otbRn / roomCount) * 1000) / 10 : null
-      const lyOcc  = hasLy && roomCount > 0 ? Math.round(((lyMap[ev.yoy_match] ?? 0) / roomCount) * 1000) / 10 : null
+      const lyOcc  = hasLy && roomCount > 0 ? Math.round(((lyMap[evLyDate] ?? 0) / roomCount) * 1000) / 10 : null
       const adr    = otbRn > 0 ? Math.round(otbRev / otbRn) : null           // raw won (렌더에서 /1000 → k)
       const barRate = barMap[ev.date] ?? null
       const puNights = otb ? otbRn - vsRn : null                             // 전일픽업 = OTB - vs OTB
@@ -1145,7 +1175,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
     })
     map.forEach(g => g.dates.sort((a, b) => a.date.localeCompare(b.date)))
     return Array.from(map.values())
-  }, [calendarEvents, eventOtbData, eventVsData, eventLyData, eventBarData, roomCount])
+  }, [calendarEvents, eventOtbData, eventVsData, eventLyData, eventBarData, roomCount, lyMode])
 
   // ── 섹션 D — 월별 OTB 현황 (DashboardPage lyData 재활용, 당월 포함 3개월) ──
   const monthlyKpi = useMemo(() => {
@@ -1420,9 +1450,18 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                 <DatePicker label="" value={localVsDate} onChange={setLocalVsDate} availableDates={otbDates.filter(d => d < localOtbDate)} bare plain fontPx={12} dateColor={TXT} underlineColor="transparent" />
               </div>
             </div>
-            <span style={{ fontSize: 11, color: C.mint, letterSpacing: '0.02em', whiteSpace: 'nowrap', flexShrink: 0 }}>
-              단위 : 실 · {adrUnit} · {revUnit}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <span
+                onClick={() => setLyMode(m => (m === 'match' ? 'date' : 'match'))}
+                style={{ fontSize: 11, color: C.textSecondary, letterSpacing: '0.02em', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}
+              >
+                전년대비 : {lyMode === 'match' ? '전년동기간' : '전년동일자'} ⇄
+              </span>
+              <span style={{ color: C.borderStrong, fontSize: 10 }}>|</span>
+              <span style={{ fontSize: 11, color: C.mint, letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>
+                단위 : 실 · {adrUnit} · {revUnit}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -1579,7 +1618,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
 
           {/* 섹션 D — 월별 OTB 현황 */}
           <div style={{ marginBottom: 18 }}>
-            <div style={sectionTitle}>월별 OTB 현황<span style={{ fontSize: 10, color: C.textMuted, marginLeft: 8, fontWeight: 400 }}>· 전년대비 기준: 전년동월</span></div>
+            <div style={sectionTitle}>월별 현황<span style={{ fontSize: 10, color: C.textMuted, marginLeft: 8, fontWeight: 400 }}>· 전년대비 기준: 전년동월</span></div>
             <div style={{ ...card, padding: '10px 14px' }}>
               {/* 2줄 헤더 */}
               <div style={{ display: 'grid', gridTemplateColumns: '70px repeat(6, 1fr)', borderBottom: `0.5px solid ${BORDER}` }}>
@@ -1612,9 +1651,9 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                 return (
                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '70px repeat(6, 1fr)', alignItems: 'center' }}>
                     <span style={{ fontSize: 10, fontWeight: 500, color: TXT, padding: '4px 6px' }}>{r.month}월</span>
-                    {cell(`${r.otbOcc}%`, `LY ${signOcc(r.diffLyOcc)}`, dir3(r.diffLyOcc))}
-                    {cell(fmtAdr(r.otbAdrWon), `LY ${sAdr(r.diffLyAdrWon)}`, dir3(r.diffLyAdrWon))}
-                    {cell(fmtRev(r.otbRevWon), `LY ${sRev(r.diffLyRevWon)}`, dir3(r.diffLyRevWon))}
+                    {cell(`${r.otbOcc}%`, `전년비 ${signOcc(r.diffLyOcc)}`, dir3(r.diffLyOcc))}
+                    {cell(fmtAdr(r.otbAdrWon), `전년비 ${sAdr(r.diffLyAdrWon)}`, dir3(r.diffLyAdrWon))}
+                    {cell(fmtRev(r.otbRevWon), `전년비 ${sRev(r.diffLyRevWon)}`, dir3(r.diffLyRevWon))}
                     {cell(`${r.fcOcc}%`, `목표 ${signOcc(r.diffBudOcc)}`, dir3(r.diffBudOcc), true)}
                     {cell(fmtAdr(r.fcAdrWon), `목표 ${sAdr(r.diffBudAdrWon)}`, dir3(r.diffBudAdrWon))}
                     {cell(fmtRev(r.fcRevWon), `목표 ${sRev(r.diffBudRevWon)}`, dir3(r.diffBudRevWon))}
