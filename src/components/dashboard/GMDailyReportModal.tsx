@@ -1446,9 +1446,9 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                 ].map(({ name, val, diff, diffStr, fs }, idx, arr) => (
                   <div key={name} style={idx === arr.length - 1 ? { flex: 'none', marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', maxWidth: 96, overflow: 'hidden' } : { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
                     <span style={{ fontSize: 9, color: C.textMuted, marginBottom: 4 }}>{name}</span>
-                    <span style={{ fontSize: fs, fontWeight: 500, color: C.textPrimary, lineHeight: 1.1, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}><FmtVal val={val} numSize={fs} /></span>
+                    <span style={{ fontSize: fs, fontWeight: 500, color: C.textPrimary, lineHeight: 1.1, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', textAlign: 'right' }}><FmtVal val={val} numSize={fs} /></span>
                     {diff !== null ? (
-                      <span style={{ ...badgeStyle(diff > 0 ? 'up' : diff < 0 ? 'dn' : 'neu'), height: 18, lineHeight: '16px', whiteSpace: 'nowrap', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-block' }}>전년비 {diffStr}</span>
+                      <span style={{ ...badgeStyle(diff > 0 ? 'up' : diff < 0 ? 'dn' : 'neu'), height: 18, lineHeight: '16px', whiteSpace: 'nowrap', width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-block', textAlign: 'right', boxSizing: 'border-box' }}>전년비 {diffStr}</span>
                     ) : (
                       <div style={{ height: 18 }} />
                     )}
@@ -1486,8 +1486,8 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                 {/* 전일 픽업 — 오른쪽 끝 */}
                 <div style={{ flex: 'none', marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', maxWidth: 96, overflow: 'hidden' }}>
                   <span style={{ fontSize: 9, color: C.textMuted, marginBottom: 4 }}>전일 픽업</span>
-                  <span style={{ fontSize: 18, fontWeight: 500, lineHeight: 1.1, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', color: todayKpi.pu > 0 ? '#1d9e75' : todayKpi.pu < 0 ? '#a32d2d' : C.textMuted }}>{todayKpi.pu > 0 ? `+${todayKpi.pu}` : todayKpi.pu < 0 ? `${todayKpi.pu}` : '±0'}</span>
-                  <span style={{ fontSize: 9, color: todayKpi.remaining > 0 ? C.textMuted : '#a32d2d', height: 18, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>잔여 {todayKpi.remaining}</span>
+                  <span style={{ fontSize: 18, fontWeight: 500, lineHeight: 1.1, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', textAlign: 'right', color: todayKpi.pu > 0 ? '#1d9e75' : todayKpi.pu < 0 ? '#a32d2d' : C.textMuted }}>{todayKpi.pu > 0 ? `+${todayKpi.pu}` : todayKpi.pu < 0 ? `${todayKpi.pu}` : '±0'}</span>
+                  <span style={{ fontSize: 9, color: todayKpi.remaining > 0 ? C.textMuted : '#a32d2d', height: 18, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', textAlign: 'right' }}>잔여 {todayKpi.remaining}</span>
                 </div>
               </div>
             </div>
