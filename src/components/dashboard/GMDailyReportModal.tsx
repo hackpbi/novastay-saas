@@ -1340,21 +1340,10 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
       `}</style>
       <div className="gm-a4 gm-report-content" style={a4} onClick={e => e.stopPropagation()}>
 
-        {/* ── 헤더 (2행: 1행 타이틀/날짜/버튼, 2행 단위텍스트 우측정렬) ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 18 }}>
-          {/* 1행 */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 16, fontWeight: 500, color: TXT }}>데일리 리포트</span>
-            <div data-theme="light" style={{ colorScheme: 'light', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }} onClick={e => e.stopPropagation()}>
-              <span style={{ color: TXT2 }}>기준일</span>
-              <DatePicker label="" value={localOtbDate} onChange={setLocalOtbDate} availableDates={otbDates} bare plain fontPx={12} dateColor={TXT} underlineColor="transparent" />
-              <span style={{ color: C.borderStrong, fontSize: 10 }}>|</span>
-              <span style={{ color: TXT3 }}>vs</span>
-              <DatePicker label="" value={localVsDate} onChange={setLocalVsDate} availableDates={otbDates.filter(d => d < localOtbDate)} bare plain fontPx={12} dateColor={TXT} underlineColor="transparent" />
-            </div>
-          </div>
-          <div className="gm-no-print" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* ── 헤더 (1행: 아이콘 우측정렬(프린트 숨김) / 2행: 타이틀·날짜 좌 + 단위 우) ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
+          {/* 1행 — 아이콘 그룹, 우측 정렬, 프린트 시 숨김 */}
+          <div className="gm-no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
             {/* 보기 토글 — 전체 / 압축 (섹션 B Pick-up 상세 표시량) */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
               <span style={{ color: C.textMuted }}>보기</span>
@@ -1419,10 +1408,19 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
             <button onClick={onClose} aria-label="닫기"
               style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${BORDER}`, background: 'transparent', color: TXT2, cursor: 'pointer', fontSize: 14 }}>✕</button>
           </div>
-          </div>
-          {/* 2행 — 단위 텍스트, 우측 정렬 (프린트 시에도 노출) */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <span style={{ fontSize: 11, color: C.mint, letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>
+          {/* 2행 — 좌: 타이틀+날짜picker / 우: 단위텍스트 (프린트 시에도 노출) */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 16, fontWeight: 500, color: TXT }}>데일리 리포트</span>
+              <div data-theme="light" style={{ colorScheme: 'light', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }} onClick={e => e.stopPropagation()}>
+                <span style={{ color: TXT2 }}>기준일</span>
+                <DatePicker label="" value={localOtbDate} onChange={setLocalOtbDate} availableDates={otbDates} bare plain fontPx={12} dateColor={TXT} underlineColor="transparent" />
+                <span style={{ color: C.borderStrong, fontSize: 10 }}>|</span>
+                <span style={{ color: TXT3 }}>vs</span>
+                <DatePicker label="" value={localVsDate} onChange={setLocalVsDate} availableDates={otbDates.filter(d => d < localOtbDate)} bare plain fontPx={12} dateColor={TXT} underlineColor="transparent" />
+              </div>
+            </div>
+            <span style={{ fontSize: 11, color: C.mint, letterSpacing: '0.02em', whiteSpace: 'nowrap', flexShrink: 0 }}>
               단위 : 실 · {adrUnit} · {revUnit}
             </span>
           </div>
