@@ -749,12 +749,12 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
       { name: 'RevPAR', start: fmtAdr(startKpi.revparWon), end: fmtAdr(kpi.act.revparWon), diffStr: sAdr(kpi.act.revparWon - startKpi.revparWon), diffN: kpi.act.revparWon - startKpi.revparWon },
     ]
     return (
-      <div style={{ border: `1.5px solid ${C.border}`, borderRadius: 10, padding: '14px 16px', marginBottom: 18 }}>
+      <div style={{ border: `1.5px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
           <div>
             <span style={{ fontSize: 14, fontWeight: 600, color: '#0b0b0b' }}>Start → End</span>
           </div>
-          <span style={{ fontSize: 9, color: C.textMuted }}>기준일 {startOtbDateResolved ?? '-'}</span>
+          <span style={{ fontSize: 9, color: C.textMuted }}>월초 기준일 : {startOtbDateResolved ?? '-'}</span>
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
@@ -776,6 +776,43 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
             ))}
           </tbody>
         </table>
+      </div>
+    )
+  }
+
+  // 이벤트 일자 마감 미니 카드 — 기존 eventKpi 재사용 (점유율/객단가/매출만)
+  const renderEventClosingMini = () => {
+    if (eventKpi.length === 0) return null
+    return (
+      <div style={{ border: `1.5px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#0b0b0b', marginBottom: 10 }}>이벤트 일자 마감</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 240, overflowY: 'auto' }}>
+          {eventKpi.map(g => (
+            <div key={g.name}>
+              <div style={{ fontSize: 11, fontWeight: 500, color: C.textPrimary, marginBottom: 4, paddingBottom: 4, borderBottom: `0.5px solid ${C.border}` }}>{g.name}</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+                <thead>
+                  <tr>
+                    <th style={{ ...th, textAlign: 'left', padding: '2px 4px' }}>일자</th>
+                    <th style={{ ...th, textAlign: 'right', padding: '2px 4px' }}>점유율</th>
+                    <th style={{ ...th, textAlign: 'right', padding: '2px 4px' }}>객단가</th>
+                    <th style={{ ...th, textAlign: 'right', padding: '2px 4px' }}>매출</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {g.dates.map((d: any, i: number) => (
+                    <tr key={i} style={{ borderBottom: i < g.dates.length - 1 ? `0.5px solid ${C.border}` : 'none' }}>
+                      <td style={{ fontSize: 10, color: C.textPrimary, padding: '2px 4px' }}>{d.label}</td>
+                      <td style={{ fontSize: 10, color: C.blue, fontWeight: 500, textAlign: 'right', padding: '2px 4px' }}>{d.actOcc}%</td>
+                      <td style={{ fontSize: 10, color: C.textSecondary, textAlign: 'right', padding: '2px 4px' }}>{fmtAdr(d.actAdrWon)}</td>
+                      <td style={{ fontSize: 10, color: C.textSecondary, textAlign: 'right', padding: '2px 4px' }}>{fmtRev(d.actRevWon)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
@@ -896,7 +933,10 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
             {renderMiniSummary(`${curM}월`, `${String(curY).slice(-2)}년`, '온북', '온북', curKpi, '#1e2f52', curOtbDate)}
           </div>
 
-          {renderStartEnd()}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
+            {renderStartEnd()}
+            {renderEventClosingMini()}
+          </div>
 
           {/* 비교표 */}
           <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 4, tableLayout: 'fixed' }}>
