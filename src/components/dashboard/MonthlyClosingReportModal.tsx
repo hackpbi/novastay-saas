@@ -938,40 +938,6 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
             {renderEventClosingMini()}
           </div>
 
-          {/* 비교표 */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 4, tableLayout: 'fixed' }}>
-            <colgroup>
-              <col style={{ width: '20%' }} />
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '16%' }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th style={{ ...th, textAlign: 'left' }}>구분</th>
-                <th style={{ ...th, textAlign: 'right' }}>실적</th>
-                <th style={{ ...th, textAlign: 'right' }}>목표</th>
-                <th style={{ ...th, textAlign: 'right' }}>목표대비</th>
-                <th style={{ ...th, textAlign: 'right' }}>전년</th>
-                <th style={{ ...th, textAlign: 'right' }}>전년대비</th>
-              </tr>
-            </thead>
-            <tbody>
-              {kpiRows.map(r => (
-                <tr key={r.name} style={{ borderBottom: `0.5px solid ${C.border}` }}>
-                  <td style={{ ...td, textAlign: 'left', fontWeight: 500 }}>{r.name}</td>
-                  <td style={{ ...td, textAlign: 'right', fontWeight: 600 }}>{renderVal(r.act, 11)}</td>
-                  <td style={{ ...td, textAlign: 'right', color: C.textSecondary }}>{renderVal(r.bud, 11)}</td>
-                  <td style={{ ...td, textAlign: 'right', color: diffColor(r.vsBudN), fontWeight: 500 }}>{renderVal(r.vsBud, 11)}</td>
-                  <td style={{ ...td, textAlign: 'right', color: C.textSecondary }}>{renderVal(r.ly, 11)}</td>
-                  <td style={{ ...td, textAlign: 'right', color: diffColor(r.vsLyN), fontWeight: 500 }}>{renderVal(r.vsLy, 11)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
           {/* 세그별 실적 */}
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10 }}>세그별 실적</div>
