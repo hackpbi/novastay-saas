@@ -1213,6 +1213,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
       return {
         month,
         otbOcc, otbAdrWon, otbRevWon,
+        lyOcc, lyAdrWon, lyRevWon,
         diffLyOcc:  Math.round((otbOcc - lyOcc) * 10) / 10, diffLyAdrWon:  otbAdrWon - lyAdrWon, diffLyRevWon:  otbRevWon - lyRevWon,
         fcOcc, fcAdrWon, fcRevWon,
         diffBudOcc: Math.round((fcOcc - budOcc) * 10) / 10, diffBudAdrWon: fcAdrWon - budAdrWon, diffBudRevWon: fcRevWon - budRevWon,
@@ -1621,14 +1622,18 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
             <div style={sectionTitle}>월별 현황<span style={{ fontSize: 10, color: C.textMuted, marginLeft: 8, fontWeight: 400 }}>· 전년대비 기준: 전년동월</span></div>
             <div style={{ ...card, padding: '10px 14px' }}>
               {/* 2줄 헤더 */}
-              <div style={{ display: 'grid', gridTemplateColumns: '70px repeat(6, 1fr)', borderBottom: `0.5px solid ${BORDER}` }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '70px repeat(9, 1fr)', borderBottom: `0.5px solid ${BORDER}` }}>
                 <span />
                 <span style={{ ...th, fontSize: 8, gridColumn: 'span 3', textAlign: 'center', color: '#2a78d6', fontWeight: 600 }}>OTB 현황</span>
                 <span style={{ ...th, fontSize: 8, gridColumn: 'span 3', textAlign: 'center', color: '#1d9e75', fontWeight: 600, borderLeft: `1px solid ${BORDER}` }}>전망<span style={{ fontSize: 8, color: C.textMuted, fontWeight: 400, marginLeft: 3 }}>(하단: 목표 대비)</span></span>
+                <span style={{ ...th, fontSize: 8, gridColumn: 'span 3', textAlign: 'center', color: '#898781', fontWeight: 600, borderLeft: `1px solid ${BORDER}` }}>전년마감실적</span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '70px repeat(6, 1fr)', borderBottom: `0.5px solid ${BORDER}`, paddingBottom: 3 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '70px repeat(9, 1fr)', borderBottom: `0.5px solid ${BORDER}`, paddingBottom: 3 }}>
                 <span style={{ ...th, fontSize: 8 }}>구분</span>
                 <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>점유율</span>
+                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>객단가({adrUnit})</span>
+                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>매출({revUnit})</span>
+                <span style={{ ...th, fontSize: 8, textAlign: 'right', borderLeft: `1px solid ${BORDER}` }}>점유율</span>
                 <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>객단가({adrUnit})</span>
                 <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>매출({revUnit})</span>
                 <span style={{ ...th, fontSize: 8, textAlign: 'right', borderLeft: `1px solid ${BORDER}` }}>점유율</span>
@@ -1648,8 +1653,13 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                     <span style={{ display: 'block', fontSize: 8, color: dirColor(dir), whiteSpace: 'nowrap' }}>{sub}</span>
                   </span>
                 )
+                const simpleCell = (main: string, bl = false) => (
+                  <span style={{ textAlign: 'right', padding: '4px 4px 4px 0', borderLeft: bl ? `1px solid ${BORDER}` : undefined }}>
+                    <span style={{ display: 'block', fontSize: monFs, color: TXT2, fontWeight: 400, whiteSpace: 'nowrap' }}>{main}</span>
+                  </span>
+                )
                 return (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '70px repeat(6, 1fr)', alignItems: 'center' }}>
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '70px repeat(9, 1fr)', alignItems: 'center' }}>
                     <span style={{ fontSize: 10, fontWeight: 500, color: TXT, padding: '4px 6px' }}>{r.month}월</span>
                     {cell(`${r.otbOcc}%`, `전년비 ${signOcc(r.diffLyOcc)}`, dir3(r.diffLyOcc))}
                     {cell(fmtAdr(r.otbAdrWon), `전년비 ${sAdr(r.diffLyAdrWon)}`, dir3(r.diffLyAdrWon))}
@@ -1657,6 +1667,9 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                     {cell(`${r.fcOcc}%`, `목표 ${signOcc(r.diffBudOcc)}`, dir3(r.diffBudOcc), true)}
                     {cell(fmtAdr(r.fcAdrWon), `목표 ${sAdr(r.diffBudAdrWon)}`, dir3(r.diffBudAdrWon))}
                     {cell(fmtRev(r.fcRevWon), `목표 ${sRev(r.diffBudRevWon)}`, dir3(r.diffBudRevWon))}
+                    {simpleCell(`${r.lyOcc}%`, true)}
+                    {simpleCell(fmtAdr(r.lyAdrWon))}
+                    {simpleCell(fmtRev(r.lyRevWon))}
                   </div>
                 )
               })}
