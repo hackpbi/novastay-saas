@@ -217,11 +217,11 @@ const calcMonthSummary = (rows: any[], roomCount: number, year: number, month: n
   const avail = roomCount * new Date(year, month, 0).getDate()
   const otbOcc = avail > 0 ? Math.round((otbRn / avail) * 1000) / 10 : 0
   const vsOcc  = avail > 0 ? Math.round((vsRn  / avail) * 1000) / 10 : 0
-  const otbAdr = otbRn > 0 ? Math.round(otbRev / otbRn / 1000) : 0
-  const vsAdr  = vsRn  > 0 ? Math.round(vsRev  / vsRn  / 1000) : 0
+  const otbAdrWon = otbRn > 0 ? otbRev / otbRn : 0   // raw 원
+  const vsAdrWon  = vsRn  > 0 ? vsRev  / vsRn  : 0   // raw 원
   const segMap: Record<string, number> = {}
   rows.forEach((r: any) => { const seg = segLabel(r); segMap[seg] = (segMap[seg] ?? 0) + (r.pu_nights ?? 0) })
-  return { puOcc: Math.round((otbOcc - vsOcc) * 10) / 10, puRn, puAdr: otbAdr - vsAdr, puRevM: Math.round(puRev / 1000000), segMap }
+  return { puOcc: Math.round((otbOcc - vsOcc) * 10) / 10, puRn, puAdrWon: otbAdrWon - vsAdrWon, puRevWon: puRev, segMap }
 }
 
 // 세그 칩 — segmentation 소분류별 pu_nights (seg_name 표시, 0 제외, order_index 오름차순)
@@ -282,8 +282,9 @@ const puColor = (n: number | null) => (n == null ? C.textMuted : n > 0 ? C.mint 
 const puText = (n: number | null) => (n == null ? '-' : n > 0 ? `+${n}실` : n < 0 ? `${n}실` : '±0실')
 const holidayBadge: React.CSSProperties = { fontSize: 9, background: '#faeeda', color: '#854f0b', padding: '1px 5px', borderRadius: 3, marginLeft: 4, fontWeight: 500 }
 
-const renderEventCard = (ev: EventGroup) => {
+const renderEventCard = (ev: EventGroup, fmtAdr: (won: number) => string, adrUnit: '원' | '천원') => {
   const evTh: React.CSSProperties = { fontSize: 9, color: C.textMuted, fontWeight: 500, padding: '0 4px 5px 0', borderBottom: `0.5px solid ${C.border}` }
+  const moneyFs = adrUnit === '원' ? 8 : 10   // 원 단위 넘침 방지
   return (
     <div key={ev.name} style={{ background: C.cardBg, borderRadius: 8, padding: '8px 14px', breakInside: 'avoid', marginBottom: 8 }}>
       {/* 헤더 — 이벤트명 + 공휴일 배지 */}
@@ -326,10 +327,10 @@ const renderEventCard = (ev: EventGroup) => {
                 </div>
               </td>
               <td style={{ padding: '2px 4px 2px 0', textAlign: 'right' }}>
-                <span style={{ fontSize: 10, color: C.textSecondary }}>{d.adr !== null ? <FmtVal val={`${Math.round(d.adr / 1000)}k`} numSize={10} /> : '-'}</span>
+                <span style={{ fontSize: moneyFs, color: C.textSecondary, whiteSpace: 'nowrap' }}>{d.adr !== null ? <FmtVal val={fmtAdr(d.adr)} numSize={moneyFs} /> : '-'}</span>
               </td>
               <td style={{ padding: '2px 4px 2px 0', textAlign: 'right' }}>
-                <span style={{ fontSize: 10, fontWeight: 500, color: C.textPrimary }}>{d.barRate !== null ? <FmtVal val={`${Math.round(d.barRate / 1000)}k`} numSize={10} /> : '-'}</span>
+                <span style={{ fontSize: moneyFs, fontWeight: 500, color: C.textPrimary, whiteSpace: 'nowrap' }}>{d.barRate !== null ? <FmtVal val={fmtAdr(d.barRate)} numSize={moneyFs} /> : '-'}</span>
               </td>
               <td style={{ padding: '2px 4px 2px 0', textAlign: 'right' }}>
                 <span style={{ fontSize: 10, fontWeight: 500, color: puColor(d.puNights) }}>{puText(d.puNights)}</span>
@@ -374,7 +375,7 @@ const getPage3Days = (dateStr: string): string[][] => {
 }
 
 // Canvas 플러그인 — OCC% 상단 라벨 + BAR Rate 칩(막대 중앙)
-const occBarPlugin = {
+const makeOccBarPlugin = (fmtBar: (won: number) => string) => ({
   id: 'occBarPlugin',
   afterDatasetsDraw(chart: any) {
     const { ctx, data, scales } = chart
@@ -407,17 +408,18 @@ const occBarPlugin = {
         ctx.fillStyle = '#4a4a48'
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
-        ctx.fillText(barRate + 'k', bar.x, chipCenterY)
+        ctx.fillText(fmtBar(barRate), bar.x, chipCenterY)
         ctx.restore()
       }
     })
   },
-}
+})
 
 const createPage3Chart = (
   canvas: HTMLCanvasElement | null,
   kpiRows: Page3Day[],
   chartRef: React.MutableRefObject<Chart | null>,
+  fmtBar: (won: number) => string,
 ) => {
   if (!canvas) return
   chartRef.current?.destroy()
@@ -439,7 +441,7 @@ const createPage3Chart = (
           callbacks: {
             label: (ctx: any) => {
               if (ctx.datasetIndex === 0) return ` OCC: ${ctx.raw}%`
-              if (ctx.datasetIndex === 1 && ctx.raw) return ` BAR: ${ctx.raw}k`
+              if (ctx.datasetIndex === 1 && ctx.raw) return ` BAR: ${fmtBar(ctx.raw)}`
               return undefined
             },
           },
@@ -448,16 +450,37 @@ const createPage3Chart = (
       scales: {
         x: { grid: { display: false }, ticks: { align: 'center', textStrokeWidth: 0, font: { size: 8 }, maxRotation: 0, callback: (_v: any, index: number) => { const d = kpiRows[index]; return [d.dateLabel, d.day] }, color: (ctx: any) => { const dy = kpiRows[ctx.index]?.day; return (dy === '금' || dy === '토') ? '#e24b4a' : '#898781' } }, border: { display: false } },
         y: { min: 0, max: 100, position: 'left', grid: { color: '#e1e0d9', lineWidth: 0.5 }, ticks: { font: { size: 8 }, color: '#898781', stepSize: 25, callback: (v: any) => v + '%' }, border: { display: false } },
-        yBar: { type: 'linear', position: 'right', min: 0, max: 500, grid: { display: false }, ticks: { display: false }, border: { display: false } },
+        yBar: { type: 'linear', position: 'right', min: 0, max: 500000, grid: { display: false }, ticks: { display: false }, border: { display: false } },
       },
       layout: { padding: { top: 16 } },
     },
-    plugins: [occBarPlugin],
+    plugins: [makeOccBarPlugin(fmtBar)],
   })
 }
 
 export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, otbDates = [], lyData: lyPacingData, lyLoading, forecastRows, budgetRows }: GMDailyReportModalProps) {
   const [compact, setCompact] = useState(false)   // false=전체, true=압축(세그별 Top3 + 기타)
+
+  // ── 단위 설정 (대시보드 MonthCard/모달 컨벤션 동일) ──
+  const [showUnitSetting, setShowUnitSetting] = useState(false)
+  const [adrUnit, setAdrUnit] = useState<'원' | '천원'>('천원')
+  const [revUnit, setRevUnit] = useState<'원' | '천원' | '백만원'>('백만원')
+  // 단위 설정 패널 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!showUnitSetting) return
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('.unit-setting-wrap')) setShowUnitSetting(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showUnitSetting])
+
+  // ── 단위 포맷 헬퍼 (raw 원 값 → 선택 단위, 소수점 없이 콤마). 훅보다 앞에 정의(차트 useEffect에서 사용) ──
+  const fmtAdr = (won: number) => (adrUnit === '원' ? Math.round(won) : Math.round(won / 1000)).toLocaleString('ko-KR')
+  const fmtRev = (won: number) => (revUnit === '원' ? Math.round(won) : revUnit === '천원' ? Math.round(won / 1000) : Math.round(won / 1_000_000)).toLocaleString('ko-KR')
+  const sAdr = (won: number) => (won === 0 ? '±0' : (won > 0 ? '+' : '') + fmtAdr(won))
+  const sRev = (won: number) => (won === 0 ? '±0' : (won > 0 ? '+' : '') + fmtRev(won))
 
   // ── 기준일/vs 로컬 관리 (모달 내부 DatePicker로 독립 변경) ──
   const [localOtbDate, setLocalOtbDate] = useState(otbDate)
@@ -531,15 +554,15 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
     const totalAvail = days * roomCount
 
     const occ = totalAvail > 0 ? Math.round((totalRn / totalAvail) * 1000) / 10 : 0
-    const adr = totalRn > 0 ? Math.round(totalRev / totalRn / 1000) : 0
-    const rev = Math.round(totalRev / 1000000)
+    const adrWon = totalRn > 0 ? totalRev / totalRn : 0   // raw 원
+    const revWon = totalRev                               // raw 원
 
     const periodLabel = `${sm}/${sd}~${em}/${ed}`
 
     // ── DEBUG ──
-    console.log('[GMReport MTD] computed →', { totalRn, totalRev, days, totalAvail, occ, adr, rev, periodLabel })
+    console.log('[GMReport MTD] computed →', { totalRn, totalRev, days, totalAvail, occ, adrWon, revWon, periodLabel })
 
-    return { occ, adr, rev, periodLabel }
+    return { occ, adrWon, revWon, periodLabel }
   }, [mtdOtbData, mtdStart, mtdEnd, roomCount])
 
   // 어제 실적 — 같은 달: a02_otb_daily(update_date=otbDate), 다른 달(매월1일): a01_actual_daily
@@ -638,22 +661,22 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
     const c = sum(yesterdayData)
     const occ    = hasCur ? Math.round((c.rn / roomCount) * 1000) / 10 : null
     const rn     = hasCur ? c.rn : null
-    const adr    = hasCur ? (c.rn > 0 ? Math.round(c.rev / c.rn / 1000) : 0) : null
-    const rev    = hasCur ? Math.round(c.rev / 1000000) : null
-    const revpar = hasCur ? Math.round((c.rev / roomCount) / 1000) : null
+    const adrWon    = hasCur ? (c.rn > 0 ? c.rev / c.rn : 0) : null   // raw 원
+    const revWon    = hasCur ? c.rev : null                           // raw 원
+    const revparWon = hasCur ? c.rev / roomCount : null               // raw 원
     // LY (없으면 전부 null → 배지 미표시)
     const hasLy = Array.isArray(lyData) && lyData.length > 0 && roomCount > 0
     const l = sum(lyData)
-    const lyOcc    = hasLy ? Math.round((l.rn / roomCount) * 1000) / 10 : null
-    const lyAdr    = hasLy && l.rn > 0 ? Math.round(l.rev / l.rn / 1000) : null
-    const lyRevM   = hasLy && l.rev > 0 ? Math.round(l.rev / 1000000) : null
-    const lyRevpar = hasLy ? Math.round((l.rev / roomCount) / 1000) : null
-    // 대비
-    const diffOcc    = (lyOcc !== null && occ !== null)       ? Math.round((occ - lyOcc) * 10) / 10 : null
-    const diffAdr    = (lyAdr !== null && adr !== null)       ? adr - lyAdr : null
-    const diffRev    = (lyRevM !== null && rev !== null)      ? rev - lyRevM : null
-    const diffRevpar = (lyRevpar !== null && revpar !== null) ? revpar - lyRevpar : null
-    return { occ, rn, adr, rev, revpar, diffOcc, diffAdr, diffRev, diffRevpar }
+    const lyOcc       = hasLy ? Math.round((l.rn / roomCount) * 1000) / 10 : null
+    const lyAdrWon    = hasLy && l.rn > 0 ? l.rev / l.rn : null
+    const lyRevWon    = hasLy && l.rev > 0 ? l.rev : null
+    const lyRevparWon = hasLy ? l.rev / roomCount : null
+    // 대비 (raw 원 차이)
+    const diffOcc       = (lyOcc !== null && occ !== null)             ? Math.round((occ - lyOcc) * 10) / 10 : null
+    const diffAdrWon    = (lyAdrWon !== null && adrWon !== null)       ? adrWon - lyAdrWon : null
+    const diffRevWon    = (lyRevWon !== null && revWon !== null)       ? revWon - lyRevWon : null
+    const diffRevparWon = (lyRevparWon !== null && revparWon !== null) ? revparWon - lyRevparWon : null
+    return { occ, rn, adrWon, revWon, revparWon, diffOcc, diffAdrWon, diffRevWon, diffRevparWon }
   }, [yesterdayData, lyData, roomCount])
 
   // ── 컴팩트 바 — 당일 OTB/vs/LY (어제 실적은 기존 yesterdayKpi 재사용) ──
@@ -721,20 +744,20 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
     const lyRev  = (todayLyData ?? []).reduce((s: number, r: any) => s + (r.room_revenue ?? 0), 0)
 
     const occ       = roomCount > 0 ? Math.round((otbRn / roomCount) * 1000) / 10 : 0
-    const adr       = otbRn > 0 ? Math.round(otbRev / otbRn / 1000) : 0
-    const rev       = Math.round(otbRev / 1000000)
+    const adrWon    = otbRn > 0 ? otbRev / otbRn : 0   // raw 원
+    const revWon    = otbRev                           // raw 원
     const remaining = roomCount - otbRn
     const pu        = otbRn - vsRn
 
-    const lyOcc  = roomCount > 0 && lyRn > 0 ? Math.round((lyRn / roomCount) * 1000) / 10 : null
-    const lyAdr  = lyRn > 0 ? Math.round(lyRev / lyRn / 1000) : null
-    const lyRev2 = lyRev > 0 ? Math.round(lyRev / 1000000) : null
+    const lyOcc    = roomCount > 0 && lyRn > 0 ? Math.round((lyRn / roomCount) * 1000) / 10 : null
+    const lyAdrWon = lyRn > 0 ? lyRev / lyRn : null
+    const lyRevWon = lyRev > 0 ? lyRev : null
 
-    const diffOcc = lyOcc !== null ? Math.round((occ - lyOcc) * 10) / 10 : null
-    const diffAdr = lyAdr !== null ? adr - lyAdr : null
-    const diffRev = lyRev2 !== null ? rev - lyRev2 : null
+    const diffOcc    = lyOcc !== null ? Math.round((occ - lyOcc) * 10) / 10 : null
+    const diffAdrWon = lyAdrWon !== null ? adrWon - lyAdrWon : null
+    const diffRevWon = lyRevWon !== null ? revWon - lyRevWon : null
 
-    return { occ, rn: otbRn, adr, rev, remaining, pu, diffOcc, diffAdr, diffRev }
+    return { occ, rn: otbRn, adrWon, revWon, remaining, pu, diffOcc, diffAdrWon, diffRevWon }
   }, [todayOtbData, todayVsData, todayLyData, roomCount])
 
   // ── OTB 차트 (컴팩트 바 아래) ──
@@ -852,18 +875,18 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
       const otbRn   = srcRows.reduce((s: number, r: any) => s + (r.nights ?? 0), 0)
       const otbRev  = srcRows.reduce((s: number, r: any) => s + (r.room_revenue ?? 0), 0)
       const otbOcc  = roomCount > 0 ? Math.round((otbRn / roomCount) * 1000) / 10 : 0
-      const adr     = otbRn > 0 ? Math.round(otbRev / otbRn / 1000) : 0
+      const adrWon  = otbRn > 0 ? otbRev / otbRn : 0   // raw 원
       const cal     = calMap[date]
       const lyRn    = cal?.yoy_match ? (lyMap[cal.yoy_match] ?? 0) : 0
       const lyOcc   = roomCount > 0 && lyRn > 0 ? Math.round((lyRn / roomCount) * 1000) / 10 : null
-      const barRate = barMap[date] ? Math.round(barMap[date] / 1000) : null
+      const barRateWon = barMap[date] ? barMap[date] : null   // raw 원
       const occColor = otbOcc >= 80 ? '#2a78d6' : otbOcc >= 60 ? '#eda100' : '#e24b4a'
       const [, mm, dd] = date.split('-')
       const dateLabel = `${parseInt(mm)}/${parseInt(dd)}`
       const day       = cal?.day ?? ''
       const isFriSat  = day === '금' || day === '토'
       const isToday   = date === localOtbDate
-      return { date, dateLabel, day, isFriSat, isToday, isPast, isActual, otbOcc, adr, barRate, lyOcc, occColor }
+      return { date, dateLabel, day, isFriSat, isToday, isPast, isActual, otbOcc, adrWon, barRateWon, lyOcc, occColor }
     })
   }, [chartDays, chartOtbData, chartActualData, chartCalData, chartLyData, chartBarData, roomCount, localOtbDate, otbY, otbM])
 
@@ -928,7 +951,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
     const barPrio: Record<string, number> = {}
     ;(page3BarData ?? []).forEach((r: any) => {
       const p = barPriority[r.date_type] ?? 0
-      if (!barMap[r.stay_date] || p > barPrio[r.stay_date]) { barMap[r.stay_date] = Math.round(r.new_rate / 1000); barPrio[r.stay_date] = p }
+      if (!barMap[r.stay_date] || p > barPrio[r.stay_date]) { barMap[r.stay_date] = r.new_rate; barPrio[r.stay_date] = p }
     })
     return page3DayGroups.map(days => days.map((date): Page3Day => {
       const otbRows = (page3OtbData ?? []).filter((r: any) => r.business_date === date)
@@ -950,15 +973,16 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
   // 3페이지 차트 생성/파괴
   useEffect(() => {
     if (!open) return
-    createPage3Chart(chart1Ref.current, page3Kpi[0] ?? [], chartInst1)
-    createPage3Chart(chart2Ref.current, page3Kpi[1] ?? [], chartInst2)
-    createPage3Chart(chart3Ref.current, page3Kpi[2] ?? [], chartInst3)
+    createPage3Chart(chart1Ref.current, page3Kpi[0] ?? [], chartInst1, fmtAdr)
+    createPage3Chart(chart2Ref.current, page3Kpi[1] ?? [], chartInst2, fmtAdr)
+    createPage3Chart(chart3Ref.current, page3Kpi[2] ?? [], chartInst3, fmtAdr)
     return () => {
       chartInst1.current?.destroy(); chartInst1.current = null
       chartInst2.current?.destroy(); chartInst2.current = null
       chartInst3.current?.destroy(); chartInst3.current = null
     }
-  }, [open, page3Kpi])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, page3Kpi, adrUnit])
 
   // ESC + 스크롤락
   useEffect(() => {
@@ -1126,8 +1150,8 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
       const daysInMonth = new Date(year, month, 0).getDate()
       const totalAvail  = roomCount * daysInMonth
       const occ  = (rn: number) => (totalAvail > 0 ? Math.round((rn / totalAvail) * 1000) / 10 : 0)
-      const adr  = (rn: number, rev: number) => (rn > 0 ? Math.round(rev / rn / 1000) : 0)   // 천원(k)
-      const revM = (rev: number) => Math.round(rev / 1000000)                                 // 백만(m)
+      const adrWon = (rn: number, rev: number) => (rn > 0 ? rev / rn : 0)   // raw 원
+      const revWon = (rev: number) => rev                                    // raw 원
 
       const monthRows = lyPacingData.filter((r) => {
         const [y, m] = r.business_date.split('-').map(Number)
@@ -1137,27 +1161,27 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
       const otbRev = monthRows.reduce((s, r) => s + (r.otb_revenue ?? 0), 0)
       const lyRn   = monthRows.reduce((s, r) => s + (r.ly_nights   ?? 0), 0)
       const lyRev  = monthRows.reduce((s, r) => s + (r.ly_revenue  ?? 0), 0)
-      const otbOcc = occ(otbRn), otbAdr = adr(otbRn, otbRev), otbRevM = revM(otbRev)
-      const lyOcc  = occ(lyRn),  lyAdr  = adr(lyRn, lyRev),   lyRevM  = revM(lyRev)
+      const otbOcc = occ(otbRn), otbAdrWon = adrWon(otbRn, otbRev), otbRevWon = revWon(otbRev)
+      const lyOcc  = occ(lyRn),  lyAdrWon  = adrWon(lyRn, lyRev),   lyRevWon  = revWon(lyRev)
 
       // Forecast (forecastRows, month_num 필터)
       const fcRows = (forecastRows ?? []).filter(r => r.month_num === month)
       const fcRn   = fcRows.reduce((s, r) => s + (r.forecast_nights  ?? 0), 0)
       const fcRev  = fcRows.reduce((s, r) => s + (r.forecast_revenue ?? 0), 0)
-      const fcOcc  = occ(fcRn), fcAdr = adr(fcRn, fcRev), fcRevM = revM(fcRev)
+      const fcOcc  = occ(fcRn), fcAdrWon = adrWon(fcRn, fcRev), fcRevWon = revWon(fcRev)
 
       // Budget (budgetRows, month_num 필터)
       const budRows = (budgetRows ?? []).filter(r => r.month_num === month)
       const budRn   = budRows.reduce((s, r) => s + (r.budget_nights  ?? 0), 0)
       const budRev  = budRows.reduce((s, r) => s + (r.budget_revenue ?? 0), 0)
-      const budOcc  = occ(budRn), budAdr = adr(budRn, budRev), budRevM = revM(budRev)
+      const budOcc  = occ(budRn), budAdrWon = adrWon(budRn, budRev), budRevWon = revWon(budRev)
 
       return {
         month,
-        otbOcc, otbAdr, otbRevM,
-        diffLyOcc:  Math.round((otbOcc - lyOcc) * 10) / 10, diffLyAdr:  otbAdr - lyAdr, diffLyRevM:  otbRevM - lyRevM,
-        fcOcc, fcAdr, fcRevM,
-        diffBudOcc: Math.round((fcOcc - budOcc) * 10) / 10, diffBudAdr: fcAdr - budAdr, diffBudRevM: fcRevM - budRevM,
+        otbOcc, otbAdrWon, otbRevWon,
+        diffLyOcc:  Math.round((otbOcc - lyOcc) * 10) / 10, diffLyAdrWon:  otbAdrWon - lyAdrWon, diffLyRevWon:  otbRevWon - lyRevWon,
+        fcOcc, fcAdrWon, fcRevWon,
+        diffBudOcc: Math.round((fcOcc - budOcc) * 10) / 10, diffBudAdrWon: fcAdrWon - budAdrWon, diffBudRevWon: fcRevWon - budRevWon,
       }
     })
   }, [lyPacingData, forecastRows, budgetRows, threeMonths, roomCount])
@@ -1172,9 +1196,9 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
     calcMonthSummary(pm[1], roomCount, threeMonths[1].year, threeMonths[1].month),
     calcMonthSummary(pm[2], roomCount, threeMonths[2].year, threeMonths[2].month),
   ]
-  const totalPuRn   = summaries.reduce((s, m) => s + m.puRn, 0)
-  const totalPuRevM = summaries.reduce((s, m) => s + m.puRevM, 0)
-  const avgPuAdr    = summaries[0].puAdr
+  const totalPuRn     = summaries.reduce((s, m) => s + m.puRn, 0)
+  const totalPuRevWon = summaries.reduce((s, m) => s + m.puRevWon, 0)
+  const avgPuAdrWon   = summaries[0].puAdrWon
   const accountRows = buildAccountRows(pm[0], pm[1], pm[2])
   const segGroups: Record<string, AccountRow[]> = {}
   for (const row of accountRows) (segGroups[row.seg] ??= []).push(row)
@@ -1323,6 +1347,10 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
               <span style={{ color: TXT3 }}>vs</span>
               <DatePicker label="" value={localVsDate} onChange={setLocalVsDate} availableDates={otbDates.filter(d => d < localOtbDate)} bare plain fontPx={12} dateColor={TXT} underlineColor="transparent" />
             </div>
+            {/* 단위 텍스트 — 프린트 시에도 노출 (gm-no-print 아님) */}
+            <span style={{ fontSize: 11, color: C.mint, letterSpacing: '0.02em', whiteSpace: 'nowrap', marginLeft: 4 }}>
+              단위 : 실 · {adrUnit} · {revUnit}
+            </span>
           </div>
           <div className="gm-no-print" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {/* 보기 토글 — 전체 / 압축 (섹션 B Pick-up 상세 표시량) */}
@@ -1341,6 +1369,46 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                   background: compact ? C.cardBg : 'transparent' }}>
                 압축
               </button>
+            </div>
+            {/* 단위 설정 — 기어 버튼 + 드롭다운 */}
+            <div className="unit-setting-wrap" style={{ position: 'relative' }}>
+              <button onClick={() => setShowUnitSetting(v => !v)} aria-label="단위 설정"
+                style={{ width: 28, height: 28, borderRadius: 6, cursor: 'pointer',
+                  border: `1px solid ${showUnitSetting ? C.mint : BORDER}`,
+                  background: showUnitSetting ? C.mintBadgeBg : 'transparent',
+                  color: showUnitSetting ? C.mintBadgeFg : C.textMuted,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              </button>
+              {showUnitSetting && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, background: C.pageBg, border: `1px solid ${C.mint}33`, borderRadius: 8, padding: '12px 14px', width: 210, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 9999 }}>
+                  <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 10, letterSpacing: '0.04em' }}>단위 설정</div>
+                  {/* ADR */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ fontSize: 11, color: C.textSecondary }}>객단가</span>
+                    <div style={{ display: 'flex', border: `1px solid ${BORDER}`, borderRadius: 5, overflow: 'hidden' }}>
+                      {(['원', '천원'] as const).map(u => (
+                        <button key={u} onClick={() => setAdrUnit(u)} style={{ padding: '3px 8px', fontSize: 10, border: 'none', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                          background: adrUnit === u ? C.mint : 'transparent', color: adrUnit === u ? '#fff' : C.textMuted, fontWeight: adrUnit === u ? 500 : 400 }}>{u}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ height: 1, background: C.border, margin: '8px 0' }} />
+                  {/* REV */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 11, color: C.textSecondary }}>매출</span>
+                    <div style={{ display: 'flex', border: `1px solid ${BORDER}`, borderRadius: 5, overflow: 'hidden' }}>
+                      {(['원', '천원', '백만원'] as const).map(u => (
+                        <button key={u} onClick={() => setRevUnit(u)} style={{ padding: '3px 8px', fontSize: 10, border: 'none', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                          background: revUnit === u ? C.mint : 'transparent', color: revUnit === u ? '#fff' : C.textMuted, fontWeight: revUnit === u ? 500 : 400 }}>{u}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             <button onClick={handlePrint}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, padding: '5px 11px', borderRadius: 6, border: `1px solid ${BORDER}`, background: 'transparent', color: TXT, cursor: 'pointer' }}>
@@ -1364,16 +1432,16 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-start', width: '100%' }}>
                 {[
-                  { name: '점유율',   val: yesterdayKpi.occ    !== null ? `${yesterdayKpi.occ}%`    : '-', diff: yesterdayKpi.diffOcc,    unit: '%p' },
-                  { name: '객단가',    val: yesterdayKpi.adr    !== null ? `${yesterdayKpi.adr}k`    : '-', diff: yesterdayKpi.diffAdr,    unit: 'k' },
-                  { name: '매출',    val: yesterdayKpi.rev    !== null ? `${yesterdayKpi.rev}m`    : '-', diff: yesterdayKpi.diffRev,    unit: 'm' },
-                  { name: 'RevPAR', val: yesterdayKpi.revpar !== null ? `${yesterdayKpi.revpar}k` : '-', diff: yesterdayKpi.diffRevpar, unit: 'k' },
-                ].map(({ name, val, diff, unit }, idx, arr) => (
+                  { name: '점유율',   val: yesterdayKpi.occ !== null ? `${yesterdayKpi.occ}%` : '-', diff: yesterdayKpi.diffOcc, diffStr: yesterdayKpi.diffOcc !== null ? (yesterdayKpi.diffOcc > 0 ? `+${yesterdayKpi.diffOcc}%p` : yesterdayKpi.diffOcc < 0 ? `${yesterdayKpi.diffOcc}%p` : '±0%p') : '', fs: 18 },
+                  { name: '객단가',    val: yesterdayKpi.adrWon    !== null ? fmtAdr(yesterdayKpi.adrWon)    : '-', diff: yesterdayKpi.diffAdrWon,    diffStr: yesterdayKpi.diffAdrWon    !== null ? sAdr(yesterdayKpi.diffAdrWon)    : '', fs: adrUnit === '원' ? 14 : 18 },
+                  { name: '매출',    val: yesterdayKpi.revWon    !== null ? fmtRev(yesterdayKpi.revWon)    : '-', diff: yesterdayKpi.diffRevWon,    diffStr: yesterdayKpi.diffRevWon    !== null ? sRev(yesterdayKpi.diffRevWon)    : '', fs: revUnit === '원' ? 14 : 18 },
+                  { name: 'RevPAR', val: yesterdayKpi.revparWon !== null ? fmtAdr(yesterdayKpi.revparWon) : '-', diff: yesterdayKpi.diffRevparWon, diffStr: yesterdayKpi.diffRevparWon !== null ? sAdr(yesterdayKpi.diffRevparWon) : '', fs: adrUnit === '원' ? 14 : 18 },
+                ].map(({ name, val, diff, diffStr, fs }, idx, arr) => (
                   <div key={name} style={idx === arr.length - 1 ? { flex: 'none', marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' } : { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
                     <span style={{ fontSize: 9, color: C.textMuted, marginBottom: 4 }}>{name}</span>
-                    <span style={{ fontSize: 18, fontWeight: 500, color: C.textPrimary, lineHeight: 1.1, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><FmtVal val={val} numSize={18} /></span>
+                    <span style={{ fontSize: fs, fontWeight: 500, color: C.textPrimary, lineHeight: 1.1, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><FmtVal val={val} numSize={fs} /></span>
                     {diff !== null ? (
-                      <span style={{ ...badgeStyle(diff > 0 ? 'up' : diff < 0 ? 'dn' : 'neu'), height: 18, lineHeight: '16px', whiteSpace: 'nowrap' }}>전년비 {diff > 0 ? `+${diff}${unit}` : `${diff}${unit}`}</span>
+                      <span style={{ ...badgeStyle(diff > 0 ? 'up' : diff < 0 ? 'dn' : 'neu'), height: 18, lineHeight: '16px', whiteSpace: 'nowrap' }}>전년비 {diffStr}</span>
                     ) : (
                       <div style={{ height: 18 }} />
                     )}
@@ -1393,15 +1461,15 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-start', width: '100%' }}>
                 {[
-                  { name: '점유율', val: `${todayKpi.occ}%`, diff: todayKpi.diffOcc, unit: '%p', color: C.textPrimary },
-                  { name: '객단가',  val: `${todayKpi.adr}k`,  diff: todayKpi.diffAdr, unit: 'k',  color: C.textPrimary },
-                  { name: '매출',  val: `${todayKpi.rev}m`,  diff: todayKpi.diffRev, unit: 'm',  color: C.textPrimary },
-                ].map(({ name, val, diff, unit, color }) => (
+                  { name: '점유율', val: `${todayKpi.occ}%`, diff: todayKpi.diffOcc, diffStr: todayKpi.diffOcc !== null ? (todayKpi.diffOcc > 0 ? `+${todayKpi.diffOcc}%p` : todayKpi.diffOcc < 0 ? `${todayKpi.diffOcc}%p` : '±0%p') : '', color: C.textPrimary, fs: 18 },
+                  { name: '객단가',  val: fmtAdr(todayKpi.adrWon), diff: todayKpi.diffAdrWon, diffStr: todayKpi.diffAdrWon !== null ? sAdr(todayKpi.diffAdrWon) : '', color: C.textPrimary, fs: adrUnit === '원' ? 14 : 18 },
+                  { name: '매출',  val: fmtRev(todayKpi.revWon), diff: todayKpi.diffRevWon, diffStr: todayKpi.diffRevWon !== null ? sRev(todayKpi.diffRevWon) : '', color: C.textPrimary, fs: revUnit === '원' ? 14 : 18 },
+                ].map(({ name, val, diff, diffStr, color, fs }) => (
                   <div key={name} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
                     <span style={{ fontSize: 9, color: C.textMuted, marginBottom: 4 }}>{name}</span>
-                    <span style={{ fontSize: 18, fontWeight: 500, color, lineHeight: 1.1, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><FmtVal val={val} numSize={18} /></span>
+                    <span style={{ fontSize: fs, fontWeight: 500, color, lineHeight: 1.1, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><FmtVal val={val} numSize={fs} /></span>
                     {diff !== null ? (
-                      <span style={{ ...badgeStyle(diff > 0 ? 'up' : diff < 0 ? 'dn' : 'neu'), height: 18, lineHeight: '16px', whiteSpace: 'nowrap' }}>전년비 {diff > 0 ? `+${diff}${unit}` : `${diff}${unit}`}</span>
+                      <span style={{ ...badgeStyle(diff > 0 ? 'up' : diff < 0 ? 'dn' : 'neu'), height: 18, lineHeight: '16px', whiteSpace: 'nowrap' }}>전년비 {diffStr}</span>
                     ) : (
                       <div style={{ height: 18 }} />
                     )}
@@ -1431,9 +1499,9 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                     <span style={{ color: C.textMuted, fontSize: 10 }}>OCC</span>
                     <span style={{ fontWeight: 500, color: C.textPrimary }}>{mtdKpi.occ}%</span>
                     <span style={{ color: C.textMuted, fontSize: 10 }}>객단가</span>
-                    <span style={{ fontWeight: 500, color: C.textPrimary }}><FmtVal val={`${mtdKpi.adr}k`} numSize={11} /></span>
+                    <span style={{ fontWeight: 500, color: C.textPrimary }}><FmtVal val={fmtAdr(mtdKpi.adrWon)} numSize={11} /></span>
                     <span style={{ color: C.textMuted, fontSize: 10 }}>매출</span>
-                    <span style={{ fontWeight: 500, color: C.textPrimary }}><FmtVal val={`${mtdKpi.rev}m`} numSize={11} /></span>
+                    <span style={{ fontWeight: 500, color: C.textPrimary }}><FmtVal val={fmtRev(mtdKpi.revWon)} numSize={11} /></span>
                   </div>
                 </div>
               )}
@@ -1469,14 +1537,14 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                   <tr style={{ borderTop: `0.5px solid ${C.border}` }}>
                     <td style={{ fontSize: 8, color: C.textMuted, padding: '3px 2px' }}>객단가</td>
                     {chartKpi.map(d => (
-                      <td key={d.date} style={{ textAlign: 'center', padding: '3px 2px', fontSize: 9, color: C.textSecondary, fontWeight: d.isToday ? 500 : 400, background: d.isToday ? '#f0f4ff' : d.isPast ? '#fafaf8' : 'transparent', borderBottom: `0.5px solid ${C.border}` }}>{d.adr > 0 ? <FmtVal val={`${d.adr}k`} numSize={9} /> : '-'}</td>
+                      <td key={d.date} style={{ textAlign: 'center', padding: '3px 2px', fontSize: adrUnit === '원' ? 8 : 9, whiteSpace: 'nowrap', color: C.textSecondary, fontWeight: d.isToday ? 500 : 400, background: d.isToday ? '#f0f4ff' : d.isPast ? '#fafaf8' : 'transparent', borderBottom: `0.5px solid ${C.border}` }}>{d.adrWon > 0 ? <FmtVal val={fmtAdr(d.adrWon)} numSize={adrUnit === '원' ? 8 : 9} /> : '-'}</td>
                     ))}
                   </tr>
                   {/* BAR 행 */}
                   <tr>
                     <td style={{ fontSize: 8, color: C.textMuted, padding: '3px 2px' }}>BAR</td>
                     {chartKpi.map(d => (
-                      <td key={d.date} style={{ textAlign: 'center', padding: '3px 2px', fontSize: 9, color: C.textPrimary, fontWeight: 500, background: d.isToday ? '#f0f4ff' : d.isPast ? '#fafaf8' : 'transparent', borderBottom: `0.5px solid ${C.border}` }}>{d.barRate !== null ? <FmtVal val={`${d.barRate}k`} numSize={9} /> : '-'}</td>
+                      <td key={d.date} style={{ textAlign: 'center', padding: '3px 2px', fontSize: adrUnit === '원' ? 8 : 9, whiteSpace: 'nowrap', color: C.textPrimary, fontWeight: 500, background: d.isToday ? '#f0f4ff' : d.isPast ? '#fafaf8' : 'transparent', borderBottom: `0.5px solid ${C.border}` }}>{d.barRateWon !== null ? <FmtVal val={fmtAdr(d.barRateWon)} numSize={adrUnit === '원' ? 8 : 9} /> : '-'}</td>
                     ))}
                   </tr>
                   {/* LY 행 */}
@@ -1504,11 +1572,11 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
               <div style={{ display: 'grid', gridTemplateColumns: '70px repeat(6, 1fr)', borderBottom: `0.5px solid ${BORDER}`, paddingBottom: 3 }}>
                 <span style={{ ...th, fontSize: 8 }}>구분</span>
                 <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>점유율</span>
-                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>객단가(천원)</span>
-                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>매출(백만)</span>
+                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>객단가({adrUnit})</span>
+                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>매출({revUnit})</span>
                 <span style={{ ...th, fontSize: 8, textAlign: 'right', borderLeft: `1px solid ${BORDER}` }}>점유율</span>
-                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>객단가(천원)</span>
-                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>매출(백만)</span>
+                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>객단가({adrUnit})</span>
+                <span style={{ ...th, fontSize: 8, textAlign: 'right' }}>매출({revUnit})</span>
               </div>
               {lyLoading ? (
                 <div style={{ padding: '10px 4px', fontSize: 10, color: TXT3, textAlign: 'center' }}>월별 데이터 불러오는 중…</div>
@@ -1516,21 +1584,22 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                 <div style={{ padding: '10px 4px', fontSize: 10, color: TXT3, textAlign: 'center' }}>-</div>
               ) : monthlyKpi.map((r, i) => {
                 const signOcc = (n: number) => (n > 0 ? `+${n}%p` : n < 0 ? `${n}%p` : '±0%p')
+                const monFs = (adrUnit === '원' || revUnit === '원') ? 8 : 10   // 원 단위 넘침 방지
                 const cell = (main: string, sub: string, dir: string, bl = false) => (
                   <span style={{ textAlign: 'right', padding: '4px 4px 4px 0', borderLeft: bl ? `1px solid ${BORDER}` : undefined }}>
-                    <span style={{ display: 'block', fontSize: 10, color: TXT, fontWeight: 400 }}>{main}</span>
-                    <span style={{ display: 'block', fontSize: 8, color: dirColor(dir) }}>{sub}</span>
+                    <span style={{ display: 'block', fontSize: monFs, color: TXT, fontWeight: 400, whiteSpace: 'nowrap' }}>{main}</span>
+                    <span style={{ display: 'block', fontSize: 8, color: dirColor(dir), whiteSpace: 'nowrap' }}>{sub}</span>
                   </span>
                 )
                 return (
                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '70px repeat(6, 1fr)', alignItems: 'center' }}>
                     <span style={{ fontSize: 10, fontWeight: 500, color: TXT, padding: '4px 6px' }}>{r.month}월</span>
                     {cell(`${r.otbOcc}%`, `LY ${signOcc(r.diffLyOcc)}`, dir3(r.diffLyOcc))}
-                    {cell(r.otbAdr.toLocaleString(), `LY ${sign(r.diffLyAdr)}k`, dir3(r.diffLyAdr))}
-                    {cell(r.otbRevM.toLocaleString(), `LY ${sign(r.diffLyRevM)}m`, dir3(r.diffLyRevM))}
+                    {cell(fmtAdr(r.otbAdrWon), `LY ${sAdr(r.diffLyAdrWon)}`, dir3(r.diffLyAdrWon))}
+                    {cell(fmtRev(r.otbRevWon), `LY ${sRev(r.diffLyRevWon)}`, dir3(r.diffLyRevWon))}
                     {cell(`${r.fcOcc}%`, `목표 ${signOcc(r.diffBudOcc)}`, dir3(r.diffBudOcc), true)}
-                    {cell(r.fcAdr.toLocaleString(), `목표 ${sign(r.diffBudAdr)}k`, dir3(r.diffBudAdr))}
-                    {cell(r.fcRevM.toLocaleString(), `목표 ${sign(r.diffBudRevM)}m`, dir3(r.diffBudRevM))}
+                    {cell(fmtAdr(r.fcAdrWon), `목표 ${sAdr(r.diffBudAdrWon)}`, dir3(r.diffBudAdrWon))}
+                    {cell(fmtRev(r.fcRevWon), `목표 ${sRev(r.diffBudRevWon)}`, dir3(r.diffBudRevWon))}
                   </div>
                 )
               })}
@@ -1546,7 +1615,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
               <div style={{ ...card, fontSize: 11, color: TXT3, textAlign: 'center' }}>해당 기간 이벤트 없음</div>
             ) : (
               <div style={{ columnCount: 2, columnGap: 8 }}>
-                {eventGroups.map(renderEventCard)}
+                {eventGroups.map(ev => renderEventCard(ev, fmtAdr, adrUnit))}
               </div>
             )}
           </div>
@@ -1571,8 +1640,8 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
               return (
                 <>어제 대비 3개월 픽업은 총{' '}
                   <strong style={{ color: col(totalPuRn), fontWeight: 500 }}>{sign(totalPuRn)}실</strong>{' '}{verb(totalPuRn)}, 객단가{' '}
-                  <strong style={{ color: col(avgPuAdr), fontWeight: 500 }}>{sign(avgPuAdr)}k</strong>{' '}{verb(avgPuAdr)}, 매출{' '}
-                  <strong style={{ color: col(totalPuRevM), fontWeight: 500 }}>{sign(totalPuRevM)}m</strong>{' '}{verb(totalPuRevM)}하였습니다.</>
+                  <strong style={{ color: col(avgPuAdrWon), fontWeight: 500 }}>{sAdr(avgPuAdrWon)}</strong>{' '}{verb(avgPuAdrWon)}, 매출{' '}
+                  <strong style={{ color: col(totalPuRevWon), fontWeight: 500 }}>{sRev(totalPuRevWon)}</strong>{' '}{verb(totalPuRevWon)}하였습니다.</>
               )
             })()}
           </div>
@@ -1589,8 +1658,8 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                   {/* KPI 미니박스 — OCC / ADR(k) / REV(m) */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', border: `0.5px solid ${BORDER}`, borderRadius: 4, marginBottom: 8 }}>
                     <KpiMini label="점유율" value={pv(s.puOcc, '%p')} dir={isPickupLoading ? 'neu' : dir3(s.puOcc)} />
-                    <KpiMini label="객단가" value={pv(s.puAdr, 'k')}  dir={isPickupLoading ? 'neu' : dir3(s.puAdr)} />
-                    <KpiMini label="매출" value={pv(s.puRevM, 'm')} dir={isPickupLoading ? 'neu' : dir3(s.puRevM)} />
+                    <KpiMini label="객단가" value={isPickupLoading ? '…' : sAdr(s.puAdrWon)}  dir={isPickupLoading ? 'neu' : dir3(s.puAdrWon)} />
+                    <KpiMini label="매출" value={isPickupLoading ? '…' : sRev(s.puRevWon)} dir={isPickupLoading ? 'neu' : dir3(s.puRevWon)} />
                   </div>
                   {/* 세그 칩 — 소분류(segmentation), 남은 공간 채움 */}
                   <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 4, alignContent: 'flex-start' }}>
