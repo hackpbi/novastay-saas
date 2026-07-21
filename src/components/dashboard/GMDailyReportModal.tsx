@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import Chart from 'chart.js/auto'
 import { supabase } from '@/lib/supabase'
 import DatePicker from '@/components/DatePicker'
+import { useActualMonthly } from '@/hooks/useActualMonthly'
 import type { LyPacingRow } from '@/hooks/useLyPacing'
 import type { ForecastMonthlyRow } from '@/hooks/useForecastMonthly'
 import type { BudgetMonthlyRow } from '@/hooks/useBudgetMonthly'
@@ -1177,6 +1178,27 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
     return Array.from(map.values())
   }, [calendarEvents, eventOtbData, eventVsData, eventLyData, eventBarData, roomCount, lyMode])
 
+  // 전년마감실적 — DashboardPage와 동일하게 useActualMonthly(get_actual_monthly) 재사용
+  const monthYears  = threeMonths.map(t => t.year)
+  const lyFromYear  = Math.min(...monthYears) - 1
+  const lyToYear    = Math.max(...monthYears)
+  const { data: lyActualRows = [] } = useActualMonthly({
+    hotelId:  hotelId || undefined,
+    fromYear: lyFromYear,
+    toYear:   lyToYear,
+  })
+  // year-month_num 키로 합산 (DashboardPage lyActualByMonth와 동일 로직)
+  const lyActualByMonth = useMemo(() => {
+    const acc: Record<string, { nights: number; revenue: number }> = {}
+    for (const r of lyActualRows) {
+      const key = `${r.year}-${r.month_num}`
+      if (!acc[key]) acc[key] = { nights: 0, revenue: 0 }
+      acc[key].nights  += r.actual_nights ?? 0
+      acc[key].revenue += r.actual_revenue ?? 0
+    }
+    return acc
+  }, [lyActualRows])
+
   // ── 섹션 D — 월별 OTB 현황 (DashboardPage lyData 재활용, 당월 포함 3개월) ──
   const monthlyKpi = useMemo(() => {
     if (!lyPacingData || lyPacingData.length === 0) return []
@@ -1210,16 +1232,23 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
       const budRev  = budRows.reduce((s, r) => s + (r.budget_revenue ?? 0), 0)
       const budOcc  = occ(budRn), budAdrWon = adrWon(budRn, budRev), budRevWon = revWon(budRev)
 
+      // 전년마감실적(전년 동월 마감 실적, useActualMonthly 소스)
+      const closingKey = `${year - 1}-${month}`
+      const closing = lyActualByMonth[closingKey] ?? { nights: 0, revenue: 0 }
+      const lyClosingOcc    = occ(closing.nights)
+      const lyClosingAdrWon = adrWon(closing.nights, closing.revenue)
+      const lyClosingRevWon = revWon(closing.revenue)
+
       return {
         month,
         otbOcc, otbAdrWon, otbRevWon,
-        lyOcc, lyAdrWon, lyRevWon,
         diffLyOcc:  Math.round((otbOcc - lyOcc) * 10) / 10, diffLyAdrWon:  otbAdrWon - lyAdrWon, diffLyRevWon:  otbRevWon - lyRevWon,
         fcOcc, fcAdrWon, fcRevWon,
         diffBudOcc: Math.round((fcOcc - budOcc) * 10) / 10, diffBudAdrWon: fcAdrWon - budAdrWon, diffBudRevWon: fcRevWon - budRevWon,
+        lyClosingOcc, lyClosingAdrWon, lyClosingRevWon,
       }
     })
-  }, [lyPacingData, forecastRows, budgetRows, threeMonths, roomCount])
+  }, [lyPacingData, forecastRows, budgetRows, threeMonths, roomCount, lyActualByMonth])
 
   if (!open) return null
 
@@ -1667,9 +1696,9 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
                     {cell(`${r.fcOcc}%`, `목표 ${signOcc(r.diffBudOcc)}`, dir3(r.diffBudOcc), true)}
                     {cell(fmtAdr(r.fcAdrWon), `목표 ${sAdr(r.diffBudAdrWon)}`, dir3(r.diffBudAdrWon))}
                     {cell(fmtRev(r.fcRevWon), `목표 ${sRev(r.diffBudRevWon)}`, dir3(r.diffBudRevWon))}
-                    {simpleCell(`${r.lyOcc}%`, true)}
-                    {simpleCell(fmtAdr(r.lyAdrWon))}
-                    {simpleCell(fmtRev(r.lyRevWon))}
+                    {simpleCell(`${r.lyClosingOcc}%`, true)}
+                    {simpleCell(fmtAdr(r.lyClosingAdrWon))}
+                    {simpleCell(fmtRev(r.lyClosingRevWon))}
                   </div>
                 )
               })}
