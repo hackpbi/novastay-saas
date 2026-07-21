@@ -209,25 +209,40 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
   const calMap: Record<string, { day: string; yoy_match: string | null; event: string | null }> = {}
   calData?.forEach((r: any) => { calMap[r.date] = { day: r.day, yoy_match: r.yoy_match, event: r.event } })
 
-  // ── 온북월(otbDate가 속한 달) 요약 카드용 데이터 ──
-  const [curY, curM] = (otbDate || '2000-01-01').split('-').map(Number)
-  const curMonthStart = otbDate ? `${curY}-${String(curM).padStart(2, '0')}-01` : ''
-  const curMonthEnd   = otbDate ? new Date(curY, curM, 0).toLocaleDateString('sv', { timeZone: 'Asia/Seoul' }) : ''
-  const curLyStart = otbDate ? `${curY - 1}-${String(curM).padStart(2, '0')}-01` : ''
-  const curLyEnd   = otbDate ? new Date(curY - 1, curM, 0).toLocaleDateString('sv', { timeZone: 'Asia/Seoul' }) : ''
+  // ── 온북월(마감월의 다음 달) 요약 카드용 데이터 ──
+  // 온북월 = 마감월(reportYear/reportMonth)의 다음 달
+  const curY = reportMonth === 12 ? reportYear + 1 : reportYear
+  const curM = reportMonth === 12 ? 1 : reportMonth + 1
+
+  // 온북 리포트 기준일 = 온북월 1일에 가장 가까운 평일
+  // (1일이 토요일이면 전날 금요일, 일요일이면 다음날 월요일, 평일이면 1일 그대로)
+  const curOtbDate = (() => {
+    if (!curY || !curM) return ''
+    const first = new Date(curY, curM - 1, 1)
+    const dow = first.getDay()   // 0=일 ... 6=토
+    const target = new Date(first)
+    if (dow === 6) target.setDate(first.getDate() - 1)        // 토 → 전날(금)
+    else if (dow === 0) target.setDate(first.getDate() + 1)   // 일 → 다음날(월)
+    return target.toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })
+  })()
+
+  const curMonthStart = curY && curM ? `${curY}-${String(curM).padStart(2, '0')}-01` : ''
+  const curMonthEnd   = curY && curM ? new Date(curY, curM, 0).toLocaleDateString('sv', { timeZone: 'Asia/Seoul' }) : ''
+  const curLyStart = curY && curM ? `${curY - 1}-${String(curM).padStart(2, '0')}-01` : ''
+  const curLyEnd   = curY && curM ? new Date(curY - 1, curM, 0).toLocaleDateString('sv', { timeZone: 'Asia/Seoul' }) : ''
 
   const { data: curOtbData } = useQuery({
-    queryKey: ['closing_cur_otb', hotelId, otbDate, curMonthStart, curMonthEnd],
+    queryKey: ['closing_cur_otb', hotelId, curOtbDate, curMonthStart, curMonthEnd],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('a02_otb_daily')
         .select('nights, room_revenue')
-        .eq('hotel_id', hotelId).eq('update_date', otbDate)
+        .eq('hotel_id', hotelId).eq('update_date', curOtbDate)
         .gte('business_date', curMonthStart).lte('business_date', curMonthEnd)
       if (error) throw error
       return data ?? []
     },
-    enabled: open && !!hotelId && !!otbDate && !!curMonthStart && !!curMonthEnd,
+    enabled: open && !!hotelId && !!curOtbDate && !!curMonthStart && !!curMonthEnd,
     staleTime: 5 * 60 * 1000,
   })
 
