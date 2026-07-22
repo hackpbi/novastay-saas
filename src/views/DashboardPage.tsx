@@ -6,7 +6,7 @@ import { ArrowUp, ArrowDown } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { usePickupData, type PickupRow } from '@/hooks/usePickupData'
 import { useOtbData } from '@/hooks/useOtbData'
-import { useLyPacing, type LyPacingMode } from '@/hooks/useLyPacing'
+import { useLyPacing, type LyPacingMode, type LyPacingRow } from '@/hooks/useLyPacing'
 import SegmentationModal          from '@/components/dashboard/SegmentationModal'
 import AccountModal               from '@/components/dashboard/AccountModal'
 import MonthlyPickupSegModal      from '@/components/dashboard/MonthlyPickupSegModal'
@@ -186,11 +186,11 @@ const eventRangeLabel = (g: EventGroup) => {
 // ── 이벤트 hover 툴팁 ─────────────────────────────────────────────────────────────
 const DOW_KR = ['일', '월', '화', '수', '목', '금', '토']
 
-type DayAggEntry = { otbN: number; otbR: number; vsN: number; vsR: number }
+type DayAggEntry = { otbN: number; otbR: number; lyN: number; puN: number }
 
 // 이벤트 뱃지 + hover 툴팁 — 뱃지 스타일은 Phase 1(민트/블루) 유지, 툴팁은 PickupMonthCard 이식.
 // 카드 overflow-hidden 잘림 방지를 위해 툴팁만 createPortal + position:fixed 로 렌더.
-function EventBadge({ group, pickupRows, roomCount }: { group: EventGroup; pickupRows: PickupRow[]; roomCount: number }) {
+function EventBadge({ group, pickupRows, lyRows, roomCount }: { group: EventGroup; pickupRows: PickupRow[]; lyRows: LyPacingRow[]; roomCount: number }) {
   const [hovered, setHovered] = useState(false)
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
   const [barData, setBarData] = useState<Record<string, { cur: number | null }>>({})
@@ -203,13 +203,21 @@ function EventBadge({ group, pickupRows, roomCount }: { group: EventGroup; picku
     const map: Record<string, DayAggEntry> = {}
     for (const r of pickupRows) {
       if (!group.dates.includes(r.business_date)) continue
+      if (r.segmentation === 'HOU') continue   // HOU 제외 (원본 카드와 동일)
       let a = map[r.business_date]
-      if (!a) { a = { otbN: 0, otbR: 0, vsN: 0, vsR: 0 }; map[r.business_date] = a }
-      a.otbN += r.otb_nights ?? 0;     a.otbR += r.otb_revenue ?? 0
-      a.vsN  += r.vs_otb_nights ?? 0;  a.vsR  += r.vs_otb_revenue ?? 0
+      if (!a) { a = { otbN: 0, otbR: 0, lyN: 0, puN: 0 }; map[r.business_date] = a }
+      a.otbN += r.otb_nights ?? 0;  a.otbR += r.otb_revenue ?? 0
+      a.puN  += r.pu_nights ?? 0    // 픽업용 (RPC 계산값)
+    }
+    for (const r of lyRows) {
+      if (!group.dates.includes(r.business_date)) continue
+      if (r.segmentation === 'HOU') continue   // HOU 제외 (원본 카드와 동일)
+      let a = map[r.business_date]
+      if (!a) { a = { otbN: 0, otbR: 0, lyN: 0, puN: 0 }; map[r.business_date] = a }
+      a.lyN += r.ly_nights ?? 0     // 이전 점유율용 (전년동기)
     }
     return map
-  }, [pickupRows, group.dates])
+  }, [pickupRows, lyRows, group.dates])
 
   // 미래 이벤트만 hover 시 BAR 현재값(s02_rate_detail) fetch
   useEffect(() => {
@@ -311,16 +319,12 @@ function EventBadge({ group, pickupRows, roomCount }: { group: EventGroup; picku
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${group.dates.length}, 1fr)` }}>
             {group.dates.map(date => {
               const row = dayAgg[date]
-              const hasPu = !!row && row.vsN !== row.otbN
+              const hasPu = !!row && (row.puN ?? 0) !== 0
               const currOcc = row && roomCount ? (row.otbN / roomCount * 100).toFixed(1) : null
-              const prevOcc = row && roomCount ? (row.vsN / roomCount * 100).toFixed(1) : null
+              const prevOcc = row && roomCount ? (row.lyN / roomCount * 100).toFixed(1) : null
               const adr = row && row.otbN ? Math.round(row.otbR / row.otbN / 1000) : null
               const rev = row && row.otbR ? (row.otbR / 1e6).toFixed(1) : null
-              const puOcc = row && roomCount ? ((row.otbN - row.vsN) / roomCount * 100).toFixed(1) : null
-              const puNights = row ? (row.otbN - row.vsN) : null
-              // [DEBUG-TEMP] vsN 진단 — 확인 후 제거
-              const _puNightsField = pickupRows.filter(r => r.business_date === date).reduce((s, r) => s + (r.pu_nights ?? 0), 0)
-              console.log('[DEBUG] event tooltip row', { date, otbN: row?.otbN, vsN: row?.vsN, 'otbN-vsN': puNights, pu_nights_field: _puNightsField, roomCount })
+              const puNights = row ? row.puN : null
               const dd = new Date(date)
               const dLabel = `${dd.getMonth() + 1}/${dd.getDate()} ${DOW_KR[dd.getDay()]}`
               const before = !!otbDate && date < otbDate
@@ -536,7 +540,7 @@ function fmtFcRevenue(n: number | null | undefined): string {
 }
 // ─── Month Card ─────────────────────────────────────────────────────────────────
 
-function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSegClick, onAccountClick, pickupNights, onLyClick, lyMode, onLyModeToggle, events = [], pickupRows = [], adrUnit = '천원', revUnit = '백만원', lyOcc = null, lyAdr = null, lyRevenue = null }: {
+function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSegClick, onAccountClick, pickupNights, onLyClick, lyMode, onLyModeToggle, events = [], pickupRows = [], lyRows = [], adrUnit = '천원', revUnit = '백만원', lyOcc = null, lyAdr = null, lyRevenue = null }: {
   data:             MonthData
   stats:            MonthStats
   loading:          boolean
@@ -551,6 +555,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
   onLyModeToggle:   () => void
   events?:          EventGroup[]
   pickupRows?:      PickupRow[]
+  lyRows?:          LyPacingRow[]
   adrUnit?:         '천원' | '원'
   revUnit?:         '원' | '천원' | '백만원'
   lyOcc?:           number | null
@@ -633,7 +638,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
           {events.length > 0 && (
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 6 }}>
               {events.map(ev => (
-                <EventBadge key={ev.startDate + ev.name} group={ev} pickupRows={pickupRows} roomCount={roomCount} />
+                <EventBadge key={ev.startDate + ev.name} group={ev} pickupRows={pickupRows} lyRows={lyRows} roomCount={roomCount} />
               ))}
             </div>
           )}
@@ -1530,6 +1535,7 @@ export default function DashboardPage() {
             onLyModeToggle={() => setLyMode(prev => prev === 'v1' ? 'v2' : 'v1')}
             events={eventGroups.filter(g => { const [gy, gm] = g.startDate.split('-').map(Number); return gy === m.year && gm === m.month })}
             pickupRows={pickupData.filter(r => { const d = new Date(r.business_date); return d.getFullYear() === m.year && d.getMonth() + 1 === m.month })}
+            lyRows={lyData.filter(r => { const d = new Date(r.business_date); return d.getFullYear() === m.year && d.getMonth() + 1 === m.month })}
             adrUnit={adrUnit}
             revUnit={revUnit}
             lyOcc={lyActualByMonth[`${m.year - 1}-${m.month}`]?.occ ?? null}
