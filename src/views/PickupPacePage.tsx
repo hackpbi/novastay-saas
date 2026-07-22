@@ -14,7 +14,7 @@ import { PaceSegmentModal } from '@/components/pickup/PaceSegmentModal'
 import BarRatePacingModal from '@/components/pickup/BarRatePacingModal'
 
 const cardStyle: React.CSSProperties = {
-  background: '#000000', border: '1px solid var(--color-border-default)', borderRadius: 12,
+  background: '#000', border: '0.5px solid rgba(0,229,160,0.15)', borderLeft: '3px solid rgba(0,229,160,0.6)', borderRadius: 12,
 }
 
 // 동기간/동일자 토글 스위치

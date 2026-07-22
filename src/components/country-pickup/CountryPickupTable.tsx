@@ -121,7 +121,7 @@ export default function CountryPickupTable({ data, isPastMonth, lyData, lyMode, 
   )
 
   return (
-    <div style={{ background: 'var(--color-bg-secondary)', border: '0.5px solid var(--color-border-subtle)', borderRadius: 10, overflow: 'hidden' }}>
+    <div style={{ background: '#000', border: '0.5px solid rgba(0,229,160,0.15)', borderLeft: '3px solid rgba(0,229,160,0.6)', borderRadius: 10, overflow: 'hidden' }}>
       {/* 패널 헤더 */}
       <div style={{ padding: '10px 14px', borderBottom: '0.5px solid var(--color-border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-secondary)' }}>Detailed Data Analysis</span>

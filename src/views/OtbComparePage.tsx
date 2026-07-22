@@ -35,7 +35,7 @@ const thumbStyle = (on: boolean): React.CSSProperties => ({
 })
 
 const cardStyle: React.CSSProperties = {
-  background: '#000000', border: '1px solid var(--color-border-default)', borderRadius: 12,
+  background: '#000', border: '0.5px solid rgba(0,229,160,0.15)', borderLeft: '3px solid rgba(0,229,160,0.6)', borderRadius: 12,
 }
 
 // ── 세그먼트 비교 테이블 (현재 OTB · 전년 OTB · GAP) ──────────────────────────────

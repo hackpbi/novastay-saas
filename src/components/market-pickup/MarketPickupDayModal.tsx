@@ -286,11 +286,20 @@ export default function MarketPickupDayModal({
     const lyAdr  = lyN  > 0 ? Math.round(lyR  / lyN)  : 0
     return { otbN, otbAdr, otbR, lyN, lyAdr, lyR, gapN: otbN - lyN, gapAdr: otbAdr - lyAdr, gapR: otbR - lyR }
   }
-  // 전년 비교 합계 — main 행 합산 (각 행이 자식 코드를 이미 집계)
-  const lyTotal = rows.filter(r => r.level === 'main').reduce((t, r) => {
-    const v = lyForRow(r.id)
-    return { otbN: t.otbN + v.otbN, otbR: t.otbR + v.otbR, lyN: t.lyN + v.lyN, lyR: t.lyR + v.lyR }
-  }, { otbN: 0, otbR: 0, lyN: 0, lyR: 0 })
+  // HOU(House Use) 코드 식별 — lyComparisonSegTable 방식과 동일 (Total 합산에서 제외)
+  const houCodes = new Set<string>()
+  for (const s of schema) {
+    if (s.segmentation.includes('HOU')) {
+      for (const code of s.segmentation) houCodes.add(code)
+    }
+  }
+  // 전년 비교 합계 — HOU 제외, leaf 행(non-main)만 합산 (lyComparisonSegTable 방식과 동일)
+  const lyTotal = rows
+    .filter(r => r.level !== 'main' && !(codesBySchemaId[r.id] ?? []).some(c => houCodes.has(c)))
+    .reduce((t, r) => {
+      const v = lyForRow(r.id)
+      return { otbN: t.otbN + v.otbN, otbR: t.otbR + v.otbR, lyN: t.lyN + v.lyN, lyR: t.lyR + v.lyR }
+    }, { otbN: 0, otbR: 0, lyN: 0, lyR: 0 })
   const lyTotOtbAdr = lyTotal.otbN > 0 ? Math.round(lyTotal.otbR / lyTotal.otbN) : 0
   const lyTotLyAdr  = lyTotal.lyN  > 0 ? Math.round(lyTotal.lyR  / lyTotal.lyN)  : 0
   // 전년 비교 컬럼(현재 OTB/작년 OTB/GAP) 클릭 → 세그 선택 + 어카운트 소스 지정 (같은 세그·소스 재클릭 시 해제)
@@ -459,7 +468,7 @@ export default function MarketPickupDayModal({
       <tfoot>
         {/* Total 행 */}
         <tr style={{ position: 'sticky', bottom: 0, background: '#000000' }}>
-          <td style={{ padding: '7px 12px', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}>Total</td>
+          <td style={{ padding: '7px 12px', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}>합계 (HOU 제외)</td>
           <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)', borderLeft: `1px solid ${DIV}` }}>{fmtOtbRn(summary.totalNights)}</td>
           <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtOtbAdr(summary.totalAdr)} numSize={11} /></td>
           <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtOtbRev(summary.totalRevenue)} numSize={11} /></td>
@@ -471,7 +480,7 @@ export default function MarketPickupDayModal({
         </tr>
         {/* OCC 행 */}
         <tr style={{ borderTop: '0.5px solid rgba(255,255,255,0.06)' }}>
-          <td style={{ padding: '6px 12px', fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>OCC</td>
+          <td style={{ padding: '6px 12px', fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>점유율</td>
           <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)', borderLeft: `1px solid ${DIV}` }}>{summary.occ.toFixed(1)}%</td>
           {hasPickup && (
           <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: occPuColor, borderLeft: `1px solid ${DIV}` }}>{summary.puNights >= 0 ? '+' : ''}{(summary.puNights / occDenom * 100).toFixed(1)}%</td>
@@ -563,7 +572,7 @@ export default function MarketPickupDayModal({
       </tbody>
       <tfoot>
         <tr style={{ position: 'sticky', bottom: 0, background: '#000000' }}>
-          <td style={{ padding: '7px 12px', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}>Total</td>
+          <td style={{ padding: '7px 12px', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}>합계 (HOU 제외)</td>
           <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)', borderLeft: `1px solid ${DIV}` }}>{fmtOtbRn(lyTotal.otbN)}</td>
           <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtOtbAdr(lyTotOtbAdr)} numSize={11} /></td>
           <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtOtbRev(lyTotal.otbR)} numSize={11} /></td>
@@ -575,7 +584,7 @@ export default function MarketPickupDayModal({
           <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: gapColor(lyGapTotR), borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmtGapRevM(lyGapTotR)} numSize={11} /></td>
         </tr>
         <tr style={{ borderTop: '0.5px solid rgba(255,255,255,0.06)' }}>
-          <td style={{ padding: '6px 12px', fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>OCC</td>
+          <td style={{ padding: '6px 12px', fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>점유율</td>
           <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)', borderLeft: `1px solid ${DIV}` }}>{lyCurOcc.toFixed(1)}%</td>
           <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: lyGray, borderLeft: `1px solid ${DIV}` }}>{lyLyOcc.toFixed(1)}%</td>
           <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: gapColor(lyGapTotN), borderLeft: `1px solid ${DIV}` }}>{(lyCurOcc - lyLyOcc) >= 0 ? '+' : ''}{(lyCurOcc - lyLyOcc).toFixed(1)}%p</td>
@@ -594,8 +603,13 @@ export default function MarketPickupDayModal({
     <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
       <div className="absolute inset-0 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose} />
       <div style={{
-        position: 'relative', background: '#000000',
-        border: '1px solid var(--color-border-default)',
+        position: 'relative',
+        background: `
+          radial-gradient(circle at 100% 100%, rgba(0,229,160,0.08) 0%, transparent 40%),
+          #000000
+        `,
+        border: '0.5px solid rgba(0,229,160,0.2)',
+        borderLeft: '3px solid rgba(0,229,160,0.6)',
         borderRadius: 16, display: 'flex', flexDirection: 'column',
         width: activeTab === 'ly' ? 'min(96vw, 1400px)' : 'min(96vw, 1040px)', maxHeight: '82vh',
         boxShadow: 'var(--shadow-card)', overflow: 'hidden', transition: 'width 0.15s',

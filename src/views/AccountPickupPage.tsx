@@ -595,8 +595,9 @@ export default function AccountPickupPage() {
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '8px 14px',
-          background: 'rgba(255,255,255,0.02)',
-          border: '0.5px solid rgba(255,255,255,0.07)',
+          background: '#000',
+          border: '0.5px solid rgba(0,229,160,0.15)',
+          borderLeft: '3px solid rgba(0,229,160,0.6)',
           borderBottom: '0.5px solid rgba(255,255,255,0.06)',
           borderRadius: '8px 8px 0 0',
         }}>
@@ -635,7 +636,7 @@ export default function AccountPickupPage() {
         </div>
 
         {/* 테이블 카드 — 상단 라운드/테두리 제거(위 바와 연결) */}
-        <div style={{ background: 'var(--color-bg-secondary)', border: '0.5px solid var(--color-border-subtle)', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
+        <div style={{ background: '#000', border: '0.5px solid rgba(0,229,160,0.15)', borderLeft: '3px solid rgba(0,229,160,0.6)', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto', width: '100%' }}>
             <div style={{ width: isPastMonth ? 'fit-content' : '100%', minWidth: isPastMonth ? '100%' : undefined }}>
               {isPastMonth ? (
