@@ -145,39 +145,43 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     staleTime: 10 * 60 * 1000,
   })
 
-  // 예산 Step 1: 해당 연도의 최신 update_date 조회
+  // 예산 Step 1: a04_budget_mtd에서 최신 confirmed update_date 조회
   const { data: budgetDateData } = useQuery({
-    queryKey: ['closing_budget_date', hotelId, reportYear],
+    queryKey: ['closing_budget_mtd_date', hotelId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from('a03_budget')
+        .from('a04_budget_mtd')
         .select('update_date')
         .eq('hotel_id', hotelId)
-        .gte('business_date', `${reportYear}-01-01`)
-        .lte('business_date', `${reportYear}-12-31`)
+        .eq('confirmed', true)
         .order('update_date', { ascending: false })
         .limit(1)
       if (error) throw error
       return data ?? []
     },
-    enabled: open && !!hotelId && !!reportYear,
+    enabled: open && !!hotelId,
     staleTime: 10 * 60 * 1000,
   })
   const budgetUpdateDate = budgetDateData?.[0]?.update_date ?? null
 
-  // 예산 Step 2: get_budget_monthly RPC (최신 update_date 사용)
-  const { data: budgetRows } = useQuery({
-    queryKey: ['closing_budget', hotelId, reportYear, budgetUpdateDate],
+  // 예산 Step 2: 그 update_date 기준 전체 조회 후 마감월(year/month)로 필터
+  const { data: budgetRowsFetched } = useQuery({
+    queryKey: ['closing_budget_mtd', hotelId, budgetUpdateDate],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .rpc('get_budget_monthly', { p_hotel_id: hotelId, p_year: reportYear, p_update_date: budgetUpdateDate })
+        .from('a04_budget_mtd')
+        .select('year, month, segmentation, budget_nights, budget_revenue')
+        .eq('hotel_id', hotelId)
+        .eq('update_date', budgetUpdateDate)
+        .eq('confirmed', true)
       if (error) throw error
       return data ?? []
     },
-    enabled: open && !!hotelId && !!reportYear && !!budgetUpdateDate,
+    enabled: open && !!hotelId && !!budgetUpdateDate,
     staleTime: 10 * 60 * 1000,
   })
-  const monthBudget = (budgetRows ?? []).filter((r: any) => Number(r.month_num) === reportMonth)
+  const budgetRows = (budgetRowsFetched ?? []).filter((r: any) => r.year === reportYear && r.month === reportMonth)
+  const monthBudget = (budgetRows ?? []).filter((r: any) => Number(r.month) === reportMonth)
   console.log('[ClosingReport budget]', {
     reportMonth,
     reportMonthType: typeof reportMonth,
@@ -282,36 +286,10 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     staleTime: 10 * 60 * 1000,
   })
 
-  const sameYear = curY === reportYear
-  const { data: curBudgetDateData } = useQuery({
-    queryKey: ['closing_cur_budget_date', hotelId, curY],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from('a03_budget').select('update_date')
-        .eq('hotel_id', hotelId)
-        .gte('business_date', `${curY}-01-01`).lte('business_date', `${curY}-12-31`)
-        .order('update_date', { ascending: false }).limit(1)
-      if (error) throw error
-      return data ?? []
-    },
-    enabled: open && !sameYear && !!hotelId && !!curY,
-    staleTime: 10 * 60 * 1000,
-  })
-  const curBudgetUpdateDate = sameYear ? budgetUpdateDate : (curBudgetDateData?.[0]?.update_date ?? null)
-
-  const { data: curBudgetRowsFetched } = useQuery({
-    queryKey: ['closing_cur_budget', hotelId, curY, curBudgetUpdateDate],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .rpc('get_budget_monthly', { p_hotel_id: hotelId, p_year: curY, p_update_date: curBudgetUpdateDate })
-      if (error) throw error
-      return data ?? []
-    },
-    enabled: open && !sameYear && !!hotelId && !!curY && !!curBudgetUpdateDate,
-    staleTime: 10 * 60 * 1000,
-  })
-  const curBudgetRows = sameYear ? budgetRows : curBudgetRowsFetched
-  const curMonthBudget = (curBudgetRows ?? []).filter((r: any) => Number(r.month_num) === curM)
+  // a04_budget_mtd는 최신 confirmed update_date 스냅샷 하나가 여러 연도를 포함하므로
+  // budgetRowsFetched(Step 1에서 조회한 것)를 그대로 재사용, year/month만 다르게 필터
+  const curBudgetRows = (budgetRowsFetched ?? []).filter((r: any) => r.year === curY && r.month === curM)
+  const curMonthBudget = (curBudgetRows ?? []).filter((r: any) => Number(r.month) === curM)
   const curBudRn  = curMonthBudget.reduce((s: number, r: any) => s + (r.budget_nights ?? 0), 0)
   const curBudRev = curMonthBudget.reduce((s: number, r: any) => s + (r.budget_revenue ?? 0), 0)
 

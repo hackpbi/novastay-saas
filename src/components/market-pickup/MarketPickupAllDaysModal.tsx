@@ -1,32 +1,21 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
-import { X, Printer } from 'lucide-react'
+import { Printer } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useDateContext } from '@/contexts/DateContext'
+import { useMarketSchema } from '@/hooks/useMarketSchema'
 import type { PickupRow } from '@/hooks/usePickupData'
 import type { SegLeaf } from './MarketPickupMonthBlock'
 import { lastDayOfMonth, inMonth, WEEKDAY_KR } from '@/utils/pickupPageUtils'
-import { getDayColor, getEventBadge } from '@/utils/dateUtils'
+import { getEventBadge } from '@/utils/dateUtils'
 
 // 라이트 모드 미리보기(인쇄) 테이블 셀 스타일
 const printTh    = { padding: '6px 10px', textAlign: 'center' as const, fontSize: 11, fontWeight: 600, border: '1px solid #e5e7eb' }
 const printSubTh = { padding: '4px 8px',  textAlign: 'right'  as const, fontSize: 10, fontWeight: 500, border: '1px solid #e5e7eb' }
 const printTd    = { padding: '4px 8px',  textAlign: 'right'  as const, fontSize: 11, border: '1px solid #f3f4f6' }
-
-// 이벤트 동그라미 뱃지 (민트)
-function EventDot({ text }: { text: string }) {
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
-      background: 'rgba(0,229,160,0.12)', border: '1px solid #00E5A0',
-      color: '#00E5A0', fontSize: 9, fontWeight: 600, lineHeight: 1,
-    }}>{text.slice(0, 2)}</span>
-  )
-}
 
 type Metric = 'rn' | 'adr' | 'rev'
 type Mode   = 'pickup' | 'otb'
@@ -50,10 +39,10 @@ function metricValue(a: Agg, metric: Metric, mode: Mode): number | null {
     case 'rev': return Math.round((a.otbR - a.vsR) / 1e6 * 10) / 10
   }
 }
-function fmtMetric(v: number | null, metric: Metric, mode: Mode): string {
+// 양수: 부호 없이 숫자만 / 음수: △ + 절대값
+function fmtMetric(v: number | null, _metric: Metric, _mode: Mode): string {
   if (v === null || v === 0) return '—'
-  const sign = mode === 'pickup' && v > 0 ? '+' : ''
-  return metric === 'rn' ? `${sign}${v}` : metric === 'adr' ? `${sign}${v}k` : `${sign}${v}M`
+  return v < 0 ? `△${Math.abs(v)}` : `${v}`
 }
 // OCC% — avail = roomCount × 일수
 function occValue(a: Agg, avail: number, mode: Mode): number | null {
@@ -61,10 +50,9 @@ function occValue(a: Agg, avail: number, mode: Mode): number | null {
   const nights = mode === 'otb' ? a.otbN : a.otbN - a.vsN
   return Math.round(nights / avail * 100)
 }
-function fmtOcc(v: number | null, mode: Mode): string {
+function fmtOcc(v: number | null, _mode: Mode): string {
   if (v === null || v === 0) return '—'
-  const sign = mode === 'pickup' && v > 0 ? '+' : ''
-  return `${sign}${v}%`
+  return v < 0 ? `△${Math.abs(v)}%` : `${v}%`
 }
 export default function MarketPickupAllDaysModal({
   open, onClose, year, month, pickupRows, activeSegs, roomCount,
@@ -78,11 +66,20 @@ export default function MarketPickupAllDaysModal({
   roomCount:  number
 }) {
   const { otbDate, vsOtbDate } = useDateContext()
-  const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
+  const { data: schema = [] } = useMarketSchema()
+  // 상위 그룹(main) 재구성 — 모달 prop(activeSegs)엔 부모 정보가 없어 스키마를 직접 조회해 parent_id로 묶음
+  const parentGroups = useMemo(() => {
+    const parentIdOf = new Map<string, string | null>()
+    for (const s of schema) parentIdOf.set(s.id, s.parent_id)
+    const mains = schema.filter(s => s.level === 'main' && s.parent_id === null)
+    return mains
+      .map(main => ({ id: main.id, name: main.name, children: activeSegs.filter(s => parentIdOf.get(s.id) === main.id) }))
+      .filter(g => g.children.length > 0)
+  }, [schema, activeSegs])
   // Pick-up(전일 대비) / OTB(절대값) 보기 모드
   const [viewMode, setViewMode] = useState<Mode>('pickup')
   // 누적 토글: 0=R/N, 1=R/N+ADR, 2=R/N+ADR+REV
-  const [metricLevel, setMetricLevel] = useState<0 | 1 | 2>(1)
+  const [metricLevel, setMetricLevel] = useState<0 | 1 | 2>(2)
   const handleMetricClick = (clicked: 'adr' | 'rev') => {
     if (clicked === 'adr') setMetricLevel(prev => (prev >= 1 ? 0 : 1))
     else setMetricLevel(prev => (prev >= 2 ? 1 : 2))
@@ -154,22 +151,14 @@ export default function MarketPickupAllDaysModal({
 
   if (!open) return null
 
-  // 라이트 셀 색상
-  const lc = (v: number | null) =>
-    viewMode === 'otb' ? '#374151' : (v == null || v === 0 ? '#9ca3af' : v < 0 ? '#dc2626' : '#059669')
-
   return createPortal(
-    <>
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
-      <div className="absolute inset-0 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose} />
-      <div
-        className="relative rounded-2xl overflow-hidden flex flex-col"
-        style={{ background: '#000000', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-card)', width: '80.75vw', height: '76.5vh', maxWidth: '80.75vw', maxHeight: '76.5vh' }}
-      >
-        {/* 헤더 — 제목 + 지표 토글 + 닫기 */}
-        <div className="flex items-center justify-between px-5 py-3.5 shrink-0" style={{ borderBottom: '1px solid var(--divider-color)' }}>
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>{month1}월 픽업 전일자</h2>
-          <div className="flex items-center gap-3">
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <style>{`@media print { body * { visibility: hidden !important; } #print-content, #print-content * { visibility: visible !important; } #print-content { position: absolute; left: 0; top: 0; } #print-content th, #print-content td { font-size: 7px !important; padding: 1px 2px !important; } @page { size: A4 landscape; margin: 0; } }`}</style>
+      <div data-theme="light" style={{ colorScheme: 'light', background: '#fff', width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* 헤더 — 제목 + Pick-up/OTB 토글 + R/N/ADR/REV 토글 + Print + 닫기 */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid #e5e7eb' }}>
+          <span style={{ fontSize: 14, fontWeight: 500, color: '#111' }}>{month1}월 픽업 전일자</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {/* Pick-up / OTB 보기 토글 */}
             <div style={{ display: 'flex', gap: 4 }}>
               {(['pickup', 'otb'] as const).map(mode => (
@@ -178,9 +167,9 @@ export default function MarketPickupAllDaysModal({
                   onClick={() => setViewMode(mode)}
                   style={{
                     fontSize: 11, padding: '3px 10px', borderRadius: 6, cursor: 'pointer',
-                    border: `1px solid ${viewMode === mode ? '#00E5A0' : '#2a2a2a'}`,
-                    background: viewMode === mode ? '#00E5A0' : 'transparent',
-                    color: viewMode === mode ? '#0a0a0a' : '#555',
+                    border: `1px solid ${viewMode === mode ? '#1d9e75' : '#e1e0d9'}`,
+                    background: viewMode === mode ? '#1d9e75' : 'transparent',
+                    color: viewMode === mode ? '#ffffff' : '#898781',
                     fontWeight: viewMode === mode ? 600 : 400,
                   }}
                 >
@@ -188,6 +177,7 @@ export default function MarketPickupAllDaysModal({
                 </button>
               ))}
             </div>
+            {/* R/N · ADR · REV 누적 토글 */}
             <div style={{ display: 'flex', gap: 3 }}>
               <button
                 onClick={() => setMetricLevel(0)}
@@ -219,186 +209,110 @@ export default function MarketPickupAllDaysModal({
                 )
               })}
             </div>
-            <button
-              onClick={() => setPrintPreviewOpen(true)}
-              style={{
-                background: 'transparent', border: '1px solid #2a2a2a', borderRadius: 6,
-                color: '#888', fontSize: 11, padding: '3px 10px', cursor: 'pointer',
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-              }}
-            >
+            <button onClick={() => window.print()} style={{ background: '#1d9e75', border: 'none', borderRadius: 6, color: '#fff', fontSize: 12, fontWeight: 600, padding: '6px 16px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
               <Printer size={13} /> Print
             </button>
-            <button onClick={onClose} className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1" aria-label="닫기">
-              <X size={20} />
-            </button>
+            <button onClick={onClose} style={{ background: 'transparent', border: '1px solid #e5e7eb', borderRadius: 6, color: '#666', fontSize: 12, padding: '6px 12px', cursor: 'pointer' }}>닫기</button>
           </div>
         </div>
-
-        {/* 테이블 */}
-        <div style={{ overflow: 'auto', flex: 1, minHeight: 0, fontSize: 10 }}>
-          {activeSegs.length === 0 ? (
-            <div style={{ padding: 24, textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 12 }}>선택된 세그먼트가 없습니다.</div>
-          ) : (
-            <table style={{ borderCollapse: 'collapse', fontSize: 10, tableLayout: 'auto' }}>
+        {/* 본문 */}
+        <div style={{ flex: 1, overflow: 'auto', padding: 24 }}>
+          <div id="print-content" style={{ width: '297mm', height: '210mm', padding: '5mm', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', background: '#fff' }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111', marginBottom: 4 }}>{year}년 {month1}월 픽업 전일자 {viewMode === 'otb' ? '(OTB)' : '(Pick-up)'}</h2>
+            <p style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>OTB {otbDate} vs {vsOtbDate}</p>
+            <div style={{ textAlign: 'right', fontSize: 11, color: '#666', marginBottom: 4 }}>[단위 : 실, 천원, 백만원]</div>
+            <table style={{ flex: 1, width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
+              <colgroup>
+                <col style={{ width: 90 }} />
+                {(['OCC', 'R/N', 'ADR', 'REV'] as const).map(c => <col key={`sumcol-${c}`} />)}
+                {parentGroups.map(g => (
+                  <Fragment key={g.id}>
+                    {METS.map(m => <col key={`pcol-${g.id}-${m}`} />)}
+                    {g.children.map(s => METS.map(m => <col key={`ccol-${s.id}-${m}`} />))}
+                  </Fragment>
+                ))}
+              </colgroup>
               <thead>
-                {/* 1행: 합계(날짜 오른쪽) + 세그먼트명 (colspan 병합) */}
-                <tr style={{ position: 'sticky', top: 0, zIndex: 3, background: '#000000' }}>
-                  <th rowSpan={2} style={{ height: 24, boxSizing: 'border-box', textAlign: 'left', color: 'var(--color-text-secondary)', fontWeight: 500, padding: '4px 6px', borderBottom: '0.5px solid #333', whiteSpace: 'nowrap', position: 'sticky', left: 0, zIndex: 4, background: '#000000' }}>날짜</th>
-                  <th colSpan={4} style={{ height: 24, boxSizing: 'border-box', textAlign: 'center', color: '#00E5A0', fontWeight: 600, padding: '4px 6px', borderBottom: '0.5px solid #333', borderLeft: '0.5px solid #333', borderRight: '1px solid rgba(0,229,160,0.25)' }}>합계</th>
-                  {activeSegs.map(s => (
-                    <th key={s.id} colSpan={METS.length} style={{ height: 24, boxSizing: 'border-box', textAlign: 'center', background: s.color || '#1a1a1a', color: s.fontDarkColor || '#fff', fontWeight: s.isBold ? 600 : 500, padding: '4px 6px', borderBottom: '0.5px solid #333', borderLeft: '0.5px solid #333', whiteSpace: 'nowrap' }}>{s.name}</th>
+                <tr>
+                  <th rowSpan={2} style={{ ...printTh, background: '#f9fafb', color: '#374151' }}>날짜</th>
+                  <th colSpan={4} style={{ ...printTh, background: '#ecfdf5', color: '#065f46' }}>합계</th>
+                  {parentGroups.map(g => (
+                    <Fragment key={g.id}>
+                      <th colSpan={METS.length} style={{ ...printTh, background: '#ecfdf5', color: '#065f46' }}>{g.name}</th>
+                      {g.children.map(s => (
+                        <th key={s.id} colSpan={METS.length} style={{ ...printTh, background: s.lightColor ?? '#f9fafb', color: '#374151' }}>{s.name}</th>
+                      ))}
+                    </Fragment>
                   ))}
                 </tr>
-                {/* 2행: 합계 OCC/R/N/ADR/REV + 세그먼트 R/N·ADR·REV */}
-                <tr style={{ position: 'sticky', top: 24, zIndex: 3, background: '#000000' }}>
-                  {(['OCC', 'R/N', 'ADR', 'REV'] as const).map((c, ci) => (
-                    <th key={`th-${c}`} style={{ textAlign: 'right', color: '#666', fontWeight: 400, padding: '3px 6px', borderBottom: '0.5px solid #333', ...(ci === 0 ? { borderLeft: '0.5px solid #333' } : {}), ...(ci === 3 ? { borderRight: '1px solid rgba(0,229,160,0.25)' } : {}) }}>{c}</th>
+                <tr>
+                  {(['OCC', 'R/N', 'ADR', 'REV'] as const).map(c => <th key={c} style={{ ...printSubTh, background: '#f9fafb', color: '#6b7280' }}>{c}</th>)}
+                  {parentGroups.map(g => (
+                    <Fragment key={g.id}>
+                      {METS.map(m => <th key={`p-${g.id}-${m}`} style={{ ...printSubTh, background: '#f9fafb', color: '#6b7280' }}>{metLabel[m]}</th>)}
+                      {g.children.map(s => METS.map(m => <th key={`${s.id}-${m}`} style={{ ...printSubTh, background: '#f9fafb', color: '#6b7280' }}>{metLabel[m]}</th>))}
+                    </Fragment>
                   ))}
-                  {activeSegs.map(s => METS.map((m, mi) => (
-                    <th key={`${s.id}-${m}`} style={{ textAlign: 'right', color: '#666', fontWeight: 400, padding: '3px 6px', borderBottom: '0.5px solid #333', ...(mi === 0 ? { borderLeft: '0.5px solid #333' } : {}) }}>{metLabel[m]}</th>
-                  )))}
                 </tr>
               </thead>
-              <tbody className="font-mono">
+              <tbody>
                 {allDays.map(i => {
                   const dow = new Date(year, month, i + 1).getDay()
                   const dateStr = `${year}-${String(month1).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`
-                  const badge = eventMap[dateStr]
+                  const isFriSat = dow === 5 || dow === 6
+                  const isRed = isFriSat || !!eventMap[dateStr]
+                  const cellColor = isRed ? '#E24B4A' : '#000000'
                   const totalAgg = sumAggs(activeSegs.map(s => segDayAgg(s, i)))
                   const occ = occValue(totalAgg, roomCount, viewMode)
                   return (
-                    <tr key={i} style={{ borderTop: '0.5px solid #1f1f1f' }}>
-                      <td style={{ padding: '3px 6px', whiteSpace: 'nowrap', position: 'sticky', left: 0, zIndex: 1, background: '#000000' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ color: getDayColor(dateStr) }}>{month1}/{i + 1} {WEEKDAY_KR[dow]}</span>
-                          {badge && <EventDot text={badge} />}
-                        </div>
+                    <tr key={i} style={{ background: isRed ? 'rgba(226,75,74,0.06)' : undefined }}>
+                      <td style={{ ...printTd, textAlign: 'left', whiteSpace: 'nowrap', color: cellColor }}>
+                        {month1}/{i + 1} {WEEKDAY_KR[dow]}{eventMap[dateStr] ? ` (${eventMap[dateStr].slice(0, 2)})` : ''}
                       </td>
-                      {/* 합계 — OCC / R/N / ADR / REV (회색 일반체) */}
-                      <td style={{ padding: '3px 5px', textAlign: 'right', color: '#888', fontWeight: 400, borderLeft: '0.5px solid #1f1f1f' }}>{fmtOcc(occ, viewMode)}</td>
-                      {(['rn', 'adr', 'rev'] as Metric[]).map((m, mi) => {
-                        const v = metricValue(totalAgg, m, viewMode)
-                        return <td key={`tot-${m}`} style={{ padding: '3px 5px', textAlign: 'right', color: '#888', fontWeight: 400, ...(mi === 2 ? { borderRight: '1px solid rgba(0,229,160,0.25)' } : {}) }}>{fmtMetric(v, m, viewMode)}</td>
-                      })}
-                      {/* 세그먼트별 (회색 일반체) */}
-                      {activeSegs.map(s => {
-                        const agg = segDayAgg(s, i)
-                        return METS.map((m, mi) => {
-                          const v = metricValue(agg, m, viewMode)
-                          return <td key={`${s.id}-${m}`} style={{ padding: '3px 5px', textAlign: 'right', color: '#888', fontWeight: 400, ...(mi === 0 ? { borderLeft: '0.5px solid #1f1f1f' } : {}) }}>{fmtMetric(v, m, viewMode)}</td>
-                        })
+                      <td style={{ ...printTd, color: cellColor }}>{fmtOcc(occ, viewMode)}</td>
+                      {(['rn', 'adr', 'rev'] as Metric[]).map(m => { const v = metricValue(totalAgg, m, viewMode); return <td key={m} style={{ ...printTd, color: cellColor }}>{fmtMetric(v, m, viewMode)}</td> })}
+                      {parentGroups.map(g => {
+                        const pAgg = sumAggs(g.children.map(c => segDayAgg(c, i)))
+                        return (
+                          <Fragment key={g.id}>
+                            {METS.map(m => { const v = metricValue(pAgg, m, viewMode); return <td key={`p-${g.id}-${m}`} style={{ ...printTd, color: cellColor }}>{fmtMetric(v, m, viewMode)}</td> })}
+                            {g.children.map(s => { const agg = segDayAgg(s, i); return METS.map(m => { const v = metricValue(agg, m, viewMode); return <td key={`${s.id}-${m}`} style={{ ...printTd, color: cellColor }}>{fmtMetric(v, m, viewMode)}</td> }) })}
+                          </Fragment>
+                        )
                       })}
                     </tr>
                   )
                 })}
               </tbody>
               <tfoot>
-                <tr style={{ position: 'sticky', bottom: 0, background: '#000000' }}>
-                  <td style={{ padding: '4px 6px', fontWeight: 600, color: 'var(--color-text-primary)', borderTop: '0.5px solid #333', position: 'sticky', left: 0, zIndex: 1, background: '#000000' }}>합 계</td>
+                <tr>
+                  <td style={{ ...printTd, textAlign: 'left', fontWeight: 700, color: '#000000', background: '#f9fafb' }}>합 계</td>
                   {(() => {
                     const grand = sumAggs(activeSegs.flatMap(s => Array.from({ length: days }, (_, i) => segDayAgg(s, i))))
                     const occ = occValue(grand, roomCount * days, viewMode)
                     return (
                       <>
-                        <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 400, color: '#aaa', borderTop: '0.5px solid #333', borderLeft: '0.5px solid #333' }}>{fmtOcc(occ, viewMode)}</td>
-                        {(['rn', 'adr', 'rev'] as Metric[]).map((m, mi) => (
-                          <td key={`grand-${m}`} style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 400, color: '#aaa', borderTop: '0.5px solid #333', ...(mi === 2 ? { borderRight: '1px solid rgba(0,229,160,0.25)' } : {}) }}>{fmtMetric(metricValue(grand, m, viewMode), m, viewMode)}</td>
-                        ))}
+                        <td style={{ ...printTd, fontWeight: 700, color: '#000000', background: '#f9fafb' }}>{fmtOcc(occ, viewMode)}</td>
+                        {(['rn', 'adr', 'rev'] as Metric[]).map(m => <td key={m} style={{ ...printTd, fontWeight: 700, color: '#000000', background: '#f9fafb' }}>{fmtMetric(metricValue(grand, m, viewMode), m, viewMode)}</td>)}
                       </>
                     )
                   })()}
-                  {activeSegs.map(s => {
-                    const monthAgg = sumAggs(Array.from({ length: days }, (_, i) => segDayAgg(s, i)))
-                    return METS.map((m, mi) => {
-                      const v = metricValue(monthAgg, m, viewMode)
-                      return <td key={`${s.id}-${m}`} style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 400, color: '#aaa', borderTop: '0.5px solid #333', ...(mi === 0 ? { borderLeft: '0.5px solid #333' } : {}) }}>{fmtMetric(v, m, viewMode)}</td>
-                    })
+                  {parentGroups.map(g => {
+                    const pMonthAgg = sumAggs(g.children.flatMap(c => Array.from({ length: days }, (_, i) => segDayAgg(c, i))))
+                    return (
+                      <Fragment key={g.id}>
+                        {METS.map(m => <td key={`p-${g.id}-${m}`} style={{ ...printTd, fontWeight: 700, color: '#000000', background: '#f9fafb' }}>{fmtMetric(metricValue(pMonthAgg, m, viewMode), m, viewMode)}</td>)}
+                        {g.children.map(s => { const monthAgg = sumAggs(Array.from({ length: days }, (_, i) => segDayAgg(s, i))); return METS.map(m => <td key={`${s.id}-${m}`} style={{ ...printTd, fontWeight: 700, color: '#000000', background: '#f9fafb' }}>{fmtMetric(metricValue(monthAgg, m, viewMode), m, viewMode)}</td>) })}
+                      </Fragment>
+                    )
                   })}
                 </tr>
               </tfoot>
             </table>
-          )}
-        </div>
-      </div>
-    </div>
-
-    {/* ── Print 미리보기 (라이트 모드) ── */}
-    {printPreviewOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <style>{`@media print { body * { visibility: hidden !important; } #print-content, #print-content * { visibility: visible !important; } #print-content { position: absolute; left: 0; top: 0; width: 100%; } @page { size: landscape; margin: 10mm; } }`}</style>
-          <div style={{ background: '#fff', borderRadius: 12, width: '90vw', height: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            {/* 미리보기 헤더 */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid #e5e7eb' }}>
-              <span style={{ fontSize: 14, fontWeight: 500, color: '#111' }}>Print Preview — {month1}월 픽업 전일자</span>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => window.print()} style={{ background: '#00E5A0', border: 'none', borderRadius: 6, color: '#0a0a0a', fontSize: 12, fontWeight: 600, padding: '6px 16px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                  <Printer size={13} /> Print
-                </button>
-                <button onClick={() => setPrintPreviewOpen(false)} style={{ background: 'transparent', border: '1px solid #e5e7eb', borderRadius: 6, color: '#666', fontSize: 12, padding: '6px 12px', cursor: 'pointer' }}>닫기</button>
-              </div>
-            </div>
-            {/* 미리보기 본문 */}
-            <div style={{ flex: 1, overflow: 'auto', padding: 24 }}>
-              <div id="print-content">
-                <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111', marginBottom: 4 }}>{year}년 {month1}월 픽업 전일자 {viewMode === 'otb' ? '(OTB)' : '(Pick-up)'}</h2>
-                <p style={{ fontSize: 12, color: '#666', marginBottom: 16 }}>OTB {otbDate} vs {vsOtbDate}</p>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                  <thead>
-                    <tr>
-                      <th rowSpan={2} style={{ ...printTh, background: '#f9fafb', color: '#374151' }}>날짜</th>
-                      <th colSpan={4} style={{ ...printTh, background: '#ecfdf5', color: '#065f46' }}>합계</th>
-                      {activeSegs.map(s => (
-                        <th key={s.id} colSpan={METS.length} style={{ ...printTh, background: s.lightColor ?? '#f9fafb', color: '#374151' }}>{s.name}</th>
-                      ))}
-                    </tr>
-                    <tr>
-                      {(['OCC', 'R/N', 'ADR', 'REV'] as const).map(c => <th key={c} style={{ ...printSubTh, background: '#f9fafb', color: '#6b7280' }}>{c}</th>)}
-                      {activeSegs.map(s => METS.map(m => <th key={`${s.id}-${m}`} style={{ ...printSubTh, background: '#f9fafb', color: '#6b7280' }}>{metLabel[m]}</th>))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {allDays.map(i => {
-                      const dow = new Date(year, month, i + 1).getDay()
-                      const dateStr = `${year}-${String(month1).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`
-                      const isFriSat = dow === 5 || dow === 6
-                      const totalAgg = sumAggs(activeSegs.map(s => segDayAgg(s, i)))
-                      const occ = occValue(totalAgg, roomCount, viewMode)
-                      return (
-                        <tr key={i}>
-                          <td style={{ ...printTd, textAlign: 'left', whiteSpace: 'nowrap', color: isFriSat ? '#dc2626' : '#374151' }}>
-                            {month1}/{i + 1} {WEEKDAY_KR[dow]}{eventMap[dateStr] ? ` (${eventMap[dateStr].slice(0, 2)})` : ''}
-                          </td>
-                          <td style={{ ...printTd, color: lc(occ) }}>{fmtOcc(occ, viewMode)}</td>
-                          {(['rn', 'adr', 'rev'] as Metric[]).map(m => { const v = metricValue(totalAgg, m, viewMode); return <td key={m} style={{ ...printTd, color: lc(v) }}>{fmtMetric(v, m, viewMode)}</td> })}
-                          {activeSegs.map(s => { const agg = segDayAgg(s, i); return METS.map(m => { const v = metricValue(agg, m, viewMode); return <td key={`${s.id}-${m}`} style={{ ...printTd, color: lc(v) }}>{fmtMetric(v, m, viewMode)}</td> }) })}
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <td style={{ ...printTd, textAlign: 'left', fontWeight: 700, color: '#111', background: '#f9fafb' }}>합 계</td>
-                      {(() => {
-                        const grand = sumAggs(activeSegs.flatMap(s => Array.from({ length: days }, (_, i) => segDayAgg(s, i))))
-                        const occ = occValue(grand, roomCount * days, viewMode)
-                        return (
-                          <>
-                            <td style={{ ...printTd, fontWeight: 700, color: lc(occ), background: '#f9fafb' }}>{fmtOcc(occ, viewMode)}</td>
-                            {(['rn', 'adr', 'rev'] as Metric[]).map(m => <td key={m} style={{ ...printTd, fontWeight: 700, color: lc(metricValue(grand, m, viewMode)), background: '#f9fafb' }}>{fmtMetric(metricValue(grand, m, viewMode), m, viewMode)}</td>)}
-                          </>
-                        )
-                      })()}
-                      {activeSegs.map(s => { const monthAgg = sumAggs(Array.from({ length: days }, (_, i) => segDayAgg(s, i))); return METS.map(m => <td key={`${s.id}-${m}`} style={{ ...printTd, fontWeight: 700, color: lc(metricValue(monthAgg, m, viewMode)), background: '#f9fafb' }}>{fmtMetric(metricValue(monthAgg, m, viewMode), m, viewMode)}</td>) })}
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
           </div>
         </div>
-      )}
-    </>,
+      </div>
+    </div>,
     document.body
   )
 }
