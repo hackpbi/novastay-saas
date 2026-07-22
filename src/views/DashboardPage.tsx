@@ -213,22 +213,12 @@ function EventBadge({ group, pickupRows, lyRows, roomCount, adrUnit, revUnit }: 
   const dayAgg = useMemo(() => {
     const map: Record<string, DayAggEntry> = {}
     for (const r of pickupRows) {
-      // [DEBUG-TEMP] vsN 진단 — 확인 후 제거 (필터 전 raw 행)
-      if (r.business_date === '2026-08-14' || r.business_date === '2026-08-15') {
-        console.log('[DEBUG] pickupRows row', {
-          business_date: r.business_date,
-          keys: Object.keys(r),
-          vs_otb_nights: (r as any).vs_otb_nights,
-          otb_nights: (r as any).otb_nights,
-          segmentation: r.segmentation,
-        })
-      }
       if (!group.dates.includes(r.business_date)) continue
       if (r.segmentation === 'HOU') continue   // HOU 제외 (원본 카드와 동일)
       let a = map[r.business_date]
       if (!a) { a = { otbN: 0, otbR: 0, vsN: 0, lyN: 0, puN: 0 }; map[r.business_date] = a }
       a.otbN += r.otb_nights ?? 0;      a.otbR += r.otb_revenue ?? 0
-      a.vsN  += r.vs_otb_nights ?? 0    // 이전 점유율용 (날짜피커 vs 기준일)
+      a.vsN  += (r as any).vs_nights ?? 0    // 이전 점유율용 (RPC 실제 컬럼명 vs_nights)
       a.puN  += r.pu_nights ?? 0        // 픽업용 (RPC 계산값)
     }
     for (const r of lyRows) {
