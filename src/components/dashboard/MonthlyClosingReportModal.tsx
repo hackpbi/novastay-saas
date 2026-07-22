@@ -658,28 +658,70 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
   // 세그먼트별 요일 매트릭스 (codeToSegName/orderedSegNames 이후에 선언 — 선언 전 참조 방지)
   const dowSegKpi = useMemo(() => {
     const dowOrder = ['월', '화', '수', '목', '금', '토', '일']
-    const map: Record<string, Record<string, { rn: number; rev: number }>> = {}
+    const map: Record<string, Record<string, { rn: number; rev: number; lyRn: number }>> = {}
+    const segTotal: Record<string, number> = {}
+    const segLyTotal: Record<string, number> = {}
+    let grandRn = 0
+    let grandLyRn = 0
+
     ;(actualData ?? []).forEach((r: any) => {
       const day = calMap[r.business_date]?.day
       if (!day) return
       const segName = codeToSegName[r.segmentation] ?? r.segmentation ?? '기타'
       if (!map[segName]) map[segName] = {}
-      if (!map[segName][day]) map[segName][day] = { rn: 0, rev: 0 }
+      if (!map[segName][day]) map[segName][day] = { rn: 0, rev: 0, lyRn: 0 }
       map[segName][day].rn  += r.nights ?? 0
       map[segName][day].rev += r.room_revenue ?? 0
+      segTotal[segName] = (segTotal[segName] ?? 0) + (r.nights ?? 0)
+      grandRn += r.nights ?? 0
     })
+
+    ;(lyData ?? []).forEach((r: any) => {
+      const segName = codeToSegName[r.segmentation] ?? r.segmentation ?? '기타'
+      segLyTotal[segName] = (segLyTotal[segName] ?? 0) + (r.nights ?? 0)
+      grandLyRn += r.nights ?? 0
+    })
+
+    // 전년비(객실) — 요일 매칭(yoy_match) 기준으로 같은 요일 버킷에 전년 RN 누적
+    const lyByDate: Record<string, Record<string, number>> = {}
+    ;(lyData ?? []).forEach((r: any) => {
+      const segName = codeToSegName[r.segmentation] ?? r.segmentation ?? '기타'
+      if (!lyByDate[r.business_date]) lyByDate[r.business_date] = {}
+      lyByDate[r.business_date][segName] = (lyByDate[r.business_date][segName] ?? 0) + (r.nights ?? 0)
+    })
+    Object.entries(calMap).forEach(([, cal]: any) => {
+      if (!cal.day || !cal.yoy_match) return
+      const lyForDate = lyByDate[cal.yoy_match]
+      if (!lyForDate) return
+      Object.entries(lyForDate).forEach(([segName, rn]) => {
+        if (!map[segName]) map[segName] = {}
+        if (!map[segName][cal.day]) map[segName][cal.day] = { rn: 0, rev: 0, lyRn: 0 }
+        map[segName][cal.day].lyRn += rn as number
+      })
+    })
+
     const segNames = Object.keys(map).sort((a, b) => {
       const ia = orderedSegNames.indexOf(a), ib = orderedSegNames.indexOf(b)
       return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib)
     })
-    return segNames.map(seg => ({
-      seg,
-      cells: dowOrder.map(day => {
-        const c = map[seg]?.[day] ?? { rn: 0, rev: 0 }
-        return { day, rn: c.rn, adrWon: c.rn > 0 ? c.rev / c.rn : 0 }
-      }),
-    }))
-  }, [actualData, calMap, codeToSegName, orderedSegNames])
+
+    return segNames.map(seg => {
+      const total = segTotal[seg] ?? 0
+      return {
+        seg,
+        shareRn: grandRn > 0 ? Math.round((total / grandRn) * 1000) / 10 : 0,
+        shareLyRn: grandLyRn > 0 ? Math.round(((segLyTotal[seg] ?? 0) / grandLyRn) * 1000) / 10 : 0,
+        cells: dowOrder.map(day => {
+          const c = map[seg]?.[day] ?? { rn: 0, rev: 0, lyRn: 0 }
+          return {
+            day, rn: c.rn, adrWon: c.rn > 0 ? c.rev / c.rn : 0,
+            pctOfSeg: total > 0 ? Math.round((c.rn / total) * 1000) / 10 : 0,
+            vsLyRn: c.rn - c.lyRn,
+          }
+        }),
+      }
+    })
+  }, [actualData, lyData, calMap, codeToSegName, orderedSegNames])
 
   // ── 어카운트별 실적 (get_account_actual_data RPC — 별칭 적용 account_name + LY/GAP 동시 반환) ──
   const { data: accountActualRows = [] } = useQuery({
@@ -974,35 +1016,56 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
   }
 
   // 세그먼트별 요일 실적 박스 (R/N · ADR 2행)
-  const renderDowSegBox = (seg: { seg: string; cells: any[] }) => (
-    <table key={seg.seg} style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9, tableLayout: 'fixed', marginBottom: 10 }}>
-      <colgroup>
-        <col style={{ width: '22%' }} /><col style={{ width: '8%' }} />
-        {seg.cells.map((c: any) => <col key={c.day} style={{ width: '11.7%' }} />)}
-      </colgroup>
-      <thead>
-        <tr>
-          <th style={{ textAlign: 'left', fontSize: 9, color: '#0b0b0b', fontWeight: 600, padding: 4, borderBottom: `0.5px solid ${C.border}` }}>{seg.seg}</th>
-          <th style={{ borderBottom: `0.5px solid ${C.border}` }}></th>
-          {seg.cells.map((c: any) => (
-            <th key={c.day} style={{ textAlign: 'right', fontSize: 9, color: c.day === '금' || c.day === '토' ? '#e24b4a' : C.textMuted, fontWeight: 500, padding: 4, borderBottom: `0.5px solid ${C.border}` }}>{c.day}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td style={{ padding: '2px 4px' }}></td>
-          <td style={{ textAlign: 'right', padding: '2px 4px', color: C.textMuted }}>R/N</td>
-          {seg.cells.map((c: any) => <td key={c.day} style={{ textAlign: 'right', padding: '2px 4px', color: '#0b0b0b' }}>{c.rn > 0 ? c.rn.toLocaleString() : '-'}</td>)}
-        </tr>
-        <tr style={{ borderBottom: `0.5px solid ${C.border}` }}>
-          <td style={{ padding: '2px 4px' }}></td>
-          <td style={{ textAlign: 'right', padding: '2px 4px', color: C.textMuted }}>ADR</td>
-          {seg.cells.map((c: any) => <td key={c.day} style={{ textAlign: 'right', padding: '2px 4px', color: C.textSecondary }}>{c.rn > 0 ? fmtAdr(c.adrWon) : '-'}</td>)}
-        </tr>
-      </tbody>
-    </table>
-  )
+  const renderDowSegBox = (seg: { seg: string; shareRn: number; shareLyRn: number; cells: any[] }) => {
+    const z = (n: number, str: string) => (n === 0 ? '-' : str)
+    return (
+      <div key={seg.seg} style={{ background: C.cardBg, borderRadius: 8, padding: '10px 12px', marginBottom: 10, breakInside: 'avoid' } as React.CSSProperties}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#0b0b0b' }}>{seg.seg}</span>
+          <span style={{ fontSize: 9, color: C.blue, fontWeight: 500 }}>객실비중 {seg.shareRn}% / 전년 {seg.shareLyRn}%</span>
+        </div>
+        <div style={{ width: '100%', height: 3, background: C.border, borderRadius: 2, marginBottom: 8, overflow: 'hidden' }}>
+          <div style={{ width: `${Math.min(100, seg.shareRn)}%`, height: '100%', background: C.blue }} />
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9, tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: '16%' }} />
+            {seg.cells.map((c: any) => <col key={c.day} style={{ width: '12%' }} />)}
+          </colgroup>
+          <thead>
+            <tr>
+              <th style={{ borderBottom: `0.5px solid ${C.border}` }}></th>
+              {seg.cells.map((c: any) => (
+                <th key={c.day} style={{ textAlign: 'right', fontSize: 9, color: c.day === '금' || c.day === '토' ? '#e24b4a' : C.textMuted, fontWeight: 500, padding: '3px 4px', borderBottom: `0.5px solid ${C.border}` }}>{c.day}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style={{ textAlign: 'right', padding: '2px 4px', color: C.textMuted }}>객실</td>
+              {seg.cells.map((c: any) => <td key={c.day} style={{ textAlign: 'right', padding: '2px 4px', color: '#0b0b0b' }}>{z(c.rn, c.rn.toLocaleString())}</td>)}
+            </tr>
+            <tr>
+              <td style={{ textAlign: 'right', padding: '2px 4px', color: C.textMuted }}>객단가</td>
+              {seg.cells.map((c: any) => <td key={c.day} style={{ textAlign: 'right', padding: '2px 4px', color: C.textSecondary }}>{z(c.rn, fmtAdr(c.adrWon))}</td>)}
+            </tr>
+            <tr>
+              <td style={{ textAlign: 'right', padding: '2px 4px', color: C.textMuted }}>비중</td>
+              {seg.cells.map((c: any) => <td key={c.day} style={{ textAlign: 'right', padding: '2px 4px', color: C.textMuted }}>{z(c.rn, `${c.pctOfSeg}%`)}</td>)}
+            </tr>
+            <tr>
+              <td style={{ textAlign: 'right', padding: '2px 4px', color: C.textMuted }}>전년비</td>
+              {seg.cells.map((c: any) => (
+                <td key={c.day} style={{ textAlign: 'right', padding: '2px 4px', color: diffColor(c.vsLyRn), fontWeight: 500 }}>
+                  {c.vsLyRn > 0 ? `+${c.vsLyRn}` : c.vsLyRn}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    )
+  }
 
   // 마감월/온북월 미니 요약 카드 — 실적(온북)/목표비/전년비 표시
   const renderMiniSummary = (
