@@ -795,11 +795,8 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
       })
   }, [accountActualRows, orderedSegNames])
 
-  // 국기 이모지 (alpha2 → 유니코드 지역표시문자)
-  const flagEmoji = (alpha2?: string) => {
-    if (!alpha2 || alpha2.length !== 2) return ''
-    return alpha2.toUpperCase().replace(/./g, (c) => String.fromCodePoint(127397 + c.charCodeAt(0)))
-  }
+  // 국기 이미지 URL (alpha2 → flagcdn.com PNG — 플랫폼 무관 항상 그림 표시)
+  const flagImgUrl = (alpha2?: string) => (alpha2 && alpha2.length === 2 ? `https://flagcdn.com/16x12/${alpha2.toLowerCase()}.png` : '')
 
   // 국적별 실적 — get_country_actual_data가 otb_*(당월)/ly_*(전년)를 함께 반환, 상위 10개국 + 기타
   const countryKpi = useMemo(() => {
@@ -820,7 +817,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
       const adrWon = c.rn > 0 ? c.rev / c.rn : 0
       const lyAdrWon = c.lyRn > 0 ? c.lyRev / c.lyRn : 0
       return {
-        name: c.nameKo, flag: flagEmoji(c.alpha2),
+        name: c.nameKo, flag: flagImgUrl(c.alpha2),
         rn: c.rn, adrWon, revWon: c.rev,
         diffRn: c.rn - c.lyRn, diffAdrWon: adrWon - lyAdrWon, diffRevWon: c.rev - c.lyRev,
       }
@@ -855,7 +852,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
       const ia = orderedSegNames.indexOf(a), ib = orderedSegNames.indexOf(b)
       return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib)
     })
-    const cols = [...top5Names, '기타']
+    const cols = top5Names
     return segNames.map(seg => ({
       seg,
       cells: cols.map(name => {
@@ -1677,7 +1674,10 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
             <tbody>
               {countryKpi.map(c => (
                 <tr key={c.name} style={{ borderBottom: `0.5px solid ${C.border}` }}>
-                  <td style={{ ...td, textAlign: 'left', fontWeight: c.name === '기타' ? 500 : 400 }}>{c.flag ? `${c.flag} ` : ''}{c.name}</td>
+                  <td style={{ ...td, textAlign: 'left', fontWeight: c.name === '기타' ? 500 : 400 }}>
+                    {c.flag && <img src={c.flag} alt="" style={{ width: 14, height: 10.5, marginRight: 5, verticalAlign: 'middle', border: '0.5px solid #e1e0d9' }} />}
+                    {c.name}
+                  </td>
                   <td style={{ ...td, textAlign: 'right' }}>{c.rn.toLocaleString()}</td>
                   <td style={{ ...td, textAlign: 'right', color: C.textSecondary }}>{fmtAdr(c.adrWon)}</td>
                   <td style={{ ...td, textAlign: 'right', color: C.textSecondary }}>{fmtRev(c.revWon)}</td>
