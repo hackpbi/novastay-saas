@@ -1005,13 +1005,13 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
             <div style={{ background: '#f5f5f3', borderRadius: 8, overflow: 'hidden' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
                 <colgroup>
-                  <col style={{ width: '13%' }} />
+                  <col style={{ width: '10%' }} />
                   {/* R/N: 실적/목표/전년 */}
-                  <col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '15%' }} />
+                  <col style={{ width: '10%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} />
                   {/* ADR: 실적/목표/전년 */}
-                  <col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '15%' }} />
+                  <col style={{ width: '10%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} />
                   {/* REV: 실적/목표/전년 */}
-                  <col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '15%' }} />
+                  <col style={{ width: '10%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} />
                 </colgroup>
                 <thead>
                   {/* 그룹 헤더 */}
@@ -1054,19 +1054,19 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                       </td>
                       {/* 실적 */}
                       <td style={{ textAlign:'right', padding:'3px 8px', borderBottom:'0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9', ...ov }}>{row.actRn.toLocaleString()}</td>
-                      <td style={{ textAlign:'right', padding:'3px 8px', borderBottom:'0.5px solid #e1e0d9', fontSize: moneyFs, ...ov }}>{fmtAdr(row.actAdrWon)}</td>
+                      <td style={{ textAlign:'right', padding:'3px 8px', borderBottom:'0.5px solid #e1e0d9', fontSize: revFs(fmtAdr(row.actAdrWon)), ...ov }}>{fmtAdr(row.actAdrWon)}</td>
                       <td style={{ textAlign:'right', padding:'3px 8px', borderBottom:'0.5px solid #e1e0d9', fontSize: revFs(fmtRev(row.actRevWon)), ...ov }}>{fmtRev(row.actRevWon)}</td>
                       {/* 목표비(실적-목표 diff) */}
                       <td style={{ textAlign:'right', padding:'3px 8px', borderBottom:'0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9', color: row.actRn - row.budRn >= 0 ? '#1d9e75' : '#a32d2d', ...ov }}>
                         {row.actRn - row.budRn > 0 ? `+${(row.actRn - row.budRn).toLocaleString()}` : (row.actRn - row.budRn).toLocaleString()}
                       </td>
-                      <td style={{ textAlign:'right', padding:'3px 8px', borderBottom:'0.5px solid #e1e0d9', color: row.actAdrWon - row.budAdrWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: moneyFs, ...ov }}>{sAdr(row.actAdrWon - row.budAdrWon)}</td>
+                      <td style={{ textAlign:'right', padding:'3px 8px', borderBottom:'0.5px solid #e1e0d9', color: row.actAdrWon - row.budAdrWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: revFs(sAdr(row.actAdrWon - row.budAdrWon)), ...ov }}>{sAdr(row.actAdrWon - row.budAdrWon)}</td>
                       <td style={{ textAlign:'right', padding:'3px 8px', borderBottom:'0.5px solid #e1e0d9', color: row.actRevWon - row.budRevWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: revFs(sRev(row.actRevWon - row.budRevWon)), ...ov }}>{sRev(row.actRevWon - row.budRevWon)}</td>
                       {/* 전년(대비 diff) */}
                       <td style={{ textAlign:'right', padding:'3px 8px', borderBottom:'0.5px solid #e1e0d9', borderLeft:'0.5px solid #e1e0d9', color: row.actRn - row.lyRn >= 0 ? '#1d9e75' : '#a32d2d', ...ov }}>
                         {row.actRn - row.lyRn > 0 ? `+${(row.actRn - row.lyRn).toLocaleString()}` : (row.actRn - row.lyRn).toLocaleString()}
                       </td>
-                      <td style={{ textAlign:'right', padding:'3px 8px', borderBottom:'0.5px solid #e1e0d9', color: row.actAdrWon - row.lyAdrWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: moneyFs, ...ov }}>{sAdr(row.actAdrWon - row.lyAdrWon)}</td>
+                      <td style={{ textAlign:'right', padding:'3px 8px', borderBottom:'0.5px solid #e1e0d9', color: row.actAdrWon - row.lyAdrWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: revFs(sAdr(row.actAdrWon - row.lyAdrWon)), ...ov }}>{sAdr(row.actAdrWon - row.lyAdrWon)}</td>
                       <td style={{ textAlign:'right', padding:'3px 8px', borderBottom:'0.5px solid #e1e0d9', color: row.actRevWon - row.lyRevWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: revFs(sRev(row.actRevWon - row.lyRevWon)), ...ov }}>{sRev(row.actRevWon - row.lyRevWon)}</td>
                     </tr>
                     )
@@ -1076,19 +1076,19 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                     <td style={{ textAlign:'left', fontWeight: 600, padding:'3px 10px', color:'#0b0b0b' }}>{segKpi.total.seg}</td>
                     {/* 실적 */}
                     <td style={{ textAlign:'right', padding:'3px 8px', borderLeft:'0.5px solid #c8c7c0', fontWeight: 600 }}>{segKpi.total.actRn.toLocaleString()}</td>
-                    <td style={{ textAlign:'right', padding:'3px 8px', fontWeight: 600, fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtAdr(segKpi.total.actAdrWon)}</td>
+                    <td style={{ textAlign:'right', padding:'3px 8px', fontWeight: 600, fontSize: revFs(fmtAdr(segKpi.total.actAdrWon)), whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtAdr(segKpi.total.actAdrWon)}</td>
                     <td style={{ textAlign:'right', padding:'3px 8px', fontWeight: 600, fontSize: revFs(fmtRev(segKpi.total.actRevWon)), whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtRev(segKpi.total.actRevWon)}</td>
                     {/* 목표비(실적-목표 diff) */}
                     <td style={{ textAlign:'right', padding:'3px 8px', borderLeft:'0.5px solid #c8c7c0', color: segKpi.total.actRn - segKpi.total.budRn >= 0 ? '#1d9e75' : '#a32d2d' }}>
                       {segKpi.total.actRn - segKpi.total.budRn > 0 ? `+${(segKpi.total.actRn - segKpi.total.budRn).toLocaleString()}` : (segKpi.total.actRn - segKpi.total.budRn).toLocaleString()}
                     </td>
-                    <td style={{ textAlign:'right', padding:'3px 8px', color: segKpi.total.actAdrWon - segKpi.total.budAdrWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{sAdr(segKpi.total.actAdrWon - segKpi.total.budAdrWon)}</td>
+                    <td style={{ textAlign:'right', padding:'3px 8px', color: segKpi.total.actAdrWon - segKpi.total.budAdrWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: revFs(sAdr(segKpi.total.actAdrWon - segKpi.total.budAdrWon)), whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{sAdr(segKpi.total.actAdrWon - segKpi.total.budAdrWon)}</td>
                     <td style={{ textAlign:'right', padding:'3px 8px', color: segKpi.total.actRevWon - segKpi.total.budRevWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: revFs(sRev(segKpi.total.actRevWon - segKpi.total.budRevWon)), whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{sRev(segKpi.total.actRevWon - segKpi.total.budRevWon)}</td>
                     {/* 전년(대비 diff) */}
                     <td style={{ textAlign:'right', padding:'3px 8px', borderLeft:'0.5px solid #c8c7c0', color: segKpi.total.actRn - segKpi.total.lyRn >= 0 ? '#1d9e75' : '#a32d2d' }}>
                       {segKpi.total.actRn - segKpi.total.lyRn > 0 ? `+${(segKpi.total.actRn - segKpi.total.lyRn).toLocaleString()}` : (segKpi.total.actRn - segKpi.total.lyRn).toLocaleString()}
                     </td>
-                    <td style={{ textAlign:'right', padding:'3px 8px', color: segKpi.total.actAdrWon - segKpi.total.lyAdrWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{sAdr(segKpi.total.actAdrWon - segKpi.total.lyAdrWon)}</td>
+                    <td style={{ textAlign:'right', padding:'3px 8px', color: segKpi.total.actAdrWon - segKpi.total.lyAdrWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: revFs(sAdr(segKpi.total.actAdrWon - segKpi.total.lyAdrWon)), whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{sAdr(segKpi.total.actAdrWon - segKpi.total.lyAdrWon)}</td>
                     <td style={{ textAlign:'right', padding:'3px 8px', color: segKpi.total.actRevWon - segKpi.total.lyRevWon >= 0 ? '#1d9e75' : '#a32d2d', fontSize: revFs(sRev(segKpi.total.actRevWon - segKpi.total.lyRevWon)), whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{sRev(segKpi.total.actRevWon - segKpi.total.lyRevWon)}</td>
                   </tr>
                   {/* 점유율 — 3그룹 병합·가운데 정렬 (실적 / 목표비 diff / 전년비 diff) */}
