@@ -1254,7 +1254,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                 <div style={{ fontSize: 12, fontWeight: 600, color: '#0b0b0b', marginBottom: 6, paddingBottom: 5, borderBottom: '0.5px solid #e1e0d9' }}>{seg.seg}</div>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
                   <colgroup>
-                    <col style={{ width: '34%' }} /><col style={{ width: '18%' }} /><col style={{ width: '22%' }} /><col style={{ width: '18%' }} /><col style={{ width: '8%' }} />
+                    <col style={{ width: '32%' }} /><col style={{ width: '16%' }} /><col style={{ width: '20%' }} /><col style={{ width: '18%' }} /><col style={{ width: '14%' }} />
                   </colgroup>
                   <thead>
                     <tr>
@@ -1262,7 +1262,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                       <th style={{ textAlign: 'right', fontSize: 9, color: '#898781', fontWeight: 500, padding: '0 4px 4px 0', borderBottom: '0.5px solid #e1e0d9' }}>객실</th>
                       <th style={{ textAlign: 'right', fontSize: 9, color: '#898781', fontWeight: 500, padding: '0 4px 4px 0', borderBottom: '0.5px solid #e1e0d9' }}>객단가</th>
                       <th style={{ textAlign: 'right', fontSize: 9, color: '#898781', fontWeight: 500, padding: '0 4px 4px 0', borderBottom: '0.5px solid #e1e0d9' }}>매출</th>
-                      <th style={{ textAlign: 'right', fontSize: 9, color: '#898781', fontWeight: 500, padding: '0 0 4px 4px', borderBottom: '0.5px solid #e1e0d9' }}>증감</th>
+                      <th style={{ textAlign: 'right', fontSize: 9, color: '#898781', fontWeight: 500, padding: '0 0 4px 4px', borderBottom: '0.5px solid #e1e0d9' }}>전년비</th>
                     </tr>
                   </thead>
                   <tbody>
