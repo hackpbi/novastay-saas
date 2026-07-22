@@ -538,8 +538,9 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
   // ── 요일별 ──
   const dowKpi = useMemo(() => {
     const dowOrder = ['월', '화', '수', '목', '금', '토', '일']
-    const map: Record<string, { rn: number; rev: number; dates: Set<string> }> = {}
-    dowOrder.forEach(d => { map[d] = { rn: 0, rev: 0, dates: new Set<string>() } })
+    const map: Record<string, { rn: number; rev: number; lyRn: number; lyRev: number; dates: Set<string> }> = {}
+    dowOrder.forEach(d => { map[d] = { rn: 0, rev: 0, lyRn: 0, lyRev: 0, dates: new Set<string>() } })
+
     ;(actualData ?? []).forEach((r: any) => {
       const day = calMap[r.business_date]?.day
       if (!day || !map[day]) return
@@ -547,18 +548,36 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
       map[day].rev += r.room_revenue ?? 0
       map[day].dates.add(r.business_date)
     })
+
+    const lyByDate: Record<string, { rn: number; rev: number }> = {}
+    ;(lyData ?? []).forEach((r: any) => {
+      if (!lyByDate[r.business_date]) lyByDate[r.business_date] = { rn: 0, rev: 0 }
+      lyByDate[r.business_date].rn  += r.nights ?? 0
+      lyByDate[r.business_date].rev += r.room_revenue ?? 0
+    })
+    Object.entries(calMap).forEach(([, cal]: any) => {
+      if (!cal.day || !map[cal.day] || !cal.yoy_match) return
+      const ly = lyByDate[cal.yoy_match]
+      if (!ly) return
+      map[cal.day].lyRn  += ly.rn
+      map[cal.day].lyRev += ly.rev
+    })
+
     return dowOrder.map(day => {
       const d = map[day]
-      const totalAvailForDow = d.dates.size * roomCount   // 해당 요일 날짜 수 × roomCount
+      const totalAvail = d.dates.size * roomCount
+      const occ   = totalAvail > 0 ? Math.round((d.rn / totalAvail) * 1000) / 10 : 0
+      const lyOcc = totalAvail > 0 ? Math.round((d.lyRn / totalAvail) * 1000) / 10 : 0
+      const adrWon   = d.rn > 0 ? d.rev / d.rn : 0
+      const lyAdrWon = d.lyRn > 0 ? d.lyRev / d.lyRn : 0
       return {
-        day,
-        occ:    totalAvailForDow > 0 ? Math.round((d.rn / totalAvailForDow) * 1000) / 10 : 0,
-        adrWon: d.rn > 0 ? d.rev / d.rn : 0,
-        revWon: d.rev,
+        day, occ, adrWon, revWon: d.rev,
+        vsLyOcc: Math.round((occ - lyOcc) * 10) / 10,
+        vsLyAdrWon: adrWon - lyAdrWon,
         isFriSat: day === '금' || day === '토',
       }
     })
-  }, [actualData, calMap, roomCount])
+  }, [actualData, lyData, calMap, roomCount])
 
   // ── 이벤트 실적 ──
   const eventKpi = useMemo(() => {
@@ -635,6 +654,32 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     })
     return names
   }, [schemaRows])
+
+  // 세그먼트별 요일 매트릭스 (codeToSegName/orderedSegNames 이후에 선언 — 선언 전 참조 방지)
+  const dowSegKpi = useMemo(() => {
+    const dowOrder = ['월', '화', '수', '목', '금', '토', '일']
+    const map: Record<string, Record<string, { rn: number; rev: number }>> = {}
+    ;(actualData ?? []).forEach((r: any) => {
+      const day = calMap[r.business_date]?.day
+      if (!day) return
+      const segName = codeToSegName[r.segmentation] ?? r.segmentation ?? '기타'
+      if (!map[segName]) map[segName] = {}
+      if (!map[segName][day]) map[segName][day] = { rn: 0, rev: 0 }
+      map[segName][day].rn  += r.nights ?? 0
+      map[segName][day].rev += r.room_revenue ?? 0
+    })
+    const segNames = Object.keys(map).sort((a, b) => {
+      const ia = orderedSegNames.indexOf(a), ib = orderedSegNames.indexOf(b)
+      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib)
+    })
+    return segNames.map(seg => ({
+      seg,
+      cells: dowOrder.map(day => {
+        const c = map[seg]?.[day] ?? { rn: 0, rev: 0 }
+        return { day, rn: c.rn, adrWon: c.rn > 0 ? c.rev / c.rn : 0 }
+      }),
+    }))
+  }, [actualData, calMap, codeToSegName, orderedSegNames])
 
   // ── 어카운트별 실적 (get_account_actual_data RPC — 별칭 적용 account_name + LY/GAP 동시 반환) ──
   const { data: accountActualRows = [] } = useQuery({
@@ -837,6 +882,122 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     { label: '매출',    value: fmtRev(kpi.act.revWon),  budSub: sRev(kpi.vsBud.revWon),  budSubN: kpi.vsBud.revWon,  sub: sRev(kpi.vsLy.revWon),  subN: kpi.vsLy.revWon },
     { label: 'RevPAR',  value: fmtAdr(kpi.act.revparWon), budSub: sAdr(kpi.vsBud.revparWon), budSubN: kpi.vsBud.revparWon, sub: sAdr(kpi.vsLy.revparWon), subN: kpi.vsLy.revparWon },
   ] : []
+
+  // 요일별 점유율 막대그래프 + 하단 4행 표(객단가/매출/전년비점유율/전년비객단가)
+  const renderDowBarChart = () => {
+    const dowColor = (d: any) => (d.isFriSat ? '#e24b4a' : '#2a78d6')
+    return (
+      <div style={{ background: C.cardBg, borderRadius: 8, padding: '14px 16px 10px' }}>
+        <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 8 }}>점유율 (%)</div>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 90 }}>
+          {dowKpi.map(d => (
+            <div key={d.day} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+              <span style={{ fontSize: 9, color: '#0b0b0b', fontWeight: 500, marginBottom: 3 }}>{d.occ}%</span>
+              <div style={{ width: '100%', background: dowColor(d), borderRadius: '3px 3px 0 0', height: `${Math.min(100, d.occ)}%` }} />
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 5 }}>
+          {dowKpi.map(d => (
+            <div key={d.day} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: d.isFriSat ? '#e24b4a' : '#0b0b0b' }}>{d.day}</div>
+          ))}
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9, marginTop: 10, tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: '18%' }} />
+            {dowKpi.map(d => <col key={d.day} style={{ width: '11.7%' }} />)}
+          </colgroup>
+          <tbody>
+            <tr style={{ borderTop: `0.5px solid ${C.border}` }}>
+              <td style={{ padding: '3px 4px', color: C.textMuted }}>객단가</td>
+              {dowKpi.map(d => <td key={d.day} style={{ textAlign: 'center', padding: '3px 4px', color: '#0b0b0b' }}>{fmtAdr(d.adrWon)}</td>)}
+            </tr>
+            <tr>
+              <td style={{ padding: '3px 4px', color: C.textMuted }}>매출</td>
+              {dowKpi.map(d => <td key={d.day} style={{ textAlign: 'center', padding: '3px 4px', color: '#0b0b0b' }}>{fmtRev(d.revWon)}</td>)}
+            </tr>
+            <tr style={{ borderTop: `0.5px solid ${C.border}` }}>
+              <td style={{ padding: '3px 4px', color: C.textMuted }}>전년비(점유율)</td>
+              {dowKpi.map(d => <td key={d.day} style={{ textAlign: 'center', padding: '3px 4px', color: diffColor(d.vsLyOcc), fontWeight: 500 }}>{diffText(d.vsLyOcc, '')}</td>)}
+            </tr>
+            <tr>
+              <td style={{ padding: '3px 4px', color: C.textMuted }}>전년비(객단가)</td>
+              {dowKpi.map(d => <td key={d.day} style={{ textAlign: 'center', padding: '3px 4px', color: diffColor(d.vsLyAdrWon), fontWeight: 500 }}>{sAdr(d.vsLyAdrWon)}</td>)}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  // 요일별 매출 비중 원형 차트 (순수 SVG, 리더라인으로 라벨 연결)
+  const renderDowRevPie = () => {
+    const total = dowKpi.reduce((s, d) => s + d.revWon, 0)
+    if (total <= 0) return null
+    const cx = 150, cy = 110, r = 65
+    let cum = 0
+    const slices = dowKpi.map(d => {
+      const pct = total > 0 ? (d.revWon / total) * 100 : 0
+      const startAngle = (cum / total) * 2 * Math.PI - Math.PI / 2
+      cum += d.revWon
+      const endAngle = (cum / total) * 2 * Math.PI - Math.PI / 2
+      const midAngle = (startAngle + endAngle) / 2
+      const x1 = cx + r * Math.cos(startAngle), y1 = cy + r * Math.sin(startAngle)
+      const x2 = cx + r * Math.cos(endAngle), y2 = cy + r * Math.sin(endAngle)
+      const largeArc = endAngle - startAngle > Math.PI ? 1 : 0
+      const path = `M${cx} ${cy} L${x1} ${y1} A${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`
+      const lr1 = r + 10, lr2 = r + 32
+      const lx1 = cx + lr1 * Math.cos(midAngle), ly1 = cy + lr1 * Math.sin(midAngle)
+      const lx2 = cx + lr2 * Math.cos(midAngle), ly2 = cy + lr2 * Math.sin(midAngle)
+      const anchor = Math.cos(midAngle) > 0.15 ? 'start' : Math.cos(midAngle) < -0.15 ? 'end' : 'middle'
+      return { day: d.day, pct: Math.round(pct), path, lx1, ly1, lx2, ly2, anchor, isFriSat: d.isFriSat }
+    })
+    return (
+      <div style={{ background: C.cardBg, borderRadius: 8, padding: 16, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 6 }}>매출 비중</div>
+        <svg viewBox="0 0 300 220" style={{ width: '100%', height: 'auto', overflow: 'visible' }}>
+          {slices.map(s => <path key={s.day} d={s.path} fill={s.isFriSat ? '#e24b4a' : '#2a78d6'} />)}
+          {slices.map(s => (
+            <g key={s.day}>
+              <line x1={s.lx1} y1={s.ly1} x2={s.lx2} y2={s.ly2} stroke="#898781" strokeWidth={1} />
+              <text x={s.lx2 + (s.anchor === 'start' ? 3 : s.anchor === 'end' ? -3 : 0)} y={s.ly2} textAnchor={s.anchor as any} fontSize={10} fill={s.isFriSat ? '#e24b4a' : '#0b0b0b'} fontWeight={s.isFriSat ? 600 : 400}>{s.day} {s.pct}%</text>
+            </g>
+          ))}
+        </svg>
+      </div>
+    )
+  }
+
+  // 세그먼트별 요일 실적 박스 (R/N · ADR 2행)
+  const renderDowSegBox = (seg: { seg: string; cells: any[] }) => (
+    <table key={seg.seg} style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9, tableLayout: 'fixed', marginBottom: 10 }}>
+      <colgroup>
+        <col style={{ width: '22%' }} /><col style={{ width: '8%' }} />
+        {seg.cells.map((c: any) => <col key={c.day} style={{ width: '11.7%' }} />)}
+      </colgroup>
+      <thead>
+        <tr>
+          <th style={{ textAlign: 'left', fontSize: 9, color: '#0b0b0b', fontWeight: 600, padding: 4, borderBottom: `0.5px solid ${C.border}` }}>{seg.seg}</th>
+          <th style={{ borderBottom: `0.5px solid ${C.border}` }}></th>
+          {seg.cells.map((c: any) => (
+            <th key={c.day} style={{ textAlign: 'right', fontSize: 9, color: c.day === '금' || c.day === '토' ? '#e24b4a' : C.textMuted, fontWeight: 500, padding: 4, borderBottom: `0.5px solid ${C.border}` }}>{c.day}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style={{ padding: '2px 4px' }}></td>
+          <td style={{ textAlign: 'right', padding: '2px 4px', color: C.textMuted }}>R/N</td>
+          {seg.cells.map((c: any) => <td key={c.day} style={{ textAlign: 'right', padding: '2px 4px', color: '#0b0b0b' }}>{c.rn > 0 ? c.rn.toLocaleString() : '-'}</td>)}
+        </tr>
+        <tr style={{ borderBottom: `0.5px solid ${C.border}` }}>
+          <td style={{ padding: '2px 4px' }}></td>
+          <td style={{ textAlign: 'right', padding: '2px 4px', color: C.textMuted }}>ADR</td>
+          {seg.cells.map((c: any) => <td key={c.day} style={{ textAlign: 'right', padding: '2px 4px', color: C.textSecondary }}>{c.rn > 0 ? fmtAdr(c.adrWon) : '-'}</td>)}
+        </tr>
+      </tbody>
+    </table>
+  )
 
   // 마감월/온북월 미니 요약 카드 — 실적(온북)/목표비/전년비 표시
   const renderMiniSummary = (
@@ -1222,15 +1383,33 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
             <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
           </div>
           <div ref={page2Ref} className="mcr-page2">
-          <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, breakBefore: 'page' } as React.CSSProperties}>요일별 실적</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, marginBottom: 20 }}>
-            {dowKpi.map(d => (
-              <div key={d.day} style={{ background: C.cardBg, borderRadius: 8, padding: '10px 6px', textAlign: 'center' }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: d.isFriSat ? '#e24b4a' : C.textPrimary, marginBottom: 6 }}>{d.day}</div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: C.blue }}>{d.occ}%</div>
-                <div style={{ fontSize: (adrUnit === '원' || revUnit === '원') ? 8 : 9, color: C.textMuted, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fmtAdr(d.adrWon)} · {fmtRev(d.revWon)}</div>
+          <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 8, breakBefore: 'page' } as React.CSSProperties}>요일별 실적</div>
+
+          {(() => {
+            const sorted = [...dowKpi].sort((a, b) => b.occ - a.occ)
+            const best = sorted[0], worst = sorted[sorted.length - 1]
+            const weakDays = dowKpi.filter(d => d.vsLyOcc < 0 && !d.isFriSat)
+            const insight = weakDays.length >= 2
+              ? `${weakDays.map(d => d.day).join('·')}요일이 전년 대비 약세 — 주중 프로모션 또는 BAR 조정 검토 필요`
+              : `${best.day}요일이 ${best.occ}%로 가장 높고, ${worst.day}요일이 ${worst.occ}%로 가장 낮음`
+            return (
+              <div style={{ fontSize: 11, color: C.textSecondary, marginBottom: 10, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <span><b style={{ color: C.mint }}>최고</b> {best.day}요일 {best.occ}%</span>
+                <span><b style={{ color: '#e24b4a' }}>최저</b> {worst.day}요일 {worst.occ}%</span>
+                <span style={{ color: C.textMuted }}>· {insight}</span>
               </div>
-            ))}
+            )
+          })()}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 12, marginBottom: 14 }}>
+            {renderDowBarChart()}
+            {renderDowRevPie()}
+          </div>
+
+          <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 8 }}>세그먼트별 요일별 실적</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+            <div>{dowSegKpi.slice(0, Math.ceil(dowSegKpi.length / 2)).map(renderDowSegBox)}</div>
+            <div>{dowSegKpi.slice(Math.ceil(dowSegKpi.length / 2)).map(renderDowSegBox)}</div>
           </div>
 
           <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, marginTop: 20 }}>
