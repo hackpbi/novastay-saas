@@ -317,6 +317,10 @@ function EventBadge({ group, pickupRows, roomCount }: { group: EventGroup; picku
               const adr = row && row.otbN ? Math.round(row.otbR / row.otbN / 1000) : null
               const rev = row && row.otbR ? (row.otbR / 1e6).toFixed(1) : null
               const puOcc = row && roomCount ? ((row.otbN - row.vsN) / roomCount * 100).toFixed(1) : null
+              const puNights = row ? (row.otbN - row.vsN) : null
+              // [DEBUG-TEMP] vsN 진단 — 확인 후 제거
+              const _puNightsField = pickupRows.filter(r => r.business_date === date).reduce((s, r) => s + (r.pu_nights ?? 0), 0)
+              console.log('[DEBUG] event tooltip row', { date, otbN: row?.otbN, vsN: row?.vsN, 'otbN-vsN': puNights, pu_nights_field: _puNightsField, roomCount })
               const dd = new Date(date)
               const dLabel = `${dd.getMonth() + 1}/${dd.getDate()} ${DOW_KR[dd.getDay()]}`
               const before = !!otbDate && date < otbDate
@@ -350,7 +354,7 @@ function EventBadge({ group, pickupRows, roomCount }: { group: EventGroup; picku
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)' }}>픽업</span>
                       <span style={{ fontSize: 11, fontWeight: 500, color: hasPu ? '#00E5A0' : 'rgba(255,255,255,0.18)' }}>
-                        {hasPu && puOcc ? `+${puOcc}%` : '—'}
+                        {hasPu && puNights !== null ? `${puNights >= 0 ? '+' : ''}${puNights} 객실` : '—'}
                       </span>
                     </div>
                   )}
