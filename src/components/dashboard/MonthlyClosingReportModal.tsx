@@ -886,28 +886,33 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
   // 요일별 점유율 막대그래프 + 하단 4행 표(객단가/매출/전년비점유율/전년비객단가)
   const renderDowBarChart = () => {
     const dowColor = (d: any) => (d.isFriSat ? '#e24b4a' : '#2a78d6')
+    const BAR_MAX_PX = 70
     return (
       <div style={{ background: C.cardBg, borderRadius: 8, padding: '14px 16px 10px' }}>
         <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 8 }}>점유율 (%)</div>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 90 }}>
-          {dowKpi.map(d => (
-            <div key={d.day} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
-              <span style={{ fontSize: 9, color: '#0b0b0b', fontWeight: 500, marginBottom: 3 }}>{d.occ}%</span>
-              <div style={{ width: '100%', background: dowColor(d), borderRadius: '3px 3px 0 0', height: `${Math.min(100, d.occ)}%` }} />
-            </div>
-          ))}
-        </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 5 }}>
-          {dowKpi.map(d => (
-            <div key={d.day} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: d.isFriSat ? '#e24b4a' : '#0b0b0b' }}>{d.day}</div>
-          ))}
-        </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9, marginTop: 10, tableLayout: 'fixed' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9, tableLayout: 'fixed' }}>
           <colgroup>
             <col style={{ width: '18%' }} />
             {dowKpi.map(d => <col key={d.day} style={{ width: '11.7%' }} />)}
           </colgroup>
           <tbody>
+            <tr>
+              <td></td>
+              {dowKpi.map(d => (
+                <td key={d.day} style={{ verticalAlign: 'bottom', padding: '0 4px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <span style={{ fontSize: 9, color: '#0b0b0b', fontWeight: 500, marginBottom: 3 }}>{d.occ}%</span>
+                    <div style={{ width: '100%', background: dowColor(d), borderRadius: '3px 3px 0 0', height: `${Math.round((Math.min(100, d.occ) / 100) * BAR_MAX_PX)}px` }} />
+                  </div>
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <td></td>
+              {dowKpi.map(d => (
+                <td key={d.day} style={{ textAlign: 'center', fontSize: 9, fontWeight: 500, color: d.isFriSat ? '#e24b4a' : '#0b0b0b', padding: '4px' }}>{d.day}</td>
+              ))}
+            </tr>
             <tr style={{ borderTop: `0.5px solid ${C.border}` }}>
               <td style={{ padding: '3px 4px', color: C.textMuted }}>객단가</td>
               {dowKpi.map(d => <td key={d.day} style={{ textAlign: 'center', padding: '3px 4px', color: '#0b0b0b' }}>{fmtAdr(d.adrWon)}</td>)}
