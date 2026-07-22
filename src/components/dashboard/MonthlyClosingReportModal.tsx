@@ -736,26 +736,12 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     staleTime: 10 * 60 * 1000,
   })
 
-  // ── 국적별 실적 (get_country_actual_data RPC — 당월 Actual) ──
+  // ── 국적별 실적 (get_country_actual_data RPC — otb_* 당월 + ly_* 전년 동시 반환, seg_name 포함) ──
   const { data: countryActualRows = [] } = useQuery({
     queryKey: ['closing_country_actual', hotelId, reportYear, reportMonth],
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc('get_country_actual_data', {
         p_hotel_id: hotelId, p_year: reportYear, p_month: reportMonth, p_segmentation: null, p_account_name: null,
-      })
-      if (error) throw error
-      return data ?? []
-    },
-    enabled: open && !!hotelId && !!reportYear && !!reportMonth,
-    staleTime: 10 * 60 * 1000,
-  })
-
-  // ── 국적별 실적 전년(LY) — 마감월은 이전월이므로 RPC의 ly_* 대신 전년 동월 Actual을 별도 조회해 country 기준 병합 ──
-  const { data: countryLyRows = [] } = useQuery({
-    queryKey: ['closing_country_ly', hotelId, reportYear - 1, reportMonth],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc('get_country_actual_data', {
-        p_hotel_id: hotelId, p_year: reportYear - 1, p_month: reportMonth, p_segmentation: null, p_account_name: null,
       })
       if (error) throw error
       return data ?? []
@@ -815,25 +801,16 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     return alpha2.toUpperCase().replace(/./g, (c) => String.fromCodePoint(127397 + c.charCodeAt(0)))
   }
 
-  // 국적별 실적 — 당월 Actual + 전년(LY) country 기준 병합, 상위 10개국 + 기타
+  // 국적별 실적 — get_country_actual_data가 otb_*(당월)/ly_*(전년)를 함께 반환, 상위 10개국 + 기타
   const countryKpi = useMemo(() => {
-    const lyMap: Record<string, { rn: number; rev: number }> = {}
-    ;(countryLyRows ?? []).forEach((r: any) => {
-      const key = r.country_name_ko || r.country || '(미지정)'
-      if (!lyMap[key]) lyMap[key] = { rn: 0, rev: 0 }
-      lyMap[key].rn  += r.nights ?? 0
-      lyMap[key].rev += r.room_revenue ?? 0
-    })
     const map: Record<string, { nameKo: string; alpha2: string; rn: number; rev: number; lyRn: number; lyRev: number }> = {}
     ;(countryActualRows ?? []).forEach((r: any) => {
       const key = r.country_name_ko || r.country || '(미지정)'
       if (!map[key]) map[key] = { nameKo: key, alpha2: r.alpha2 ?? '', rn: 0, rev: 0, lyRn: 0, lyRev: 0 }
-      map[key].rn  += r.nights ?? 0
-      map[key].rev += r.room_revenue ?? 0
-    })
-    Object.values(map).forEach(c => {
-      const ly = lyMap[c.nameKo]
-      if (ly) { c.lyRn = ly.rn; c.lyRev = ly.rev }
+      map[key].rn    += r.otb_nights ?? 0
+      map[key].rev   += r.otb_revenue ?? 0
+      map[key].lyRn  += r.ly_nights ?? 0
+      map[key].lyRev += r.ly_revenue ?? 0
     })
     const list = Object.values(map).sort((a, b) => b.rn - a.rn)
     const top10 = list.slice(0, 10)
@@ -855,37 +832,23 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
       rows.push({ name: '기타', flag: '', rn: agg.rn, adrWon, revWon: agg.rev, diffRn: agg.rn - agg.lyRn, diffAdrWon: adrWon - lyAdrWon, diffRevWon: agg.rev - agg.lyRev })
     }
     return rows
-  }, [countryActualRows, countryLyRows])
+  }, [countryActualRows])
 
-  // 세그먼트별 국적 실적 — 상위 5개국 + 기타(컬럼), 세그먼트(행) 기준. seg는 codeToSegName으로 이름 변환
+  // 세그먼트별 국적 실적 — 상위 5개국 + 기타(컬럼), 세그먼트(행) 기준. RPC의 seg_name/otb_*/ly_* 직접 사용
   const segCountryKpi = useMemo(() => {
     const top5Names = countryKpi.slice(0, 5).map(c => c.name)
     const colOf = (countryName: string) => (top5Names.includes(countryName) ? countryName : '기타')
 
-    const lyMap: Record<string, Record<string, { rn: number; rev: number }>> = {}
-    ;(countryLyRows ?? []).forEach((r: any) => {
-      const segName = codeToSegName[r.segmentation] ?? r.segmentation ?? '기타'
-      const col = colOf(r.country_name_ko || r.country || '(미지정)')
-      if (!lyMap[segName]) lyMap[segName] = {}
-      if (!lyMap[segName][col]) lyMap[segName][col] = { rn: 0, rev: 0 }
-      lyMap[segName][col].rn  += r.nights ?? 0
-      lyMap[segName][col].rev += r.room_revenue ?? 0
-    })
-
     const map: Record<string, Record<string, { rn: number; rev: number; lyRn: number; lyRev: number }>> = {}
     ;(countryActualRows ?? []).forEach((r: any) => {
-      const segName = codeToSegName[r.segmentation] ?? r.segmentation ?? '기타'
+      const segName = r.seg_name || r.segmentation || '기타'
       const col = colOf(r.country_name_ko || r.country || '(미지정)')
       if (!map[segName]) map[segName] = {}
       if (!map[segName][col]) map[segName][col] = { rn: 0, rev: 0, lyRn: 0, lyRev: 0 }
-      map[segName][col].rn  += r.nights ?? 0
-      map[segName][col].rev += r.room_revenue ?? 0
-    })
-    Object.entries(map).forEach(([segName, cols]) => {
-      Object.entries(cols).forEach(([col, c]) => {
-        const ly = lyMap[segName]?.[col]
-        if (ly) { c.lyRn = ly.rn; c.lyRev = ly.rev }
-      })
+      map[segName][col].rn    += r.otb_nights ?? 0
+      map[segName][col].rev   += r.otb_revenue ?? 0
+      map[segName][col].lyRn  += r.ly_nights ?? 0
+      map[segName][col].lyRev += r.ly_revenue ?? 0
     })
 
     const segNames = Object.keys(map).sort((a, b) => {
@@ -900,7 +863,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
         return { name, rn: c.rn, adrWon: c.rn > 0 ? c.rev / c.rn : 0, diffRn: c.rn - c.lyRn }
       }),
     }))
-  }, [countryActualRows, countryLyRows, countryKpi, codeToSegName, orderedSegNames])
+  }, [countryActualRows, countryKpi, orderedSegNames])
 
   const page1Ref  = useRef<HTMLDivElement>(null)
   const page2Ref  = useRef<HTMLDivElement>(null)
