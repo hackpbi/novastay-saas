@@ -43,7 +43,7 @@ const barLabelPlugin = {
 }
 
 export default function MarketPickupMonthBlock({
-  year, month, monthKey, pickupRows, groups, selected, onToggleSeg, onBarClick, onOpenDetail, roomCount, allSegIds, isDayModalOpen, showActions = true, showBar = true, showBorder = true,
+  year, month, monthKey, pickupRows, groups, selected, onToggleSeg, onBarClick, onOpenDetail, roomCount, allSegIds, isDayModalOpen, showActions = true, showBar = true, showBorder = true, showSegment = true,
 }: {
   year:           number
   month:          number   // 0-based
@@ -60,6 +60,7 @@ export default function MarketPickupMonthBlock({
   showActions?:   boolean   // false → History/Detail 버튼 숨김 (기본 true = 기존 동작 보존)
   showBar?:       boolean   // false → 일별 바 차트 숨김 (기본 true = 기존 동작 보존)
   showBorder?:    boolean   // false → 최외곽 테두리/배경/라운드 제거 (기본 true = 기존 동작 보존)
+  showSegment?:   boolean   // false → Segment 드롭다운 버튼 숨김 (기본 true = 기존 동작 보존)
 }) {
   const month1 = month + 1
   const days   = lastDayOfMonth(year, month1)
@@ -443,7 +444,7 @@ export default function MarketPickupMonthBlock({
   }, [dailyTotals, days, month1, onBarClick, eventMap, year, month])
 
   return (
-    <div className="rounded-2xl overflow-visible" style={{ background: 'var(--color-bg-surface, var(--card-header-bg))', border: '1px solid var(--color-border-default)', height: '100%', display: 'flex', flexDirection: 'column', ...(showBorder === false ? { border: 'none', borderRadius: 0, background: 'transparent', padding: 0 } : {}) }}>
+    <div className="rounded-2xl overflow-visible" style={{ background: 'linear-gradient(175deg, #0d1f1a 0%, #000000 40%)', border: '1px solid #1e1e1e', borderLeft: '3px solid rgba(0,229,160,0.6)', height: '100%', display: 'flex', flexDirection: 'column', ...(showBorder === false ? { background: 'transparent', border: 'none', borderLeft: 'none', borderRadius: 0, padding: 0 } : {}) }}>
       {/* 월 헤더 — 월 라벨 + Segment 패널 + Picked up + KPI + History/Detail */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px 8px', flexWrap: 'wrap', flexShrink: 0 }}>
         {/* 월 라벨 */}
@@ -455,6 +456,7 @@ export default function MarketPickupMonthBlock({
         </div>
 
         {/* Segment 패널 */}
+        {showSegment !== false && (
         <div style={{ position: 'relative' }} data-seg-panel>
           <button
             onClick={() => setPanelOpen(p => !p)}
@@ -510,6 +512,7 @@ export default function MarketPickupMonthBlock({
             </div>
           )}
         </div>
+        )}
 
         {/* Picked up 칩 */}
         {pickedSegs.length > 0 && (

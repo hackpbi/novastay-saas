@@ -202,7 +202,8 @@
       "Bash(grep -E \"^[0-9a-f]{7,}|PAGE_SIZE = \")",
       "PowerShell(npx tsc --noEmit; \"EXIT: $LASTEXITCODE\")",
       "PowerShell($env:NEXT_DIST_DIR='.next-verify'; npm run build; \"EXIT: $LASTEXITCODE\")",
-      "PowerShell(\"cleanup done\")"
+      "PowerShell(\"cleanup done\")",
+      "Bash(echo \"PUSH_EXIT: $?\")"
     ],
     "additionalDirectories": [
       "C:\\dev\\18_NovaStay_Saas_ver1\\.next-verify"

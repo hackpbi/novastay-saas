@@ -50,6 +50,7 @@ export default function MarketPickupPage() {
   const otbMonth = otbDate ? parseInt(otbDate.slice(5, 7)) - 1 : now.getMonth()
   const prevStart = new Date(now.getFullYear(), now.getMonth() + monthOffset - 2, 1)
   const isPrevDisabled = prevStart.getFullYear() < otbYear || (prevStart.getFullYear() === otbYear && prevStart.getMonth() < otbMonth)
+  const isNextDisabled = monthOffset >= 3   // 총 6개월(3개월 블록 2페이지)만 노출 → 마지막 페이지에서 다음 비활성
   useEffect(() => {
     const sd = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
     if (sd.getFullYear() < otbYear || (sd.getFullYear() === otbYear && sd.getMonth() < otbMonth)) setMonthOffset(0)
@@ -69,17 +70,17 @@ export default function MarketPickupPage() {
     setSlideDir('right')   // 이전 = 오른쪽에서 슬라이드 인
     setIsAnimating(true)
     setTimeout(() => {
-      setMonthOffset(p => p - 2)
+      setMonthOffset(p => p - 3)
       setIsAnimating(false)
       setSlideDir(null)
     }, 300)
   }
   const handleNext = () => {
-    if (isAnimating) return
+    if (isNextDisabled || isAnimating) return
     setSlideDir('left')    // 다음 = 왼쪽에서 슬라이드 인
     setIsAnimating(true)
     setTimeout(() => {
-      setMonthOffset(p => p + 2)
+      setMonthOffset(p => p + 3)
       setIsAnimating(false)
       setSlideDir(null)
     }, 300)
@@ -102,17 +103,44 @@ export default function MarketPickupPage() {
 
   const allSegIds = useMemo(() => new Set(groups.flatMap(g => g.segs.map(s => s.id))), [groups])
 
-  // ── 세그먼트 선택 상태 (월별 독립, 기본 전체 선택) ──────────────────────────────
-  const [selectedSegs, setSelectedSegs] = useState<Record<string, Set<string>>>({})
-  const resolveSelected = (monthKey: string) => selectedSegs[monthKey] ?? allSegIds
-  const onToggleSeg = (monthKey: string, segId: string) => {
+  // ── 세그먼트 선택 상태 (3개 블록 공유, 기본 전체 선택) ──────────────────────────────
+  const [selectedSegs, setSelectedSegs] = useState<Set<string> | null>(null)   // null = 전체 선택
+  const resolvedSegs = selectedSegs ?? allSegIds
+  const onToggleSeg = (segId: string) => {
     setSelectedSegs(prev => {
-      const cur = new Set(prev[monthKey] ?? allSegIds)
+      const cur = new Set(prev ?? allSegIds)
       if (cur.has(segId)) cur.delete(segId)
       else cur.add(segId)
-      return { ...prev, [monthKey]: cur }
+      return cur
     })
   }
+
+  // 공통 Segment 드롭다운 패널 (페이지 레벨)
+  const [segPanelOpen, setSegPanelOpen] = useState(false)
+  // 완료(Done) 클릭 시에만 실제 selectedSegs에 커밋 — 그 전까지 tempSelected에만 스테이징
+  const [tempSelected, setTempSelected] = useState<Set<string> | null>(null)
+  useEffect(() => {
+    if (segPanelOpen) setTempSelected(selectedSegs)
+  }, [segPanelOpen])   // eslint-disable-line react-hooks/exhaustive-deps
+  const handleToggleTemp = (segId: string) => {
+    setTempSelected(prev => {
+      const next = new Set(prev ?? allSegIds)
+      if (next.has(segId)) next.delete(segId)
+      else next.add(segId)
+      return next
+    })
+  }
+  const handleReset = () => setTempSelected(new Set())
+  const handleSelectAll = () => setTempSelected(new Set(allSegIds))
+  const handleDone = () => { setSelectedSegs(tempSelected); setSegPanelOpen(false) }
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('[data-page-seg-panel]')) setSegPanelOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const [dayModal, setDayModal] = useState<{ year: number; month: number; day: number; defaultTab: 'pickup' | 'otb' } | null>(null)
   const [detailModal, setDetailModal] = useState<{ year: number; month: number } | null>(null)
@@ -154,25 +182,119 @@ export default function MarketPickupPage() {
               {String(months[0].month + 1).padStart(2, '0')}월{' '}
               <span style={{ fontSize: '0.7em' }}>{String(months[0].year).slice(-2)}년</span>
             </span>
+            {' ~ '}
+            <span style={{ color: '#00E5A0' }}>
+              {String(months[2].month + 1).padStart(2, '0')}월{' '}
+              <span style={{ fontSize: '0.7em' }}>{String(months[2].year).slice(-2)}년</span>
+            </span>
           </span>
           {/* 다음 (항상 표시) */}
           <button
             onClick={handleNext}
             style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-              background: 'none', border: 'none', cursor: 'pointer',
+              background: 'none', border: 'none',
+              cursor: isNextDisabled ? 'default' : 'pointer',
+              pointerEvents: isNextDisabled ? 'none' : 'auto',
               padding: '4px 10px', borderRadius: 6,
             }}
           >
-            <span style={{ fontSize: 29, color: '#00E5A0', lineHeight: 1 }}>›</span>
-            <span style={{ fontSize: 11, color: 'rgba(0,229,160,0.6)', letterSpacing: '0.03em' }}>다음</span>
+            <span style={{ fontSize: 29, color: isNextDisabled ? 'rgba(255,255,255,0.1)' : '#00E5A0', lineHeight: 1 }}>›</span>
+            <span style={{ fontSize: 11, color: isNextDisabled ? 'rgba(255,255,255,0.08)' : 'rgba(0,229,160,0.6)', letterSpacing: '0.03em' }}>다음</span>
           </button>
         </div>
+        {/* 우측 그룹 — 공통 Segment + Detail */}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }} data-page-seg-panel>
+          {/* 공통 Segment 버튼 (3개 블록 공유 필터) */}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setSegPanelOpen(v => !v)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                background: 'transparent', border: '0.5px solid #00E5A0',
+                borderRadius: 6, padding: '5px 11px',
+                fontSize: 12, color: '#00E5A0', cursor: 'pointer',
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
+              </svg>
+              Segment
+              <span style={{ background: '#1a3a2a', color: '#00E5A0', borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 600 }}>
+                {resolvedSegs.size} selected
+              </span>
+              <span style={{ display: 'inline-block', fontSize: 10, transition: 'transform 0.15s', transform: segPanelOpen ? 'rotate(180deg)' : 'none' }}>▾</span>
+            </button>
+            {segPanelOpen && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 200,
+                background: 'radial-gradient(circle at 15% 0%, rgba(0,229,160,0.12) 0%, transparent 55%), #0d0d0d', border: '0.5px solid #333', borderRadius: 10,
+                minWidth: 240, maxHeight: 340, boxShadow: '0 6px 20px rgba(0,0,0,0.5)',
+                display: 'flex', flexDirection: 'column',
+              }}>
+                <div style={{ flex: 1, overflowY: 'auto', padding: 10 }}>
+                {groups.map(g => (
+                  <div key={g.id} style={{ marginBottom: 6 }}>
+                    <div style={{ fontSize: 10, color: 'var(--color-text-tertiary)', padding: '2px 8px', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.4 }}>{g.name}</div>
+                    {g.segs.map(seg => {
+                      const on = (tempSelected ?? allSegIds).has(seg.id)
+                      return (
+                        <div key={seg.id}
+                          onClick={() => handleToggleTemp(seg.id)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 5, cursor: 'pointer' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          <span style={{
+                            width: 14, height: 14, borderRadius: 3, flexShrink: 0,
+                            border: on ? 'none' : '1.5px solid #444', background: on ? '#00E5A0' : 'transparent',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 9, color: '#0a0a0a', fontWeight: 700, lineHeight: 1,
+                          }}>{on ? '✓' : ''}</span>
+                          <span style={{ width: 8, height: 8, borderRadius: 2, background: seg.color, flexShrink: 0 }} />
+                          <span style={{ flex: 1, whiteSpace: 'nowrap', fontSize: 12, color: on ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>{seg.name}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+                </div>
+                {/* 하단 고정 액션 버튼 행 */}
+                <div style={{
+                  display: 'flex', gap: 8, padding: '10px 14px',
+                  borderTop: '0.5px solid rgba(255,255,255,0.08)',
+                  flexShrink: 0,
+                }}>
+                  <button onClick={handleReset} style={{
+                    flex: 1, textAlign: 'center', padding: '7px 0', borderRadius: 8,
+                    fontSize: 12, fontWeight: 500, border: '0.5px solid rgba(255,255,255,0.1)',
+                    background: 'transparent', color: '#aaa', cursor: 'pointer',
+                  }}>
+                    초기화
+                  </button>
+                  <button onClick={handleSelectAll} style={{
+                    flex: 1, textAlign: 'center', padding: '7px 0', borderRadius: 8,
+                    fontSize: 12, fontWeight: 500, border: '0.5px solid rgba(255,255,255,0.1)',
+                    background: 'transparent', color: '#aaa', cursor: 'pointer',
+                  }}>
+                    전체
+                  </button>
+                  <button onClick={handleDone} style={{
+                    flex: 1, textAlign: 'center', padding: '7px 0', borderRadius: 8,
+                    fontSize: 12, fontWeight: 700, border: 'none',
+                    background: '#00E5A0', color: '#003d29', cursor: 'pointer',
+                  }}>
+                    완료
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         {/* Detail 버튼 (우측 끝) — onClick 추후 연결 */}
         <button
           onClick={() => {}}
           style={{
-            marginLeft: 'auto',
             display: 'inline-flex',
             alignItems: 'center',
             gap: 5,
@@ -205,6 +327,7 @@ export default function MarketPickupPage() {
           </svg>
           Detail
         </button>
+        </div>
       </div>
 
       {/* 월 블록 — 2개 카드가 남은 공간 채움 */}
@@ -232,13 +355,14 @@ export default function MarketPickupPage() {
                   monthKey={monthKey}
                   pickupRows={pickupRows}
                   groups={groups}
-                  selected={resolveSelected(monthKey)}
-                  onToggleSeg={(segId) => onToggleSeg(monthKey, segId)}
+                  selected={resolvedSegs}
+                  onToggleSeg={onToggleSeg}
                   onBarClick={(day, defaultTab) => setDayModal({ year: t.year, month: t.month, day, defaultTab })}
                   onOpenDetail={() => setDetailModal({ year: t.year, month: t.month })}
                   roomCount={roomCount}
                   allSegIds={allSegIds}
                   isDayModalOpen={!!dayModal}
+                  showSegment={false}
                 />
               </div>
             )

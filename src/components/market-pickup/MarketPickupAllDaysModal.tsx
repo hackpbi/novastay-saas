@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { X, Printer } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -157,9 +158,9 @@ export default function MarketPickupAllDaysModal({
   const lc = (v: number | null) =>
     viewMode === 'otb' ? '#374151' : (v == null || v === 0 ? '#9ca3af' : v < 0 ? '#dc2626' : '#059669')
 
-  return (
+  return createPortal(
     <>
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
       <div className="absolute inset-0 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose} />
       <div
         className="relative rounded-2xl overflow-hidden flex flex-col"
@@ -324,7 +325,7 @@ export default function MarketPickupAllDaysModal({
 
     {/* ── Print 미리보기 (라이트 모드) ── */}
     {printPreviewOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <style>{`@media print { body * { visibility: hidden !important; } #print-content, #print-content * { visibility: visible !important; } #print-content { position: absolute; left: 0; top: 0; width: 100%; } @page { size: landscape; margin: 10mm; } }`}</style>
           <div style={{ background: '#fff', borderRadius: 12, width: '90vw', height: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {/* 미리보기 헤더 */}
@@ -397,6 +398,7 @@ export default function MarketPickupAllDaysModal({
           </div>
         </div>
       )}
-    </>
+    </>,
+    document.body
   )
 }
