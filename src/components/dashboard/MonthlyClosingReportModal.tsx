@@ -208,8 +208,11 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     enabled: open && !!monthStart && !!monthEnd,
     staleTime: 60 * 60 * 1000,
   })
-  const calMap: Record<string, { day: string; yoy_match: string | null; event: string | null }> = {}
-  calData?.forEach((r: any) => { calMap[r.date] = { day: r.day, yoy_match: r.yoy_match, event: r.event } })
+  const calMap = useMemo(() => {
+    const map: Record<string, { day: string; yoy_match: string | null; event: string | null }> = {}
+    calData?.forEach((r: any) => { map[r.date] = { day: r.day, yoy_match: r.yoy_match, event: r.event } })
+    return map
+  }, [calData])
 
   // c05_market_table_schema — 트리 구조(level/parent_id/is_bold/segmentation/색상)
   const { data: schemaRows = [] } = useQuery({
@@ -658,7 +661,6 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
   const page2Ref  = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    console.log('[DEBUG] chart effect fired', { open, dailyKpiLen: dailyKpi.length, adrUnit, time: Date.now() }) // 임시 디버그용 — 확인 후 제거 예정
     if (!open || !chartRef.current || !dailyKpi.length) return
     chartInst.current?.destroy()
     const canvas = chartRef.current
