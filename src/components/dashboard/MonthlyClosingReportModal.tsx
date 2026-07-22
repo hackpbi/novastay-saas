@@ -670,7 +670,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
         ],
       },
       options: {
-        responsive: true, maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false, resizeDelay: 200,
         plugins: {
           legend: { display: false },
           tooltip: {
