@@ -5,7 +5,6 @@
 
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
@@ -55,12 +54,30 @@ export default function PickupPacePage() {
   const [viewMonth, setViewMonth] = useState(otbMonth)
   useEffect(() => { setViewYear(otbYear); setViewMonth(otbMonth) }, [otbYear, otbMonth])
   const isMinMonth = viewYear < otbYear || (viewYear === otbYear && viewMonth <= otbMonth)
+
+  const [titleShifting, setTitleShifting] = useState(false)
+  const [isAnimating,   setIsAnimating]   = useState(false)
+  useEffect(() => {
+    setTitleShifting(true)
+    const t = setTimeout(() => setTitleShifting(false), 350)
+    return () => clearTimeout(t)
+  }, [viewMonth, viewYear])
+
   const handlePrev = () => {
-    if (isMinMonth) return
-    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) } else setViewMonth(m => m - 1)
+    if (isMinMonth || isAnimating) return
+    setIsAnimating(true)
+    setTimeout(() => {
+      if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) } else setViewMonth(m => m - 1)
+      setIsAnimating(false)
+    }, 300)
   }
   const handleNext = () => {
-    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) } else setViewMonth(m => m + 1)
+    if (isAnimating) return
+    setIsAnimating(true)
+    setTimeout(() => {
+      if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) } else setViewMonth(m => m + 1)
+      setIsAnimating(false)
+    }, 300)
   }
 
   // 날짜 클릭 → PickupTrendModal (해당 날짜의 월)
@@ -114,21 +131,46 @@ export default function PickupPacePage() {
     <div>
       {/* 헤더 — 월 네비 통합 타이틀 + 글로벌 OTB */}
       <div className="flex items-center justify-between mb-4" style={{ gap: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <button onClick={handlePrev} disabled={isMinMonth} aria-label="이전 달"
-            className="flex items-center justify-center p-1 rounded-lg text-brand-muted hover:text-brand-text disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-            style={{ border: 'none', background: 'transparent' }}>
-            <ChevronLeft size={18} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <button
+            onClick={handlePrev}
+            style={{
+              overflow: 'hidden',
+              maxWidth: isMinMonth ? 0 : 60,
+              opacity: isMinMonth ? 0 : 1,
+              transform: `translateX(${isMinMonth ? -10 : 0}px)`,
+              padding: isMinMonth ? '4px 0' : '4px 10px',
+              pointerEvents: isMinMonth ? 'none' : 'auto',
+              transition: 'max-width 0.35s ease, opacity 0.25s ease, transform 0.35s ease, padding 0.35s ease',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+              background: 'none', border: 'none', cursor: 'pointer',
+            }}
+          >
+            <span style={{ fontSize: 29, color: '#00E5A0', lineHeight: 1 }}>‹</span>
+            <span style={{ fontSize: 11, color: 'rgba(0,229,160,0.6)', letterSpacing: '0.03em' }}>이전</span>
           </button>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 220, justifyContent: 'center' }}>
-            <span style={{ color: '#00E5A0', fontSize: 20, fontWeight: 700 }}>{viewMonth + 1}월</span>
-            <span style={{ color: '#00E5A0', fontSize: 14, fontWeight: 600 }}>{String(viewYear).slice(2)}년</span>
-            <span style={{ color: '#fff', fontSize: 20, fontWeight: 700 }}>Pick-up Pace</span>
-          </div>
-          <button onClick={handleNext} aria-label="다음 달"
-            className="flex items-center justify-center p-1 rounded-lg text-brand-muted hover:text-brand-text transition-all"
-            style={{ border: 'none', background: 'transparent' }}>
-            <ChevronRight size={18} />
+          <span style={{
+            fontSize: 24, fontWeight: 500, color: '#fff', letterSpacing: '0.04em',
+            transition: 'opacity 0.2s ease, transform 0.35s ease',
+            opacity: titleShifting ? 0.5 : 1,
+            transform: titleShifting ? 'translateX(4px)' : 'translateX(0)',
+          }}>
+            픽업 페이스_
+            <span style={{ color: '#00E5A0' }}>
+              {String(viewMonth + 1).padStart(2, '0')}월{' '}
+              <span style={{ fontSize: '0.7em' }}>{String(viewYear).slice(-2)}년</span>
+            </span>
+          </span>
+          <button
+            onClick={handleNext}
+            style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+              background: 'none', border: 'none', cursor: 'pointer',
+              padding: '4px 10px', borderRadius: 6,
+            }}
+          >
+            <span style={{ fontSize: 29, color: '#00E5A0', lineHeight: 1 }}>›</span>
+            <span style={{ fontSize: 11, color: 'rgba(0,229,160,0.6)', letterSpacing: '0.03em' }}>다음</span>
           </button>
         </div>
         {/* 전년 비교 모드 — 동기간/동일자 */}
@@ -140,6 +182,12 @@ export default function PickupPacePage() {
         </div>
       </div>
 
+      {/* 콘텐츠 — 월 이동 슬라이드 애니메이션 */}
+      <div style={{
+        transform: isAnimating ? 'translateX(-40px)' : 'translateX(0)',
+        opacity: isAnimating ? 0 : 1,
+        transition: isAnimating ? 'none' : 'transform 0.3s ease, opacity 0.3s ease',
+      }}>
       {/* 상단 — 월 픽업 페이스 (월간 OCC 누적 페이스, D-30 ~ D-0) */}
       <div style={{ ...cardStyle, padding: '14px 16px 10px' }}>
         <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>
@@ -187,6 +235,7 @@ export default function PickupPacePage() {
             <span style={{ fontSize: 11, color: '#888' }}>ADR</span>
           </div>
         </div>
+      </div>
       </div>
 
       {/* 월 페이스 막대 클릭 → 세그먼트 상세 모달 */}

@@ -38,7 +38,7 @@ export default function MarketPickupPage() {
   const [isAnimating, setIsAnimating] = useState(false)
   const [titleShifting, setTitleShifting] = useState(false)
   const months = useMemo(
-    () => [0, 1].map(i => {
+    () => [0, 1, 2].map(i => {
       const d = new Date(now.getFullYear(), now.getMonth() + monthOffset + i, 1)
       return { year: d.getFullYear(), month: d.getMonth() }
     }),
@@ -139,17 +139,17 @@ export default function MarketPickupPage() {
               background: 'none', border: 'none', cursor: 'pointer',
             }}
           >
-            <span style={{ fontSize: 22, color: '#00E5A0', lineHeight: 1 }}>‹</span>
+            <span style={{ fontSize: 29, color: '#00E5A0', lineHeight: 1 }}>‹</span>
             <span style={{ fontSize: 11, color: 'rgba(0,229,160,0.6)', letterSpacing: '0.03em' }}>이전</span>
           </button>
           {/* 타이틀 + 월 (dashboard5 패턴 + shift 애니메이션) */}
           <span style={{
-            fontSize: 19, fontWeight: 500, color: '#fff', letterSpacing: '0.04em',
+            fontSize: 24, fontWeight: 500, color: '#fff', letterSpacing: '0.04em',
             transition: 'opacity 0.2s ease, transform 0.35s ease',
             opacity: titleShifting ? 0.5 : 1,
             transform: titleShifting ? 'translateX(4px)' : 'translateX(0)',
           }}>
-            일자별 픽업_
+            픽업_
             <span style={{ color: '#00E5A0' }}>
               {String(months[0].month + 1).padStart(2, '0')}월{' '}
               <span style={{ fontSize: '0.7em' }}>{String(months[0].year).slice(-2)}년</span>
@@ -164,7 +164,7 @@ export default function MarketPickupPage() {
               padding: '4px 10px', borderRadius: 6,
             }}
           >
-            <span style={{ fontSize: 22, color: '#00E5A0', lineHeight: 1 }}>›</span>
+            <span style={{ fontSize: 29, color: '#00E5A0', lineHeight: 1 }}>›</span>
             <span style={{ fontSize: 11, color: 'rgba(0,229,160,0.6)', letterSpacing: '0.03em' }}>다음</span>
           </button>
         </div>

@@ -188,13 +188,31 @@ export default function AccountPickupPage() {
     setCurYear(b.getFullYear()); setCurMonth(b.getMonth() + 1)
   }, [otbDate])
 
+  const [titleShifting, setTitleShifting] = useState(false)
+  const [isAnimating,   setIsAnimating]   = useState(false)
+  useEffect(() => {
+    setTitleShifting(true)
+    const t = setTimeout(() => setTitleShifting(false), 350)
+    return () => clearTimeout(t)
+  }, [curMonth, curYear])
+
   const handlePrevMonth = () => {
-    if (curMonth === 1) { setCurYear(y => y - 1); setCurMonth(12) }
-    else setCurMonth(m => m - 1)
+    if (isAnimating) return
+    setIsAnimating(true)
+    setTimeout(() => {
+      if (curMonth === 1) { setCurYear(y => y - 1); setCurMonth(12) }
+      else setCurMonth(m => m - 1)
+      setIsAnimating(false)
+    }, 300)
   }
   const handleNextMonth = () => {
-    if (curMonth === 12) { setCurYear(y => y + 1); setCurMonth(1) }
-    else setCurMonth(m => m + 1)
+    if (isAnimating) return
+    setIsAnimating(true)
+    setTimeout(() => {
+      if (curMonth === 12) { setCurYear(y => y + 1); setCurMonth(1) }
+      else setCurMonth(m => m + 1)
+      setIsAnimating(false)
+    }, 300)
   }
 
   // isPastMonth — otbDate(최신 update_date) 기준
@@ -427,7 +445,42 @@ export default function AccountPickupPage() {
     <div>
       {/* 헤더 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
-        <div style={{ fontSize: 17, fontWeight: 500, color: 'var(--color-text-primary)' }}>Account Pick-up</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <button
+            onClick={handlePrevMonth}
+            style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+              background: 'none', border: 'none', cursor: 'pointer',
+              padding: '4px 10px', borderRadius: 6,
+            }}
+          >
+            <span style={{ fontSize: 29, color: '#00E5A0', lineHeight: 1 }}>‹</span>
+            <span style={{ fontSize: 11, color: 'rgba(0,229,160,0.6)', letterSpacing: '0.03em' }}>이전</span>
+          </button>
+          <span style={{
+            fontSize: 24, fontWeight: 500, color: '#fff', letterSpacing: '0.04em',
+            transition: 'opacity 0.2s ease, transform 0.35s ease',
+            opacity: titleShifting ? 0.5 : 1,
+            transform: titleShifting ? 'translateX(4px)' : 'translateX(0)',
+          }}>
+            어카운트 픽업_
+            <span style={{ color: '#00E5A0' }}>
+              {String(curMonth).padStart(2, '0')}월{' '}
+              <span style={{ fontSize: '0.7em' }}>{String(curYear).slice(-2)}년</span>
+            </span>
+          </span>
+          <button
+            onClick={handleNextMonth}
+            style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+              background: 'none', border: 'none', cursor: 'pointer',
+              padding: '4px 10px', borderRadius: 6,
+            }}
+          >
+            <span style={{ fontSize: 29, color: '#00E5A0', lineHeight: 1 }}>›</span>
+            <span style={{ fontSize: 11, color: 'rgba(0,229,160,0.6)', letterSpacing: '0.03em' }}>다음</span>
+          </button>
+        </div>
         <button
           onClick={() => setShowDownloadModal(true)}
           style={{
@@ -441,14 +494,8 @@ export default function AccountPickupPage() {
         </button>
       </div>
 
-      {/* 월 네비 + 세그먼트 필터 (한 행) */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-        {/* 좌: 월 네비 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button onClick={handlePrevMonth} aria-label="이전 달" style={{ width: 24, height: 24, borderRadius: '50%', border: '0.5px solid var(--color-border-subtle)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
-          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', minWidth: 68, textAlign: 'center' }}>{curYear}년 {curMonth}월</span>
-          <button onClick={handleNextMonth} aria-label="다음 달" style={{ width: 24, height: 24, borderRadius: '50%', border: '0.5px solid var(--color-border-subtle)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
-        </div>
+      {/* 세그먼트 필터 (한 행) */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
         {/* 우: 세그먼트 필터 — 전체 + FIT/GRP 드롭다운 (CountryPickupPage와 동일) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>세그먼트</span>
@@ -475,6 +522,12 @@ export default function AccountPickupPage() {
         </div>
       </div>
 
+      {/* 콘텐츠 — 월 이동 슬라이드 애니메이션 */}
+      <div style={{
+        transform: isAnimating ? 'translateX(-40px)' : 'translateX(0)',
+        opacity: isAnimating ? 0 : 1,
+        transition: isAnimating ? 'none' : 'transform 0.3s ease, opacity 0.3s ease',
+      }}>
       {/* KPI 카드 4개 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-3">
         {/* 1 — Active Accounts */}
@@ -786,6 +839,7 @@ export default function AccountPickupPage() {
         </div>
         </>
       )}
+      </div>
 
       {showDownloadModal && (
         <AccountPickupDownloadModal

@@ -9,7 +9,7 @@ import { lastDayOfMonth, inMonth } from '@/utils/pickupPageUtils'
 import MarketPickupAllDaysModal from './MarketPickupAllDaysModal'
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토']
 
 export type SegLeaf  = { id: string; name: string; color: string; lightColor: string | null; fontDarkColor: string | null; isBold: boolean; codes: string[] }
 export type SegGroup = { id: string; name: string; segs: SegLeaf[] }
@@ -448,8 +448,10 @@ export default function MarketPickupMonthBlock({
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px 8px', flexWrap: 'wrap', flexShrink: 0 }}>
         {/* 월 라벨 */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)' }}>{MONTH_NAMES[month]}</span>
-          <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>{year}</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+            {String(month1).padStart(2, '0')}월
+            <span style={{ fontSize: '0.7em', color: 'var(--color-text-tertiary)' }}>{' '}{String(year).slice(-2)}년</span>
+          </span>
         </div>
 
         {/* Segment 패널 */}

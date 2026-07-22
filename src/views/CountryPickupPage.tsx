@@ -193,13 +193,31 @@ export default function CountryPickupPage() {
     const b = otbDate ? new Date(otbDate + 'T00:00:00') : new Date()
     setSelectedYear(b.getFullYear()); setSelectedMonth(b.getMonth())
   }, [otbDate])
+  const [titleShifting, setTitleShifting] = useState(false)
+  const [isAnimating,   setIsAnimating]   = useState(false)
+  useEffect(() => {
+    setTitleShifting(true)
+    const t = setTimeout(() => setTitleShifting(false), 350)
+    return () => clearTimeout(t)
+  }, [selectedMonth, selectedYear])
+
   const handlePrevMonth = () => {
-    if (selectedMonth === 0) { setSelectedYear(y => y - 1); setSelectedMonth(11) }
-    else setSelectedMonth(m => m - 1)
+    if (isAnimating) return
+    setIsAnimating(true)
+    setTimeout(() => {
+      if (selectedMonth === 0) { setSelectedYear(y => y - 1); setSelectedMonth(11) }
+      else setSelectedMonth(m => m - 1)
+      setIsAnimating(false)
+    }, 300)
   }
   const handleNextMonth = () => {
-    if (selectedMonth === 11) { setSelectedYear(y => y + 1); setSelectedMonth(0) }
-    else setSelectedMonth(m => m + 1)
+    if (isAnimating) return
+    setIsAnimating(true)
+    setTimeout(() => {
+      if (selectedMonth === 11) { setSelectedYear(y => y + 1); setSelectedMonth(0) }
+      else setSelectedMonth(m => m + 1)
+      setIsAnimating(false)
+    }, 300)
   }
 
   // OTB 기준월보다 이전 월이면 Actual 데이터(get_country_actual_data) 사용 (KST)
@@ -506,22 +524,46 @@ export default function CountryPickupPage() {
 
   return (
     <div>
-      {/* 헤더 */}
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          <div style={{ fontSize: 17, fontWeight: 500, color: 'var(--color-text-primary)' }}>Country Pick-up</div>
-        </div>
+      {/* 헤더 — 월 네비 통합 타이틀 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 12 }}>
+        <button
+          onClick={handlePrevMonth}
+          style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+            background: 'none', border: 'none', cursor: 'pointer',
+            padding: '4px 10px', borderRadius: 6,
+          }}
+        >
+          <span style={{ fontSize: 29, color: '#00E5A0', lineHeight: 1 }}>‹</span>
+          <span style={{ fontSize: 11, color: 'rgba(0,229,160,0.6)', letterSpacing: '0.03em' }}>이전</span>
+        </button>
+        <span style={{
+          fontSize: 24, fontWeight: 500, color: '#fff', letterSpacing: '0.04em',
+          transition: 'opacity 0.2s ease, transform 0.35s ease',
+          opacity: titleShifting ? 0.5 : 1,
+          transform: titleShifting ? 'translateX(4px)' : 'translateX(0)',
+        }}>
+          국가별 픽업_
+          <span style={{ color: '#00E5A0' }}>
+            {String(selectedMonth + 1).padStart(2, '0')}월{' '}
+            <span style={{ fontSize: '0.7em' }}>{String(selectedYear).slice(-2)}년</span>
+          </span>
+        </span>
+        <button
+          onClick={handleNextMonth}
+          style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+            background: 'none', border: 'none', cursor: 'pointer',
+            padding: '4px 10px', borderRadius: 6,
+          }}
+        >
+          <span style={{ fontSize: 29, color: '#00E5A0', lineHeight: 1 }}>›</span>
+          <span style={{ fontSize: 11, color: 'rgba(0,229,160,0.6)', letterSpacing: '0.03em' }}>다음</span>
+        </button>
       </div>
 
-      {/* 월 네비 + 필터 (한 행) */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-        {/* 좌: 월 네비 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button onClick={handlePrevMonth} aria-label="이전 달" style={{ width: 24, height: 24, borderRadius: '50%', border: '0.5px solid var(--color-border-subtle)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
-          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', minWidth: 68, textAlign: 'center' }}>{selectedYear}년 {selectedMonth + 1}월</span>
-          <button onClick={handleNextMonth} aria-label="다음 달" style={{ width: 24, height: 24, borderRadius: '50%', border: '0.5px solid var(--color-border-subtle)', background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
-        </div>
-
+      {/* 필터 (한 행) */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
         {/* 우: 필터 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>세그먼트</span>
@@ -562,6 +604,12 @@ export default function CountryPickupPage() {
         </div>
       </div>
 
+      {/* 콘텐츠 — 월 이동 슬라이드 애니메이션 */}
+      <div style={{
+        transform: isAnimating ? 'translateX(-40px)' : 'translateX(0)',
+        opacity: isAnimating ? 0 : 1,
+        transition: isAnimating ? 'none' : 'transform 0.3s ease, opacity 0.3s ease',
+      }}>
       {/* KPI 카드 4개 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-3">
         {/* 1 — 국가 수 (세계지도 배경) */}
@@ -660,6 +708,7 @@ export default function CountryPickupPage() {
       ) : (
         <CountryPickupTable data={filtered} isPastMonth={isPastMonth} lyData={lyFiltered} lyMode={lyMode} onToggleLyMode={() => setLyMode(m => (m === 'date' ? 'match' : 'date'))} onOpenDistribution={() => setShowDistModal(true)} />
       )}
+      </div>
 
       {showDownloadModal && (
         <CountryPickupDownloadModal

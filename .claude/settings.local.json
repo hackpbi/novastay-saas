@@ -199,7 +199,10 @@
       "Bash(node ./__verify_rpc_tmp.mjs)",
       "Bash(node ./__verify_agg_tmp.mjs)",
       "PowerShell($env:NEXT_DIST_DIR='.next-verify'; npm run build 2>&1 | Select-Object -Last 45)",
-      "Bash(grep -E \"^[0-9a-f]{7,}|PAGE_SIZE = \")"
+      "Bash(grep -E \"^[0-9a-f]{7,}|PAGE_SIZE = \")",
+      "PowerShell(npx tsc --noEmit; \"EXIT: $LASTEXITCODE\")",
+      "PowerShell($env:NEXT_DIST_DIR='.next-verify'; npm run build; \"EXIT: $LASTEXITCODE\")",
+      "PowerShell(\"cleanup done\")"
     ],
     "additionalDirectories": [
       "C:\\dev\\18_NovaStay_Saas_ver1\\.next-verify"
