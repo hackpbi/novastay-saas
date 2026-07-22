@@ -1551,33 +1551,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
           </div>
           {/* page2Ref 닫는 태그 — 요일별 실적 + 세그먼트별 요일 실적까지만 포함하도록 위치 조정 */}
 
-          {/* ══════════ 3페이지 — 일자별 점유율 ══════════ */}
-          <div className="mcr-page-divider" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0' }}>
-            <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
-            <span style={{ fontSize: 10, color: '#898781', background: '#fff', padding: '2px 8px', borderRadius: 10, border: '0.5px solid #e1e0d9' }}>3페이지 시작</span>
-            <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
-          </div>
-
-          <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, breakBefore: 'page' } as React.CSSProperties}>
-            일자별 점유율
-          </div>
-          <div style={{ background: '#f5f5f3', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 130 }}>
-              {dailyKpi.map(d => (
-                <div key={d.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
-                  <span style={{ fontSize: 6.5, color: '#0b0b0b', fontWeight: 500, marginBottom: 2, whiteSpace: 'nowrap' }}>{d.actOcc}%</span>
-                  <div style={{ width: '100%', background: d.occColor, borderRadius: '2px 2px 0 0', height: `${Math.min(100, d.actOcc)}%` }} />
-                </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: 2, marginTop: 4 }}>
-              {dailyKpi.map(d => (
-                <div key={d.label} style={{ flex: 1, textAlign: 'center', fontSize: 6, color: '#898781', writingMode: 'vertical-rl', height: 24 }}>{d.label}</div>
-              ))}
-            </div>
-          </div>
-
-          {/* ══════════ 4페이지 — 어카운트별 실적 ══════════ */}
+          {/* ══════════ 4페이지 — 어카운트별 실적 → 일자별 점유율 → 국적별 실적 (연속) ══════════ */}
           <div className="mcr-page-divider" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0' }}>
             <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
             <span style={{ fontSize: 10, color: '#898781', background: '#fff', padding: '2px 8px', borderRadius: 10, border: '0.5px solid #e1e0d9' }}>4페이지 시작</span>
@@ -1649,13 +1623,26 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
             )
           })()}
 
-          {/* ══════════ 5페이지 — 국적별 실적 ══════════ */}
-          <div className="mcr-page-divider" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0' }}>
-            <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
-            <span style={{ fontSize: 10, color: '#898781', background: '#fff', padding: '2px 8px', borderRadius: 10, border: '0.5px solid #e1e0d9' }}>5페이지 시작</span>
-            <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
+          <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, marginTop: 20 }}>
+            일자별 점유율
           </div>
-          <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, breakBefore: 'page' } as React.CSSProperties}>국적별 실적</div>
+          <div style={{ background: '#f5f5f3', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 130 }}>
+              {dailyKpi.map(d => (
+                <div key={d.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                  <span style={{ fontSize: 6.5, color: '#0b0b0b', fontWeight: 500, marginBottom: 2, whiteSpace: 'nowrap' }}>{d.actOcc}%</span>
+                  <div style={{ width: '100%', background: d.occColor, borderRadius: '2px 2px 0 0', height: `${Math.min(100, d.actOcc)}%` }} />
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 2, marginTop: 4 }}>
+              {dailyKpi.map(d => (
+                <div key={d.label} style={{ flex: 1, textAlign: 'center', fontSize: 6, color: '#898781', writingMode: 'vertical-rl', height: 24 }}>{d.label}</div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, marginTop: 20 }}>국적별 실적</div>
           <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
             <colgroup>
               <col style={{ width: '20%' }} /><col style={{ width: '11.4%' }} /><col style={{ width: '11.4%' }} /><col style={{ width: '11.4%' }} /><col style={{ width: '15.2%' }} /><col style={{ width: '15.2%' }} /><col style={{ width: '15.2%' }} />
