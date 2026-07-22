@@ -831,36 +831,33 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     return rows
   }, [countryActualRows])
 
-  // 세그먼트별 국적 실적 — 상위 5개국 + 기타(컬럼), 세그먼트(행) 기준. RPC의 seg_name/otb_*/ly_* 직접 사용
+  // 세그먼트별 국적 실적 — 각 세그먼트 자체 데이터 안에서 상위 5개국을 독립 산정(객실 내림차순)
   const segCountryKpi = useMemo(() => {
-    const top5Names = countryKpi.slice(0, 5).map(c => c.name)
-    const colOf = (countryName: string) => (top5Names.includes(countryName) ? countryName : '기타')
-
-    const map: Record<string, Record<string, { rn: number; rev: number; lyRn: number; lyRev: number }>> = {}
+    const bySeg: Record<string, Record<string, { rn: number; rev: number; lyRn: number; lyRev: number }>> = {}
     ;(countryActualRows ?? []).forEach((r: any) => {
       const segName = r.seg_name || r.segmentation || '기타'
-      const col = colOf(r.country_name_ko || r.country || '(미지정)')
-      if (!map[segName]) map[segName] = {}
-      if (!map[segName][col]) map[segName][col] = { rn: 0, rev: 0, lyRn: 0, lyRev: 0 }
-      map[segName][col].rn    += r.otb_nights ?? 0
-      map[segName][col].rev   += r.otb_revenue ?? 0
-      map[segName][col].lyRn  += r.ly_nights ?? 0
-      map[segName][col].lyRev += r.ly_revenue ?? 0
+      const countryName = r.country_name_ko || r.country || '(미지정)'
+      if (!bySeg[segName]) bySeg[segName] = {}
+      if (!bySeg[segName][countryName]) bySeg[segName][countryName] = { rn: 0, rev: 0, lyRn: 0, lyRev: 0 }
+      bySeg[segName][countryName].rn    += r.otb_nights ?? 0
+      bySeg[segName][countryName].rev   += r.otb_revenue ?? 0
+      bySeg[segName][countryName].lyRn  += r.ly_nights ?? 0
+      bySeg[segName][countryName].lyRev += r.ly_revenue ?? 0
     })
-
-    const segNames = Object.keys(map).sort((a, b) => {
+    const segNames = Object.keys(bySeg).sort((a, b) => {
       const ia = orderedSegNames.indexOf(a), ib = orderedSegNames.indexOf(b)
       return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib)
     })
-    const cols = top5Names
-    return segNames.map(seg => ({
-      seg,
-      cells: cols.map(name => {
-        const c = map[seg]?.[name] ?? { rn: 0, rev: 0, lyRn: 0, lyRev: 0 }
-        return { name, rn: c.rn, adrWon: c.rn > 0 ? c.rev / c.rn : 0, diffRn: c.rn - c.lyRn }
-      }),
-    }))
-  }, [countryActualRows, countryKpi, orderedSegNames])
+    return segNames.map(seg => {
+      const cells = Object.entries(bySeg[seg])
+        .map(([name, c]) => ({
+          name, rn: c.rn, adrWon: c.rn > 0 ? c.rev / c.rn : 0, diffRn: c.rn - c.lyRn,
+        }))
+        .sort((a, b) => b.rn - a.rn)
+        .slice(0, 5)
+      return { seg, cells }
+    })
+  }, [countryActualRows, orderedSegNames])
 
   const page1Ref  = useRef<HTMLDivElement>(null)
   const page2Ref  = useRef<HTMLDivElement>(null)
