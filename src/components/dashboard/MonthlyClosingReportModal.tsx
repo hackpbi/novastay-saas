@@ -73,6 +73,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
   const sAdr = (won: number) => (won === 0 ? '±0' : (won > 0 ? '+' : '') + fmtAdr(won))
   const sRev = (won: number) => (won === 0 ? '±0' : (won > 0 ? '+' : '') + fmtRev(won))
   const revFs = (s: string) => (s.length > 10 ? 8 : s.length > 8 ? 9 : s.length > 6 ? 10 : 11)
+  const nameFs = (s: string) => (s.length > 14 ? 9 : s.length > 10 ? 10 : 11)
 
   // 기본값: otbDate 기준 전월
   useEffect(() => {
@@ -1007,13 +1008,13 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
             <div style={{ background: '#f5f5f3', borderRadius: 8, overflow: 'hidden' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
                 <colgroup>
-                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '15%' }} />
                   {/* R/N: 실적/목표/전년 */}
-                  <col style={{ width: '10%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} />
+                  <col style={{ width: '9.4%' }} /><col style={{ width: '9.4%' }} /><col style={{ width: '9.4%' }} />
                   {/* ADR: 실적/목표/전년 */}
-                  <col style={{ width: '10%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} />
+                  <col style={{ width: '9.4%' }} /><col style={{ width: '9.4%' }} /><col style={{ width: '9.4%' }} />
                   {/* REV: 실적/목표/전년 */}
-                  <col style={{ width: '10%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} />
+                  <col style={{ width: '9.4%' }} /><col style={{ width: '9.4%' }} /><col style={{ width: '9.4%' }} />
                 </colgroup>
                 <thead>
                   {/* 그룹 헤더 */}
@@ -1051,7 +1052,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                     const ov = { whiteSpace: 'nowrap' as const, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const }
                     return (
                     <tr key={row.id} style={{ background: row.bgLightColor || undefined, fontWeight: row.isBold ? 600 : 400 }}>
-                      <td style={{ textAlign:'left', padding: '3px 10px 3px ' + (row.indent ? 28 : 10), borderBottom: '0.5px solid #e1e0d9', color: row.fontLightColor || '#0b0b0b', ...ov }}>
+                      <td style={{ textAlign:'left', padding: '3px 10px 3px ' + (row.indent ? 28 : 10), borderBottom: '0.5px solid #e1e0d9', color: row.fontLightColor || '#0b0b0b', fontSize: nameFs(row.name), ...ov }}>
                         {row.indent ? <><span style={{ color: '#898781' }}>└ </span>{row.name}</> : row.name}
                       </td>
                       {/* 실적 */}
@@ -1075,7 +1076,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                   })}
                   {/* 합계 (HOU 제외) */}
                   <tr style={{ background:'#eeecea', borderTop:'1px solid #c8c7c0' }}>
-                    <td style={{ textAlign:'left', fontWeight: 600, padding:'3px 10px', color:'#0b0b0b' }}>{segKpi.total.seg}</td>
+                    <td style={{ textAlign:'left', fontWeight: 600, padding:'3px 10px', color:'#0b0b0b', fontSize: nameFs(segKpi.total.seg), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{segKpi.total.seg}</td>
                     {/* 실적 */}
                     <td style={{ textAlign:'right', padding:'3px 8px', borderLeft:'0.5px solid #c8c7c0', fontWeight: 600 }}>{segKpi.total.actRn.toLocaleString()}</td>
                     <td style={{ textAlign:'right', padding:'3px 8px', fontWeight: 600, fontSize: revFs(fmtAdr(segKpi.total.actAdrWon)), whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtAdr(segKpi.total.actAdrWon)}</td>
