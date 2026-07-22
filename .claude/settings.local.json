@@ -197,7 +197,8 @@
       "Bash(node \"C:/Users/hackp/AppData/Local/Temp/claude/c--dev-18-NovaStay-Saas-ver1/0b156e0a-0a28-4fc9-b888-1cab01dcdb83/scratchpad/verify_rpc.mjs\")",
       "Bash(cp \"C:/Users/hackp/AppData/Local/Temp/claude/c--dev-18-NovaStay-Saas-ver1/0b156e0a-0a28-4fc9-b888-1cab01dcdb83/scratchpad/verify_rpc.mjs\" ./__verify_rpc_tmp.mjs)",
       "Bash(node ./__verify_rpc_tmp.mjs)",
-      "Bash(node ./__verify_agg_tmp.mjs)"
+      "Bash(node ./__verify_agg_tmp.mjs)",
+      "PowerShell($env:NEXT_DIST_DIR='.next-verify'; npm run build 2>&1 | Select-Object -Last 45)"
     ],
     "additionalDirectories": [
       "C:\\dev\\18_NovaStay_Saas_ver1\\.next-verify"

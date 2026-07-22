@@ -1589,10 +1589,63 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
           </table>
 
           <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, marginTop: 16 }}>세그먼트별 국적 실적</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div>{segCountryKpi.slice(0, Math.ceil(segCountryKpi.length / 2)).map(renderSegCountryBox)}</div>
-            <div>{segCountryKpi.slice(Math.ceil(segCountryKpi.length / 2)).map(renderSegCountryBox)}</div>
-          </div>
+          {(() => {
+            const multiCountrySegs = segCountryKpi.filter(s => s.cells.length > 1)
+            const singleCountrySegs = segCountryKpi.filter(s => s.cells.length === 1)
+            const dominantCountry = (() => {
+              const freq: Record<string, number> = {}
+              singleCountrySegs.forEach(s => { const n = s.cells[0].name; freq[n] = (freq[n] ?? 0) + 1 })
+              let best = '', bestCount = 0
+              Object.entries(freq).forEach(([name, count]) => { if (count > bestCount) { best = name; bestCount = count } })
+              return best
+            })()
+
+            const mid = Math.ceil(multiCountrySegs.length / 2)
+            const leftCards = multiCountrySegs.slice(0, mid)
+            const rightCards = multiCountrySegs.slice(mid)
+
+            const singleTable = singleCountrySegs.length > 0 && (
+              <div style={{ background: C.cardBg, borderRadius: 8, padding: '8px 12px', marginBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#0b0b0b', marginBottom: 4 }}>기타 세그먼트 (국가 1개)</div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9, tableLayout: 'fixed' }}>
+                  <colgroup>
+                    <col style={{ width: '34%' }} /><col style={{ width: '22%' }} /><col style={{ width: '16%' }} /><col style={{ width: '14%' }} /><col style={{ width: '14%' }} />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left', fontSize: 9, color: C.textMuted, fontWeight: 500, padding: '2px 4px', borderBottom: `0.5px solid ${C.border}` }}>세그먼트</th>
+                      <th style={{ textAlign: 'left', fontSize: 9, color: C.textMuted, fontWeight: 500, padding: '2px 4px', borderBottom: `0.5px solid ${C.border}` }}>국가</th>
+                      <th style={{ textAlign: 'right', fontSize: 9, color: C.textMuted, fontWeight: 500, padding: '2px 4px', borderBottom: `0.5px solid ${C.border}` }}>객실</th>
+                      <th style={{ textAlign: 'right', fontSize: 9, color: C.textMuted, fontWeight: 500, padding: '2px 4px', borderBottom: `0.5px solid ${C.border}` }}>객단가</th>
+                      <th style={{ textAlign: 'right', fontSize: 9, color: C.textMuted, fontWeight: 500, padding: '2px 4px', borderBottom: `0.5px solid ${C.border}` }}>전년비</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {singleCountrySegs.map((s, i) => {
+                      const c = s.cells[0]
+                      const isDifferent = c.name !== dominantCountry
+                      return (
+                        <tr key={s.seg} style={{ borderBottom: i < singleCountrySegs.length - 1 ? `0.5px solid ${C.border}` : 'none' }}>
+                          <td style={{ padding: '2px 4px', color: '#0b0b0b', fontWeight: 500 }}>{s.seg}</td>
+                          <td style={{ padding: '2px 4px', color: isDifferent ? C.blue : C.textSecondary, fontWeight: isDifferent ? 600 : 400 }}>{c.name}</td>
+                          <td style={{ textAlign: 'right', padding: '2px 4px', color: '#0b0b0b' }}>{c.rn > 0 ? c.rn.toLocaleString() : '-'}</td>
+                          <td style={{ textAlign: 'right', padding: '2px 4px', color: C.textSecondary }}>{c.rn > 0 ? fmtAdr(c.adrWon) : '-'}</td>
+                          <td style={{ textAlign: 'right', padding: '2px 4px', color: diffColor(c.diffRn), fontWeight: 500 }}>{c.diffRn > 0 ? `+${c.diffRn}` : c.diffRn}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
+
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>{leftCards.map(renderSegCountryBox)}</div>
+                <div>{rightCards.map(renderSegCountryBox)}{singleTable}</div>
+              </div>
+            )
+          })()}
 
           {/* ══════════ 4페이지 — 어카운트별 실적 → 일자별 점유율 ══════════ */}
           <div className="mcr-page-divider" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0' }}>
