@@ -131,9 +131,9 @@ export default function MarketPickupAllDaysModal({
       if (!arr) { arr = Array.from({ length: days }, emptyAgg); map.set(code, arr) }
       const a = arr[d - 1]
       a.otbN += r.otb_nights ?? 0
-      a.vsN  += r.vs_otb_nights ?? 0
+      a.vsN  += r.vs_nights ?? 0
       a.otbR += r.otb_revenue ?? 0
-      a.vsR  += r.vs_otb_revenue ?? 0
+      a.vsR  += r.vs_revenue ?? 0
     }
     return map
   }, [pickupRows, year, month1, days])

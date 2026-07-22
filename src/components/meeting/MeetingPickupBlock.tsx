@@ -190,9 +190,9 @@ export default function MeetingPickupBlock({
   // 총 픽업 REV / OTB·vs R/N·REV (선택 세그 기준)
   const totalPuRev  = useMemo(() => sumByCol('pu_revenue'),    [pickupRows, groups, selected, year, month1])
   const totalOtbRn  = useMemo(() => sumByCol('otb_nights'),    [pickupRows, groups, selected, year, month1])
-  const totalVsRn   = useMemo(() => sumByCol('vs_otb_nights'), [pickupRows, groups, selected, year, month1])
+  const totalVsRn   = useMemo(() => sumByCol('vs_nights'), [pickupRows, groups, selected, year, month1])
   const totalOtbRev = useMemo(() => sumByCol('otb_revenue'),   [pickupRows, groups, selected, year, month1])
-  const totalVsRev  = useMemo(() => sumByCol('vs_otb_revenue'),[pickupRows, groups, selected, year, month1])
+  const totalVsRev  = useMemo(() => sumByCol('vs_revenue'),[pickupRows, groups, selected, year, month1])
 
   // OCC 픽업
   const daysInMonth = new Date(year, month1, 0).getDate()

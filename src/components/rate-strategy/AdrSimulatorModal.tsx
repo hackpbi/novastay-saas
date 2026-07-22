@@ -217,7 +217,7 @@ export default function AdrSimulatorModal({
         p_min_date:    pickupMinDate,
       })
       if (error) throw error
-      return (data ?? []) as { business_date: string; otb_nights: number; vs_otb_nights: number }[]
+      return (data ?? []) as { business_date: string; otb_nights: number; vs_nights: number }[]
     },
   })
   const { data: barRateRows = [] } = useQuery({
@@ -241,7 +241,7 @@ export default function AdrSimulatorModal({
     for (const r of pickupRows) {
       const a = agg[r.business_date] ?? (agg[r.business_date] = { otb: 0, vs: 0 })
       a.otb += r.otb_nights ?? 0
-      a.vs  += r.vs_otb_nights ?? 0
+      a.vs  += r.vs_nights ?? 0
     }
     const barMap: Record<string, number> = {}
     for (const b of barRateRows) barMap[b.stay_date] = b.new_rate

@@ -92,8 +92,8 @@ export function buildMonthlyPickupSegTable(args: {
     if (!s) { s = emptyRaw(); rawMap.set(key, s) }
     s.otbNights  += r.otb_nights     ?? 0
     s.otbRevenue += r.otb_revenue    ?? 0
-    s.vsNights   += r.vs_otb_nights  ?? 0
-    s.vsRevenue  += r.vs_otb_revenue ?? 0
+    s.vsNights   += r.vs_nights  ?? 0
+    s.vsRevenue  += r.vs_revenue ?? 0
   }
 
   // Step C: schema에서 segCode별 cell 조회 헬퍼

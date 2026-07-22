@@ -392,8 +392,8 @@ export default function PickupMonthCard({
     const pm = pickupRows.filter(r => inMonth(r.business_date, year, month1))
     let otbN = 0, otbR = 0, vsN = 0, vsR = 0, puN = 0, puR = 0
     for (const r of pm) {
-      if (r.segmentation !== 'HOU') { otbN += r.otb_nights ?? 0; vsN += r.vs_otb_nights ?? 0; puN += r.pu_nights ?? 0 }
-      otbR += r.otb_revenue ?? 0; vsR += r.vs_otb_revenue ?? 0; puR += r.pu_revenue ?? 0
+      if (r.segmentation !== 'HOU') { otbN += r.otb_nights ?? 0; vsN += r.vs_nights ?? 0; puN += r.pu_nights ?? 0 }
+      otbR += r.otb_revenue ?? 0; vsR += r.vs_revenue ?? 0; puR += r.pu_revenue ?? 0
     }
     const aggLy = (rows: LyPacingRow[]) => {
       let n = 0, rev = 0
@@ -415,9 +415,9 @@ export default function PickupMonthCard({
       if (r.segmentation === 'HOU') continue
       const a = byDate.get(r.business_date) ?? { otbN: 0, vsN: 0, otbR: 0, vsR: 0, puN: 0 }
       a.otbN += r.otb_nights ?? 0
-      a.vsN  += r.vs_otb_nights ?? 0
+      a.vsN  += r.vs_nights ?? 0
       a.otbR += r.otb_revenue ?? 0
-      a.vsR  += r.vs_otb_revenue ?? 0
+      a.vsR  += r.vs_revenue ?? 0
       a.puN  += r.pu_nights ?? 0
       byDate.set(r.business_date, a)
     }

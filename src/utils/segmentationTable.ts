@@ -79,8 +79,8 @@ export function buildSegTable(args: {
     const s = segMap.get(code)!
     s.otbNights  += r.otb_nights    ?? 0
     s.otbRevenue += r.otb_revenue   ?? 0
-    s.vsNights   += r.vs_otb_nights  ?? 0
-    s.vsRevenue  += r.vs_otb_revenue ?? 0
+    s.vsNights   += r.vs_nights  ?? 0
+    s.vsRevenue  += r.vs_revenue ?? 0
     s.puNights   += r.pu_nights     ?? 0
     s.puRevenue  += r.pu_revenue    ?? 0
   }

@@ -150,8 +150,8 @@ export function buildAccountTable(args: {
     if (!s) { s = { otbNights: 0, otbRevenue: 0, vsNights: 0, vsRevenue: 0 }; rawMap.set(key, s) }
     s.otbNights  += r.otb_nights    ?? 0
     s.otbRevenue += r.otb_revenue   ?? 0
-    s.vsNights   += r.vs_otb_nights  ?? 0
-    s.vsRevenue  += r.vs_otb_revenue ?? 0
+    s.vsNights   += r.vs_nights  ?? 0
+    s.vsRevenue  += r.vs_revenue ?? 0
   }
 
   // ── 4. AccountRow 변환 + 그룹 분배 ──────────────────────────────────────────

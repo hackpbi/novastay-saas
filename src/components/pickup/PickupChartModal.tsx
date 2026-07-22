@@ -89,11 +89,11 @@ export default function PickupChartModal({
     const otbByDate = new Map<string, number>()
     for (const r of pm) {
       if (r.segmentation !== 'HOU') {
-        otbN += r.otb_nights ?? 0; vsN += r.vs_otb_nights ?? 0; puN += r.pu_nights ?? 0
+        otbN += r.otb_nights ?? 0; vsN += r.vs_nights ?? 0; puN += r.pu_nights ?? 0
         puByDate.set(r.business_date, (puByDate.get(r.business_date) ?? 0) + (r.pu_nights ?? 0))
         otbByDate.set(r.business_date, (otbByDate.get(r.business_date) ?? 0) + (r.otb_nights ?? 0))
       }
-      otbR += r.otb_revenue ?? 0; vsR += r.vs_otb_revenue ?? 0; puR += r.pu_revenue ?? 0
+      otbR += r.otb_revenue ?? 0; vsR += r.vs_revenue ?? 0; puR += r.pu_revenue ?? 0
     }
     const arr: { day: number; dow: number; isWeekend: boolean; puNights: number; occ: number }[] = []
     for (let day = 1; day <= days; day++) {

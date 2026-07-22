@@ -106,8 +106,8 @@ export default function MarketPickupDayModal({
       const a = map.get(acc)!
       a.otbNights  += r.otb_nights     ?? 0
       a.otbRevenue += r.otb_revenue    ?? 0
-      a.vsNights   += r.vs_otb_nights  ?? 0
-      a.vsRevenue  += r.vs_otb_revenue ?? 0
+      a.vsNights   += r.vs_nights  ?? 0
+      a.vsRevenue  += r.vs_revenue ?? 0
       a.puNights   += r.pu_nights      ?? 0
       a.puRevenue  += r.pu_revenue     ?? 0
     }

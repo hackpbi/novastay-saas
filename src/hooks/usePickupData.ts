@@ -12,8 +12,8 @@ export type PickupRow = {
   account_name:    string
   otb_nights:      number
   otb_revenue:     number
-  vs_otb_nights:   number
-  vs_otb_revenue:  number
+  vs_nights:       number
+  vs_revenue:      number
   min_nights:      number
   min_revenue:     number
   pu_nights:       number
