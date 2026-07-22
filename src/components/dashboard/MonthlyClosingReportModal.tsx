@@ -872,8 +872,10 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
             {flatRows.map((d: any, i: number) => (
               <tr key={i} style={{ borderBottom: i < flatRows.length - 1 ? `0.5px solid ${C.border}` : 'none' }}>
                 <td style={{ padding: '2px 4px', verticalAlign: 'top' }}>
-                  <div style={{ fontSize: 10, color: C.textPrimary, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.label}</div>
-                  <div style={{ fontSize: 9, color: C.textMuted, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.eventName}</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, overflow: 'hidden' }}>
+                    <span style={{ fontSize: 10, color: C.textPrimary, fontWeight: 500, whiteSpace: 'nowrap', flexShrink: 0 }}>{d.label}</span>
+                    <span style={{ fontSize: 9, color: C.textMuted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.eventName}</span>
+                  </div>
                 </td>
                 <td style={{ fontSize: 10, color: C.blue, fontWeight: 500, textAlign: 'right', padding: '2px 4px' }}>{d.actOcc}%</td>
                 <td style={{ fontSize: moneyFs, color: C.textSecondary, textAlign: 'right', padding: '2px 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fmtAdr(d.actAdrWon)}</td>
