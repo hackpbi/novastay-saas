@@ -754,6 +754,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
       { name: 'RevPAR', act: fmtAdr(k.act.revparWon), vsBud: sAdr(k.vsBud.revparWon), vsBudN: k.vsBud.revparWon, vsLy: sAdr(k.vsLy.revparWon), vsLyN: k.vsLy.revparWon },
     ]
     const moneyFs = (adrUnit === '원' || revUnit === '원') ? 10 : 12
+    const pctFs = (s: string) => (s.length > 8 ? 9 : s.length > 6 ? 10 : 12)
     return (
       <div style={{ border: `1.5px solid ${borderColor}`, borderRadius: 10, padding: '8px 16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
@@ -780,15 +781,15 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
           <tbody>
             <tr style={{ borderBottom: `0.5px solid ${C.border}` }}>
               <td style={{ ...td, textAlign: 'left', fontWeight: 600 }}>{actLabel}</td>
-              {cols.map(c => <td key={c.name} style={{ ...td, textAlign: 'right', fontWeight: 600, color: '#0b0b0b', fontSize: c.name === '점유율' ? 12 : moneyFs, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.act}</td>)}
+              {cols.map(c => <td key={c.name} style={{ ...td, textAlign: 'right', fontWeight: 600, color: '#0b0b0b', fontSize: c.name === '점유율' ? pctFs(c.act) : moneyFs, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.act}</td>)}
             </tr>
             <tr style={{ borderBottom: `0.5px solid ${C.border}` }}>
               <td style={{ ...td, textAlign: 'left', fontWeight: 500 }}>목표비</td>
-              {cols.map(c => <td key={c.name} style={{ ...td, textAlign: 'right', color: diffColor(c.vsBudN), fontWeight: 500, fontSize: c.name === '점유율' ? 12 : moneyFs, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.vsBud}</td>)}
+              {cols.map(c => <td key={c.name} style={{ ...td, textAlign: 'right', color: diffColor(c.vsBudN), fontWeight: 500, fontSize: c.name === '점유율' ? pctFs(c.vsBud) : moneyFs, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.vsBud}</td>)}
             </tr>
             <tr>
               <td style={{ ...td, textAlign: 'left', fontWeight: 500 }}>전년비</td>
-              {cols.map(c => <td key={c.name} style={{ ...td, textAlign: 'right', color: diffColor(c.vsLyN), fontWeight: 500, fontSize: c.name === '점유율' ? 12 : moneyFs, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.vsLy}</td>)}
+              {cols.map(c => <td key={c.name} style={{ ...td, textAlign: 'right', color: diffColor(c.vsLyN), fontWeight: 500, fontSize: c.name === '점유율' ? pctFs(c.vsLy) : moneyFs, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.vsLy}</td>)}
             </tr>
           </tbody>
         </table>
