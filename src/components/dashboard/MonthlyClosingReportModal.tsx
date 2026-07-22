@@ -1548,7 +1548,53 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
           </div>
           {/* page2Ref 닫는 태그 — 요일별 실적 + 세그먼트별 요일 실적까지만 포함하도록 위치 조정 */}
 
-          {/* ══════════ 4페이지 — 어카운트별 실적 → 일자별 점유율 → 국적별 실적 (연속) ══════════ */}
+          {/* ══════════ 3페이지 — 국적별 실적 + 세그먼트별 국적 실적 ══════════ */}
+          <div className="mcr-page-divider" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0' }}>
+            <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
+            <span style={{ fontSize: 10, color: '#898781', background: '#fff', padding: '2px 8px', borderRadius: 10, border: '0.5px solid #e1e0d9' }}>3페이지 시작</span>
+            <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, breakBefore: 'page' } as React.CSSProperties}>국적별 실적</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
+            <colgroup>
+              <col style={{ width: '20%' }} /><col style={{ width: '11.4%' }} /><col style={{ width: '11.4%' }} /><col style={{ width: '11.4%' }} /><col style={{ width: '15.2%' }} /><col style={{ width: '15.2%' }} /><col style={{ width: '15.2%' }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th style={{ ...th, textAlign: 'left' }}>국가</th>
+                <th style={{ ...th, textAlign: 'right' }}>객실</th>
+                <th style={{ ...th, textAlign: 'right' }}>객단가</th>
+                <th style={{ ...th, textAlign: 'right' }}>매출</th>
+                <th style={{ ...th, textAlign: 'right' }}>전년비(객실)</th>
+                <th style={{ ...th, textAlign: 'right' }}>전년비(객단가)</th>
+                <th style={{ ...th, textAlign: 'right' }}>전년비(매출)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {countryKpi.map(c => (
+                <tr key={c.name} style={{ borderBottom: `0.5px solid ${C.border}` }}>
+                  <td style={{ ...td, textAlign: 'left', fontWeight: c.name === '기타' ? 500 : 400 }}>
+                    {c.flag && <img src={c.flag} alt="" style={{ width: 14, height: 10.5, marginRight: 5, verticalAlign: 'middle', border: '0.5px solid #e1e0d9' }} />}
+                    {c.name}
+                  </td>
+                  <td style={{ ...td, textAlign: 'right' }}>{c.rn.toLocaleString()}</td>
+                  <td style={{ ...td, textAlign: 'right', color: C.textSecondary }}>{fmtAdr(c.adrWon)}</td>
+                  <td style={{ ...td, textAlign: 'right', color: C.textSecondary }}>{fmtRev(c.revWon)}</td>
+                  <td style={{ ...td, textAlign: 'right', color: diffColor(c.diffRn), fontWeight: 500 }}>{c.diffRn > 0 ? `+${c.diffRn}` : c.diffRn}</td>
+                  <td style={{ ...td, textAlign: 'right', color: diffColor(c.diffAdrWon), fontWeight: 500 }}>{sAdr(c.diffAdrWon)}</td>
+                  <td style={{ ...td, textAlign: 'right', color: diffColor(c.diffRevWon), fontWeight: 500 }}>{sRev(c.diffRevWon)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, marginTop: 16 }}>세그먼트별 국적 실적</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>{segCountryKpi.slice(0, Math.ceil(segCountryKpi.length / 2)).map(renderSegCountryBox)}</div>
+            <div>{segCountryKpi.slice(Math.ceil(segCountryKpi.length / 2)).map(renderSegCountryBox)}</div>
+          </div>
+
+          {/* ══════════ 4페이지 — 어카운트별 실적 → 일자별 점유율 ══════════ */}
           <div className="mcr-page-divider" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0' }}>
             <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
             <span style={{ fontSize: 10, color: '#898781', background: '#fff', padding: '2px 8px', borderRadius: 10, border: '0.5px solid #e1e0d9' }}>4페이지 시작</span>
@@ -1637,46 +1683,6 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                 <div key={d.label} style={{ flex: 1, textAlign: 'center', fontSize: 6, color: '#898781', writingMode: 'vertical-rl', height: 24 }}>{d.label}</div>
               ))}
             </div>
-          </div>
-
-          <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, marginTop: 20 }}>국적별 실적</div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
-            <colgroup>
-              <col style={{ width: '20%' }} /><col style={{ width: '11.4%' }} /><col style={{ width: '11.4%' }} /><col style={{ width: '11.4%' }} /><col style={{ width: '15.2%' }} /><col style={{ width: '15.2%' }} /><col style={{ width: '15.2%' }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th style={{ ...th, textAlign: 'left' }}>국가</th>
-                <th style={{ ...th, textAlign: 'right' }}>객실</th>
-                <th style={{ ...th, textAlign: 'right' }}>객단가</th>
-                <th style={{ ...th, textAlign: 'right' }}>매출</th>
-                <th style={{ ...th, textAlign: 'right' }}>전년비(객실)</th>
-                <th style={{ ...th, textAlign: 'right' }}>전년비(객단가)</th>
-                <th style={{ ...th, textAlign: 'right' }}>전년비(매출)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {countryKpi.map(c => (
-                <tr key={c.name} style={{ borderBottom: `0.5px solid ${C.border}` }}>
-                  <td style={{ ...td, textAlign: 'left', fontWeight: c.name === '기타' ? 500 : 400 }}>
-                    {c.flag && <img src={c.flag} alt="" style={{ width: 14, height: 10.5, marginRight: 5, verticalAlign: 'middle', border: '0.5px solid #e1e0d9' }} />}
-                    {c.name}
-                  </td>
-                  <td style={{ ...td, textAlign: 'right' }}>{c.rn.toLocaleString()}</td>
-                  <td style={{ ...td, textAlign: 'right', color: C.textSecondary }}>{fmtAdr(c.adrWon)}</td>
-                  <td style={{ ...td, textAlign: 'right', color: C.textSecondary }}>{fmtRev(c.revWon)}</td>
-                  <td style={{ ...td, textAlign: 'right', color: diffColor(c.diffRn), fontWeight: 500 }}>{c.diffRn > 0 ? `+${c.diffRn}` : c.diffRn}</td>
-                  <td style={{ ...td, textAlign: 'right', color: diffColor(c.diffAdrWon), fontWeight: 500 }}>{sAdr(c.diffAdrWon)}</td>
-                  <td style={{ ...td, textAlign: 'right', color: diffColor(c.diffRevWon), fontWeight: 500 }}>{sRev(c.diffRevWon)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, marginTop: 16 }}>세그먼트별 국적 실적</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div>{segCountryKpi.slice(0, Math.ceil(segCountryKpi.length / 2)).map(renderSegCountryBox)}</div>
-            <div>{segCountryKpi.slice(Math.ceil(segCountryKpi.length / 2)).map(renderSegCountryBox)}</div>
           </div>
 
         </div>
