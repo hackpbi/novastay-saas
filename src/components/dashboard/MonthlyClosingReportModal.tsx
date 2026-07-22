@@ -1513,7 +1513,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
           {/* ══════════ 2페이지 — 요일별 + 일자별 그래프 ══════════ */}
           <div className="mcr-page-divider" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0' }}>
             <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
-            <span style={{ fontSize: 10, color: '#898781', background: '#fff', padding: '2px 8px', borderRadius: 10, border: '0.5px solid #e1e0d9' }}>2페이지 시작</span>
+            <span style={{ fontSize: 10, color: '#898781', background: '#fff', padding: '2px 8px', borderRadius: 10, border: '0.5px solid #e1e0d9' }}>요일별 실적 시작</span>
             <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
           </div>
           <div ref={page2Ref} className="mcr-page2">
@@ -1551,7 +1551,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
           {/* ══════════ 3페이지 — 국적별 실적 + 세그먼트별 국적 실적 ══════════ */}
           <div className="mcr-page-divider" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0' }}>
             <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
-            <span style={{ fontSize: 10, color: '#898781', background: '#fff', padding: '2px 8px', borderRadius: 10, border: '0.5px solid #e1e0d9' }}>3페이지 시작</span>
+            <span style={{ fontSize: 10, color: '#898781', background: '#fff', padding: '2px 8px', borderRadius: 10, border: '0.5px solid #e1e0d9' }}>국적별 실적 시작</span>
             <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
           </div>
           <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, breakBefore: 'page' } as React.CSSProperties}>국적별 실적</div>
@@ -1597,7 +1597,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
           {/* ══════════ 4페이지 — 어카운트별 실적 → 일자별 점유율 ══════════ */}
           <div className="mcr-page-divider" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0' }}>
             <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
-            <span style={{ fontSize: 10, color: '#898781', background: '#fff', padding: '2px 8px', borderRadius: 10, border: '0.5px solid #e1e0d9' }}>4페이지 시작</span>
+            <span style={{ fontSize: 10, color: '#898781', background: '#fff', padding: '2px 8px', borderRadius: 10, border: '0.5px solid #e1e0d9' }}>세그먼트별 어카운트 실적 시작</span>
             <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
           </div>
           <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, breakBefore: 'page' } as React.CSSProperties}>세그먼트별 어카운트 실적</div>
