@@ -3,7 +3,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
-import Chart from 'chart.js/auto'
 import { supabase } from '@/lib/supabase'
 
 interface MonthlyClosingReportModalProps {
@@ -782,49 +781,8 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
       })
   }, [accountActualRows, orderedSegNames])
 
-  // ── 일자별 그래프 (Chart.js) ──
-  const chartRef  = useRef<HTMLCanvasElement>(null)
-  const chartInst = useRef<Chart | null>(null)
   const page1Ref  = useRef<HTMLDivElement>(null)
   const page2Ref  = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open || !chartRef.current || !dailyKpi.length) return
-    chartInst.current?.destroy()
-    const canvas = chartRef.current
-    const container = canvas.parentElement
-    if (container) {
-      canvas.width = container.clientWidth
-      canvas.height = container.clientHeight
-    }
-    chartInst.current = new Chart(canvas, {
-      data: {
-        labels: dailyKpi.map(d => d.label),
-        datasets: [
-          { type: 'bar',  label: 'OCC%',    data: dailyKpi.map(d => d.actOcc), backgroundColor: dailyKpi.map(d => d.occColor), yAxisID: 'yOcc', barPercentage: 0.8 } as any,
-          { type: 'line', label: 'LY OCC%', data: dailyKpi.map(d => d.lyOcc) as any,  borderColor: '#c8c7c0', borderWidth: 1, borderDash: [3, 3], pointRadius: 0, yAxisID: 'yOcc', tension: 0.3 },
-          { type: 'line', label: 'ADR',     data: dailyKpi.map(d => Math.round(d.actAdrWon / (adrUnit === '원' ? 1 : 1000))), borderColor: '#eda100', borderWidth: 1.5, pointRadius: 0, yAxisID: 'yAdr', tension: 0.3 },
-        ],
-      },
-      options: {
-        responsive: false, maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            mode: 'index', intersect: false,
-            callbacks: { label: (ctx: any) => ctx.dataset.label === 'ADR' ? ` ADR: ${ctx.raw.toLocaleString()}${adrUnit === '원' ? '' : 'k'}` : ` ${ctx.dataset.label}: ${ctx.raw}%` },
-          },
-        },
-        scales: {
-          x: { grid: { display: false }, ticks: { font: { size: 7 }, color: '#898781', maxRotation: 0, autoSkip: true, maxTicksLimit: 15 }, border: { display: false } },
-          yOcc: { type: 'linear', position: 'left', min: 0, max: 100, grid: { color: '#e1e0d9', lineWidth: 0.5 }, ticks: { font: { size: 8 }, color: '#898781', stepSize: 25, callback: (v: any) => v + '%' }, border: { display: false } },
-          yAdr: { type: 'linear', position: 'right', min: 0, grid: { display: false }, ticks: { font: { size: 8 }, color: '#eda100', callback: (v: any) => v.toLocaleString() + (adrUnit === '원' ? '' : 'k') }, border: { display: false } },
-        },
-      },
-    })
-    return () => { chartInst.current?.destroy(); chartInst.current = null }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, dailyKpi, adrUnit])
 
   // ESC + 스크롤락
   useEffect(() => {
@@ -855,16 +813,6 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     const applyFit = () => {
       fitOne(page1Ref.current)
       fitOne(page2Ref.current)
-      setTimeout(() => {
-        if (chartRef.current && chartInst.current) {
-          const container = chartRef.current.parentElement
-          if (container) {
-            chartRef.current.width = container.clientWidth
-            chartRef.current.height = container.clientHeight
-            chartInst.current.resize()
-          }
-        }
-      }, 100)
     }
     const resetFit = () => {
       if (page1Ref.current) page1Ref.current.style.zoom = '1'
@@ -1481,17 +1429,21 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
           </div>
 
           <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, marginTop: 20 }}>
-            일자별 OCC% & ADR
-            <span style={{ fontSize: 10, color: '#898781', marginLeft: 8 }}>· 전년 포함</span>
+            일자별 점유율
           </div>
           <div style={{ background: '#f5f5f3', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
-            <div style={{ display: 'flex', gap: 16, marginBottom: 8, fontSize: 9, color: '#898781' }}>
-              <span>■ <span style={{ color: '#2a78d6' }}>OCC% (실적)</span></span>
-              <span>- - <span style={{ color: '#c8c7c0' }}>LY OCC%</span></span>
-              <span>━ <span style={{ color: '#eda100' }}>ADR</span></span>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 130 }}>
+              {dailyKpi.map(d => (
+                <div key={d.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                  <span style={{ fontSize: 6.5, color: '#0b0b0b', fontWeight: 500, marginBottom: 2, whiteSpace: 'nowrap' }}>{d.actOcc}%</span>
+                  <div style={{ width: '100%', background: d.occColor, borderRadius: '2px 2px 0 0', height: `${Math.min(100, d.actOcc)}%` }} />
+                </div>
+              ))}
             </div>
-            <div style={{ height: 180 }}>
-              <canvas ref={chartRef} />
+            <div style={{ display: 'flex', gap: 2, marginTop: 4 }}>
+              {dailyKpi.map(d => (
+                <div key={d.label} style={{ flex: 1, textAlign: 'center', fontSize: 6, color: '#898781', writingMode: 'vertical-rl', height: 24 }}>{d.label}</div>
+              ))}
             </div>
           </div>
           </div>
