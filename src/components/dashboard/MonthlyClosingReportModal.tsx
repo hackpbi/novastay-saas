@@ -612,13 +612,38 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     })
   }, [actualData, lyData, calMap, roomCount, reportYear, reportMonth])
 
+  // 코드 → 세그먼트명 매핑 (schemaRows의 segmentation 배열 기준, 어느 레벨이든 코드를 가진 행의 name 사용)
+  const codeToSegName = useMemo(() => {
+    const map: Record<string, string> = {}
+    schemaRows.forEach((s: any) => {
+      (s.segmentation ?? []).forEach((code: string) => { map[code] = s.name })
+    })
+    return map
+  }, [schemaRows])
+
+  // 세그먼트 정렬 순서 — schema 순회 순서대로 (자식 있으면 자식들, 없으면 자신)
+  const orderedSegNames = useMemo(() => {
+    const names: string[] = []
+    const topLevel = schemaRows.filter((s: any) => s.parent_id === null).sort((a: any, b: any) => a.order_index - b.order_index)
+    topLevel.forEach((top: any) => {
+      const children = schemaRows.filter((c: any) => c.parent_id === top.id).sort((a: any, b: any) => a.order_index - b.order_index)
+      if (children.length > 0) {
+        children.forEach((c: any) => { if ((c.segmentation ?? []).length > 0) names.push(c.name) })
+      } else if ((top.segmentation ?? []).length > 0) {
+        names.push(top.name)
+      }
+    })
+    return names
+  }, [schemaRows])
+
   // ── 어카운트별 ──
   const accountKpi = useMemo(() => {
     const segMap: Record<string, { sorting1: string; accounts: Record<string, { aRn: number; aRev: number; lRn: number; lRev: number }> }> = {}
 
     const addRows = (rows: any[], isLy: boolean) => {
       ;(rows ?? []).forEach((r: any) => {
-        const seg = r.segmentation ?? '기타', acc = r.account_name ?? '기타'
+        const seg = codeToSegName[r.segmentation] ?? r.segmentation ?? '기타'
+        const acc = r.account_name ?? '기타'
         if (!segMap[seg]) segMap[seg] = { sorting1: r.sorting1 ?? '', accounts: {} }
         if (!segMap[seg].accounts[acc]) segMap[seg].accounts[acc] = { aRn: 0, aRev: 0, lRn: 0, lRev: 0 }
         if (isLy) { segMap[seg].accounts[acc].lRn += r.nights ?? 0; segMap[seg].accounts[acc].lRev += r.room_revenue ?? 0 }
@@ -629,7 +654,11 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     addRows(lyData ?? [], true)
 
     return Object.entries(segMap)
-      .sort((a, b) => (a[1].sorting1).localeCompare(b[1].sorting1))
+      .sort((a, b) => {
+        const ia = orderedSegNames.indexOf(a[0])
+        const ib = orderedSegNames.indexOf(b[0])
+        return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib)
+      })
       .map(([seg, v]) => {
         const accounts = Object.entries(v.accounts)
           .sort((a, b) => b[1].aRn - a[1].aRn)
@@ -652,7 +681,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
           },
         }
       })
-  }, [actualData, lyData])
+  }, [actualData, lyData, codeToSegName, orderedSegNames])
 
   // ── 일자별 그래프 (Chart.js) ──
   const chartRef  = useRef<HTMLCanvasElement>(null)
@@ -1215,73 +1244,70 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
             <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
           </div>
           <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, breakBefore: 'page' } as React.CSSProperties}>세그먼트별 어카운트 실적</div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-            <colgroup>
-              <col style={{ width: '22%' }} /><col style={{ width: '12%' }} /><col style={{ width: '14%' }} /><col style={{ width: '12%' }} /><col style={{ width: '12%' }} /><col style={{ width: '12%' }} /><col style={{ width: '16%' }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th style={{ ...th, textAlign: 'left' }}>어카운트</th>
-                <th style={{ ...th, textAlign: 'right' }}>RN</th>
-                <th style={{ ...th, textAlign: 'right' }}>매출</th>
-                <th style={{ ...th, textAlign: 'right' }}>객단가</th>
-                <th style={{ ...th, textAlign: 'right' }}>전년 RN</th>
-                <th style={{ ...th, textAlign: 'right' }}>RN 증감</th>
-                <th style={{ ...th, textAlign: 'right' }}>매출 증감</th>
-              </tr>
-            </thead>
-            <tbody>
-              {accountKpi.map(seg => (
-                <React.Fragment key={`seg-group-${seg.seg}`}>
-                  <tr key={`seg-${seg.seg}`} style={{ background: C.cardBg }}>
-                    <td colSpan={7} style={{ ...td, fontWeight: 600, color: C.textPrimary, padding: '5px 6px' }}>{seg.seg}</td>
-                  </tr>
-                  {seg.accounts.map(a => {
-                    const accFs = (adrUnit === '원' || revUnit === '원') ? 10 : 11
-                    const ov = { whiteSpace: 'nowrap' as const, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const }
-                    return (
-                    <tr key={`${seg.seg}-${a.acc}`} style={{ borderBottom: `0.5px solid ${C.border}` }}>
-                      <td style={{ ...td, textAlign: 'left', paddingLeft: 16, ...ov }}>{a.acc}</td>
-                      <td style={{ ...td, textAlign: 'right', ...ov }}>{a.aRn.toLocaleString()}</td>
-                      <td style={{ ...td, textAlign: 'right', fontSize: accFs, ...ov }}>{fmtRev(a.aRevWon)}</td>
-                      <td style={{ ...td, textAlign: 'right', color: C.textSecondary, fontSize: accFs, ...ov }}>{fmtAdr(a.aAdrWon)}</td>
-                      <td style={{ ...td, textAlign: 'right', color: C.textSecondary, ...ov }}>{a.lRn.toLocaleString()}</td>
-                      <td style={{ ...td, textAlign: 'right', color: diffColor(a.diffRn), fontWeight: 500, ...ov }}>{diffText(a.diffRn, '')}</td>
-                      <td style={{ ...td, textAlign: 'right', color: diffColor(a.diffRevWon), fontWeight: 500, fontSize: accFs, ...ov }}>{sRev(a.diffRevWon)}</td>
+          {(() => {
+            const mid = Math.ceil(accountKpi.length / 2)
+            const leftGroups = accountKpi.slice(0, mid)
+            const rightGroups = accountKpi.slice(mid)
+
+            const renderAccBox = (seg: { seg: string; accounts: any[]; total: any }) => (
+              <div key={seg.seg} style={{ background: '#f5f5f3', borderRadius: 8, padding: '10px 14px', marginBottom: 8, breakInside: 'avoid' } as React.CSSProperties}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#0b0b0b', marginBottom: 6, paddingBottom: 5, borderBottom: '0.5px solid #e1e0d9' }}>{seg.seg}</div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
+                  <colgroup>
+                    <col style={{ width: '34%' }} /><col style={{ width: '18%' }} /><col style={{ width: '22%' }} /><col style={{ width: '18%' }} /><col style={{ width: '8%' }} />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left', fontSize: 9, color: '#898781', fontWeight: 500, padding: '0 4px 4px 0', borderBottom: '0.5px solid #e1e0d9' }}>어카운트</th>
+                      <th style={{ textAlign: 'right', fontSize: 9, color: '#898781', fontWeight: 500, padding: '0 4px 4px 0', borderBottom: '0.5px solid #e1e0d9' }}>객실</th>
+                      <th style={{ textAlign: 'right', fontSize: 9, color: '#898781', fontWeight: 500, padding: '0 4px 4px 0', borderBottom: '0.5px solid #e1e0d9' }}>객단가</th>
+                      <th style={{ textAlign: 'right', fontSize: 9, color: '#898781', fontWeight: 500, padding: '0 4px 4px 0', borderBottom: '0.5px solid #e1e0d9' }}>매출</th>
+                      <th style={{ textAlign: 'right', fontSize: 9, color: '#898781', fontWeight: 500, padding: '0 0 4px 4px', borderBottom: '0.5px solid #e1e0d9' }}>증감</th>
                     </tr>
-                    )
-                  })}
-                  <tr key={`tot-${seg.seg}`} style={{ borderBottom: `1px solid ${C.borderStrong}` }}>
-                    <td style={{ ...td, textAlign: 'left', fontWeight: 600, color: C.textSecondary }}>{seg.seg} 소계</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 600 }}>{seg.total.aRn.toLocaleString()}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 600, fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtRev(seg.total.aRevWon)}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: C.textSecondary, fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtAdr(seg.total.aAdrWon)}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: C.textSecondary, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{seg.total.lRn.toLocaleString()}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: diffColor(seg.total.diffRn), whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{diffText(seg.total.diffRn, '')}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: diffColor(seg.total.diffRevWon), fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{sRev(seg.total.diffRevWon)}</td>
-                  </tr>
-                </React.Fragment>
-              ))}
-              {/* 전체 합계 */}
-              {(() => {
-                const g = accountKpi.reduce((s, seg) => ({
-                  aRn: s.aRn + seg.total.aRn, aRevWon: s.aRevWon + seg.total.aRevWon,
-                  lRn: s.lRn + seg.total.lRn, diffRn: s.diffRn + seg.total.diffRn, diffRevWon: s.diffRevWon + seg.total.diffRevWon,
-                }), { aRn: 0, aRevWon: 0, lRn: 0, diffRn: 0, diffRevWon: 0 })
-                return (
-                  <tr style={{ borderTop: `2px solid #0b0b0b`, background: C.cardBg }}>
-                    <td style={{ ...td, textAlign: 'left', fontWeight: 700 }}>전체 합계</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{g.aRn.toLocaleString()}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 700, fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{fmtRev(g.aRevWon)}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 700, fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{g.aRn > 0 ? fmtAdr(g.aRevWon / g.aRn) : fmtAdr(0)}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: C.textSecondary, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{g.lRn.toLocaleString()}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: diffColor(g.diffRn), whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{diffText(g.diffRn, '')}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: diffColor(g.diffRevWon), fontSize: (adrUnit === '원' || revUnit === '원') ? 10 : 11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{sRev(g.diffRevWon)}</td>
-                  </tr>
-                )
-              })()}
-            </tbody>
-          </table>
+                  </thead>
+                  <tbody>
+                    {seg.accounts.map((a: any) => (
+                      <tr key={a.acc} style={{ borderBottom: '0.5px solid #e1e0d9' }}>
+                        <td style={{ textAlign: 'left', padding: '3px 4px 3px 0', color: '#0b0b0b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.acc}</td>
+                        <td style={{ textAlign: 'right', padding: '3px 4px 3px 0', color: '#0b0b0b' }}>{a.aRn.toLocaleString()}</td>
+                        <td style={{ textAlign: 'right', padding: '3px 4px 3px 0', color: '#4a4a48', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fmtAdr(a.aAdrWon)}</td>
+                        <td style={{ textAlign: 'right', padding: '3px 4px 3px 0', color: '#4a4a48', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fmtRev(a.aRevWon)}</td>
+                        <td style={{ textAlign: 'right', padding: '3px 0 3px 4px', color: a.diffRn >= 0 ? '#1d9e75' : '#a32d2d', fontWeight: 500 }}>{a.diffRn > 0 ? `+${a.diffRn}` : a.diffRn}</td>
+                      </tr>
+                    ))}
+                    <tr style={{ borderTop: '1px solid #c8c7c0' }}>
+                      <td style={{ textAlign: 'left', padding: '3px 4px 3px 0', color: '#4a4a48', fontWeight: 600 }}>소계</td>
+                      <td style={{ textAlign: 'right', padding: '3px 4px 3px 0', color: '#0b0b0b', fontWeight: 600 }}>{seg.total.aRn.toLocaleString()}</td>
+                      <td style={{ textAlign: 'right', padding: '3px 4px 3px 0', color: '#4a4a48', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fmtAdr(seg.total.aAdrWon)}</td>
+                      <td style={{ textAlign: 'right', padding: '3px 4px 3px 0', color: '#4a4a48', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fmtRev(seg.total.aRevWon)}</td>
+                      <td style={{ textAlign: 'right', padding: '3px 0 3px 4px', color: seg.total.diffRn >= 0 ? '#1d9e75' : '#a32d2d', fontWeight: 600 }}>{seg.total.diffRn > 0 ? `+${seg.total.diffRn}` : seg.total.diffRn}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )
+
+            const grand = accountKpi.reduce((s, seg) => ({
+              aRn: s.aRn + seg.total.aRn, aRevWon: s.aRevWon + seg.total.aRevWon, diffRn: s.diffRn + seg.total.diffRn,
+            }), { aRn: 0, aRevWon: 0, diffRn: 0 })
+
+            return (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div>{leftGroups.map(renderAccBox)}</div>
+                  <div>{rightGroups.map(renderAccBox)}</div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f5f5f3', borderRadius: 8, padding: '8px 14px', marginTop: 4, fontWeight: 700 }}>
+                  <span style={{ fontSize: 12, color: '#0b0b0b' }}>전체 합계</span>
+                  <div style={{ display: 'flex', gap: 20, fontSize: 12 }}>
+                    <span>객실 {grand.aRn.toLocaleString()}</span>
+                    <span>매출 {fmtRev(grand.aRevWon)}</span>
+                    <span style={{ color: grand.diffRn >= 0 ? '#1d9e75' : '#a32d2d' }}>객실 증감 {grand.diffRn > 0 ? `+${grand.diffRn}` : grand.diffRn}</span>
+                  </div>
+                </div>
+              </>
+            )
+          })()}
 
         </div>
       </div>
