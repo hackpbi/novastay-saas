@@ -658,9 +658,16 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
   const page2Ref  = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    console.log('[DEBUG] chart effect fired', { open, dailyKpiLen: dailyKpi.length, adrUnit, time: Date.now() }) // 임시 디버그용 — 확인 후 제거 예정
     if (!open || !chartRef.current || !dailyKpi.length) return
     chartInst.current?.destroy()
-    chartInst.current = new Chart(chartRef.current, {
+    const canvas = chartRef.current
+    const container = canvas.parentElement
+    if (container) {
+      canvas.width = container.clientWidth
+      canvas.height = container.clientHeight
+    }
+    chartInst.current = new Chart(canvas, {
       data: {
         labels: dailyKpi.map(d => d.label),
         datasets: [
@@ -670,7 +677,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
         ],
       },
       options: {
-        responsive: true, maintainAspectRatio: false, resizeDelay: 200,
+        responsive: false, maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -718,6 +725,16 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     const applyFit = () => {
       fitOne(page1Ref.current)
       fitOne(page2Ref.current)
+      setTimeout(() => {
+        if (chartRef.current && chartInst.current) {
+          const container = chartRef.current.parentElement
+          if (container) {
+            chartRef.current.width = container.clientWidth
+            chartRef.current.height = container.clientHeight
+            chartInst.current.resize()
+          }
+        }
+      }, 100)
     }
     const resetFit = () => {
       if (page1Ref.current) page1Ref.current.style.zoom = '1'
