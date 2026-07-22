@@ -928,10 +928,10 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
   // 요일별 점유율 막대그래프 + 하단 4행 표(객단가/매출/전년비점유율/전년비객단가)
   const renderDowBarChart = () => {
     const dowColor = (d: any) => (d.isFriSat ? '#e24b4a' : '#2a78d6')
-    const BAR_MAX_PX = 70
+    const BAR_MAX_PX = 48
     return (
-      <div style={{ background: C.cardBg, borderRadius: 8, padding: '14px 16px 10px' }}>
-        <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 8 }}>점유율 (%)</div>
+      <div style={{ background: C.cardBg, borderRadius: 8, padding: '8px 12px 6px' }}>
+        <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 4 }}>점유율 (%)</div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9, tableLayout: 'fixed' }}>
           <colgroup>
             <col style={{ width: '18%' }} />
@@ -956,20 +956,20 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
               ))}
             </tr>
             <tr style={{ borderTop: `0.5px solid ${C.border}` }}>
-              <td style={{ padding: '3px 4px', color: C.textMuted }}>객단가</td>
-              {dowKpi.map(d => <td key={d.day} style={{ textAlign: 'center', padding: '3px 4px', color: '#0b0b0b' }}>{fmtAdr(d.adrWon)}</td>)}
+              <td style={{ padding: '2px 4px', color: C.textMuted }}>객단가</td>
+              {dowKpi.map(d => <td key={d.day} style={{ textAlign: 'center', padding: '2px 4px', color: '#0b0b0b' }}>{fmtAdr(d.adrWon)}</td>)}
             </tr>
             <tr>
-              <td style={{ padding: '3px 4px', color: C.textMuted }}>매출</td>
-              {dowKpi.map(d => <td key={d.day} style={{ textAlign: 'center', padding: '3px 4px', color: '#0b0b0b' }}>{fmtRev(d.revWon)}</td>)}
+              <td style={{ padding: '2px 4px', color: C.textMuted }}>매출</td>
+              {dowKpi.map(d => <td key={d.day} style={{ textAlign: 'center', padding: '2px 4px', color: '#0b0b0b' }}>{fmtRev(d.revWon)}</td>)}
             </tr>
             <tr style={{ borderTop: `0.5px solid ${C.border}` }}>
-              <td style={{ padding: '3px 4px', color: C.textMuted }}>전년비(점유율)</td>
-              {dowKpi.map(d => <td key={d.day} style={{ textAlign: 'center', padding: '3px 4px', color: diffColor(d.vsLyOcc), fontWeight: 500 }}>{diffText(d.vsLyOcc, '')}</td>)}
+              <td style={{ padding: '2px 4px', color: C.textMuted }}>전년비(점유율)</td>
+              {dowKpi.map(d => <td key={d.day} style={{ textAlign: 'center', padding: '2px 4px', color: diffColor(d.vsLyOcc), fontWeight: 500 }}>{diffText(d.vsLyOcc, '')}</td>)}
             </tr>
             <tr>
-              <td style={{ padding: '3px 4px', color: C.textMuted }}>전년비(객단가)</td>
-              {dowKpi.map(d => <td key={d.day} style={{ textAlign: 'center', padding: '3px 4px', color: diffColor(d.vsLyAdrWon), fontWeight: 500 }}>{sAdr(d.vsLyAdrWon)}</td>)}
+              <td style={{ padding: '2px 4px', color: C.textMuted }}>전년비(객단가)</td>
+              {dowKpi.map(d => <td key={d.day} style={{ textAlign: 'center', padding: '2px 4px', color: diffColor(d.vsLyAdrWon), fontWeight: 500 }}>{sAdr(d.vsLyAdrWon)}</td>)}
             </tr>
           </tbody>
         </table>
@@ -981,7 +981,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
   const renderDowRevPie = () => {
     const total = dowKpi.reduce((s, d) => s + d.revWon, 0)
     if (total <= 0) return null
-    const cx = 150, cy = 110, r = 65
+    const cx = 150, cy = 90, r = 65
     let cum = 0
     const slices = dowKpi.map(d => {
       const pct = total > 0 ? (d.revWon / total) * 100 : 0
@@ -1000,9 +1000,9 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
       return { day: d.day, pct: Math.round(pct), path, lx1, ly1, lx2, ly2, anchor, isFriSat: d.isFriSat }
     })
     return (
-      <div style={{ background: C.cardBg, borderRadius: 8, padding: 16, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 6 }}>매출 비중</div>
-        <svg viewBox="0 0 300 220" style={{ width: '100%', height: 'auto', overflow: 'visible' }}>
+      <div style={{ background: C.cardBg, borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 3 }}>매출 비중</div>
+        <svg viewBox="0 0 300 190" style={{ width: '100%', height: 'auto', overflow: 'visible' }}>
           {slices.map(s => <path key={s.day} d={s.path} fill={s.isFriSat ? '#e24b4a' : '#2a78d6'} />)}
           {slices.map(s => (
             <g key={s.day}>
@@ -1019,12 +1019,12 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
   const renderDowSegBox = (seg: { seg: string; shareRn: number; shareLyRn: number; cells: any[] }) => {
     const z = (n: number, str: string) => (n === 0 ? '-' : str)
     return (
-      <div key={seg.seg} style={{ background: C.cardBg, borderRadius: 8, padding: '10px 12px', marginBottom: 10, breakInside: 'avoid' } as React.CSSProperties}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+      <div key={seg.seg} style={{ background: C.cardBg, borderRadius: 8, padding: '6px 10px', marginBottom: 6, breakInside: 'avoid' } as React.CSSProperties}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 }}>
           <span style={{ fontSize: 11, fontWeight: 600, color: '#0b0b0b' }}>{seg.seg}</span>
           <span style={{ fontSize: 9, color: C.blue, fontWeight: 500 }}>객실비중 {seg.shareRn}% / 전년 {seg.shareLyRn}%</span>
         </div>
-        <div style={{ width: '100%', height: 3, background: C.border, borderRadius: 2, marginBottom: 8, overflow: 'hidden' }}>
+        <div style={{ width: '100%', height: 3, background: C.border, borderRadius: 2, marginBottom: 4, overflow: 'hidden' }}>
           <div style={{ width: `${Math.min(100, seg.shareRn)}%`, height: '100%', background: C.blue }} />
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9, tableLayout: 'fixed' }}>
@@ -1036,27 +1036,27 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
             <tr>
               <th style={{ borderBottom: `0.5px solid ${C.border}` }}></th>
               {seg.cells.map((c: any) => (
-                <th key={c.day} style={{ textAlign: 'right', fontSize: 9, color: c.day === '금' || c.day === '토' ? '#e24b4a' : C.textMuted, fontWeight: 500, padding: '3px 4px', borderBottom: `0.5px solid ${C.border}` }}>{c.day}</th>
+                <th key={c.day} style={{ textAlign: 'right', fontSize: 9, color: c.day === '금' || c.day === '토' ? '#e24b4a' : C.textMuted, fontWeight: 500, padding: '1px 4px', borderBottom: `0.5px solid ${C.border}` }}>{c.day}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td style={{ textAlign: 'right', padding: '2px 4px', color: C.textMuted }}>객실</td>
-              {seg.cells.map((c: any) => <td key={c.day} style={{ textAlign: 'right', padding: '2px 4px', color: '#0b0b0b' }}>{z(c.rn, c.rn.toLocaleString())}</td>)}
+              <td style={{ textAlign: 'right', padding: '1px 4px', color: C.textMuted }}>객실</td>
+              {seg.cells.map((c: any) => <td key={c.day} style={{ textAlign: 'right', padding: '1px 4px', color: '#0b0b0b' }}>{z(c.rn, c.rn.toLocaleString())}</td>)}
             </tr>
             <tr>
-              <td style={{ textAlign: 'right', padding: '2px 4px', color: C.textMuted }}>객단가</td>
-              {seg.cells.map((c: any) => <td key={c.day} style={{ textAlign: 'right', padding: '2px 4px', color: C.textSecondary }}>{z(c.rn, fmtAdr(c.adrWon))}</td>)}
+              <td style={{ textAlign: 'right', padding: '1px 4px', color: C.textMuted }}>객단가</td>
+              {seg.cells.map((c: any) => <td key={c.day} style={{ textAlign: 'right', padding: '1px 4px', color: C.textSecondary }}>{z(c.rn, fmtAdr(c.adrWon))}</td>)}
             </tr>
             <tr>
-              <td style={{ textAlign: 'right', padding: '2px 4px', color: C.textMuted }}>비중</td>
-              {seg.cells.map((c: any) => <td key={c.day} style={{ textAlign: 'right', padding: '2px 4px', color: C.textMuted }}>{z(c.rn, `${c.pctOfSeg}%`)}</td>)}
+              <td style={{ textAlign: 'right', padding: '1px 4px', color: C.textMuted }}>비중</td>
+              {seg.cells.map((c: any) => <td key={c.day} style={{ textAlign: 'right', padding: '1px 4px', color: C.textMuted }}>{z(c.rn, `${c.pctOfSeg}%`)}</td>)}
             </tr>
             <tr>
-              <td style={{ textAlign: 'right', padding: '2px 4px', color: C.textMuted }}>전년비</td>
+              <td style={{ textAlign: 'right', padding: '1px 4px', color: C.textMuted }}>전년비</td>
               {seg.cells.map((c: any) => (
-                <td key={c.day} style={{ textAlign: 'right', padding: '2px 4px', color: diffColor(c.vsLyRn), fontWeight: 500 }}>
+                <td key={c.day} style={{ textAlign: 'right', padding: '1px 4px', color: diffColor(c.vsLyRn), fontWeight: 500 }}>
                   {c.vsLyRn > 0 ? `+${c.vsLyRn}` : c.vsLyRn}
                 </td>
               ))}
@@ -1461,7 +1461,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
               ? `${weakDays.map(d => d.day).join('·')}요일이 전년 대비 약세 — 주중 프로모션 또는 BAR 조정 검토 필요`
               : `${best.day}요일이 ${best.occ}%로 가장 높고, ${worst.day}요일이 ${worst.occ}%로 가장 낮음`
             return (
-              <div style={{ fontSize: 11, color: C.textSecondary, marginBottom: 10, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 11, color: C.textSecondary, marginBottom: 6, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 <span><b style={{ color: C.mint }}>최고</b> {best.day}요일 {best.occ}%</span>
                 <span><b style={{ color: '#e24b4a' }}>최저</b> {worst.day}요일 {worst.occ}%</span>
                 <span style={{ color: C.textMuted }}>· {insight}</span>
@@ -1469,13 +1469,13 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
             )
           })()}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 12, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 8, marginBottom: 8 }}>
             {renderDowBarChart()}
             {renderDowRevPie()}
           </div>
 
-          <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 8 }}>세그먼트별 요일별 실적</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 5 }}>세그먼트별 요일별 실적</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
             <div>{dowSegKpi.slice(0, Math.ceil(dowSegKpi.length / 2)).map(renderDowSegBox)}</div>
             <div>{dowSegKpi.slice(Math.ceil(dowSegKpi.length / 2)).map(renderDowSegBox)}</div>
           </div>
