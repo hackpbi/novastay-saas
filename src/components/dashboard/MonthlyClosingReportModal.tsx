@@ -736,6 +736,34 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     staleTime: 10 * 60 * 1000,
   })
 
+  // ── 국적별 실적 (get_country_actual_data RPC — 당월 Actual) ──
+  const { data: countryActualRows = [] } = useQuery({
+    queryKey: ['closing_country_actual', hotelId, reportYear, reportMonth],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('get_country_actual_data', {
+        p_hotel_id: hotelId, p_year: reportYear, p_month: reportMonth, p_segmentation: null, p_account_name: null,
+      })
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: open && !!hotelId && !!reportYear && !!reportMonth,
+    staleTime: 10 * 60 * 1000,
+  })
+
+  // ── 국적별 실적 전년(LY) — 마감월은 이전월이므로 RPC의 ly_* 대신 전년 동월 Actual을 별도 조회해 country 기준 병합 ──
+  const { data: countryLyRows = [] } = useQuery({
+    queryKey: ['closing_country_ly', hotelId, reportYear - 1, reportMonth],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('get_country_actual_data', {
+        p_hotel_id: hotelId, p_year: reportYear - 1, p_month: reportMonth, p_segmentation: null, p_account_name: null,
+      })
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: open && !!hotelId && !!reportYear && !!reportMonth,
+    staleTime: 10 * 60 * 1000,
+  })
+
   const accountKpi = useMemo(() => {
     const segMap: Record<string, { accounts: Record<string, { aRn: number; aRev: number; lRn: number; lRev: number }> }> = {}
 
@@ -780,6 +808,99 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
         }
       })
   }, [accountActualRows, orderedSegNames])
+
+  // 국기 이모지 (alpha2 → 유니코드 지역표시문자)
+  const flagEmoji = (alpha2?: string) => {
+    if (!alpha2 || alpha2.length !== 2) return ''
+    return alpha2.toUpperCase().replace(/./g, (c) => String.fromCodePoint(127397 + c.charCodeAt(0)))
+  }
+
+  // 국적별 실적 — 당월 Actual + 전년(LY) country 기준 병합, 상위 10개국 + 기타
+  const countryKpi = useMemo(() => {
+    const lyMap: Record<string, { rn: number; rev: number }> = {}
+    ;(countryLyRows ?? []).forEach((r: any) => {
+      const key = r.country_name_ko || r.country || '(미지정)'
+      if (!lyMap[key]) lyMap[key] = { rn: 0, rev: 0 }
+      lyMap[key].rn  += r.nights ?? 0
+      lyMap[key].rev += r.room_revenue ?? 0
+    })
+    const map: Record<string, { nameKo: string; alpha2: string; rn: number; rev: number; lyRn: number; lyRev: number }> = {}
+    ;(countryActualRows ?? []).forEach((r: any) => {
+      const key = r.country_name_ko || r.country || '(미지정)'
+      if (!map[key]) map[key] = { nameKo: key, alpha2: r.alpha2 ?? '', rn: 0, rev: 0, lyRn: 0, lyRev: 0 }
+      map[key].rn  += r.nights ?? 0
+      map[key].rev += r.room_revenue ?? 0
+    })
+    Object.values(map).forEach(c => {
+      const ly = lyMap[c.nameKo]
+      if (ly) { c.lyRn = ly.rn; c.lyRev = ly.rev }
+    })
+    const list = Object.values(map).sort((a, b) => b.rn - a.rn)
+    const top10 = list.slice(0, 10)
+    const rest = list.slice(10)
+
+    const rows = top10.map(c => {
+      const adrWon = c.rn > 0 ? c.rev / c.rn : 0
+      const lyAdrWon = c.lyRn > 0 ? c.lyRev / c.lyRn : 0
+      return {
+        name: c.nameKo, flag: flagEmoji(c.alpha2),
+        rn: c.rn, adrWon, revWon: c.rev,
+        diffRn: c.rn - c.lyRn, diffAdrWon: adrWon - lyAdrWon, diffRevWon: c.rev - c.lyRev,
+      }
+    })
+    if (rest.length > 0) {
+      const agg = rest.reduce((s, c) => ({ rn: s.rn + c.rn, rev: s.rev + c.rev, lyRn: s.lyRn + c.lyRn, lyRev: s.lyRev + c.lyRev }), { rn: 0, rev: 0, lyRn: 0, lyRev: 0 })
+      const adrWon = agg.rn > 0 ? agg.rev / agg.rn : 0
+      const lyAdrWon = agg.lyRn > 0 ? agg.lyRev / agg.lyRn : 0
+      rows.push({ name: '기타', flag: '', rn: agg.rn, adrWon, revWon: agg.rev, diffRn: agg.rn - agg.lyRn, diffAdrWon: adrWon - lyAdrWon, diffRevWon: agg.rev - agg.lyRev })
+    }
+    return rows
+  }, [countryActualRows, countryLyRows])
+
+  // 세그먼트별 국적 실적 — 상위 5개국 + 기타(컬럼), 세그먼트(행) 기준. seg는 codeToSegName으로 이름 변환
+  const segCountryKpi = useMemo(() => {
+    const top5Names = countryKpi.slice(0, 5).map(c => c.name)
+    const colOf = (countryName: string) => (top5Names.includes(countryName) ? countryName : '기타')
+
+    const lyMap: Record<string, Record<string, { rn: number; rev: number }>> = {}
+    ;(countryLyRows ?? []).forEach((r: any) => {
+      const segName = codeToSegName[r.segmentation] ?? r.segmentation ?? '기타'
+      const col = colOf(r.country_name_ko || r.country || '(미지정)')
+      if (!lyMap[segName]) lyMap[segName] = {}
+      if (!lyMap[segName][col]) lyMap[segName][col] = { rn: 0, rev: 0 }
+      lyMap[segName][col].rn  += r.nights ?? 0
+      lyMap[segName][col].rev += r.room_revenue ?? 0
+    })
+
+    const map: Record<string, Record<string, { rn: number; rev: number; lyRn: number; lyRev: number }>> = {}
+    ;(countryActualRows ?? []).forEach((r: any) => {
+      const segName = codeToSegName[r.segmentation] ?? r.segmentation ?? '기타'
+      const col = colOf(r.country_name_ko || r.country || '(미지정)')
+      if (!map[segName]) map[segName] = {}
+      if (!map[segName][col]) map[segName][col] = { rn: 0, rev: 0, lyRn: 0, lyRev: 0 }
+      map[segName][col].rn  += r.nights ?? 0
+      map[segName][col].rev += r.room_revenue ?? 0
+    })
+    Object.entries(map).forEach(([segName, cols]) => {
+      Object.entries(cols).forEach(([col, c]) => {
+        const ly = lyMap[segName]?.[col]
+        if (ly) { c.lyRn = ly.rn; c.lyRev = ly.rev }
+      })
+    })
+
+    const segNames = Object.keys(map).sort((a, b) => {
+      const ia = orderedSegNames.indexOf(a), ib = orderedSegNames.indexOf(b)
+      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib)
+    })
+    const cols = [...top5Names, '기타']
+    return segNames.map(seg => ({
+      seg,
+      cells: cols.map(name => {
+        const c = map[seg]?.[name] ?? { rn: 0, rev: 0, lyRn: 0, lyRev: 0 }
+        return { name, rn: c.rn, adrWon: c.rn > 0 ? c.rev / c.rn : 0, diffRn: c.rn - c.lyRn }
+      }),
+    }))
+  }, [countryActualRows, countryLyRows, countryKpi, codeToSegName, orderedSegNames])
 
   const page1Ref  = useRef<HTMLDivElement>(null)
   const page2Ref  = useRef<HTMLDivElement>(null)
@@ -1007,6 +1128,46 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
                 <td key={c.day} style={{ textAlign: 'right', padding: '1px 4px', color: diffColor(c.vsLyRn), fontWeight: 500 }}>
                   {c.vsLyRn > 0 ? `+${c.vsLyRn}` : c.vsLyRn}
                 </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  // 세그먼트별 국적 실적 박스 (상위 5개국+기타 컬럼, 객실/객단가/전년비 3행)
+  const renderSegCountryBox = (seg: { seg: string; cells: any[] }) => {
+    const z = (n: number, str: string) => (n === 0 ? '-' : str)
+    return (
+      <div key={seg.seg} style={{ background: C.cardBg, borderRadius: 8, padding: '8px 12px', marginBottom: 8, breakInside: 'avoid' } as React.CSSProperties}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: '#0b0b0b', marginBottom: 4 }}>{seg.seg}</div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9, tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: '16%' }} />
+            {seg.cells.map((c: any) => <col key={c.name} style={{ width: `${84 / seg.cells.length}%` }} />)}
+          </colgroup>
+          <thead>
+            <tr>
+              <th style={{ borderBottom: `0.5px solid ${C.border}` }}></th>
+              {seg.cells.map((c: any) => (
+                <th key={c.name} style={{ textAlign: 'right', fontSize: 9, color: C.textMuted, fontWeight: 500, padding: '3px 4px', borderBottom: `0.5px solid ${C.border}` }}>{c.name}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style={{ textAlign: 'right', padding: '2px 4px', color: C.textMuted }}>객실</td>
+              {seg.cells.map((c: any) => <td key={c.name} style={{ textAlign: 'right', padding: '2px 4px', color: '#0b0b0b' }}>{z(c.rn, c.rn.toLocaleString())}</td>)}
+            </tr>
+            <tr>
+              <td style={{ textAlign: 'right', padding: '2px 4px', color: C.textMuted }}>객단가</td>
+              {seg.cells.map((c: any) => <td key={c.name} style={{ textAlign: 'right', padding: '2px 4px', color: C.textSecondary }}>{z(c.rn, fmtAdr(c.adrWon))}</td>)}
+            </tr>
+            <tr>
+              <td style={{ textAlign: 'right', padding: '2px 4px', color: C.textMuted }}>전년비</td>
+              {seg.cells.map((c: any) => (
+                <td key={c.name} style={{ textAlign: 'right', padding: '2px 4px', color: diffColor(c.diffRn), fontWeight: 500 }}>{c.diffRn > 0 ? `+${c.diffRn}` : c.diffRn}</td>
               ))}
             </tr>
           </tbody>
@@ -1527,6 +1688,49 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
               </>
             )
           })()}
+
+          {/* ══════════ 5페이지 — 국적별 실적 ══════════ */}
+          <div className="mcr-page-divider" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0' }}>
+            <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
+            <span style={{ fontSize: 10, color: '#898781', background: '#fff', padding: '2px 8px', borderRadius: 10, border: '0.5px solid #e1e0d9' }}>5페이지 시작</span>
+            <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, breakBefore: 'page' } as React.CSSProperties}>국적별 실적</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
+            <colgroup>
+              <col style={{ width: '20%' }} /><col style={{ width: '11.4%' }} /><col style={{ width: '11.4%' }} /><col style={{ width: '11.4%' }} /><col style={{ width: '15.2%' }} /><col style={{ width: '15.2%' }} /><col style={{ width: '15.2%' }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th style={{ ...th, textAlign: 'left' }}>국가</th>
+                <th style={{ ...th, textAlign: 'right' }}>객실</th>
+                <th style={{ ...th, textAlign: 'right' }}>객단가</th>
+                <th style={{ ...th, textAlign: 'right' }}>매출</th>
+                <th style={{ ...th, textAlign: 'right' }}>전년비(객실)</th>
+                <th style={{ ...th, textAlign: 'right' }}>전년비(객단가)</th>
+                <th style={{ ...th, textAlign: 'right' }}>전년비(매출)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {countryKpi.map(c => (
+                <tr key={c.name} style={{ borderBottom: `0.5px solid ${C.border}` }}>
+                  <td style={{ ...td, textAlign: 'left', fontWeight: c.name === '기타' ? 500 : 400 }}>{c.flag ? `${c.flag} ` : ''}{c.name}</td>
+                  <td style={{ ...td, textAlign: 'right' }}>{c.rn.toLocaleString()}</td>
+                  <td style={{ ...td, textAlign: 'right', color: C.textSecondary }}>{fmtAdr(c.adrWon)}</td>
+                  <td style={{ ...td, textAlign: 'right', color: C.textSecondary }}>{fmtRev(c.revWon)}</td>
+                  <td style={{ ...td, textAlign: 'right', color: diffColor(c.diffRn), fontWeight: 500 }}>{c.diffRn > 0 ? `+${c.diffRn}` : c.diffRn}</td>
+                  <td style={{ ...td, textAlign: 'right', color: diffColor(c.diffAdrWon), fontWeight: 500 }}>{sAdr(c.diffAdrWon)}</td>
+                  <td style={{ ...td, textAlign: 'right', color: diffColor(c.diffRevWon), fontWeight: 500 }}>{sRev(c.diffRevWon)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, marginTop: 16 }}>세그먼트별 국적 실적</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>{segCountryKpi.slice(0, Math.ceil(segCountryKpi.length / 2)).map(renderSegCountryBox)}</div>
+            <div>{segCountryKpi.slice(Math.ceil(segCountryKpi.length / 2)).map(renderSegCountryBox)}</div>
+          </div>
 
         </div>
       </div>
