@@ -8,7 +8,7 @@
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --color-bg-primary:   #0A0A0A;
+  --color-bg-primary:   #000000;
   --color-bg-secondary: #111111;
   --color-bg-tertiary:  #1A1A1A;
   --color-bg-elevated:  #1E1E1E;

@@ -10,6 +10,7 @@ import { useMarketSchema } from '@/hooks/useMarketSchema'
 import MarketPickupMonthBlock, { type SegGroup } from '@/components/market-pickup/MarketPickupMonthBlock'
 import MarketPickupDayModal from '@/components/market-pickup/MarketPickupDayModal'
 import PickupChartModal from '@/components/pickup/PickupChartModal'
+import MarketPickupAllDaysModal from '@/components/market-pickup/MarketPickupAllDaysModal'
 
 export default function MarketPickupPage() {
   const { currentHotel } = useHotel()
@@ -144,6 +145,7 @@ export default function MarketPickupPage() {
 
   const [dayModal, setDayModal] = useState<{ year: number; month: number; day: number; defaultTab: 'pickup' | 'otb' } | null>(null)
   const [detailModal, setDetailModal] = useState<{ year: number; month: number } | null>(null)
+  const [reportModalOpen, setReportModalOpen] = useState(false)
 
   return (
     // height = 100vh − 56px(상단 헤더 h-14) − 48px(main p-6 상하) ; 좌우 패딩은 셸 main의 p-6 사용
@@ -291,9 +293,9 @@ export default function MarketPickupPage() {
               </div>
             )}
           </div>
-        {/* Detail 버튼 (우측 끝) — onClick 추후 연결 */}
+        {/* 픽업리포트 버튼 (우측 끝) — 전일자 리포트 모달 */}
         <button
-          onClick={() => {}}
+          onClick={() => setReportModalOpen(true)}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -325,7 +327,7 @@ export default function MarketPickupPage() {
             <rect x="10" y="7" width="4" height="14" rx="1" />
             <rect x="17" y="3" width="4" height="18" rx="1" />
           </svg>
-          Detail
+          픽업리포트
         </button>
         </div>
       </div>
@@ -363,6 +365,7 @@ export default function MarketPickupPage() {
                   allSegIds={allSegIds}
                   isDayModalOpen={!!dayModal}
                   showSegment={false}
+                  showActions={false}
                 />
               </div>
             )
@@ -400,6 +403,19 @@ export default function MarketPickupPage() {
         setOtbDate={setOtbDate}
         setVsOtbDate={setVsOtbDate}
       />
+
+      {/* 픽업리포트 → 전일자 리포트 모달 */}
+      {reportModalOpen && (
+        <MarketPickupAllDaysModal
+          open={reportModalOpen}
+          onClose={() => setReportModalOpen(false)}
+          year={months[0].year}
+          month={months[0].month}
+          pickupRows={pickupRows}
+          activeSegs={groups.flatMap(g => g.segs).filter(s => resolvedSegs.has(s.id))}
+          roomCount={roomCount}
+        />
+      )}
     </div>
   )
 }
