@@ -52,6 +52,7 @@ const renderVal = (val: string, fontSize: number, color?: string) => {
 export default function MonthlyClosingReportModal({ open, onClose, hotelId, roomCount, otbDate }: MonthlyClosingReportModalProps) {
   const [reportYear,  setReportYear]  = useState<number>(0)
   const [reportMonth, setReportMonth] = useState<number>(0)
+  console.log('[DEBUG] enabled check', { open, hotelId, reportYear, reportMonth, hasHotelId: !!hotelId, hasYear: !!reportYear, hasMonth: !!reportMonth }) // 임시 디버그용 — 확인 후 제거 예정
 
   // ── 단위 설정 (GMDailyReportModal 컨벤션 동일) ──
   const [showUnitSetting, setShowUnitSetting] = useState(false)
@@ -636,24 +637,36 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     return names
   }, [schemaRows])
 
-  // ── 어카운트별 ──
-  const accountKpi = useMemo(() => {
-    const segMap: Record<string, { sorting1: string; accounts: Record<string, { aRn: number; aRev: number; lRn: number; lRev: number }> }> = {}
-
-    const addRows = (rows: any[], isLy: boolean) => {
-      ;(rows ?? []).forEach((r: any) => {
-        const seg = codeToSegName[r.segmentation] ?? r.segmentation ?? '기타'
-        const acc = r.account_name ?? '기타'
-        if (!segMap[seg]) segMap[seg] = { sorting1: r.sorting1 ?? '', accounts: {} }
-        if (!segMap[seg].accounts[acc]) segMap[seg].accounts[acc] = { aRn: 0, aRev: 0, lRn: 0, lRev: 0 }
-        if (isLy) { segMap[seg].accounts[acc].lRn += r.nights ?? 0; segMap[seg].accounts[acc].lRev += r.room_revenue ?? 0 }
-        else      { segMap[seg].accounts[acc].aRn += r.nights ?? 0; segMap[seg].accounts[acc].aRev += r.room_revenue ?? 0 }
+  // ── 어카운트별 실적 (get_account_actual_data RPC — 별칭 적용 account_name + LY/GAP 동시 반환) ──
+  const { data: accountActualRows = [] } = useQuery({
+    queryKey: ['closing_account_actual', hotelId, reportYear, reportMonth],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('get_account_actual_data', {
+        p_hotel_id: hotelId, p_year: reportYear, p_month: reportMonth, p_segmentation: null,
       })
-    }
-    addRows(actualData ?? [], false)
-    addRows(lyData ?? [], true)
+      console.log('[DEBUG] get_account_actual_data raw', { p_hotel_id: hotelId, p_year: reportYear, p_month: reportMonth, error, dataLen: data?.length, firstRow: data?.[0] }) // 임시 디버그용 — 확인 후 제거 예정
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: open && !!hotelId && !!reportYear && !!reportMonth,
+    staleTime: 10 * 60 * 1000,
+  })
 
-    return Object.entries(segMap)
+  const accountKpi = useMemo(() => {
+    const segMap: Record<string, { accounts: Record<string, { aRn: number; aRev: number; lRn: number; lRev: number }> }> = {}
+
+    ;(accountActualRows ?? []).forEach((r: any) => {
+      const seg = r.seg_name || r.segmentation || '기타'
+      const acc = r.account_name || '기타'
+      if (!segMap[seg]) segMap[seg] = { accounts: {} }
+      if (!segMap[seg].accounts[acc]) segMap[seg].accounts[acc] = { aRn: 0, aRev: 0, lRn: 0, lRev: 0 }
+      segMap[seg].accounts[acc].aRn  += r.act_nights ?? 0
+      segMap[seg].accounts[acc].aRev += r.act_revenue ?? 0
+      segMap[seg].accounts[acc].lRn  += r.ly_nights ?? 0
+      segMap[seg].accounts[acc].lRev += r.ly_revenue ?? 0
+    })
+
+    const result = Object.entries(segMap)
       .sort((a, b) => {
         const ia = orderedSegNames.indexOf(a[0])
         const ib = orderedSegNames.indexOf(b[0])
@@ -673,7 +686,8 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
           aRn: s.aRn + a.aRn, aRevWon: s.aRevWon + a.aRevWon, lRn: s.lRn + a.lRn, lRevWon: s.lRevWon + a.lRevWon,
         }), { aRn: 0, aRevWon: 0, lRn: 0, lRevWon: 0 })
         return {
-          seg, accounts,
+          seg,
+          accounts: accounts.filter(a => a.aRn !== 0 || a.aRevWon !== 0),   // 당월 객실·매출 모두 0인 계정 숨김
           total: {
             ...tot,
             aAdrWon: tot.aRn > 0 ? tot.aRevWon / tot.aRn : 0,
@@ -681,7 +695,9 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
           },
         }
       })
-  }, [actualData, lyData, codeToSegName, orderedSegNames])
+    console.log('[DEBUG] accountKpi result', { segCount: result.length, firstSeg: result[0] }) // 임시 디버그용 — 확인 후 제거 예정
+    return result
+  }, [accountActualRows, orderedSegNames])
 
   // ── 일자별 그래프 (Chart.js) ──
   const chartRef  = useRef<HTMLCanvasElement>(null)
