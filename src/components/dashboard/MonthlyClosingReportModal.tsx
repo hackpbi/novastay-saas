@@ -654,6 +654,8 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
   // ── 일자별 그래프 (Chart.js) ──
   const chartRef  = useRef<HTMLCanvasElement>(null)
   const chartInst = useRef<Chart | null>(null)
+  const page1Ref  = useRef<HTMLDivElement>(null)
+  const page2Ref  = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open || !chartRef.current || !dailyKpi.length) return
@@ -695,6 +697,40 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     window.addEventListener('keydown', onKey)
     return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey) }
   }, [open, onClose])
+
+  // 인쇄 자동맞춤(zoom) — 페이지별로 한 장에 맞춤 (page1 / page2)
+  useEffect(() => {
+    const MM_TO_PX = 96 / 25.4
+    const TARGET_HEIGHT_PX = 273 * MM_TO_PX
+
+    const fitOne = (el: HTMLDivElement | null) => {
+      if (!el) return
+      el.style.zoom = '1'
+      requestAnimationFrame(() => {
+        if (!el) return
+        const actual = el.scrollHeight
+        if (actual <= 0) return
+        let scale = TARGET_HEIGHT_PX / actual
+        scale = Math.min(1.25, Math.max(0.6, scale))
+        el.style.zoom = String(scale)
+      })
+    }
+    const applyFit = () => {
+      fitOne(page1Ref.current)
+      fitOne(page2Ref.current)
+    }
+    const resetFit = () => {
+      if (page1Ref.current) page1Ref.current.style.zoom = '1'
+      if (page2Ref.current) page2Ref.current.style.zoom = '1'
+    }
+
+    window.addEventListener('beforeprint', applyFit)
+    window.addEventListener('afterprint', resetFit)
+    return () => {
+      window.removeEventListener('beforeprint', applyFit)
+      window.removeEventListener('afterprint', resetFit)
+    }
+  }, [])
 
   // 인쇄 스타일 동적 주입 — open일 때만 (다른 리포트 모달과의 전역 충돌 방지)
   useEffect(() => {
@@ -969,6 +1005,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
         <div style={{ padding: '16px 28px', colorScheme: 'light', background: '#fff', color: '#0b0b0b' }}>
 
           {/* ══════════ 1페이지 ══════════ */}
+          <div ref={page1Ref} className="mcr-page1">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12, paddingBottom: 8, borderBottom: '1.5px solid #0b0b0b' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -1116,13 +1153,15 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
               </table>
             </div>
           </div>
+          </div>
 
-          {/* ══════════ 2페이지 — 요일별 + 이벤트 ══════════ */}
+          {/* ══════════ 2페이지 — 요일별 + 일자별 그래프 ══════════ */}
           <div className="mcr-page-divider" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0' }}>
             <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
             <span style={{ fontSize: 10, color: '#898781', background: '#fff', padding: '2px 8px', borderRadius: 10, border: '0.5px solid #e1e0d9' }}>2페이지 시작</span>
             <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
           </div>
+          <div ref={page2Ref} className="mcr-page2">
           <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, breakBefore: 'page' } as React.CSSProperties}>요일별 실적</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, marginBottom: 20 }}>
             {dowKpi.map(d => (
@@ -1134,13 +1173,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
             ))}
           </div>
 
-          {/* ══════════ 3페이지 — 일자별 그래프 ══════════ */}
-          <div className="mcr-page-divider" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0' }}>
-            <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
-            <span style={{ fontSize: 10, color: '#898781', background: '#fff', padding: '2px 8px', borderRadius: 10, border: '0.5px solid #e1e0d9' }}>3페이지 시작</span>
-            <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
-          </div>
-          <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, breakBefore: 'page' } as React.CSSProperties}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, marginTop: 20 }}>
             일자별 OCC% & ADR
             <span style={{ fontSize: 10, color: '#898781', marginLeft: 8 }}>· 전년 포함</span>
           </div>
@@ -1154,11 +1187,12 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
               <canvas ref={chartRef} />
             </div>
           </div>
+          </div>
 
-          {/* ══════════ 4페이지 — 어카운트별 실적 ══════════ */}
+          {/* ══════════ 3페이지 — 어카운트별 실적 ══════════ */}
           <div className="mcr-page-divider" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0' }}>
             <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
-            <span style={{ fontSize: 10, color: '#898781', background: '#fff', padding: '2px 8px', borderRadius: 10, border: '0.5px solid #e1e0d9' }}>4페이지 시작</span>
+            <span style={{ fontSize: 10, color: '#898781', background: '#fff', padding: '2px 8px', borderRadius: 10, border: '0.5px solid #e1e0d9' }}>3페이지 시작</span>
             <div style={{ flex: 1, borderTop: '1.5px dashed #e1e0d9' }} />
           </div>
           <div style={{ fontSize: 13, fontWeight: 500, color: '#0b0b0b', marginBottom: 10, breakBefore: 'page' } as React.CSSProperties}>세그먼트별 어카운트 실적</div>
