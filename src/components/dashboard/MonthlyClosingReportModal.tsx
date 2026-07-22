@@ -712,7 +712,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
         .mcr-page-divider { display: none !important; }
         body > *:not(.mcr-overlay) { display: none !important; }
         .mcr-overlay { position: static !important; background: transparent !important; padding: 0 !important; overflow: visible !important; height: auto !important; width: 100% !important; }
-        .mcr-content { position: static !important; box-shadow: none !important; border-radius: 0 !important; max-height: none !important; overflow: visible !important; width: 100% !important; background: #ffffff !important; padding: 12mm 14mm !important; }
+        .mcr-content { position: static !important; box-shadow: none !important; border-radius: 0 !important; max-height: none !important; overflow: visible !important; width: 100% !important; background: #ffffff !important; padding: 12mm 10mm !important; }
         * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
       }
     `
@@ -906,7 +906,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     colorScheme: 'light',
   }
   const contentStyle: React.CSSProperties = {
-    width: 'min(794px, 95vw)', background: '#fff', color: '#0b0b0b', colorScheme: 'light',
+    width: 'min(900px, 96vw)', background: '#fff', color: '#0b0b0b', colorScheme: 'light',
     borderRadius: 8, position: 'relative', flexShrink: 0,
   }
 
