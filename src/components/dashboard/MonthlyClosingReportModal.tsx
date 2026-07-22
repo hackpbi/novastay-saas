@@ -707,12 +707,12 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
     style.textContent = `
       @media print {
         html, body { background: #ffffff !important; }
-        @page { size: A4 portrait; margin: 12mm 14mm; }
+        @page { size: A4 portrait; margin: 0; }
         .mcr-header { display: none !important; }
         .mcr-page-divider { display: none !important; }
         body > *:not(.mcr-overlay) { display: none !important; }
-        .mcr-overlay { position: static !important; background: transparent !important; padding: 0 !important; }
-        .mcr-content { position: static !important; box-shadow: none !important; border-radius: 0 !important; max-height: none !important; overflow: visible !important; width: 100% !important; background: #ffffff !important; }
+        .mcr-overlay { position: static !important; background: transparent !important; padding: 0 !important; overflow: visible !important; height: auto !important; width: 100% !important; }
+        .mcr-content { position: static !important; box-shadow: none !important; border-radius: 0 !important; max-height: none !important; overflow: visible !important; width: 100% !important; background: #ffffff !important; padding: 12mm 14mm !important; }
         * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
       }
     `
