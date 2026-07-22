@@ -40,7 +40,18 @@ export type DataUploadContentProps = {
 
 function toDateString(val: any): string | null {
   if (!val) return null
-  if (typeof val === 'string') return val.slice(0, 10) || null
+  if (typeof val === 'string') {
+    const s = val.slice(0, 10)
+    // 유효한 YYYY-MM-DD 형식 + 월(01-12)·일(01-31) 범위 검증
+    // (PMS export가 빈 날짜를 "0-00-01" 같은 제로-날짜 문자열로 내보내는
+    // 경우를 걸러내기 위함 — 이런 값은 DB insert 시 22008 에러 유발)
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (!m) return null
+    const [, y, mo, d] = m
+    const mm = Number(mo), dd = Number(d)
+    if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null
+    return s
+  }
   if (typeof val === 'number') {
     const utcMs = (val - 25569) * 86400 * 1000
     const d = new Date(utcMs)
