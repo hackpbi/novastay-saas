@@ -52,7 +52,6 @@ const renderVal = (val: string, fontSize: number, color?: string) => {
 export default function MonthlyClosingReportModal({ open, onClose, hotelId, roomCount, otbDate }: MonthlyClosingReportModalProps) {
   const [reportYear,  setReportYear]  = useState<number>(0)
   const [reportMonth, setReportMonth] = useState<number>(0)
-  console.log('[DEBUG] enabled check', { open, hotelId, reportYear, reportMonth, hasHotelId: !!hotelId, hasYear: !!reportYear, hasMonth: !!reportMonth }) // 임시 디버그용 — 확인 후 제거 예정
 
   // ── 단위 설정 (GMDailyReportModal 컨벤션 동일) ──
   const [showUnitSetting, setShowUnitSetting] = useState(false)
@@ -644,7 +643,6 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
       const { data, error } = await (supabase as any).rpc('get_account_actual_data', {
         p_hotel_id: hotelId, p_year: reportYear, p_month: reportMonth, p_segmentation: null,
       })
-      console.log('[DEBUG] get_account_actual_data raw', { p_hotel_id: hotelId, p_year: reportYear, p_month: reportMonth, error, dataLen: data?.length, firstRow: data?.[0] }) // 임시 디버그용 — 확인 후 제거 예정
       if (error) throw error
       return data ?? []
     },
@@ -666,7 +664,7 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
       segMap[seg].accounts[acc].lRev += r.ly_revenue ?? 0
     })
 
-    const result = Object.entries(segMap)
+    return Object.entries(segMap)
       .sort((a, b) => {
         const ia = orderedSegNames.indexOf(a[0])
         const ib = orderedSegNames.indexOf(b[0])
@@ -695,8 +693,6 @@ export default function MonthlyClosingReportModal({ open, onClose, hotelId, room
           },
         }
       })
-    console.log('[DEBUG] accountKpi result', { segCount: result.length, firstSeg: result[0] }) // 임시 디버그용 — 확인 후 제거 예정
-    return result
   }, [accountActualRows, orderedSegNames])
 
   // ── 일자별 그래프 (Chart.js) ──
