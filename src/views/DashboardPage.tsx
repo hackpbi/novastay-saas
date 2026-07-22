@@ -190,7 +190,7 @@ type DayAggEntry = { otbN: number; otbR: number; lyN: number; puN: number }
 
 // 이벤트 뱃지 + hover 툴팁 — 뱃지 스타일은 Phase 1(민트/블루) 유지, 툴팁은 PickupMonthCard 이식.
 // 카드 overflow-hidden 잘림 방지를 위해 툴팁만 createPortal + position:fixed 로 렌더.
-function EventBadge({ group, pickupRows, lyRows, roomCount }: { group: EventGroup; pickupRows: PickupRow[]; lyRows: LyPacingRow[]; roomCount: number }) {
+function EventBadge({ group, pickupRows, lyRows, roomCount, adrUnit, revUnit }: { group: EventGroup; pickupRows: PickupRow[]; lyRows: LyPacingRow[]; roomCount: number; adrUnit: '천원' | '원'; revUnit: '원' | '천원' | '백만원' }) {
   const [hovered, setHovered] = useState(false)
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
   const [barData, setBarData] = useState<Record<string, { cur: number | null }>>({})
@@ -198,6 +198,17 @@ function EventBadge({ group, pickupRows, lyRows, roomCount }: { group: EventGrou
   const { currentHotel } = useHotel()
   const hotelId = currentHotel?.id ?? ''
   const { otbDate } = useDateContext()
+
+  // 단위 설정(adrUnit/revUnit) 연동 — MonthCard와 동일 패턴 (val: 객단가=천원, 매출=백만원 기준)
+  const fmtAdr = (val: number) => {
+    if (adrUnit === '원') return Math.round(val * 1000).toLocaleString()
+    return Math.round(val).toString()  // 천원 (기존)
+  }
+  const fmtRev = (val: number) => {
+    if (revUnit === '원') return Math.round(val * 1_000_000).toLocaleString()
+    if (revUnit === '천원') return Math.round(val * 1000).toLocaleString()
+    return val.toFixed(1)  // 백만원 (기존)
+  }
 
   const dayAgg = useMemo(() => {
     const map: Record<string, DayAggEntry> = {}
@@ -245,7 +256,7 @@ function EventBadge({ group, pickupRows, lyRows, roomCount }: { group: EventGrou
       if (cancelled) return
       const next: Record<string, { cur: number | null }> = {}
       for (const date of group.dates) {
-        next[date] = { cur: barByDate[date] != null ? Math.round(barByDate[date] / 1000) : null }
+        next[date] = { cur: barByDate[date] != null ? barByDate[date] : null }   // raw 원 저장 → 렌더 시 단위 환산
       }
       setBarData(next)
     })()
@@ -270,8 +281,8 @@ function EventBadge({ group, pickupRows, lyRows, roomCount }: { group: EventGrou
     const avail = roomCount * group.dates.length
     return {
       avgOcc:   avail > 0 ? (totOtbN / avail * 100).toFixed(1) : null,
-      avgAdr:   totOtbN > 0 ? Math.round(totOtbR / totOtbN / 1000) : null,
-      avgRev:   totOtbR > 0 ? (totOtbR / group.dates.length / 1e6).toFixed(1) : null,
+      avgAdr:   totOtbN > 0 ? totOtbR / totOtbN / 1000 : null,             // 천원 기준 (렌더 시 fmtAdr)
+      avgRev:   totOtbR > 0 ? totOtbR / group.dates.length / 1e6 : null,   // 백만원 기준 (렌더 시 fmtRev)
     }
   })()
 
@@ -322,8 +333,8 @@ function EventBadge({ group, pickupRows, lyRows, roomCount }: { group: EventGrou
               const hasPu = !!row && (row.puN ?? 0) !== 0
               const currOcc = row && roomCount ? (row.otbN / roomCount * 100).toFixed(1) : null
               const prevOcc = row && roomCount ? (row.lyN / roomCount * 100).toFixed(1) : null
-              const adr = row && row.otbN ? Math.round(row.otbR / row.otbN / 1000) : null
-              const rev = row && row.otbR ? (row.otbR / 1e6).toFixed(1) : null
+              const adr = row && row.otbN ? row.otbR / row.otbN / 1000 : null   // 천원 기준 (렌더 시 fmtAdr)
+              const rev = row && row.otbR ? row.otbR / 1e6 : null                // 백만원 기준 (렌더 시 fmtRev)
               const puNights = row ? row.puN : null
               const dd = new Date(date)
               const dLabel = `${dd.getMonth() + 1}/${dd.getDate()} ${DOW_KR[dd.getDay()]}`
@@ -348,11 +359,11 @@ function EventBadge({ group, pickupRows, lyRows, roomCount }: { group: EventGrou
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                     <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)' }}>객단가</span>
-                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{adr ? `${adr}k` : '—'}</span>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{adr ? fmtAdr(adr) : '—'}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                     <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)' }}>매출</span>
-                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{rev ? `${rev}M` : '—'}</span>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{rev ? fmtRev(rev) : '—'}</span>
                   </div>
                   {!isPast && (
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -377,7 +388,7 @@ function EventBadge({ group, pickupRows, lyRows, roomCount }: { group: EventGrou
                   <div key={date} style={{ padding: '8px 14px', borderRight: '0.5px solid rgba(255,255,255,0.04)', ...(before ? { filter: 'grayscale(1)', opacity: 0.4 } : {}) }}>
                     <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginBottom: 5 }}>BAR</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <span style={{ fontSize: 13, color: '#00E5A0' }}>{bar?.cur ? `${bar.cur}k` : '—'}</span>
+                      <span style={{ fontSize: 13, color: '#00E5A0' }}>{bar?.cur ? fmtAdr(bar.cur / 1000) : '—'}</span>
                     </div>
                   </div>
                 )
@@ -390,10 +401,10 @@ function EventBadge({ group, pickupRows, lyRows, roomCount }: { group: EventGrou
                 <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>{pastSummary.avgOcc ?? '—'}%</div>              </div>
               <div style={{ padding: '8px 14px', borderRight: '0.5px solid rgba(255,255,255,0.04)' }}>
                 <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginBottom: 3 }}>평균 객단가</div>
-                <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>{pastSummary.avgAdr != null ? `${pastSummary.avgAdr}k` : '—'}</div>              </div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>{pastSummary.avgAdr != null ? fmtAdr(pastSummary.avgAdr) : '—'}</div>              </div>
               <div style={{ padding: '8px 14px' }}>
                 <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginBottom: 3 }}>평균 매출</div>
-                <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>{pastSummary.avgRev != null ? `${pastSummary.avgRev}M` : '—'}</div>              </div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>{pastSummary.avgRev != null ? fmtRev(pastSummary.avgRev) : '—'}</div>              </div>
             </div>
           )}
         </div>,
@@ -638,7 +649,7 @@ function MonthCard({ data, stats, loading, roomCount, yoyStats, yoyLoading, onSe
           {events.length > 0 && (
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 6 }}>
               {events.map(ev => (
-                <EventBadge key={ev.startDate + ev.name} group={ev} pickupRows={pickupRows} lyRows={lyRows} roomCount={roomCount} />
+                <EventBadge key={ev.startDate + ev.name} group={ev} pickupRows={pickupRows} lyRows={lyRows} roomCount={roomCount} adrUnit={adrUnit} revUnit={revUnit} />
               ))}
             </div>
           )}
