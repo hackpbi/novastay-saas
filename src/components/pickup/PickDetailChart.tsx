@@ -546,7 +546,7 @@ export default function PickDetailChart({
   })
 
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: '#111', borderRadius: 10, padding: '14px 16px', boxSizing: 'border-box' }}>
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: 'linear-gradient(175deg, #0d1f1a 0%, #0a0a0a 40%)', border: '0.5px solid rgba(0,229,160,0.15)', borderLeft: '3px solid rgba(0,229,160,0.6)', borderRadius: 10, padding: '14px 16px', boxSizing: 'border-box' }}>
       {/* 토글 행 + 투명도 슬라이더 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap', justifyContent: 'flex-end', flexShrink: 0 }}>
         {/* 전년 + 동기간/동일자 세트 */}

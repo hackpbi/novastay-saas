@@ -105,6 +105,23 @@ export default function MarketPickupAllDaysModal({
   const METS: Metric[] = metricLevel === 0 ? ['rn'] : metricLevel === 1 ? ['rn', 'adr'] : ['rn', 'adr', 'rev']
   const metLabel: Record<Metric, string> = { rn: 'R/N', adr: 'ADR', rev: 'REV' }
 
+  // ── 모달 월 네비게이션 (prop year/month 초기화, ‹/›로 이동) — 인쇄 옵션 6개월 칩과 별개 ──
+  const [modalViewYear, setModalViewYear]   = useState(year)
+  const [modalViewMonth, setModalViewMonth] = useState(month + 1)   // 1-based
+  useEffect(() => { setModalViewYear(year); setModalViewMonth(month + 1) }, [year, month])
+  const handlePrevMonth = () => {
+    setModalViewMonth(m => {
+      if (m === 1) { setModalViewYear(y => y - 1); return 12 }
+      return m - 1
+    })
+  }
+  const handleNextMonth = () => {
+    setModalViewMonth(m => {
+      if (m === 12) { setModalViewYear(y => y + 1); return 1 }
+      return m + 1
+    })
+  }
+
   // ── 출력 옵션 모달 ──────────────────────────────────────────────
   const otbMonthList = useMemo(() => {
     const base = new Date(otbDate)
@@ -150,11 +167,12 @@ export default function MarketPickupAllDaysModal({
 
   // c06_calendar 이벤트 (날짜10 → 뱃지 2글자)
   const { data: eventMap = {} } = useQuery<Record<string, string>>({
-    queryKey: ['calendar-events', year, month1],
+    queryKey: ['calendar-events', modalViewYear, modalViewMonth],
     enabled: open,
     queryFn: async () => {
-      const start = `${year}-${String(month1).padStart(2, '0')}-01`
-      const end   = `${year}-${String(month1).padStart(2, '0')}-${String(days).padStart(2, '0')}`
+      const mDays = lastDayOfMonth(modalViewYear, modalViewMonth)
+      const start = `${modalViewYear}-${String(modalViewMonth).padStart(2, '0')}-01`
+      const end   = `${modalViewYear}-${String(modalViewMonth).padStart(2, '0')}-${String(mDays).padStart(2, '0')}`
       const { data } = await (supabase as any)
         .from('c06_calendar').select('date, event')
         .gte('date', start).lte('date', end).not('event', 'is', null)
@@ -243,7 +261,7 @@ export default function MarketPickupAllDaysModal({
     const groupL = { borderLeft: '1.5px solid #888' }   // 수정 2: 그룹 시작 좌측선
     return (
       <div key={`${tYear}-${tMonth1}-${tMode}`} className="print-page" style={{ background: '#fff' }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111', marginBottom: 4 }}>{tYear}년 {tMonth1}월 픽업 전일자 {tMode === 'otb' ? '(OTB)' : '(Pick-up)'}</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111', marginBottom: 4 }}>{tYear}년 {tMonth1}월 픽업</h2>
         <p style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>OTB {otbDate} vs {vsOtbDate}</p>
         <div style={{ textAlign: 'right', fontSize: 11, color: '#666', marginBottom: 4 }}>[단위 : 실, 천원, 백만원]</div>
         <table style={{ flex: 1, width: '100%', borderCollapse: 'collapse', fontSize: dataFontSize, tableLayout: 'fixed' }}>
@@ -348,7 +366,11 @@ export default function MarketPickupAllDaysModal({
       <div data-theme="light" style={{ colorScheme: 'light', background: '#fff', width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* 헤더 — 제목 + Pick-up/OTB 토글 + R/N/ADR/REV 토글 + Print + 닫기 */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid #e5e7eb' }}>
-          <span style={{ fontSize: 14, fontWeight: 500, color: '#111' }}>{month1}월 픽업 전일자</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={handlePrevMonth} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#00A876', padding: '0 4px' }}>‹</button>
+            <span style={{ fontSize: 14, fontWeight: 500, color: '#111' }}>{modalViewYear}년 {modalViewMonth}월 픽업</span>
+            <button onClick={handleNextMonth} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: '#00A876', padding: '0 4px' }}>›</button>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {/* Pick-up / OTB 보기 토글 */}
             <div style={{ display: 'flex', gap: 4 }}>
@@ -409,7 +431,7 @@ export default function MarketPickupAllDaysModal({
         {/* 본문 */}
         <div style={{ flex: 1, overflow: 'auto', padding: '12px 20px' }}>
           <div id="print-content" style={{ background: '#fff' }}>
-            {renderMonthTable(year, month1, viewMode, eventMap)}
+            {renderMonthTable(modalViewYear, modalViewMonth, viewMode, eventMap)}
           </div>
         </div>
       </div>

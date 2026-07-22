@@ -1,15 +1,16 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
-import { X } from 'lucide-react'
+import { X, Settings } from 'lucide-react'
 import type { PickupRow } from '@/hooks/usePickupData'
 import type { MarketSchemaRow } from '@/hooks/useMarketSchema'
 import { buildSegTable, type SegTableRow } from '@/utils/segmentationTable'
 import { useLyPacing } from '@/hooks/useLyPacing'
 import { useHotel } from '@/contexts/HotelContext'
 import { supabase } from '@/lib/supabase'
-import { WEEKDAY_KR } from '@/utils/pickupPageUtils'
+import { WEEKDAY_KR, inMonth } from '@/utils/pickupPageUtils'
 import { getDayColor } from '@/utils/dateUtils'
 import { FmtVal } from '@/utils/FmtVal'
 import DatePicker from '@/components/DatePicker'
@@ -27,7 +28,7 @@ type AccStat = {
 }
 
 export default function MarketPickupDayModal({
-  open, onClose, year, month, day, schema, pickupRows, roomCount, defaultTab, otbDate, vsDate, otbDates = [], onDateChange,
+  open, onClose, year: propYear, month: propMonth, day, schema, pickupRows, roomCount, defaultTab, otbDate, vsDate, otbDates = [], onDateChange,
 }: {
   open:          boolean
   onClose:       () => void
@@ -49,11 +50,20 @@ export default function MarketPickupDayModal({
   const [lyMode,    setLyMode]    = useState<'day' | 'period'>('day')  // 전년동일자(v1) / 전년동기간(v2)
   const [lyAccSource, setLyAccSource] = useState<'otb' | 'ly' | 'gap'>('gap')  // 전년 비교 어카운트 패널 소스
   const [lyColMode, setLyColMode] = useState(true)   // 작년 OTB 컬럼: true=전년OTB(pacing) / false=전년마감(a01 실적)
+  // ── 금액 단위 설정 (ADR/REV 각각) — 셀엔 접미사 없이 숫자만, 단위는 하단 안내로 표시 ──
+  const [adrUnit, setAdrUnit] = useState<'won' | 'k' | 'm'>('k')   // ADR 기본: 천원
+  const [revUnit, setRevUnit] = useState<'won' | 'k' | 'm'>('m')   // REV 기본: 백만원
+  const [unitPanelOpen, setUnitPanelOpen] = useState(false)
   const { currentHotel } = useHotel()
   const hotelId = currentHotel?.id ?? ''
   const [localOtbDate, setLocalOtbDate] = useState(otbDate)
   const [localVsDate,  setLocalVsDate]  = useState(vsDate)
   const [localDay,     setLocalDay]     = useState(day)
+  const [year,  setYear]  = useState(propYear)     // 월합계 모드 ‹ › 네비용 로컬 상태
+  const [month, setMonth] = useState(propMonth)    // 0-based
+  const [viewMode,     setViewMode]     = useState<'day' | 'month'>('day')   // 일자별 / 월합계
+  // day 모드: 해당 일자만 / month 모드: 해당 월 전체
+  const matchDate = (bd: string) => viewMode === 'month' ? inMonth(bd, year, month + 1) : inDay(bd, year, month + 1, localDay)
 
   useEffect(() => {
     if (!open) return
@@ -69,6 +79,9 @@ export default function MarketPickupDayModal({
       setLocalOtbDate(otbDate)
       setLocalVsDate(vsDate)
       setLocalDay(day)
+      setYear(propYear)
+      setMonth(propMonth)
+      setViewMode('day')
       setSelType('pickup')
       setSelMain(null)
       setActiveTab('otb')
@@ -76,7 +89,7 @@ export default function MarketPickupDayModal({
       setLyAccSource('gap')
       setLyColMode(true)
     }
-  }, [open, otbDate, vsDate, day, defaultTab])
+  }, [open, otbDate, vsDate, day, propYear, propMonth, defaultTab])
 
   // 날짜 변경 시 페이지에 반영 (onDateChange 있을 때만)
   useEffect(() => {
@@ -99,7 +112,7 @@ export default function MarketPickupDayModal({
 
     const map = new Map<string, AccStat>()
     for (const r of pickupRows) {
-      if (!inDay(r.business_date, year, month + 1, localDay)) continue
+      if (!matchDate(r.business_date)) continue
       if (!codeSet.has(r.segmentation)) continue
       const acc = r.account_name || '(미지정)'
       if (!map.has(acc)) map.set(acc, { otbNights: 0, otbRevenue: 0, vsNights: 0, vsRevenue: 0, puNights: 0, puRevenue: 0 })
@@ -123,7 +136,7 @@ export default function MarketPickupDayModal({
       }))
       .filter(a => a.otbNights > 0 || a.puNights !== 0)
       .sort((a, b) => Math.abs(b.puNights) - Math.abs(a.puNights))
-  }, [open, selMain, schema, pickupRows, year, month, localDay])
+  }, [open, selMain, schema, pickupRows, year, month, localDay, viewMode])
 
   // ── 전년(LY) 비교 — useLyPacing(v1=전년동일자 / v2=전년동기간), 해당 일자 필터 ──
   const { data: lyPacing } = useLyPacing(lyMode === 'day' ? 'v1' : 'v2')
@@ -141,19 +154,39 @@ export default function MarketPickupDayModal({
   const lyByCode = useMemo(() => {
     const m: Record<string, { otbN: number; otbR: number; lyN: number; lyR: number }> = {}
     for (const r of (lyPacing ?? [])) {
-      if (!inDay(r.business_date, year, month + 1, localDay)) continue
+      if (!matchDate(r.business_date)) continue
       const c = m[r.segmentation] ?? (m[r.segmentation] = { otbN: 0, otbR: 0, lyN: 0, lyR: 0 })
       c.otbN += r.otb_nights ?? 0; c.otbR += r.otb_revenue ?? 0
       c.lyN  += r.ly_nights  ?? 0; c.lyR  += r.ly_revenue  ?? 0
     }
     return m
-  }, [lyPacing, year, month, localDay])
+  }, [lyPacing, year, month, localDay, viewMode])
   // 전년마감(a01_actual_daily 실적) 원본 행 — lyColMode=false일 때만 조회 (day=단순-1년 / period=c06 yoy_match)
   const { data: lyFinalRows = [] } = useQuery({
-    queryKey: ['mp-ly-final', hotelId, year, month, localDay, lyMode],
+    queryKey: ['mp-ly-final', hotelId, year, month, localDay, lyMode, viewMode],
     enabled: open && !lyColMode && !!hotelId,
     queryFn: async () => {
       const pad = (n: number) => String(n).padStart(2, '0')
+      const sel = 'segmentation, account_name, nights, room_revenue'
+      if (viewMode === 'month') {
+        // 월합계: 전년 동월 전체 (day=단순-1년 월 / period=해당 월 각 일자의 yoy_match 모음)
+        const lastDay = new Date(year, month + 1, 0).getDate()
+        let lyDates: string[]
+        if (lyMode === 'period') {
+          const curStart = `${year}-${pad(month + 1)}-01`
+          const curEnd = `${year}-${pad(month + 1)}-${pad(lastDay)}`
+          const { data: cal } = await (supabase as any).from('c06_calendar')
+            .select('yoy_match').gte('date', curStart).lte('date', curEnd)
+          lyDates = (Array.isArray(cal) ? cal : []).map((c: any) => c?.yoy_match).filter(Boolean)
+        } else {
+          const lyLast = new Date(year - 1, month + 1, 0).getDate()
+          lyDates = Array.from({ length: lyLast }, (_, i) => `${year - 1}-${pad(month + 1)}-${pad(i + 1)}`)
+        }
+        if (lyDates.length === 0) return []
+        const { data } = await (supabase as any).from('a01_actual_daily')
+          .select(sel).eq('hotel_id', hotelId).in('business_date', lyDates)
+        return (data ?? []) as { segmentation: string; account_name: string | null; nights: number; room_revenue: number }[]
+      }
       const curDate = `${year}-${pad(month + 1)}-${pad(localDay)}`
       let lyDate = `${year - 1}-${pad(month + 1)}-${pad(localDay)}`   // day: 단순 -1년
       if (lyMode === 'period') {
@@ -162,7 +195,7 @@ export default function MarketPickupDayModal({
         if (ym) lyDate = ym
       }
       const { data } = await (supabase as any).from('a01_actual_daily')
-        .select('segmentation, account_name, nights, room_revenue').eq('hotel_id', hotelId).eq('business_date', lyDate)
+        .select(sel).eq('hotel_id', hotelId).eq('business_date', lyDate)
       return (data ?? []) as { segmentation: string; account_name: string | null; nights: number; room_revenue: number }[]
     },
   })
@@ -182,7 +215,7 @@ export default function MarketPickupDayModal({
     // 현재 OTB(항상 pacing)
     const otbMap = new Map<string, { otbN: number; otbR: number }>()
     for (const r of (lyPacing ?? [])) {
-      if (!inDay(r.business_date, year, month + 1, localDay)) continue
+      if (!matchDate(r.business_date)) continue
       if (!codeSet.has(r.segmentation)) continue
       const acc = r.account_name || '(미지정)'
       const a = otbMap.get(acc) ?? { otbN: 0, otbR: 0 }
@@ -193,7 +226,7 @@ export default function MarketPickupDayModal({
     const lyMap = new Map<string, { lyN: number; lyR: number }>()
     if (lyColMode) {
       for (const r of (lyPacing ?? [])) {
-        if (!inDay(r.business_date, year, month + 1, localDay)) continue
+        if (!matchDate(r.business_date)) continue
         if (!codeSet.has(r.segmentation)) continue
         const acc = r.account_name || '(미지정)'
         const a = lyMap.get(acc) ?? { lyN: 0, lyR: 0 }
@@ -228,15 +261,15 @@ export default function MarketPickupDayModal({
     return list
       .filter(a => a[keyN] !== 0 || a[keyR] !== 0)
       .sort((a, b) => Math.abs(b[keyN]) - Math.abs(a[keyN]))
-  }, [open, selMain, codesBySchemaId, lyPacing, lyFinalRows, lyColMode, year, month, localDay, lyAccSource])
+  }, [open, selMain, codesBySchemaId, lyPacing, lyFinalRows, lyColMode, year, month, localDay, lyAccSource, viewMode])
 
   if (!open) return null
 
-  const { rows, summary } = buildSegTable({ schema, pickup: pickupRows, year, month: month + 1, roomCount, day: localDay })
+  const { rows, summary } = buildSegTable({ schema, pickup: pickupRows, year, month: month + 1, roomCount, day: viewMode === 'month' ? undefined : localDay })
   const selRow = rows.find(r => r.id === selMain)
 
   // 해당 날짜에 픽업(pu_nights≠0)이 하나라도 있으면 PICK-UP 컬럼 표시, 없으면 OTB만
-  const hasPickup = (pickupRows ?? []).some(r => inDay(r.business_date, year, month + 1, localDay) && (r.pu_nights ?? 0) !== 0)
+  const hasPickup = (pickupRows ?? []).some(r => matchDate(r.business_date) && (r.pu_nights ?? 0) !== 0)
 
   // 행(세그)별 전년 비교 값 — 현재 OTB / 작년 OTB / GAP (codesBySchemaId + lyByCode)
   const lyForRow = (rowId: string) => {
@@ -266,6 +299,10 @@ export default function MarketPickupDayModal({
     else { setSelMain(id); setLyAccSource(src) }
   }
 
+  // 월합계 모드 월 이동 (0-based month, 연도 경계 처리 · 이동 시 localDay=1 리셋)
+  const handlePrevMonth = () => { setLocalDay(1); setMonth(m => { if (m === 0) { setYear(y => y - 1); return 11 } return m - 1 }) }
+  const handleNextMonth = () => { setLocalDay(1); setMonth(m => { if (m === 11) { setYear(y => y + 1); return 0 } return m + 1 }) }
+
   const localDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(localDay).padStart(2, '0')}`
   // OTB ~ vs 일수 차 (픽업 요약 문구용)
   const diffDays = (() => {
@@ -276,20 +313,56 @@ export default function MarketPickupDayModal({
     return d > 0 ? d : 1
   })()
 
+  // ── OCC / Rev.PAR 분모 — 월합계 모드는 가용 객실수 × 일수 (일자 모드는 일수 1) ──
+  // buildSegTable(summary.occ/revpar)는 이미 일수 반영됨. 아래는 그 외 인라인 계산(픽업·전년비교)용.
+  const occDays    = viewMode === 'month' ? new Date(year, month + 1, 0).getDate()     : 1  // 당해 월 일수
+  const occLyDays  = viewMode === 'month' ? new Date(year - 1, month + 1, 0).getDate() : 1  // 전년 동월 일수(윤년 반영)
+  const occDenom   = (roomCount || 1) * occDays    // 당해(현재 OTB·픽업·GAP) 분모
+  const occLyDenom = (roomCount || 1) * occLyDays  // 전년 OTB 분모
+
   // ── 포맷 헬퍼 ───────────────────────────────────────────────────────────────
+  // 금액 단위 변환 — 원/천원/백만원 (셀엔 접미사 없이 숫자만, 단위는 하단 안내 텍스트로 표시)
+  const unitLabel  = (u: 'won' | 'k' | 'm') => u === 'won' ? '원' : u === 'k' ? '천원' : '백만원'
+  const fmtUnitNum = (v: number, u: 'won' | 'k' | 'm') =>
+    u === 'won' ? Math.round(v).toLocaleString()
+    : u === 'k' ? Math.round(v / 1000).toLocaleString()
+    : (Math.round(v / 1e5) / 10).toLocaleString()
   const fmtPuRn  = (v: number) => v === 0 ? '—' : `${v > 0 ? '+' : ''}${Math.round(v)}`
-  const fmtPuAdr = (v: number, valid: boolean) => !valid || v === 0 ? '—' : `${v > 0 ? '+' : ''}${Math.round(v / 1000)}k`
-  const fmtPuRev = (v: number) => v === 0 ? '—' : `${v > 0 ? '+' : ''}${(v / 1e6).toFixed(1)}M`
+  const fmtPuAdr = (v: number, valid: boolean) => !valid || v === 0 ? '—' : `${v > 0 ? '+' : ''}${fmtUnitNum(v, adrUnit)}`
+  const fmtPuRev = (v: number) => v === 0 ? '—' : `${v > 0 ? '+' : ''}${fmtUnitNum(v, revUnit)}`
   const fmtOtbRn  = (v: number) => v === 0 ? '—' : v.toLocaleString()
-  const fmtOtbAdr = (v: number) => v === 0 ? '—' : `${Math.round(v / 1000)}k`
-  const fmtOtbRev = (v: number) => v === 0 ? '—' : `${(v / 1e6).toFixed(1)}M`
+  const fmtOtbAdr = (v: number) => v === 0 ? '—' : fmtUnitNum(v, adrUnit)
+  const fmtOtbRev = (v: number) => v === 0 ? '—' : fmtUnitNum(v, revUnit)
   const puColor   = (v: number) => v > 0 ? '#00B883' : v < 0 ? '#E24B4A' : 'rgba(255,255,255,0.25)'
   // 전년 비교 GAP 포맷/색
   const gapColor   = (v: number) => v > 0 ? '#00E5A0' : v < 0 ? '#E24B4A' : 'rgba(255,255,255,0.25)'
   const fmtGapRn   = (v: number) => v === 0 ? '—' : `${v > 0 ? '+' : ''}${v}`
-  const fmtGapAdrK = (v: number) => Math.abs(v) < 500 ? '—' : `${v > 0 ? '+' : ''}${Math.round(v / 1000)}k`
-  const fmtGapRevM = (v: number) => Math.abs(v) < 50000 ? '—' : `${v > 0 ? '+' : ''}${(v / 1e6).toFixed(1)}M`
+  const fmtGapAdrK = (v: number) => Math.abs(v) < 500 ? '—' : `${v > 0 ? '+' : ''}${fmtUnitNum(v, adrUnit)}`
+  const fmtGapRevM = (v: number) => Math.abs(v) < 50000 ? '—' : `${v > 0 ? '+' : ''}${fmtUnitNum(v, revUnit)}`
   const lyGray = 'rgba(255,255,255,0.45)'
+  // 단위 설정 패널의 한 줄 (ADR / REV) — 원/천원/백만원 선택
+  const renderUnitRow = (label: string, val: 'won' | 'k' | 'm', onPick: (u: 'won' | 'k' | 'm') => void) => (
+    <div style={{ marginBottom: label === 'ADR' ? 8 : 0 }}>
+      <div style={{ fontSize: 10, color: '#888', marginBottom: 4 }}>{label}</div>
+      <div style={{ display: 'flex', gap: 4 }}>
+        {(['won', 'k', 'm'] as const).map(u => (
+          <div
+            key={u}
+            onClick={() => onPick(u)}
+            style={{
+              flex: 1, textAlign: 'center', padding: '5px 6px', fontSize: 11, borderRadius: 6, cursor: 'pointer',
+              color: val === u ? '#00E5A0' : '#ccc',
+              background: val === u ? 'rgba(0,229,160,0.1)' : 'transparent',
+              border: `0.5px solid ${val === u ? 'rgba(0,229,160,0.3)' : 'rgba(255,255,255,0.08)'}`,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {unitLabel(u)}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 
   // ── c05 스키마 기반 세그 색상 (이 모달은 항상 다크모드) ──────────────────────────
   const segTextColor = (r: SegTableRow) => r.fontDarkColor ?? 'var(--color-text-primary)'
@@ -401,7 +474,7 @@ export default function MarketPickupDayModal({
           <td style={{ padding: '6px 12px', fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>OCC</td>
           <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)', borderLeft: `1px solid ${DIV}` }}>{summary.occ.toFixed(1)}%</td>
           {hasPickup && (
-          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: occPuColor, borderLeft: `1px solid ${DIV}` }}>{summary.puNights >= 0 ? '+' : ''}{(summary.puNights / (roomCount || 1) * 100).toFixed(1)}%</td>
+          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: occPuColor, borderLeft: `1px solid ${DIV}` }}>{summary.puNights >= 0 ? '+' : ''}{(summary.puNights / occDenom * 100).toFixed(1)}%</td>
           )}
         </tr>
         {/* Rev.PAR 행 */}
@@ -409,7 +482,7 @@ export default function MarketPickupDayModal({
           <td style={{ padding: '6px 12px', fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>Rev.PAR</td>
           <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)', borderLeft: `1px solid ${DIV}` }}><FmtVal numSize={11} val={`${Math.round(summary.revpar / 1000)}k`} /></td>
           {hasPickup && (
-          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: revparPuColor, borderLeft: `1px solid ${DIV}` }}><FmtVal numSize={11} val={`${summary.puRevenue >= 0 ? '+' : ''}${Math.round(summary.puRevenue / (roomCount || 1) / 1000)}k`} /></td>
+          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: revparPuColor, borderLeft: `1px solid ${DIV}` }}><FmtVal numSize={11} val={`${summary.puRevenue >= 0 ? '+' : ''}${Math.round(summary.puRevenue / occDenom / 1000)}k`} /></td>
           )}
         </tr>
       </tfoot>
@@ -421,6 +494,11 @@ export default function MarketPickupDayModal({
   const lyGapTotN   = lyTotal.otbN - lyTotal.lyN
   const lyGapTotAdr = lyTotOtbAdr - lyTotLyAdr
   const lyGapTotR   = lyTotal.otbR - lyTotal.lyR
+  // OCC / Rev.PAR — 현재는 당해 월 일수, 전년은 전년 동월 일수 분모로 각각 계산 (GAP은 두 값의 차)
+  const lyCurOcc    = lyTotal.otbN / occDenom   * 100
+  const lyLyOcc     = lyTotal.lyN  / occLyDenom * 100
+  const lyCurRevpar = lyTotal.otbR / occDenom
+  const lyLyRevpar  = lyTotal.lyR  / occLyDenom
   const renderLyTable = () => (
     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
       <thead>
@@ -498,22 +576,22 @@ export default function MarketPickupDayModal({
         </tr>
         <tr style={{ borderTop: '0.5px solid rgba(255,255,255,0.06)' }}>
           <td style={{ padding: '6px 12px', fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>OCC</td>
-          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)', borderLeft: `1px solid ${DIV}` }}>{(lyTotal.otbN / (roomCount || 1) * 100).toFixed(1)}%</td>
-          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: lyGray, borderLeft: `1px solid ${DIV}` }}>{(lyTotal.lyN / (roomCount || 1) * 100).toFixed(1)}%</td>
-          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: gapColor(lyGapTotN), borderLeft: `1px solid ${DIV}` }}>{lyGapTotN >= 0 ? '+' : ''}{(lyGapTotN / (roomCount || 1) * 100).toFixed(1)}%p</td>
+          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)', borderLeft: `1px solid ${DIV}` }}>{lyCurOcc.toFixed(1)}%</td>
+          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: lyGray, borderLeft: `1px solid ${DIV}` }}>{lyLyOcc.toFixed(1)}%</td>
+          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: gapColor(lyGapTotN), borderLeft: `1px solid ${DIV}` }}>{(lyCurOcc - lyLyOcc) >= 0 ? '+' : ''}{(lyCurOcc - lyLyOcc).toFixed(1)}%p</td>
         </tr>
         <tr>
           <td style={{ padding: '6px 12px', fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>Rev.PAR</td>
-          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)', borderLeft: `1px solid ${DIV}` }}><FmtVal numSize={11} val={`${Math.round(lyTotal.otbR / (roomCount || 1) / 1000)}k`} /></td>
-          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: lyGray, borderLeft: `1px solid ${DIV}` }}><FmtVal numSize={11} val={`${Math.round(lyTotal.lyR / (roomCount || 1) / 1000)}k`} /></td>
-          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: gapColor(lyGapTotR), borderLeft: `1px solid ${DIV}` }}><FmtVal numSize={11} val={`${lyGapTotR >= 0 ? '+' : ''}${Math.round(lyGapTotR / (roomCount || 1) / 1000)}k`} /></td>
+          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)', borderLeft: `1px solid ${DIV}` }}><FmtVal numSize={11} val={`${Math.round(lyCurRevpar / 1000)}k`} /></td>
+          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: lyGray, borderLeft: `1px solid ${DIV}` }}><FmtVal numSize={11} val={`${Math.round(lyLyRevpar / 1000)}k`} /></td>
+          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: gapColor(lyGapTotR), borderLeft: `1px solid ${DIV}` }}><FmtVal numSize={11} val={`${(lyCurRevpar - lyLyRevpar) >= 0 ? '+' : ''}${Math.round((lyCurRevpar - lyLyRevpar) / 1000)}k`} /></td>
         </tr>
       </tfoot>
     </table>
   )
 
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+  return createPortal(
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
       <div className="absolute inset-0 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose} />
       <div style={{
         position: 'relative', background: '#000000',
@@ -523,75 +601,86 @@ export default function MarketPickupDayModal({
         boxShadow: 'var(--shadow-card)', overflow: 'hidden', transition: 'width 0.15s',
       }}>
 
-        {/* 헤더 — 날짜 피커 + 픽업 요약 */}
-        <div style={{ padding: '13px 18px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <DatePicker
-              label="OTB"
-              value={localOtbDate}
-              onChange={setLocalOtbDate}
-              availableDates={otbDates}
-              accent bare plain fontPx={11}
-            />
-            <DatePicker
-              label="vs"
-              value={localVsDate}
-              onChange={setLocalVsDate}
-              availableDates={otbDates.filter(d => d < localOtbDate)}
-              accent bare plain fontPx={11}
-            />
-            {/* 픽업 요약 문구 */}
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap' }}>
-              {diffDays}일 간{' '}
-              <span style={{ fontWeight: 600, color: puColor(summary.puNights) }}>
-                {summary.puNights >= 0 ? '+' : ''}{summary.puNights}
-              </span>{' '}객실 픽업 하였습니다
-            </span>
-          </div>
-
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', marginTop: 2 }} aria-label="닫기">
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* 일자 네비(가운데) */}
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 39, borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
-          {/* 일자 ‹ {날짜} › — 가운데 정렬 */}
-          <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button
-              onClick={() => setLocalDay(d => Math.max(1, d - 1))}
-              style={{ width: 22, height: 22, borderRadius: 4, border: 'none', background: 'transparent', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >‹</button>
-            <h2 style={{ fontSize: 13, fontWeight: 600, color: getDayColor(localDateStr) }}>
-              {month + 1}/{localDay} ({WEEKDAY_KR[new Date(year, month, localDay).getDay()]})
-            </h2>
-            <button
-              onClick={() => setLocalDay(d => Math.min(new Date(year, month + 1, 0).getDate(), d + 1))}
-              style={{ width: 22, height: 22, borderRadius: 4, border: 'none', background: 'transparent', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >›</button>
-          </div>
-        </div>
-
-        {/* 탭 — OTB & Pick-up / 전년 비교 + (전년 비교 시) 전년동일자/전년동기간 서브토글 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
-          {([['otb', 'OTB & Pick-up'], ['ly', '전년 비교']] as const).map(([key, label]) => (
-            <button key={key} onClick={() => { setActiveTab(key); setSelMain(null); setLyAccSource('gap') }}
-              style={{ padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer',
-                background: activeTab === key ? '#00E5A0' : 'transparent', color: activeTab === key ? '#0a0a0a' : '#666' }}>
-              {label}
-            </button>
-          ))}
-          {activeTab === 'ly' && (
-            <div style={{ display: 'flex', gap: 4, marginLeft: 8, paddingLeft: 10, borderLeft: '1px solid #1a1a1a' }}>
-              {(['day', 'period'] as const).map(mode => (
-                <button key={mode} onClick={() => setLyMode(mode)}
-                  style={{ padding: '3px 10px', borderRadius: 6, fontSize: 10, border: 'none', cursor: 'pointer',
-                    background: lyMode === mode ? '#1a1a1a' : 'transparent', color: lyMode === mode ? '#aaa' : '#555' }}>
-                  {mode === 'day' ? 'Same Day LY' : 'Same Period LY'}
-                </button>
-              ))}
+        {/* 상단 — 일자/월 네비(가운데) + 월합계 토글 + 닫기 */}
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 46, borderBottom: '0.5px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+          {/* 가운데: 일자별 ‹ 날짜 › / 월합계 {year}년 {month}월 합계 */}
+          {viewMode === 'day' ? (
+            <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                onClick={() => setLocalDay(d => Math.max(1, d - 1))}
+                style={{ width: 22, height: 22, borderRadius: 4, border: 'none', background: 'transparent', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >‹</button>
+              <h2 style={{ fontSize: 13, fontWeight: 600, color: getDayColor(localDateStr) }}>
+                {month + 1}/{localDay} ({WEEKDAY_KR[new Date(year, month, localDay).getDay()]})
+              </h2>
+              <button
+                onClick={() => setLocalDay(d => Math.min(new Date(year, month + 1, 0).getDate(), d + 1))}
+                style={{ width: 22, height: 22, borderRadius: 4, border: 'none', background: 'transparent', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >›</button>
+            </div>
+          ) : (
+            <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <button
+                onClick={handlePrevMonth}
+                style={{ width: 22, height: 22, borderRadius: 4, border: 'none', background: 'transparent', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >‹</button>
+              <h2 style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.92)', whiteSpace: 'nowrap' }}>
+                {year}년 {month + 1}월 합계
+              </h2>
+              <button
+                onClick={handleNextMonth}
+                style={{ width: 22, height: 22, borderRadius: 4, border: 'none', background: 'transparent', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >›</button>
             </div>
           )}
+
+          {/* 우측: 일자별/월합계 · OTB&Pickup/전년비교 · 전년동일자/전년동기간 스위치 (한 줄 통합) */}
+          <div style={{ position: 'absolute', right: 44, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', gap: 14 }}>
+            {/* 일자별 ↔ 월합계 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11, color: viewMode === 'day' ? '#00E5A0' : '#666', fontWeight: viewMode === 'day' ? 600 : 400 }}>일자별</span>
+              <div
+                onClick={() => setViewMode(v => v === 'day' ? 'month' : 'day')}
+                style={{ width: 34, height: 19, borderRadius: 10, position: 'relative', cursor: 'pointer', background: viewMode === 'month' ? '#00E5A0' : '#2a2a2a', transition: 'background 0.15s' }}
+              >
+                <div style={{ width: 15, height: 15, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2, left: viewMode === 'month' ? 17 : 2, transition: 'left 0.15s' }} />
+              </div>
+              <span style={{ fontSize: 11, color: viewMode === 'month' ? '#00E5A0' : '#666', fontWeight: viewMode === 'month' ? 600 : 400 }}>월합계</span>
+            </div>
+
+            <div style={{ width: 1, height: 18, background: '#2a2a2a' }} />
+
+            {/* OTB & Pick-up ↔ 전년 비교 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span style={{ fontSize: 11, color: activeTab === 'otb' ? '#00E5A0' : '#666', fontWeight: activeTab === 'otb' ? 600 : 400 }}>OTB & Pick-up</span>
+              <div
+                onClick={() => { setActiveTab(t => t === 'otb' ? 'ly' : 'otb'); setSelMain(null); setLyAccSource('gap') }}
+                style={{ width: 32, height: 18, borderRadius: 9, position: 'relative', cursor: 'pointer', background: activeTab === 'ly' ? '#00E5A0' : '#2a2a2a', transition: 'background 0.15s' }}
+              >
+                <div style={{ width: 14, height: 14, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2, left: activeTab === 'ly' ? 16 : 2, transition: 'left 0.15s' }} />
+              </div>
+              <span style={{ fontSize: 11, color: activeTab === 'ly' ? '#00E5A0' : '#666', fontWeight: activeTab === 'ly' ? 600 : 400 }}>전년 비교</span>
+            </div>
+
+            {/* 전년동일자 ↔ 전년동기간 (전년 비교 ON일 때만) */}
+            {activeTab === 'ly' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginLeft: 4 }}>
+                <span style={{ fontSize: 11, color: lyMode === 'day' ? '#00E5A0' : '#666', fontWeight: lyMode === 'day' ? 600 : 400 }}>전년동일자</span>
+                <div
+                  onClick={() => setLyMode(m => m === 'day' ? 'period' : 'day')}
+                  style={{ width: 28, height: 16, borderRadius: 8, position: 'relative', cursor: 'pointer', background: lyMode === 'period' ? '#00E5A0' : '#2a2a2a', transition: 'background 0.15s' }}
+                >
+                  <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2, left: lyMode === 'period' ? 14 : 2, transition: 'left 0.15s' }} />
+                </div>
+                <span style={{ fontSize: 11, color: lyMode === 'period' ? '#00E5A0' : '#666', fontWeight: lyMode === 'period' ? 600 : 400 }}>전년동기간</span>
+              </div>
+            )}
+          </div>
+
+          {/* 우측 끝: 닫기 */}
+          <button onClick={onClose} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)' }} aria-label="닫기">
+            <X size={18} />
+          </button>
         </div>
 
         {/* 본문 — 통합 세그 테이블 · 어카운트 */}
@@ -732,7 +821,49 @@ export default function MarketPickupDayModal({
           </div>
 
         </div>
+
+        {/* 하단 — OTB/vs 날짜 피커 + 픽업 요약 */}
+        <div style={{ padding: '11px 18px', borderTop: '0.5px solid #1c1c1c', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', flexShrink: 0 }}>
+          <DatePicker label="OTB" value={localOtbDate} onChange={setLocalOtbDate} availableDates={otbDates} accent bare plain fontPx={11} />
+          <DatePicker label="vs" value={localVsDate} onChange={setLocalVsDate} availableDates={otbDates.filter(d => d < localOtbDate)} accent bare plain fontPx={11} />
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap' }}>
+            {diffDays}일 간{' '}
+            <span style={{ fontWeight: 600, color: puColor(summary.puNights) }}>
+              {summary.puNights >= 0 ? '+' : ''}{summary.puNights}
+            </span>{' '}객실 픽업 하였습니다
+          </span>
+
+          {/* 금액 단위 설정 — 우측 정렬, 셀엔 숫자만 표시하고 단위는 여기서 안내 */}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, position: 'relative' }}>
+            <span style={{ fontSize: 11, color: '#666', whiteSpace: 'nowrap' }}>
+              단위 : 실, ADR {unitLabel(adrUnit)}, REV {unitLabel(revUnit)}
+            </span>
+            <button
+              onClick={() => setUnitPanelOpen(v => !v)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                background: 'transparent', border: '0.5px solid rgba(255,255,255,0.15)',
+                borderRadius: 6, padding: '3px 8px', color: '#888', cursor: 'pointer',
+              }}
+              aria-label="단위 설정"
+            >
+              <Settings size={12} />
+            </button>
+            {unitPanelOpen && (<>
+              <div onClick={() => setUnitPanelOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 10 }} />
+              <div style={{
+                position: 'absolute', bottom: '100%', right: 0, marginBottom: 6,
+                background: '#161616', border: '0.5px solid rgba(255,255,255,0.1)',
+                borderRadius: 8, padding: 10, zIndex: 11, minWidth: 160,
+              }}>
+                {renderUnitRow('ADR', adrUnit, setAdrUnit)}
+                {renderUnitRow('REV', revUnit, setRevUnit)}
+              </div>
+            </>)}
+          </div>
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
