@@ -1031,6 +1031,7 @@ export default function GMDailyReportModal({ open, onClose, hotelId, otbDate, ot
     style.id = 'gm-report-print'
     style.textContent = `
       @media print {
+        html, body { background: #ffffff !important; }
         @page { size: A4 portrait; margin: 0; }
         body > *:not(#gm-report-print-root) { display: none !important; }
         #gm-report-print-root { position: static !important; background: none !important; overflow: visible !important; display: block !important; padding: 0 !important; }
