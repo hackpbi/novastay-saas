@@ -380,7 +380,7 @@ export default function StartEndPage() {
       : { background: 'rgba(245,158,11,0.08)', border: '0.5px solid rgba(245,158,11,0.20)', color: '#b8862c' }
     const isOpen = openPop === popKey
     return (
-      <div style={{ display: 'flex', gap: 3, justifyContent: 'center', marginTop: 7 }}>
+      <div style={{ display: 'flex', gap: 3, justifyContent: 'center', marginTop: 6, height: 15 }}>
         {shown.map(t => (
           <span key={t.name} style={{ fontSize: 9, padding: '2px 5px', borderRadius: 4, whiteSpace: 'nowrap', ...chipStyle }}>
             {t.name} +{kpi === 'OCC' ? t.val.toFixed(1) : t.val.toLocaleString()}
@@ -528,7 +528,7 @@ export default function StartEndPage() {
         onClick={() => setShowModal(true)}
         style={{
           position: 'relative', background: '#000', border: '0.5px solid rgba(0,229,160,0.22)',
-          borderRadius: 12, padding: '14px 16px 14px 20px', overflow: 'hidden', cursor: 'pointer',
+          borderRadius: 12, padding: '14px 16px 20px 20px', overflow: 'hidden', cursor: 'pointer',
         }}
       >
         {/* 좌측 그라데이션 바 */}
@@ -545,6 +545,7 @@ export default function StartEndPage() {
         {/* 테이블 */}
         <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', position: 'relative' }}>
           <colgroup>
+            <col style={{ width: 38 }} />
             {steps.map((_, i) => (
               <Fragment key={i}>
                 <col />
@@ -555,6 +556,7 @@ export default function StartEndPage() {
           </colgroup>
           <thead>
             <tr>
+              <th />
               {steps.map((s, i) => (
                 <Fragment key={i}>
                   <th style={{ textAlign: 'center', padding: '2px 4px', verticalAlign: 'top' }}>
@@ -573,12 +575,13 @@ export default function StartEndPage() {
           <tbody>
             {/* 올해 행 */}
             <tr>
+              <td style={{ textAlign: 'center', verticalAlign: 'middle', fontSize: 11, color: '#00E5A0' }}>{selectedYear}</td>
               {futureThisMerge ? (
                 <>
                   {/* [0] 현재 OTB 값 */}
                   <td style={{ textAlign: 'center', verticalAlign: 'middle', fontWeight: 400, letterSpacing: '-0.5px', fontSize: valStyleThis(steps[0]?.kind ?? 'current').size, color: valStyleThis(steps[0]?.kind ?? 'current').color }}>{fmtKpi(kpi, totalOf(steps[0]?.thisSeg ?? null, hou))}</td>
                   {/* 병합 화살표 (현재→전망) colspan=3: arrow0 + 당월초 + arrow1 */}
-                  <td colSpan={3} style={{ verticalAlign: 'middle', padding: '0 6px' }}>
+                  <td colSpan={3} style={{ verticalAlign: 'middle', padding: '3px 6px 0' }}>
                     {arrowBlock(deltaNode(kpi, totalOf(steps[0]?.thisSeg ?? null, hou), totalOf(steps[2]?.thisSeg ?? null, hou), false), true, chips(kpi, steps[0]?.thisSeg ?? null, steps[2]?.thisSeg ?? null, true, `${kpi}-cy-merge`))}
                     <div style={{ fontSize: 9, color: '#3a3a3a', textAlign: 'center', marginTop: 2 }}>당월초 {monthStartStr(selectedYear, m1).slice(5).replace('-', '/')} 미도래</div>
                   </td>
@@ -592,7 +595,7 @@ export default function StartEndPage() {
                       {fmtKpi(kpi, totalOf(s.thisSeg, hou))}
                     </td>
                     {i < nStep - 1 && (
-                      <td style={{ verticalAlign: 'middle', padding: '0 6px' }}>
+                      <td style={{ verticalAlign: 'middle', padding: '3px 6px 0' }}>
                         {arrowBlock(deltaNode(kpi, totalOf(s.thisSeg, hou), totalOf(steps[i + 1].thisSeg, hou), false), true, chips(kpi, s.thisSeg, steps[i + 1].thisSeg, true, `${kpi}-cy-${i}`))}
                       </td>
                     )}
@@ -605,38 +608,33 @@ export default function StartEndPage() {
 
             {/* 연도 구분선 */}
             <tr>
-              <td colSpan={nStep + (nStep - 1) + 1} style={{ padding: '5px 0' }}>
+              <td colSpan={nStep + (nStep - 1) + 2} style={{ padding: '22px 0 5px' }}>
                 <div style={{ height: 1, background: 'linear-gradient(90deg,rgba(0,229,160,0.35),rgba(0,229,160,0.10) 55%,rgba(0,229,160,0))' }} />
               </td>
             </tr>
 
             {/* 전년 행 */}
             <tr>
+              <td style={{ textAlign: 'center', verticalAlign: 'middle', paddingTop: 18, fontSize: 11, color: '#F59E0B' }}>{selectedYear - 1}</td>
               {steps.map((s, i) => (
                 <Fragment key={i}>
-                  <td style={{ textAlign: 'center', verticalAlign: 'middle', fontWeight: 400, letterSpacing: '-0.5px', fontSize: valStyleLast(s.kind).size, color: valStyleLast(s.kind).color }}>
+                  <td style={{ textAlign: 'center', verticalAlign: 'middle', paddingTop: 18, fontWeight: 400, letterSpacing: '-0.5px', fontSize: valStyleLast(s.kind).size, color: valStyleLast(s.kind).color }}>
                     {fmtKpi(kpi, totalOf(s.lastSeg, hou))}
                   </td>
                   {i < nStep - 1 && (
-                    <td style={{ verticalAlign: 'middle', padding: '0 6px' }}>
+                    <td style={{ verticalAlign: 'middle', padding: '21px 6px 0' }}>
                       {arrowBlock(deltaNode(kpi, totalOf(s.lastSeg, hou), totalOf(steps[i + 1].lastSeg, hou), true), false, chips(kpi, s.lastSeg, steps[i + 1].lastSeg, false, `${kpi}-ly-${i}`))}
                     </td>
                   )}
                 </Fragment>
               ))}
               {/* 목표 (전년 없음) */}
-              <td style={{ textAlign: 'center', verticalAlign: 'middle', fontSize: 18, color: '#3f3f3f' }}>—</td>
+              <td style={{ textAlign: 'center', verticalAlign: 'middle', paddingTop: 18, fontSize: 18, color: '#3f3f3f' }}>—</td>
             </tr>
 
             {/* 전년 행 라벨용 연도 (좌측 최상단 대체) — 생략: 값 색상으로 구분 */}
           </tbody>
         </table>
-
-        {/* 연도 라벨 (좌하단 표기) */}
-        <div style={{ display: 'flex', justifyContent: 'flex-start', gap: 12, marginTop: 6 }}>
-          <span style={{ fontSize: 11, color: '#00E5A0' }}>{selectedYear}</span>
-          <span style={{ fontSize: 11, color: '#F59E0B' }}>{selectedYear - 1}</span>
-        </div>
       </div>
     )
   }
@@ -724,11 +722,11 @@ export default function StartEndPage() {
 function arrowBlock(delta: React.ReactNode, isThis: boolean, chipsNode: React.ReactNode): React.ReactNode {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
-      <div style={{ textAlign: 'center', minHeight: 12, marginBottom: 5 }}>{delta}</div>
+      <div style={{ textAlign: 'center', minHeight: 12, marginBottom: 4, lineHeight: 1 }}>{delta}</div>
       <div style={{ position: 'relative', height: 2, borderRadius: 1, margin: '3px 4px', background: isThis ? 'linear-gradient(90deg,rgba(0,229,160,0.10),#00E5A0)' : 'linear-gradient(90deg,rgba(245,158,11,0.10),rgba(245,158,11,0.75))' }}>
         <span style={{ position: 'absolute', right: -2, top: -2, width: 6, height: 6, borderRadius: '50%', background: isThis ? '#00E5A0' : 'rgba(245,158,11,0.75)' }} />
       </div>
-      {chipsNode}
+      {chipsNode ?? <div style={{ marginTop: 6, height: 15 }} />}
     </div>
   )
 }

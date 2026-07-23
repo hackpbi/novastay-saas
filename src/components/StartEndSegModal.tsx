@@ -164,15 +164,19 @@ export default function StartEndSegModal({
     if (!selectedSeg || !acctData) return []
     const g1Point = monthState === 'future' ? 'current_otb' : 'month_start'
     const g2Point = monthState === 'past' ? 'closing' : 'current_otb'
-    const acc: Record<string, { n1: number; n2: number }> = {}
+    const acc: Record<string, { n1: number; n2: number; rev1: number; rev2: number }> = {}
     for (const r of acctData) {
       if (r.year_type !== 'cy') continue
       const k = r.account_name ?? '(없음)'
-      acc[k] ??= { n1: 0, n2: 0 }
-      if (r.point_type === g1Point) acc[k].n1 += Number(r.nights ?? 0)
-      if (r.point_type === g2Point) acc[k].n2 += Number(r.nights ?? 0)
+      acc[k] ??= { n1: 0, n2: 0, rev1: 0, rev2: 0 }
+      if (r.point_type === g1Point) { acc[k].n1 += Number(r.nights ?? 0); acc[k].rev1 += Number(r.room_revenue ?? 0) }
+      if (r.point_type === g2Point) { acc[k].n2 += Number(r.nights ?? 0); acc[k].rev2 += Number(r.room_revenue ?? 0) }
     }
-    return Object.entries(acc).map(([name, v]) => ({ name, delta: v.n2 - v.n1 })).sort((a, b) => b.delta - a.delta)
+    return Object.entries(acc).map(([name, v]) => {
+      const adr1 = v.n1 > 0 ? v.rev1 / v.n1 : null
+      const adr2 = v.n2 > 0 ? v.rev2 / v.n2 : null
+      return { name, dN: v.n2 - v.n1, dAdr: (adr1 === null || adr2 === null) ? null : adr2 - adr1, dRev: v.rev2 - v.rev1 }
+    }).sort((a, b) => b.dN - a.dN)
   }, [selectedSeg, acctData, monthState])
 
   const GBORDER = 'inset 1px 0 0 rgba(0,229,160,0.3)'
@@ -324,14 +328,18 @@ export default function StartEndSegModal({
           </div>
 
           {/* 우측 Account 패널 */}
-          <div style={{ width: 138, flexShrink: 0, borderLeft: '0.5px solid rgba(0,229,160,0.18)', display: 'flex', flexDirection: 'column', background: '#000' }}>
+          <div style={{ width: 340, flexShrink: 0, borderLeft: '0.5px solid rgba(0,229,160,0.18)', display: 'flex', flexDirection: 'column', background: '#000' }}>
             <div style={{ padding: '10px 12px', borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
               <div style={{ fontSize: 11, fontWeight: 500, color: '#F59E0B' }}>Account 증감</div>
               <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', marginTop: 3 }}>{selectedSeg ? (selectedSeg.name || '선택됨') : '세그먼트를 클릭하세요'}</div>
             </div>
             <div style={{ display: 'flex', padding: '4px 12px', borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
               <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', flex: 1 }}>어카운트</span>
-              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)' }}>Δ객실</span>
+              <div style={{ display: 'flex', flexShrink: 0 }}>
+                <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 40, textAlign: 'right' }}>객실</span>
+                <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 52, textAlign: 'right' }}>객단가</span>
+                <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', width: 56, textAlign: 'right' }}>매출</span>
+              </div>
             </div>
             <div style={{ flex: 1, overflowY: 'auto' }}>
               {!selectedSeg ? (
@@ -341,12 +349,20 @@ export default function StartEndSegModal({
                 </div>
               ) : accountList.length === 0 ? (
                 <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', padding: 12 }}>데이터 없음</div>
-              ) : accountList.map((a, i) => (
-                <div key={`${a.name}-${i}`} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 12px', borderBottom: '0.5px solid #141414' }}>
-                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 6 }}>{a.name}</span>
-                  <span style={{ fontSize: 10, color: a.delta > 0 ? '#00E5A0' : a.delta < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)' }}>{a.delta === 0 ? '—' : `${a.delta > 0 ? '+' : ''}${a.delta}`}</span>
+              ) : accountList.map((a, i) => {
+                const sAdr = a.dAdr === null ? null : scaleUnit(a.dAdr, adrUnit)
+                const sRev = scaleUnit(a.dRev, revUnit)
+                return (
+                <div key={`${a.name}-${i}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 12px', borderBottom: '0.5px solid #141414' }}>
+                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>{a.name}</span>
+                  <div style={{ display: 'flex', flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, width: 40, textAlign: 'right', color: a.dN > 0 ? '#00E5A0' : a.dN < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)' }}>{gapNum(a.dN)}</span>
+                    <span style={{ fontSize: 11, width: 52, textAlign: 'right', color: sAdr === null || sAdr === 0 ? 'rgba(255,255,255,0.3)' : sAdr > 0 ? '#00E5A0' : '#E24B4A' }}>{sAdr === null || sAdr === 0 ? '—' : `${sAdr > 0 ? '+' : ''}${sAdr.toLocaleString()}`}</span>
+                    <span style={{ fontSize: 11, width: 56, textAlign: 'right', color: sRev > 0 ? '#00E5A0' : sRev < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)' }}>{sRev === 0 ? '—' : `${sRev > 0 ? '+' : ''}${sRev.toLocaleString()}`}</span>
+                  </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         </div>
