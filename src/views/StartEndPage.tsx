@@ -172,7 +172,7 @@ export default function StartEndPage() {
 
   // 세그먼트 기여 팝오버 (한 번에 하나만) — 배지 위치에 포털로 띄움
   const [openPop, setOpenPop]     = useState<string | null>(null)
-  const [popAnchor, setPopAnchor] = useState<{ left: number; top: number } | null>(null)
+  const [popAnchor, setPopAnchor] = useState<{ left: number; top: number; maxHeight: number; dir: 'up' | 'down' } | null>(null)
   const [popSearch, setPopSearch] = useState('')
   const [popFocus, setPopFocus]   = useState(false)
   useEffect(() => {
@@ -182,9 +182,21 @@ export default function StartEndPage() {
       if (!t.closest('.se-pop-panel') && !t.closest('.se-pop-badge')) setOpenPop(null)
     }
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenPop(null) }
+    const onScroll = (e: Event) => {
+      if ((e.target as HTMLElement)?.closest?.('.se-pop-panel')) return
+      setOpenPop(null)
+    }
+    const close = () => setOpenPop(null)
     document.addEventListener('mousedown', md)
     document.addEventListener('keydown', esc)
-    return () => { document.removeEventListener('mousedown', md); document.removeEventListener('keydown', esc) }
+    window.addEventListener('scroll', onScroll, true)
+    window.addEventListener('resize', close)
+    return () => {
+      document.removeEventListener('mousedown', md)
+      document.removeEventListener('keydown', esc)
+      window.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('resize', close)
+    }
   }, [openPop])
 
   const m1 = selectedMonth + 1
@@ -328,7 +340,7 @@ export default function StartEndPage() {
   }
   // 세그먼트 기여값 (칩·팝오버 공용 — from→to 차분)
   function segVal(kpi: Kpi, ma: Cell, mb: Cell): number {
-    if (kpi === 'OCC') return cap > 0 ? ((mb.n - ma.n) / cap) * 100 : 0
+    if (kpi === 'OCC') return mb.n - ma.n
     if (kpi === 'ADR') return scaleUnit((mb.n > 0 ? mb.rev / mb.n : 0) - (ma.n > 0 ? ma.rev / ma.n : 0), adrUnit)
     if (kpi === 'REV') return scaleUnit(mb.rev - ma.rev, revUnit)
     return scaleUnit(cap > 0 ? (mb.rev - ma.rev) / cap : 0, revUnit)
@@ -364,26 +376,36 @@ export default function StartEndPage() {
   }
   // 세그먼트 기여 칩 (플러스만, 상위 2개 + 외 N 배지) — 한 줄 고정
   function chips(kpi: Kpi, aSeg: SegMap | null, bSeg: SegMap | null, isThis: boolean, popKey: string): React.ReactNode {
+    if (kpi === 'ADR') return null
     if (!aSeg || !bSeg) return null
-    const items: { name: string; val: number }[] = []
+    const plus: { name: string; val: number }[] = []
+    const minus: { name: string; val: number }[] = []
     for (const main of mains) {
       if (main.codes.some(c => hou.has(c))) continue
       const val = segVal(kpi, sumCodes(aSeg, main.codes), sumCodes(bSeg, main.codes))
-      if (val > 0) items.push({ name: main.name, val })
+      if (val > 0) plus.push({ name: main.name, val })
+      else if (val < 0) minus.push({ name: main.name, val })
     }
-    items.sort((a, b) => b.val - a.val)
-    if (items.length === 0) return null
-    const shown = items.slice(0, 2)
-    const extra = items.length - 2
-    const chipStyle: React.CSSProperties = isThis
+    plus.sort((a, b) => b.val - a.val)
+    minus.sort((a, b) => Math.abs(b.val) - Math.abs(a.val))
+    const total = plus.length + minus.length
+    if (total === 0) return null
+    const shown = plus.length > 0 && minus.length > 0 ? [plus[0], minus[0]]
+      : plus.length === 0 ? minus.slice(0, 2)
+      : plus.slice(0, 2)
+    const extra = total - shown.length
+    const plusStyle: React.CSSProperties = isThis
       ? { background: 'rgba(0,229,160,0.10)', border: '0.5px solid rgba(0,229,160,0.25)', color: '#59d3a8' }
       : { background: 'rgba(245,158,11,0.08)', border: '0.5px solid rgba(245,158,11,0.20)', color: '#b8862c' }
+    const minusStyle: React.CSSProperties = isThis
+      ? { background: 'rgba(226,75,74,0.10)', border: '0.5px solid rgba(226,75,74,0.30)', color: '#e07a79' }
+      : { background: 'rgba(226,75,74,0.07)', border: '0.5px solid rgba(226,75,74,0.22)', color: '#b06463' }
     const isOpen = openPop === popKey
     return (
       <div style={{ display: 'flex', gap: 3, justifyContent: 'center', marginTop: 6, height: 15 }}>
         {shown.map(t => (
-          <span key={t.name} style={{ fontSize: 9, padding: '2px 5px', borderRadius: 4, whiteSpace: 'nowrap', ...chipStyle }}>
-            {t.name} +{kpi === 'OCC' ? t.val.toFixed(1) : t.val.toLocaleString()}
+          <span key={t.name} style={{ fontSize: 9, padding: '2px 5px', borderRadius: 4, whiteSpace: 'nowrap', ...(t.val > 0 ? plusStyle : minusStyle) }}>
+            {t.name} {t.val > 0 ? '+' : '−'}{Math.abs(t.val).toLocaleString()}
           </span>
         ))}
         {extra > 0 && (
@@ -394,7 +416,15 @@ export default function StartEndPage() {
               const willOpen = openPop !== popKey
               if (willOpen) {
                 const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                setPopAnchor({ left: r.left + r.width / 2, top: r.bottom + 6 })
+                const POP_W = 218, POP_MAX = 220, MARGIN = 12
+                const spaceBelow = window.innerHeight - r.bottom - MARGIN
+                const spaceAbove = r.top - MARGIN
+                const openUp = spaceBelow < POP_MAX && spaceAbove > spaceBelow
+                const maxHeight = Math.max(120, Math.min(POP_MAX, openUp ? spaceAbove : spaceBelow))
+                const top = openUp ? r.top - maxHeight - 6 : r.bottom + 6
+                const half = POP_W / 2
+                const left = Math.max(8 + half, Math.min(r.left + r.width / 2, window.innerWidth - 8 - half))
+                setPopAnchor({ left, top, maxHeight, dir: openUp ? 'up' : 'down' })
                 setOpenPop(popKey); setPopSearch(''); setPopFocus(false)
               } else setOpenPop(null)
             }}
@@ -405,7 +435,7 @@ export default function StartEndPage() {
                 : { border: '0.5px solid #2e2e2e', background: 'transparent', color: '#777' }),
             }}
           >
-            외 {extra} {isOpen ? '▴' : '▾'}
+            외 {extra} {isOpen ? (popAnchor?.dir === 'up' ? '▾' : '▴') : '▾'}
           </span>
         )}
         {isOpen && renderPopover(kpi, aSeg, bSeg)}
@@ -433,7 +463,7 @@ export default function StartEndPage() {
     if (!popAnchor) return null
     const rows = popTree
       .map(r => ({ ...r, val: segVal(kpi, sumCodes(aSeg, r.codes), sumCodes(bSeg, r.codes)) }))
-      .filter(r => r.val > 0)
+      .filter(r => r.val !== 0)
     const showSearch = rows.length >= 8
     const q = popSearch.trim().toLowerCase()
     let displayRows = rows
@@ -458,6 +488,25 @@ export default function StartEndPage() {
       displayRows = rows.filter(r => vis.has(r.id))
     }
     const hiddenCount = rows.length - displayRows.length
+    const renderRow = (r: (typeof displayRows)[number]) => {
+      const indent = r.level === 'main' ? 11 : r.level === 'mid' ? 19 : 27
+      const nameColor = r.level === 'main' ? '#fff' : r.level === 'mid' ? '#999' : '#777'
+      const isNeg = r.val < 0
+      const valColor = isNeg
+        ? (r.level === 'main' ? '#E24B4A' : r.level === 'mid' ? '#b04745' : '#8a3a39')
+        : (r.level === 'main' ? '#00E5A0' : r.level === 'mid' ? '#3d9d7c' : '#357f66')
+      const mainBg = isNeg ? '#1d0f0f' : '#0f1d18'
+      return (
+        <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, padding: '3px 11px', paddingLeft: indent, background: r.level === 'main' ? mainBg : 'transparent', marginTop: r.level === 'main' ? 2 : 0, fontWeight: r.level === 'main' ? 500 : 400, color: nameColor }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 6 }}>
+            {r.level !== 'main' && <span style={{ color: '#555' }}>└ </span>}{highlightSeg(r.name, q)}
+          </span>
+          <span style={{ color: valColor, whiteSpace: 'nowrap' }}>{r.val > 0 ? '+' : '−'}{Math.abs(r.val).toLocaleString()}</span>
+        </div>
+      )
+    }
+    const plusRows = displayRows.filter(r => r.val > 0)
+    const minusRows = displayRows.filter(r => r.val < 0)
     return createPortal(
       <div
         className="se-pop-panel"
@@ -466,7 +515,7 @@ export default function StartEndPage() {
           position: 'fixed', left: popAnchor.left, top: popAnchor.top, transform: 'translateX(-50%)',
           background: '#0d0d0d', border: '0.5px solid rgba(0,229,160,0.30)', borderRadius: 8,
           width: 218, padding: '9px 0 7px', boxShadow: '0 8px 24px rgba(0,0,0,0.75)',
-          zIndex: 10000, maxHeight: 220, overflowY: 'auto',
+          zIndex: 10000, maxHeight: popAnchor.maxHeight, overflowY: 'auto',
         }}
       >
         {showSearch ? (
@@ -492,19 +541,9 @@ export default function StartEndPage() {
         ) : (
           <div style={{ fontSize: 9, color: '#666', padding: '0 11px 7px' }}>전체 기여 세그먼트</div>
         )}
-        {displayRows.map(r => {
-          const indent = r.level === 'main' ? 11 : r.level === 'mid' ? 19 : 27
-          const nameColor = r.level === 'main' ? '#fff' : r.level === 'mid' ? '#999' : '#777'
-          const valColor = r.level === 'main' ? '#00E5A0' : r.level === 'mid' ? '#3d9d7c' : '#357f66'
-          return (
-            <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, padding: '3px 11px', paddingLeft: indent, background: r.level === 'main' ? '#0f1d18' : 'transparent', marginTop: r.level === 'main' ? 2 : 0, fontWeight: r.level === 'main' ? 500 : 400, color: nameColor }}>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 6 }}>
-                {r.level !== 'main' && <span style={{ color: '#555' }}>└ </span>}{highlightSeg(r.name, q)}
-              </span>
-              <span style={{ color: valColor, whiteSpace: 'nowrap' }}>+{kpi === 'OCC' ? r.val.toFixed(1) : r.val.toLocaleString()}</span>
-            </div>
-          )
-        })}
+        {plusRows.map(renderRow)}
+        {minusRows.length > 0 && <div style={{ height: 1, background: '#1c1c1c', margin: '6px 0' }} />}
+        {minusRows.map(renderRow)}
         {q && (
           <div style={{ fontSize: 9, color: '#555', padding: '7px 11px 2px', borderTop: '0.5px solid #1a1a1a', marginTop: 5 }}>
             {matchedCount}건 일치 · 나머지 {hiddenCount}건 숨김
@@ -517,6 +556,7 @@ export default function StartEndPage() {
 
   // ─── 카드 ───────────────────────────────────────────────────────────────────────
   const kpiUnit = (kpi: Kpi) => kpi === 'OCC' ? '%' : kpi === 'ADR' ? unitLabel(adrUnit) : unitLabel(revUnit)
+  const kpiTitle = (kpi: Kpi) => kpi === 'OCC' ? '점유율' : kpi === 'ADR' ? '객단가' : kpi === 'REV' ? '매출' : kpi
 
   function KpiCard({ kpi }: { kpi: Kpi }) {
     const nStep = steps.length
@@ -538,8 +578,9 @@ export default function StartEndPage() {
 
         {/* 타이틀 */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 10, position: 'relative' }}>
-          <span style={{ fontSize: 14, fontWeight: 500, color: '#00E5A0' }}>{kpi}</span>
+          <span style={{ fontSize: 14, fontWeight: 500, color: '#00E5A0' }}>{kpiTitle(kpi)}</span>
           <span style={{ fontSize: 10, color: '#4a4a4a' }}>{kpiUnit(kpi)}</span>
+          {kpi === 'OCC' && <span style={{ fontSize: 9, color: '#3a3a3a', marginLeft: 4 }}>칩 단위 : 실</span>}
         </div>
 
         {/* 테이블 */}
@@ -582,7 +623,7 @@ export default function StartEndPage() {
                   <td style={{ textAlign: 'center', verticalAlign: 'middle', fontWeight: 400, letterSpacing: '-0.5px', fontSize: valStyleThis(steps[0]?.kind ?? 'current').size, color: valStyleThis(steps[0]?.kind ?? 'current').color }}>{fmtKpi(kpi, totalOf(steps[0]?.thisSeg ?? null, hou))}</td>
                   {/* 병합 화살표 (현재→전망) colspan=3: arrow0 + 당월초 + arrow1 */}
                   <td colSpan={3} style={{ verticalAlign: 'middle', padding: '3px 6px 0' }}>
-                    {arrowBlock(deltaNode(kpi, totalOf(steps[0]?.thisSeg ?? null, hou), totalOf(steps[2]?.thisSeg ?? null, hou), false), true, chips(kpi, steps[0]?.thisSeg ?? null, steps[2]?.thisSeg ?? null, true, `${kpi}-cy-merge`))}
+                    {arrowBlock(deltaNode(kpi, totalOf(steps[0]?.thisSeg ?? null, hou), totalOf(steps[2]?.thisSeg ?? null, hou), false), true, chips(kpi, steps[0]?.thisSeg ?? null, steps[2]?.thisSeg ?? null, true, `${kpi}-cy-merge`), kpi !== 'ADR')}
                     <div style={{ fontSize: 9, color: '#3a3a3a', textAlign: 'center', marginTop: 2 }}>당월초 {monthStartStr(selectedYear, m1).slice(5).replace('-', '/')} 미도래</div>
                   </td>
                   {/* [2] 전망 값 */}
@@ -596,7 +637,7 @@ export default function StartEndPage() {
                     </td>
                     {i < nStep - 1 && (
                       <td style={{ verticalAlign: 'middle', padding: '3px 6px 0' }}>
-                        {arrowBlock(deltaNode(kpi, totalOf(s.thisSeg, hou), totalOf(steps[i + 1].thisSeg, hou), false), true, chips(kpi, s.thisSeg, steps[i + 1].thisSeg, true, `${kpi}-cy-${i}`))}
+                        {arrowBlock(deltaNode(kpi, totalOf(s.thisSeg, hou), totalOf(steps[i + 1].thisSeg, hou), false), true, chips(kpi, s.thisSeg, steps[i + 1].thisSeg, true, `${kpi}-cy-${i}`), kpi !== 'ADR')}
                       </td>
                     )}
                   </Fragment>
@@ -623,7 +664,7 @@ export default function StartEndPage() {
                   </td>
                   {i < nStep - 1 && (
                     <td style={{ verticalAlign: 'middle', padding: '21px 6px 0' }}>
-                      {arrowBlock(deltaNode(kpi, totalOf(s.lastSeg, hou), totalOf(steps[i + 1].lastSeg, hou), true), false, chips(kpi, s.lastSeg, steps[i + 1].lastSeg, false, `${kpi}-ly-${i}`))}
+                      {arrowBlock(deltaNode(kpi, totalOf(s.lastSeg, hou), totalOf(steps[i + 1].lastSeg, hou), true), false, chips(kpi, s.lastSeg, steps[i + 1].lastSeg, false, `${kpi}-ly-${i}`), kpi !== 'ADR')}
                     </td>
                   )}
                 </Fragment>
@@ -719,14 +760,14 @@ export default function StartEndPage() {
 }
 
 // ─── 화살표 블록 ───────────────────────────────────────────────────────────────────
-function arrowBlock(delta: React.ReactNode, isThis: boolean, chipsNode: React.ReactNode): React.ReactNode {
+function arrowBlock(delta: React.ReactNode, isThis: boolean, chipsNode: React.ReactNode, reserveChip: boolean = true): React.ReactNode {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
       <div style={{ textAlign: 'center', minHeight: 12, marginBottom: 4, lineHeight: 1 }}>{delta}</div>
       <div style={{ position: 'relative', height: 2, borderRadius: 1, margin: '3px 4px', background: isThis ? 'linear-gradient(90deg,rgba(0,229,160,0.10),#00E5A0)' : 'linear-gradient(90deg,rgba(245,158,11,0.10),rgba(245,158,11,0.75))' }}>
         <span style={{ position: 'absolute', right: -2, top: -2, width: 6, height: 6, borderRadius: '50%', background: isThis ? '#00E5A0' : 'rgba(245,158,11,0.75)' }} />
       </div>
-      {chipsNode ?? <div style={{ marginTop: 6, height: 15 }} />}
+      {chipsNode ?? (reserveChip ? <div style={{ marginTop: 6, height: 15 }} /> : null)}
     </div>
   )
 }

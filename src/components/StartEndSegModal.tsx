@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X } from 'lucide-react'
+import { X, Calendar, History, Play, LineChart, Flag } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
@@ -44,6 +44,27 @@ function buildTree(schema: MarketSchemaRow[]): TreeRow[] {
   return out
 }
 
+// 비교 모드 5종 — 좌/우에 놓을 (year_type, point_type) 조합
+type Mode = 'cy' | 'ly' | 'cmp_start' | 'cmp_otb' | 'cmp_closing'
+type ModeCfg = { L: [string, string]; R: [string, string]; gap: string }
+const MODE_MAP: Record<Mode, ModeCfg> = {
+  cy:          { L: ['cy', 'month_start'], R: ['cy', 'current_otb'], gap: '픽업' },
+  ly:          { L: ['ly', 'month_start'], R: ['ly', 'current_otb'], gap: '픽업' },
+  cmp_start:   { L: ['ly', 'month_start'], R: ['cy', 'month_start'], gap: '전년 대비' },
+  cmp_otb:     { L: ['ly', 'current_otb'], R: ['cy', 'current_otb'], gap: '전년 대비' },
+  cmp_closing: { L: ['ly', 'closing'],     R: ['cy', 'closing'],     gap: '전년 대비' },
+}
+
+// 올해/전년 모드는 과거월일 때 우측 시점을 current_otb → closing(마감)으로 전환
+// (지나간 투숙일은 오늘자 OTB 스냅샷에 없으므로 실적은 closing 에 있음)
+function resolveCfg(mode: Mode, monthState: MonthState): ModeCfg {
+  const base = MODE_MAP[mode]
+  if ((mode === 'cy' || mode === 'ly') && monthState === 'past') {
+    return { ...base, R: [base.R[0], 'closing'] as [string, string] }
+  }
+  return base
+}
+
 export default function StartEndSegModal({
   hotelId, year, month, monthState: initialState, roomCount, otbDate, onClose,
 }: {
@@ -63,6 +84,7 @@ export default function StartEndSegModal({
   const [revUnit, setRevUnit] = useState<Unit>('백만원')
   const [showUnit, setShowUnit] = useState(false)
   const [selectedSeg, setSelectedSeg] = useState<{ name: string; codes: string[] } | null>(null)
+  const [mode, setMode] = useState<Mode>('cy')
 
   useEffect(() => {
     setTitleShifting(true)
@@ -95,9 +117,17 @@ export default function StartEndSegModal({
     selYear < otbY || (selYear === otbY && selMonth < otbM) ? 'past'
     : selYear === otbY && selMonth === otbM ? 'current' : 'future'
 
+  // 비교>OTB 모드는 기준월 이전으로 이동 불가 → 기준월(current)에서 '이전' 비활성
+  const otbPrevDisabled = mode === 'cmp_otb' && monthState === 'current'
+
+  // 비교>마감 모드는 기준월 이후로 이동 불가 → 최대 조회월(기준월의 이전달)에서 '다음' 비활성
+  const prevBaseY = otbM === 1 ? otbY - 1 : otbY
+  const prevBaseM = otbM === 1 ? 12 : otbM - 1
+  const closingNextDisabled = mode === 'cmp_closing' && selYear === prevBaseY && selMonth === prevBaseM
+
   const cap = roomCount * lastDay(selYear, selMonth)
 
-  const { data, isLoading } = useQuery<{ g1: Raw[] | null; g2: Raw[] | null; g1Date: string | null; g2Date: string | null }>({
+  const { data, isLoading } = useQuery<{ seg: Record<string, Record<string, Raw[]>>; snap: Record<string, Record<string, string | null>> }>({
     queryKey: ['start-end-modal', hotelId, selYear, selMonth, otbDate, monthState],
     enabled: !!hotelId && !!otbDate,
     staleTime: 60 * 1000,
@@ -106,20 +136,17 @@ export default function StartEndSegModal({
         p_hotel_id: hotelId, p_year: selYear, p_month: selMonth, p_otb_date: otbDate,
       })
       if (error) throw error
-      // 올해(cy) 행만 point_type 별로 분리 (snap_date 그대로 사용)
-      const byPoint: Record<string, Raw[]> = {}
-      const snapByPoint: Record<string, string | null> = {}
+      // cy/ly × point_type 전부 분리 (snap_date 그대로 사용)
+      const seg: Record<string, Record<string, Raw[]>> = { cy: {}, ly: {} }
+      const snap: Record<string, Record<string, string | null>> = { cy: {}, ly: {} }
       for (const r of (data ?? []) as any[]) {
-        if (r.year_type !== 'cy') continue
+        const yt = r.year_type as string
+        if (yt !== 'cy' && yt !== 'ly') continue
         const pt = r.point_type as string
-        ;(byPoint[pt] ??= []).push({ segmentation: r.segmentation, nights: Number(r.nights ?? 0), room_revenue: Number(r.room_revenue ?? 0) })
-        if (!(pt in snapByPoint)) snapByPoint[pt] = r.snap_date ?? null
+        ;(seg[yt][pt] ??= []).push({ segmentation: r.segmentation, nights: Number(r.nights ?? 0), room_revenue: Number(r.room_revenue ?? 0) })
+        if (!(pt in snap[yt])) snap[yt][pt] = r.snap_date ?? null
       }
-      const g = (pt: string): Raw[] | null => byPoint[pt] ?? null
-      const s = (pt: string): string | null => snapByPoint[pt] ?? null
-      if (monthState === 'past')    return { g1: g('month_start'), g2: g('closing'), g1Date: s('month_start'), g2Date: s('closing') ?? monthEndStr(selYear, selMonth) }
-      if (monthState === 'current') return { g1: g('month_start'), g2: g('current_otb'), g1Date: s('month_start'), g2Date: s('current_otb') }
-      return { g1: g('current_otb'), g2: null, g1Date: s('current_otb'), g2Date: null }   // future: 당월초 미도래
+      return { seg, snap }
     },
   })
 
@@ -130,17 +157,41 @@ export default function StartEndSegModal({
     return set
   }, [schema])
 
-  const g1 = data?.g1 ?? null
-  const g2 = data?.g2 ?? null
+  // 선택 모드 → 좌/우 (year_type, point_type)  — 올해/전년은 월 상태에 따라 우측 시점 분기
+  const cfg = resolveCfg(mode, monthState)
+  const [lYt, lPt] = cfg.L
+  const [rYt, rPt] = cfg.R
+  const g1 = data?.seg?.[lYt]?.[lPt] ?? null
+  const g2 = data?.seg?.[rYt]?.[rPt] ?? null
+  const g1Date = data?.snap?.[lYt]?.[lPt] ?? null
+  const g2Date = data?.snap?.[rYt]?.[rPt] ?? null
+  const noL = g1 === null
+  const noR = g2 === null
+  const noGap = noL || noR
 
-  // 그룹 메타 (일자는 RPC snap_date 사용)
-  const g1Date = data?.g1Date ?? null
-  const g2Date = data?.g2Date ?? null
-  const groups = monthState === 'past'
-    ? [{ title: '당월초 OTB', color: '#5B8DEF', date: g1Date }, { title: '마감 실적', color: '#F59E0B', date: g2Date }, { title: 'GAP (총 픽업)', color: '#00E5A0', date: null }]
-    : monthState === 'current'
-    ? [{ title: '당월초 OTB', color: '#5B8DEF', date: g1Date }, { title: '현재 OTB', color: '#00E5A0', date: g2Date }, { title: 'GAP (픽업)', color: '#00E5A0', date: null }]
-    : [{ title: '현재 OTB', color: '#00E5A0', date: g1Date }, { title: '당월초 OTB', color: '#5B8DEF', date: null }, { title: 'GAP (픽업)', color: '#00E5A0', date: null }]
+  // 시점별 헤더 라벨·색상 (cy 마감은 과거월=마감 / 당월·미래월=전망)
+  const sideTitle = (yt: string, pt: string) =>
+    yt === 'cy'
+      ? (pt === 'month_start' ? '당월초 OTB' : pt === 'current_otb' ? '현재 OTB' : (monthState === 'past' ? '마감' : '전망'))
+      : (pt === 'month_start' ? '전년 당월초 OTB' : pt === 'current_otb' ? '전년 동일자 OTB' : '전년 마감')
+  const sideColor = (yt: string, pt: string) =>
+    yt === 'ly' ? '#F59E0B' : (pt === 'month_start' ? '#7ea3e8' : '#00E5A0')
+
+  // 데이터 없음 라벨: 미래월의 당월초(month_start)만 '미도래', 그 외는 '—'
+  const missingLabel = (pt: string) => pt === 'month_start' && monthState === 'future' ? '미도래' : '—'
+  const groups = [
+    { title: sideTitle(lYt, lPt), color: sideColor(lYt, lPt), date: g1Date, missing: noL, empty: missingLabel(lPt) },
+    { title: sideTitle(rYt, rPt), color: sideColor(rYt, rPt), date: g2Date, missing: noR, empty: missingLabel(rPt) },
+    { title: `GAP (${cfg.gap})`, color: '#00E5A0', date: null, missing: false, empty: '—' },
+  ]
+
+  // 요약 줄용 기준일 포맷 (snap_date 우선, closing 은 'YY.MM 마감/전망' 대체)
+  const yy = (yt: string) => String(yt === 'ly' ? selYear - 1 : selYear).slice(2)
+  const fmtSideDate = (yt: string, pt: string, date: string | null) =>
+    date ? date.slice(2).replace(/-/g, '.')
+         : pt === 'closing' ? `${yy(yt)}.${pad(selMonth)} ${yt === 'cy' && monthState !== 'past' ? '전망' : '마감'}`
+         : '—'
+  const summaryText = `${fmtSideDate(lYt, lPt, g1Date)} → ${fmtSideDate(rYt, rPt, g2Date)} · GAP = ${cfg.gap}`
 
   // 하단 합계 (HOU 제외)
   const nonHou = useMemo(() => tree.filter(r => !r.isMain && !r.codes.some(c => houCodes.has(c))), [tree, houCodes])
@@ -162,22 +213,22 @@ export default function StartEndSegModal({
   })
   const accountList = useMemo(() => {
     if (!selectedSeg || !acctData) return []
-    const g1Point = monthState === 'future' ? 'current_otb' : 'month_start'
-    const g2Point = monthState === 'past' ? 'closing' : 'current_otb'
+    const cfg = resolveCfg(mode, monthState)
+    const [alYt, alPt] = cfg.L
+    const [arYt, arPt] = cfg.R
     const acc: Record<string, { n1: number; n2: number; rev1: number; rev2: number }> = {}
     for (const r of acctData) {
-      if (r.year_type !== 'cy') continue
       const k = r.account_name ?? '(없음)'
       acc[k] ??= { n1: 0, n2: 0, rev1: 0, rev2: 0 }
-      if (r.point_type === g1Point) { acc[k].n1 += Number(r.nights ?? 0); acc[k].rev1 += Number(r.room_revenue ?? 0) }
-      if (r.point_type === g2Point) { acc[k].n2 += Number(r.nights ?? 0); acc[k].rev2 += Number(r.room_revenue ?? 0) }
+      if (r.year_type === alYt && r.point_type === alPt) { acc[k].n1 += Number(r.nights ?? 0); acc[k].rev1 += Number(r.room_revenue ?? 0) }
+      if (r.year_type === arYt && r.point_type === arPt) { acc[k].n2 += Number(r.nights ?? 0); acc[k].rev2 += Number(r.room_revenue ?? 0) }
     }
     return Object.entries(acc).map(([name, v]) => {
       const adr1 = v.n1 > 0 ? v.rev1 / v.n1 : null
       const adr2 = v.n2 > 0 ? v.rev2 / v.n2 : null
       return { name, dN: v.n2 - v.n1, dAdr: (adr1 === null || adr2 === null) ? null : adr2 - adr1, dRev: v.rev2 - v.rev1 }
     }).sort((a, b) => b.dN - a.dN)
-  }, [selectedSeg, acctData, monthState])
+  }, [selectedSeg, acctData, mode, monthState])
 
   const GBORDER = 'inset 1px 0 0 rgba(0,229,160,0.3)'
   const th: React.CSSProperties = { fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.5)', padding: '5px 8px', textAlign: 'right', whiteSpace: 'nowrap' }
@@ -190,9 +241,8 @@ export default function StartEndSegModal({
   const gapNum = (v: number) => v === 0 ? '—' : `${v > 0 ? '+' : ''}${v.toLocaleString('ko-KR')}`
 
   function GroupCells({ name, codes, isMain }: { name: string; codes: string[]; isMain: boolean }) {
-    const a = sumCodes(g1, codes)
-    const b = monthState === 'future' ? { n: 0, rev: 0 } : sumCodes(g2, codes)
-    const noG2 = monthState === 'future'
+    const a = noL ? { n: 0, rev: 0 } : sumCodes(g1, codes)
+    const b = noR ? { n: 0, rev: 0 } : sumCodes(g2, codes)
     const dN = b.n - a.n
     const adrA = a.n > 0 ? a.rev / a.n : 0, adrB = b.n > 0 ? b.rev / b.n : 0
     const dAdr = scaleUnit(adrB - adrA, adrUnit)
@@ -200,25 +250,25 @@ export default function StartEndSegModal({
     return (
       <>
         {/* 그룹1 */}
-        <td style={{ ...td, boxShadow: GBORDER }}>{fmtN(a.n)}</td>
-        <td style={td}>{a.n === 0 ? '—' : scaleUnit(a.rev / a.n, adrUnit).toLocaleString()}</td>
-        <td style={td}>{fmtRev(a.rev)}</td>
+        <td style={{ ...td, boxShadow: GBORDER }}>{noL ? '—' : fmtN(a.n)}</td>
+        <td style={td}>{noL ? '—' : (a.n === 0 ? '—' : scaleUnit(a.rev / a.n, adrUnit).toLocaleString())}</td>
+        <td style={td}>{noL ? '—' : fmtRev(a.rev)}</td>
         {/* 그룹2 */}
-        <td style={{ ...td, boxShadow: GBORDER }}>{noG2 ? '—' : fmtN(b.n)}</td>
-        <td style={td}>{noG2 ? '—' : (b.n === 0 ? '—' : scaleUnit(b.rev / b.n, adrUnit).toLocaleString())}</td>
-        <td style={td}>{noG2 ? '—' : fmtRev(b.rev)}</td>
+        <td style={{ ...td, boxShadow: GBORDER }}>{noR ? '—' : fmtN(b.n)}</td>
+        <td style={td}>{noR ? '—' : (b.n === 0 ? '—' : scaleUnit(b.rev / b.n, adrUnit).toLocaleString())}</td>
+        <td style={td}>{noR ? '—' : fmtRev(b.rev)}</td>
         {/* GAP */}
-        <td style={{ ...td, boxShadow: GBORDER, cursor: noG2 ? 'default' : 'pointer', color: noG2 ? 'rgba(255,255,255,0.3)' : gapColor(dN, isMain) }}
-            onClick={noG2 ? undefined : () => setSelectedSeg({ name, codes })}>
-          {noG2 ? '—' : gapNum(dN)}
+        <td style={{ ...td, boxShadow: GBORDER, cursor: noGap ? 'default' : 'pointer', color: noGap ? 'rgba(255,255,255,0.3)' : gapColor(dN, isMain) }}
+            onClick={noGap ? undefined : () => setSelectedSeg({ name, codes })}>
+          {noGap ? '—' : gapNum(dN)}
         </td>
-        <td style={{ ...td, cursor: noG2 ? 'default' : 'pointer', color: noG2 ? 'rgba(255,255,255,0.3)' : gapColor(dAdr, isMain) }}
-            onClick={noG2 ? undefined : () => setSelectedSeg({ name, codes })}>
-          {noG2 ? '—' : (dAdr === 0 ? '—' : `${dAdr > 0 ? '+' : ''}${dAdr.toLocaleString()}`)}
+        <td style={{ ...td, cursor: noGap ? 'default' : 'pointer', color: noGap ? 'rgba(255,255,255,0.3)' : gapColor(dAdr, isMain) }}
+            onClick={noGap ? undefined : () => setSelectedSeg({ name, codes })}>
+          {noGap ? '—' : (dAdr === 0 ? '—' : `${dAdr > 0 ? '+' : ''}${dAdr.toLocaleString()}`)}
         </td>
-        <td style={{ ...td, cursor: noG2 ? 'default' : 'pointer', color: noG2 ? 'rgba(255,255,255,0.3)' : gapColor(dRev, isMain) }}
-            onClick={noG2 ? undefined : () => setSelectedSeg({ name, codes })}>
-          {noG2 ? '—' : (dRev === 0 ? '—' : `${dRev > 0 ? '+' : ''}${dRev.toLocaleString()}`)}
+        <td style={{ ...td, cursor: noGap ? 'default' : 'pointer', color: noGap ? 'rgba(255,255,255,0.3)' : gapColor(dRev, isMain) }}
+            onClick={noGap ? undefined : () => setSelectedSeg({ name, codes })}>
+          {noGap ? '—' : (dRev === 0 ? '—' : `${dRev > 0 ? '+' : ''}${dRev.toLocaleString()}`)}
         </td>
       </>
     )
@@ -226,7 +276,7 @@ export default function StartEndSegModal({
 
   // 하단 합계/점유율/REVPAR
   const totA = sumCodes(g1, allCodes)
-  const totB = monthState === 'future' ? { n: 0, rev: 0 } : sumCodes(g2, allCodes)
+  const totB = noR ? { n: 0, rev: 0 } : sumCodes(g2, allCodes)
   const occ = (n: number) => cap > 0 ? `${((n / cap) * 100).toFixed(1)}%` : '—'
   const revpar = (rev: number) => cap > 0 ? `${Math.round(rev / cap / 1000)}k` : '—'
 
@@ -237,7 +287,7 @@ export default function StartEndSegModal({
         {/* 헤더 */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <button onClick={prevMonth} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>
+            <button onClick={otbPrevDisabled ? undefined : prevMonth} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none', cursor: otbPrevDisabled ? 'default' : 'pointer', padding: '4px 8px', opacity: otbPrevDisabled ? 0.25 : 1 }}>
               <span style={{ fontSize: 18, color: '#00E5A0', lineHeight: 1 }}>‹</span>
               <span style={{ fontSize: 9, color: 'rgba(0,229,160,0.6)' }}>이전</span>
             </button>
@@ -247,17 +297,44 @@ export default function StartEndSegModal({
             {monthState === 'past' && (
               <span style={{ fontSize: 9, color: '#F59E0B', border: '0.5px solid rgba(245,158,11,0.35)', borderRadius: 4, padding: '2px 6px', marginLeft: 6 }}>마감</span>
             )}
-            <button onClick={nextMonth} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>
+            <button onClick={closingNextDisabled ? undefined : nextMonth} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none', cursor: closingNextDisabled ? 'default' : 'pointer', padding: '4px 8px', opacity: closingNextDisabled ? 0.25 : 1 }}>
               <span style={{ fontSize: 18, color: '#00E5A0', lineHeight: 1 }}>›</span>
               <span style={{ fontSize: 9, color: 'rgba(0,229,160,0.6)' }}>다음</span>
             </button>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', padding: 4 }}><X size={22} /></button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* 올해 / 전년 — 붙은 세그먼트 컨트롤 */}
+            <div style={{ display: 'flex', background: '#0c0c0c', border: '0.5px solid #242424', borderRadius: 7, padding: 2 }}>
+              <div onClick={() => setMode('cy')} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '5px 11px', borderRadius: 5, cursor: 'pointer', ...(mode === 'cy' ? { background: 'rgba(0,229,160,0.12)', color: '#00E5A0' } : { color: '#777' }) }}>
+                <Calendar size={12} />올해
+              </div>
+              <div onClick={() => setMode('ly')} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '5px 11px', borderRadius: 5, cursor: 'pointer', ...(mode === 'ly' ? { background: 'rgba(0,229,160,0.12)', color: '#00E5A0' } : { color: '#777' }) }}>
+                <History size={12} />전년
+              </div>
+            </div>
+            <div style={{ width: 1, height: 18, background: '#242424' }} />
+            {/* 비교 3종 — 분리된 옵션버튼 */}
+            <span style={{ fontSize: 10, color: '#555' }}>비교</span>
+            <div style={{ display: 'flex', gap: 5 }}>
+              <div onClick={() => setMode('cmp_start')} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '6px 11px', borderRadius: 6, cursor: 'pointer', ...(mode === 'cmp_start' ? { border: '0.5px solid rgba(0,229,160,0.5)', background: 'rgba(0,229,160,0.08)', color: '#00E5A0' } : { border: '0.5px solid #262626', color: '#888' }) }}>
+                <Play size={12} />월초
+              </div>
+              <div onClick={() => { setMode('cmp_otb'); if (monthState === 'past') { setSelYear(otbY); setSelMonth(otbM) } }} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '6px 11px', borderRadius: 6, cursor: 'pointer', ...(mode === 'cmp_otb' ? { border: '0.5px solid rgba(0,229,160,0.5)', background: 'rgba(0,229,160,0.08)', color: '#00E5A0' } : { border: '0.5px solid #262626', color: '#888' }) }}>
+                <LineChart size={12} />OTB
+              </div>
+              <div onClick={() => { setMode('cmp_closing'); if (monthState !== 'past') { setSelYear(prevBaseY); setSelMonth(prevBaseM) } }} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '6px 11px', borderRadius: 6, cursor: 'pointer', ...(mode === 'cmp_closing' ? { border: '0.5px solid rgba(0,229,160,0.5)', background: 'rgba(0,229,160,0.08)', color: '#00E5A0' } : { border: '0.5px solid #262626', color: '#888' }) }}>
+                <Flag size={12} />마감
+              </div>
+            </div>
+            <div style={{ width: 1, height: 18, background: '#242424' }} />
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', padding: 4 }}><X size={22} /></button>
+          </div>
         </div>
 
         {/* 본문: 테이블 + Account 패널 */}
         <div style={{ display: 'flex', overflow: 'hidden', flex: 1 }}>
           <div style={{ flex: '1 1 0', minWidth: 0, overflow: 'auto', padding: '12px 20px' }}>
+            <div style={{ fontSize: 9, color: '#4a4a4a', marginBottom: 14 }}>{summaryText}</div>
             {isLoading ? (
               <div className="animate-pulse" style={{ height: 300, background: 'var(--color-bg-tertiary)', borderRadius: 8 }} />
             ) : (
@@ -268,7 +345,7 @@ export default function StartEndSegModal({
                     {groups.map((g, i) => (
                       <th key={i} colSpan={3} style={{ ...th, textAlign: 'center', boxShadow: GBORDER, height: 38, verticalAlign: 'middle' }}>
                         <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>{g.title}</div>
-                        <div style={{ fontSize: 9, color: g.color }}>{g.date ? g.date.slice(5).replace('-', '/') : (i === 1 && monthState === 'future' ? '미도래' : ' ')}</div>
+                        <div style={{ fontSize: 9, color: g.color }}>{g.date ? g.date.slice(5).replace('-', '/') : (g.missing ? g.empty : ' ')}</div>
                       </th>
                     ))}
                   </tr>
@@ -300,27 +377,27 @@ export default function StartEndSegModal({
                     <td style={{ ...td, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.35)' }}>{totA.n === 0 ? '—' : scaleUnit(totA.rev / totA.n, adrUnit).toLocaleString()}</td>
                     <td style={{ ...td, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.35)' }}>{fmtRev(totA.rev)}</td>
                     {/* 그룹2 */}
-                    <td style={{ ...td, boxShadow: GBORDER, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.35)' }}>{monthState === 'future' ? '—' : fmtN(totB.n)}</td>
-                    <td style={{ ...td, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.35)' }}>{monthState === 'future' ? '—' : (totB.n === 0 ? '—' : scaleUnit(totB.rev / totB.n, adrUnit).toLocaleString())}</td>
-                    <td style={{ ...td, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.35)' }}>{monthState === 'future' ? '—' : fmtRev(totB.rev)}</td>
+                    <td style={{ ...td, boxShadow: GBORDER, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.35)' }}>{noR ? '—' : fmtN(totB.n)}</td>
+                    <td style={{ ...td, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.35)' }}>{noR ? '—' : (totB.n === 0 ? '—' : scaleUnit(totB.rev / totB.n, adrUnit).toLocaleString())}</td>
+                    <td style={{ ...td, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.35)' }}>{noR ? '—' : fmtRev(totB.rev)}</td>
                     {/* GAP */}
-                    <td style={{ ...td, boxShadow: GBORDER, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.35)', color: gapColor(totB.n - totA.n, true) }}>{monthState === 'future' ? '—' : gapNum(totB.n - totA.n)}</td>
+                    <td style={{ ...td, boxShadow: GBORDER, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.35)', color: gapColor(totB.n - totA.n, true) }}>{noGap ? '—' : gapNum(totB.n - totA.n)}</td>
                     <td style={{ ...td, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.35)' }} />
-                    <td style={{ ...td, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.35)', color: gapColor(totB.rev - totA.rev, true) }}>{monthState === 'future' ? '—' : gapNum(scaleUnit(totB.rev - totA.rev, revUnit))}</td>
+                    <td style={{ ...td, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.35)', color: gapColor(totB.rev - totA.rev, true) }}>{noGap ? '—' : gapNum(scaleUnit(totB.rev - totA.rev, revUnit))}</td>
                   </tr>
                   {/* 점유율 */}
                   <tr>
                     <td style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.4)', padding: '6px 8px' }}>점유율</td>
                     <td colSpan={3} style={{ ...td, textAlign: 'center', boxShadow: GBORDER, fontWeight: 600 }}>{occ(totA.n)}</td>
-                    <td colSpan={3} style={{ ...td, textAlign: 'center', boxShadow: GBORDER, fontWeight: 600 }}>{monthState === 'future' ? '—' : occ(totB.n)}</td>
-                    <td colSpan={3} style={{ ...td, textAlign: 'center', boxShadow: GBORDER, fontWeight: 600 }}>{monthState === 'future' ? '—' : `${(((totB.n - totA.n) / (cap || 1)) * 100).toFixed(1)}%p`}</td>
+                    <td colSpan={3} style={{ ...td, textAlign: 'center', boxShadow: GBORDER, fontWeight: 600 }}>{noR ? '—' : occ(totB.n)}</td>
+                    <td colSpan={3} style={{ ...td, textAlign: 'center', boxShadow: GBORDER, fontWeight: 600 }}>{noGap ? '—' : `${(((totB.n - totA.n) / (cap || 1)) * 100).toFixed(1)}%p`}</td>
                   </tr>
                   {/* REVPAR */}
                   <tr>
                     <td style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.4)', padding: '6px 8px' }}>REVPAR</td>
                     <td colSpan={3} style={{ ...td, textAlign: 'center', boxShadow: GBORDER, fontWeight: 600 }}>{revpar(totA.rev)}</td>
-                    <td colSpan={3} style={{ ...td, textAlign: 'center', boxShadow: GBORDER, fontWeight: 600 }}>{monthState === 'future' ? '—' : revpar(totB.rev)}</td>
-                    <td colSpan={3} style={{ ...td, textAlign: 'center', boxShadow: GBORDER, fontWeight: 600 }}>{monthState === 'future' ? '—' : `${Math.round((totB.rev - totA.rev) / (cap || 1) / 1000)}k`}</td>
+                    <td colSpan={3} style={{ ...td, textAlign: 'center', boxShadow: GBORDER, fontWeight: 600 }}>{noR ? '—' : revpar(totB.rev)}</td>
+                    <td colSpan={3} style={{ ...td, textAlign: 'center', boxShadow: GBORDER, fontWeight: 600 }}>{noGap ? '—' : `${Math.round((totB.rev - totA.rev) / (cap || 1) / 1000)}k`}</td>
                   </tr>
                 </tfoot>
               </table>
