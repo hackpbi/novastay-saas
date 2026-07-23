@@ -32,7 +32,7 @@ interface MonthlyOccPaceChartProps {
 }
 
 export default function MonthlyOccPaceChart({
-  rows, otbDate, lyMode, viewMonth, calRows = [], onSelectUpdateDate,
+  rows, otbDate, lyMode, viewYear, viewMonth, calRows = [], onSelectUpdateDate,
 }: MonthlyOccPaceChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const chartRef  = useRef<Chart | null>(null)
@@ -188,16 +188,51 @@ export default function MonthlyOccPaceChart({
         plugins: {
           legend: { display: false },
           tooltip: {
-            callbacks: {
-              title: (items: any[]) => {
-                const d = new Date(rows[items[0].dataIndex]?.update_date)
-                return `${d.getMonth() + 1}/${d.getDate()} (${DOW_KR[d.getDay()]}) 기준`
-              },
-              label: (item: any) => {
-                const v = item.raw
-                if (item.dataset.yAxisID === 'y2') return ` ${item.dataset.label}: ${v == null ? '-' : `${Math.round(v / 1000)}k`}`
-                return ` ${item.dataset.label}: ${v == null ? '-' : `${v}%`}`
-              },
+            enabled: false,
+            // 표 형태 커스텀 툴팁 (점유율/객단가 × 현재/전년/증감) — REV는 데이터 소스에 없어 제외
+            external: (context: any) => {
+              const { chart, tooltip } = context
+              const parent = chart.canvas.parentNode as HTMLElement
+              let el = parent.querySelector('div.mopc-tooltip') as HTMLElement | null
+              if (!el) {
+                el = document.createElement('div')
+                el.className = 'mopc-tooltip'
+                el.style.cssText = 'position:absolute;pointer-events:none;transition:opacity .1s;background:linear-gradient(175deg, rgba(0,229,160,0.08) 0%, transparent 40%), #000;border:0.5px solid rgba(0,229,160,0.3);border-radius:10px;padding:10px 12px;z-index:20;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,0.4)'
+                parent.appendChild(el)
+              }
+              if (tooltip.opacity === 0) { el.style.opacity = '0'; return }
+              const i = tooltip.dataPoints?.[0]?.dataIndex
+              if (i == null || !rows[i]) return
+              const d = new Date(rows[i].update_date)
+              const title = `${d.getMonth() + 1}/${d.getDate()} (${DOW_KR[d.getDay()]}) 기준`
+              const occC = thisData[i], occL = lyData[i]
+              const adrC = thisAdrData[i], adrL = lyAdrData[i]
+              const yC = String(viewYear).slice(2), yL = String(viewYear - 1).slice(2)
+              const gapColor = (v: number) => v > 0 ? '#00E5A0' : v < 0 ? '#E24B4A' : 'rgba(255,255,255,0.4)'
+              const occStr = (v: number | null) => v == null ? '-' : `${v.toFixed(1)}%`
+              const adrStr = (v: number | null) => v == null ? '-' : `${Math.round(v / 1000)}k`
+              const occGap = (occC != null && occL != null) ? occC - occL : null
+              const adrGap = (adrC != null && adrL != null) ? adrC - adrL : null
+              const occGapStr = occGap == null ? '-' : `${occGap >= 0 ? '+' : ''}${occGap.toFixed(1)}%p`
+              const adrGapStr = adrGap == null ? '-' : `${adrGap >= 0 ? '+' : ''}${Math.round(adrGap / 1000)}k`
+              const th  = 'padding:6px 12px;color:#999;text-align:right;font-weight:500'
+              const tdL = 'padding:6px 12px;color:#ccc;text-align:left'
+              const td  = 'padding:6px 12px;text-align:right'
+              el.innerHTML =
+                `<div style="font-size:11px;color:#bbb;margin-bottom:6px">${title}</div>` +
+                `<table style="border-collapse:collapse;font-size:12px">` +
+                  `<tr><td></td><td style="${th}">점유율</td><td style="${th}">객단가</td></tr>` +
+                  `<tr><td style="${tdL}">${yC}년</td><td style="${td};color:#fff">${occStr(occC)}</td><td style="${td};color:#fff">${adrStr(adrC)}</td></tr>` +
+                  `<tr><td style="${tdL}">${yL}년</td><td style="${td};color:#999">${occStr(occL)}</td><td style="${td};color:#999">${adrStr(adrL)}</td></tr>` +
+                  `<tr><td style="${tdL}">증감</td><td style="${td};color:${gapColor(occGap ?? 0)}">${occGapStr}</td><td style="${td};color:${gapColor(adrGap ?? 0)}">${adrGapStr}</td></tr>` +
+                `</table>`
+              el.style.opacity = '1'
+              // 커서(caretX/caretY) 좌측에 붙임 — 좌측 공간 부족 시 우측으로 자동 전환
+              const w = el.offsetWidth, h = el.offsetHeight
+              const baseX = chart.canvas.offsetLeft + tooltip.caretX
+              const leftPos = baseX - w - 12
+              el.style.left = (leftPos < 0 ? baseX + 12 : leftPos) + 'px'
+              el.style.top  = chart.canvas.offsetTop + tooltip.caretY - h / 2 + 'px'
             },
           },
         },
@@ -231,7 +266,7 @@ export default function MonthlyOccPaceChart({
     })
 
     return () => { chartRef.current?.destroy(); chartRef.current = null }
-  }, [rows, adrOn, lyMode, otbDate, viewMonth, calRows])
+  }, [rows, adrOn, lyMode, otbDate, viewYear, viewMonth, calRows])
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -242,7 +277,7 @@ export default function MonthlyOccPaceChart({
         </div>
         <span style={{ fontSize: 11, color: '#888' }}>ADR</span>
       </div>
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <canvas ref={canvasRef} />
       </div>
       {/* 범례 */}

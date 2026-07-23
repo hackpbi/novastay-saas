@@ -41,7 +41,7 @@ function FmtAdr({ n, unit = '천원' }: { n: number; unit?: '천원' | '원' }) 
 }
 function FmtRevenue({ n, unit = '백만원' }: { n: number; unit?: '원' | '천원' | '백만원' }) {
   if (Math.abs(n) < 50_000) return <Dash />
-  return <>{unit === '백만원' ? (n / 1_000_000).toFixed(1) : unit === '천원' ? Math.round(n / 1000).toLocaleString() : Math.round(n).toLocaleString()}</>
+  return <>{unit === '백만원' ? Math.round(n / 1_000_000).toLocaleString() : unit === '천원' ? Math.round(n / 1000).toLocaleString() : Math.round(n).toLocaleString()}</>
 }
 function FmtGapNights({ n, fontColor }: { n: number; fontColor?: string }) {
   if (n === 0) return <GapDash />
@@ -60,7 +60,7 @@ function FmtGapRevenue({ n, fontColor, unit = '백만원' }: { n: number; fontCo
   if (Math.abs(n) < 50_000) return <Dash />
   const sign = n > 0 ? '+' : ''
   const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
-  const text = unit === '백만원' ? (n / 1_000_000).toFixed(1) : unit === '천원' ? Math.round(n / 1000).toLocaleString() : Math.round(n).toLocaleString()
+  const text = unit === '백만원' ? Math.round(n / 1_000_000).toLocaleString() : unit === '천원' ? Math.round(n / 1000).toLocaleString() : Math.round(n).toLocaleString()
   return <span style={{ color }}>{sign}{text}</span>
 }
 function FmtOcc({ n }: { n: number }) {
@@ -286,7 +286,7 @@ export default function LyComparisonSegModal({
   const scaleAdr = (val: number) =>
     adrUnit === '천원' ? String(Math.round(val / 1000)) : Math.round(val).toLocaleString()
   const scaleRev = (val: number) =>
-    revUnit === '백만원' ? (val / 1_000_000).toFixed(1)
+    revUnit === '백만원' ? Math.round(val / 1_000_000).toLocaleString()
     : revUnit === '천원' ? Math.round(val / 1000).toLocaleString()
     : Math.round(val).toLocaleString()
 
@@ -353,79 +353,6 @@ export default function LyComparisonSegModal({
 
           {/* Right: mode toggle + close */}
           <div className="flex items-center gap-3">
-            {/* 단위 설정 */}
-            <div className="unit-setting-wrap" style={{ position: 'relative' }}>
-              <button
-                onClick={() => setShowUnitSetting(v => !v)}
-                style={{
-                  width: 30, height: 30, borderRadius: 6,
-                  border: showUnitSetting
-                    ? '0.5px solid #00E5A0'
-                    : '0.5px solid rgba(255,255,255,0.15)',
-                  background: showUnitSetting ? 'rgba(0,229,160,0.1)' : 'none',
-                  cursor: 'pointer',
-                  color: showUnitSetting ? '#00E5A0' : 'rgba(255,255,255,0.4)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'all 0.15s',
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" strokeWidth="1.8"
-                  strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="3"/>
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                </svg>
-              </button>
-
-              {showUnitSetting && (
-                <div style={{
-                  position: 'absolute', top: 'calc(100% + 6px)', right: 0,
-                  background: '#1a1a1a',
-                  border: '0.5px solid rgba(0,229,160,0.25)',
-                  borderRadius: 8, padding: '12px 14px', width: 210,
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                  zIndex: 9999,
-                }}>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginBottom: 10, letterSpacing: '0.04em' }}>
-                    단위 설정
-                  </div>
-
-                  {/* ADR */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>객단가</span>
-                    <div style={{ display: 'flex', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 5, overflow: 'hidden' }}>
-                      {(['원', '천원'] as const).map(u => (
-                        <button key={u} onClick={() => setAdrUnit(u)} style={{
-                          padding: '3px 8px', fontSize: 10, border: 'none', cursor: 'pointer',
-                          fontFamily: 'inherit', whiteSpace: 'nowrap',
-                          background: adrUnit === u ? '#00E5A0' : 'transparent',
-                          color: adrUnit === u ? '#0a0a0a' : 'rgba(255,255,255,0.35)',
-                          fontWeight: adrUnit === u ? 500 : 400,
-                        }}>{u}</button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.07)', margin: '8px 0' }} />
-
-                  {/* REV */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>매출</span>
-                    <div style={{ display: 'flex', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 5, overflow: 'hidden' }}>
-                      {(['원', '천원', '백만원'] as const).map(u => (
-                        <button key={u} onClick={() => setRevUnit(u)} style={{
-                          padding: '3px 8px', fontSize: 10, border: 'none', cursor: 'pointer',
-                          fontFamily: 'inherit', whiteSpace: 'nowrap',
-                          background: revUnit === u ? '#00E5A0' : 'transparent',
-                          color: revUnit === u ? '#0a0a0a' : 'rgba(255,255,255,0.35)',
-                          fontWeight: revUnit === u ? 500 : 400,
-                        }}>{u}</button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
             <button onClick={onClose} className="text-brand-muted hover:text-brand-text transition-colors p-1 -mr-1" aria-label="닫기">
               <X size={22} />
             </button>
@@ -641,7 +568,80 @@ export default function LyComparisonSegModal({
           <span style={{ fontSize: 11, color: 'var(--brand-dimmed)' }}>
             {onAccountDrillDown ? 'GAP 셀 클릭 → Account 보기' : ''}
           </span>
-          <span style={{ fontSize: 11, color: '#00E5A0', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>단위 : 실 · {adrUnit} · {revUnit}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 11, color: '#00E5A0', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>단위 : 실 · {adrUnit} · {revUnit}</span>
+            {/* 단위 설정 */}
+            <div className="unit-setting-wrap" style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShowUnitSetting(v => !v)}
+                style={{
+                  width: 30, height: 30, borderRadius: 6,
+                  border: '1px solid #00E5A0',
+                  background: showUnitSetting ? 'rgba(0,229,160,0.1)' : 'none',
+                  cursor: 'pointer',
+                  color: showUnitSetting ? '#00E5A0' : 'rgba(255,255,255,0.4)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="1.8"
+                  strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+              </button>
+
+              {showUnitSetting && (
+                <div style={{
+                  position: 'absolute', bottom: 'calc(100% + 6px)', right: 0,
+                  background: '#1a1a1a',
+                  border: '0.5px solid rgba(0,229,160,0.25)',
+                  borderRadius: 8, padding: '12px 14px', width: 210,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                  zIndex: 9999,
+                }}>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginBottom: 10, letterSpacing: '0.04em' }}>
+                    단위 설정
+                  </div>
+
+                  {/* ADR */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>객단가</span>
+                    <div style={{ display: 'flex', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 5, overflow: 'hidden' }}>
+                      {(['원', '천원'] as const).map(u => (
+                        <button key={u} onClick={() => setAdrUnit(u)} style={{
+                          padding: '3px 8px', fontSize: 10, border: 'none', cursor: 'pointer',
+                          fontFamily: 'inherit', whiteSpace: 'nowrap',
+                          background: adrUnit === u ? '#00E5A0' : 'transparent',
+                          color: adrUnit === u ? '#0a0a0a' : 'rgba(255,255,255,0.35)',
+                          fontWeight: adrUnit === u ? 500 : 400,
+                        }}>{u}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.07)', margin: '8px 0' }} />
+
+                  {/* REV */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>매출</span>
+                    <div style={{ display: 'flex', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 5, overflow: 'hidden' }}>
+                      {(['원', '천원', '백만원'] as const).map(u => (
+                        <button key={u} onClick={() => setRevUnit(u)} style={{
+                          padding: '3px 8px', fontSize: 10, border: 'none', cursor: 'pointer',
+                          fontFamily: 'inherit', whiteSpace: 'nowrap',
+                          background: revUnit === u ? '#00E5A0' : 'transparent',
+                          color: revUnit === u ? '#0a0a0a' : 'rgba(255,255,255,0.35)',
+                          fontWeight: revUnit === u ? 500 : 400,
+                        }}>{u}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -214,7 +214,17 @@
       "Bash(node \"C:/Users/hackp/AppData/Local/Temp/claude/c--dev-18-NovaStay-Saas-ver1/9e70476b-1dd4-48a8-a254-0429e69d87c1/scratchpad/check_otb.mjs\")",
       "PowerShell(npx tsc --noEmit; \"TSC_EXIT=$LASTEXITCODE\")",
       "PowerShell($p = Get-Process node -ErrorAction SilentlyContinue | Sort-Object StartTime | Select-Object -Last 3 Id, StartTime, @{n='CPU\\(s\\)';e={[int]$_.CPU}}; if \\($p\\) { $p | Format-Table -AutoSize | Out-String } else { \"no node process\" })",
-      "PowerShell(Remove-Item -Recurse -Force .next-verify -ErrorAction SilentlyContinue; \"cleaned:\"; -not \\(Test-Path .next-verify\\))"
+      "PowerShell(Remove-Item -Recurse -Force .next-verify -ErrorAction SilentlyContinue; \"cleaned:\"; -not \\(Test-Path .next-verify\\))",
+      "PowerShell(if \\($?\\) { \"TSC EXIT 0\" } else { \"TSC FAILED\" })",
+      "Bash(SUPABASE_SERVICE_ROLE_KEY=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ0Znh4YWpvamxuYnBkcmRqdXJlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODA1MzU1MCwiZXhwIjoyMDkzNjI5NTUwfQ.OvoEIb6uYGp4ZWVN5qUk75TjurqTCq5XwxyoVL2WUCA\" node \"C:/Users/hackp/AppData/Local/Temp/claude/c--dev-18-NovaStay-Saas-ver1/2c514e26-ec19-4226-8b71-ea3d078c1708/scratchpad/probe.mjs\")",
+      "Bash(SUPABASE_SERVICE_ROLE_KEY=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ0Znh4YWpvamxuYnBkcmRqdXJlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODA1MzU1MCwiZXhwIjoyMDkzNjI5NTUwfQ.OvoEIb6uYGp4ZWVN5qUk75TjurqTCq5XwxyoVL2WUCA\" node __probe_tmp.mjs)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(echo \"tsc EXIT=$?\")",
+      "Bash(ls -la \"c:/Users/hackp/OneDrive/Desktop/18_NovaStay_Saas_ver1/src/views/StartEndPage.tsx\" 2>/dev/null && echo \"---ONEDRIVE EXISTS---\"; ls -la \"c:/dev/18_NovaStay_Saas_ver1/src/views/StartEndPage.tsx\" 2>/dev/null && echo \"---DEV EXISTS---\")",
+      "Read(//c/Users/hackp/OneDrive/Desktop/18_NovaStay_Saas_ver1/src/views/**)",
+      "PowerShell(git -C c:\\\\dev\\\\18_NovaStay_Saas_ver1 status --short -- src/views/StartEndPage.tsx)",
+      "PowerShell(git -C c:\\\\dev\\\\18_NovaStay_Saas_ver1 diff --stat)",
+      "PowerShell(\"---\")"
     ],
     "additionalDirectories": [
       "C:\\dev\\18_NovaStay_Saas_ver1\\.next-verify"

@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
-import { X } from 'lucide-react'
+import { X, Settings } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useMarketSchema } from '@/hooks/useMarketSchema'
 import { FmtVal } from '@/utils/FmtVal'
@@ -17,10 +17,20 @@ import {
 } from '@/utils/otbCompareTable'
 
 const DIV = 'rgba(255,255,255,0.08)'
+const GRP_DIV = 'rgba(0,229,160,0.3)'   // 전년 OTB / GAP 컬럼 그룹 시작 구분선 (민트)
+
+// 금액 단위 포맷터 타입 (ADR/REV 각각 독립 단위 — 상위에서 주입)
+type UnitFmt = {
+  adr:    (v: number) => string
+  rev:    (v: number) => string
+  gapAdr: (v: number) => string
+  gapRev: (v: number) => string
+  revPar: (v: number) => string
+}
 
 // ── 세그먼트 비교 테이블 (OtbComparePage 동일 구조) ─────────────────────────────
 function SegCompareTable({
-  data, roomCount, days, isPeriod, selectedId, selectedSource, onSelect,
+  data, roomCount, days, isPeriod, selectedId, selectedSource, onSelect, fmt,
 }: {
   data:            { rows: ReturnType<typeof buildOtbCompare>['rows']; total: OtbCompareVals }
   roomCount:       number
@@ -29,6 +39,7 @@ function SegCompareTable({
   selectedId?:     string | null
   selectedSource?: 'otb' | 'ly' | 'gap' | null
   onSelect?:       (id: string, source: 'otb' | 'ly' | 'gap') => void
+  fmt:             UnitFmt
 }) {
   const { rows, total } = data
   const lyColor = isPeriod ? '#a78bfa' : '#F59E0B'
@@ -55,7 +66,7 @@ function SegCompareTable({
       style={{
         padding: '5px 12px', textAlign: 'right', color,
         cursor: clickable ? 'pointer' : 'default', fontWeight: bold ? 500 : 400,
-        borderLeft: leftBorder ? `2px solid ${active ? '#00E5A0' : 'transparent'}` : undefined,
+        borderLeft: leftBorder ? `1px solid ${active ? '#00E5A0' : GRP_DIV}` : undefined,
       }}
     >{node}</td>
   )
@@ -65,15 +76,15 @@ function SegCompareTable({
       <thead>
         <tr>
           <th style={{ ...stickyTop0, textAlign: 'left', padding: '6px 12px', fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.04em' }}>SEGMENT</th>
-          <th colSpan={3} style={grpTh('#5B8DEF')}>현재 OTB</th>
-          <th colSpan={3} style={grpTh(lyColor)}>전년 OTB</th>
-          <th colSpan={3} style={grpTh('#F59E0B')}>GAP</th>
+          <th colSpan={3} style={{ ...grpTh('#5B8DEF'), borderLeft: `1px solid ${GRP_DIV}` }}>현재 OTB</th>
+          <th colSpan={3} style={{ ...grpTh(lyColor), borderLeft: `1px solid ${GRP_DIV}` }}>전년 OTB</th>
+          <th colSpan={3} style={{ ...grpTh('#F59E0B'), borderLeft: `1px solid ${GRP_DIV}` }}>GAP</th>
         </tr>
         <tr style={{ borderBottom: `0.5px solid ${DIV}` }}>
           <th style={{ ...stickyTop24, padding: '4px 12px 6px' }} />
-          {(['R/N', 'ADR', 'REV'] as const).map((h, i) => <th key={`c-${h}`} style={{ ...subTh, borderLeft: i === 0 ? `1px solid ${DIV}` : undefined }}>{h}</th>)}
-          {(['R/N', 'ADR', 'REV'] as const).map((h, i) => <th key={`l-${h}`} style={{ ...subTh, borderLeft: i === 0 ? `1px solid ${DIV}` : undefined }}>{h}</th>)}
-          {(['ΔR/N', 'ΔADR', 'ΔREV'] as const).map((h, i) => <th key={`g-${h}`} style={{ ...subTh, borderLeft: i === 0 ? `1px solid ${DIV}` : undefined }}>{h}</th>)}
+          {(['객실', '객단가', '매출'] as const).map((h, i) => <th key={`c-${h}`} style={{ ...subTh, borderLeft: i === 0 ? `1px solid ${GRP_DIV}` : undefined }}>{h}</th>)}
+          {(['객실', '객단가', '매출'] as const).map((h, i) => <th key={`l-${h}`} style={{ ...subTh, borderLeft: i === 0 ? `1px solid ${GRP_DIV}` : undefined }}>{h}</th>)}
+          {(['Δ객실', 'Δ객단가', 'Δ매출'] as const).map((h, i) => <th key={`g-${h}`} style={{ ...subTh, borderLeft: i === 0 ? `1px solid ${GRP_DIV}` : undefined }}>{h}</th>)}
         </tr>
       </thead>
       <tbody>
@@ -98,42 +109,42 @@ function SegCompareTable({
                 </span>
               </td>
               {cell(r.id, 'otb', cCol(r), otbFmt.rn(r.otbN), true, active && selectedSource === 'otb')}
-              {cell(r.id, 'otb', cCol(r), <FmtVal val={otbFmt.adr(r.otbAdr)} numSize={11} />)}
-              {cell(r.id, 'otb', cCol(r), <FmtVal val={otbFmt.rev(r.otbR)} numSize={11} />)}
+              {cell(r.id, 'otb', cCol(r), <FmtVal val={fmt.adr(r.otbAdr)} numSize={11} />)}
+              {cell(r.id, 'otb', cCol(r), <FmtVal val={fmt.rev(r.otbR)} numSize={11} />)}
               {cell(r.id, 'ly', LY_GRAY, otbFmt.rn(r.lyN), true, active && selectedSource === 'ly')}
-              {cell(r.id, 'ly', LY_GRAY, <FmtVal val={otbFmt.adr(r.lyAdr)} numSize={11} />)}
-              {cell(r.id, 'ly', LY_GRAY, <FmtVal val={otbFmt.rev(r.lyR)} numSize={11} />)}
+              {cell(r.id, 'ly', LY_GRAY, <FmtVal val={fmt.adr(r.lyAdr)} numSize={11} />)}
+              {cell(r.id, 'ly', LY_GRAY, <FmtVal val={fmt.rev(r.lyR)} numSize={11} />)}
               {cell(r.id, 'gap', gapColor(r.gapN), otbFmt.gapRn(r.gapN), true, active && selectedSource === 'gap', true)}
-              {cell(r.id, 'gap', gapColor(r.gapAdr), <FmtVal val={otbFmt.gapAdr(r.gapAdr)} numSize={11} />, false, false, true)}
-              {cell(r.id, 'gap', gapColor(r.gapR), <FmtVal val={otbFmt.gapRev(r.gapR)} numSize={11} />, false, false, true)}
+              {cell(r.id, 'gap', gapColor(r.gapAdr), <FmtVal val={fmt.gapAdr(r.gapAdr)} numSize={11} />, false, false, true)}
+              {cell(r.id, 'gap', gapColor(r.gapR), <FmtVal val={fmt.gapRev(r.gapR)} numSize={11} />, false, false, true)}
             </tr>
           )
         })}
       </tbody>
       <tfoot>
         <tr style={{ position: 'sticky', bottom: 0, background: '#000000' }}>
-          <td style={{ padding: '7px 12px', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}>Total</td>
-          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)', borderLeft: `1px solid ${DIV}` }}>{otbFmt.rn(total.otbN)}</td>
-          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={otbFmt.adr(total.otbAdr)} numSize={11} /></td>
-          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={otbFmt.rev(total.otbR)} numSize={11} /></td>
-          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: LY_GRAY, borderTop: '1px solid rgba(0,229,160,0.5)', borderLeft: `1px solid ${DIV}` }}>{otbFmt.rn(total.lyN)}</td>
-          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: LY_GRAY, borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={otbFmt.adr(total.lyAdr)} numSize={11} /></td>
-          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: LY_GRAY, borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={otbFmt.rev(total.lyR)} numSize={11} /></td>
-          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: gapColor(total.gapN), borderTop: '1px solid rgba(0,229,160,0.5)', borderLeft: `1px solid ${DIV}` }}>{otbFmt.gapRn(total.gapN)}</td>
-          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: gapColor(total.gapAdr), borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={otbFmt.gapAdr(total.gapAdr)} numSize={11} /></td>
-          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: gapColor(total.gapR), borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={otbFmt.gapRev(total.gapR)} numSize={11} /></td>
+          <td style={{ padding: '7px 12px', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}>합계 (HOU 제외)</td>
+          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)', borderLeft: `1px solid ${GRP_DIV}` }}>{otbFmt.rn(total.otbN)}</td>
+          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmt.adr(total.otbAdr)} numSize={11} /></td>
+          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmt.rev(total.otbR)} numSize={11} /></td>
+          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: LY_GRAY, borderTop: '1px solid rgba(0,229,160,0.5)', borderLeft: `1px solid ${GRP_DIV}` }}>{otbFmt.rn(total.lyN)}</td>
+          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: LY_GRAY, borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmt.adr(total.lyAdr)} numSize={11} /></td>
+          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: LY_GRAY, borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmt.rev(total.lyR)} numSize={11} /></td>
+          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: gapColor(total.gapN), borderTop: '1px solid rgba(0,229,160,0.5)', borderLeft: `1px solid ${GRP_DIV}` }}>{otbFmt.gapRn(total.gapN)}</td>
+          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: gapColor(total.gapAdr), borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmt.gapAdr(total.gapAdr)} numSize={11} /></td>
+          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: gapColor(total.gapR), borderTop: '1px solid rgba(0,229,160,0.5)' }}><FmtVal val={fmt.gapRev(total.gapR)} numSize={11} /></td>
         </tr>
         <tr style={{ borderTop: `0.5px solid rgba(255,255,255,0.06)` }}>
-          <td style={{ padding: '6px 12px', fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>OCC</td>
-          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)', borderLeft: `1px solid ${DIV}` }}>{(total.otbN / occDenom * 100).toFixed(1)}%</td>
-          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: LY_GRAY, borderLeft: `1px solid ${DIV}` }}>{(total.lyN / occDenom * 100).toFixed(1)}%</td>
-          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: gapColor(total.gapN), borderLeft: `1px solid ${DIV}` }}>{total.gapN >= 0 ? '+' : ''}{(total.gapN / occDenom * 100).toFixed(1)}%p</td>
+          <td style={{ padding: '6px 12px', fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>점유율</td>
+          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)', borderLeft: `1px solid ${GRP_DIV}` }}>{(total.otbN / occDenom * 100).toFixed(1)}%</td>
+          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: LY_GRAY, borderLeft: `1px solid ${GRP_DIV}` }}>{(total.lyN / occDenom * 100).toFixed(1)}%</td>
+          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: gapColor(total.gapN), borderLeft: `1px solid ${GRP_DIV}` }}>{total.gapN >= 0 ? '+' : ''}{(total.gapN / occDenom * 100).toFixed(1)}%p</td>
         </tr>
         <tr>
           <td style={{ padding: '6px 12px', fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>Rev.PAR</td>
-          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)', borderLeft: `1px solid ${DIV}` }}><FmtVal numSize={11} val={`${Math.round(total.otbR / occDenom / 1000)}k`} /></td>
-          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: LY_GRAY, borderLeft: `1px solid ${DIV}` }}><FmtVal numSize={11} val={`${Math.round(total.lyR / occDenom / 1000)}k`} /></td>
-          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: gapColor(total.gapR), borderLeft: `1px solid ${DIV}` }}><FmtVal numSize={11} val={`${total.gapR >= 0 ? '+' : ''}${Math.round(total.gapR / occDenom / 1000)}k`} /></td>
+          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)', borderLeft: `1px solid ${GRP_DIV}` }}><FmtVal numSize={11} val={fmt.revPar(total.otbR / occDenom)} /></td>
+          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: LY_GRAY, borderLeft: `1px solid ${GRP_DIV}` }}><FmtVal numSize={11} val={fmt.revPar(total.lyR / occDenom)} /></td>
+          <td colSpan={3} style={{ padding: '6px 12px', textAlign: 'center', fontSize: 11, fontWeight: 500, color: gapColor(total.gapR), borderLeft: `1px solid ${GRP_DIV}` }}><FmtVal numSize={11} val={`${total.gapR >= 0 ? '+' : ''}${fmt.revPar(total.gapR / occDenom)}`} /></td>
         </tr>
       </tfoot>
     </table>
@@ -142,13 +153,14 @@ function SegCompareTable({
 
 // ── account 패널 (OtbComparePage 동일 구조) ────────────────────────────────────
 function AccountPanel({
-  segName, segColor, source, accounts, rangeLabel,
+  segName, segColor, source, accounts, rangeLabel, fmt,
 }: {
   segName:    string
   segColor:   string | null
   source:     'otb' | 'ly' | 'gap'
   accounts:   ReturnType<typeof buildOtbCompareAccounts>
   rangeLabel: string
+  fmt:        UnitFmt
 }) {
   const isGap = source === 'gap'
   const title = source === 'otb' ? '현재 OTB' : source === 'ly' ? '전년 OTB' : 'GAP (증감)'
@@ -158,8 +170,8 @@ function AccountPanel({
   const rowR   = (a: (typeof accounts)[number]) => (source === 'otb' ? a.otbR   : source === 'ly' ? a.lyR   : a.gapR)
   const valColor = (v: number) => (isGap ? gapColor(v) : source === 'ly' ? LY_GRAY : (v !== 0 ? '#fff' : 'rgba(255,255,255,0.25)'))
   const fmtN = (v: number) => (isGap ? otbFmt.gapRn(v)  : otbFmt.rn(v))
-  const fmtA = (v: number) => (isGap ? otbFmt.gapAdr(v) : otbFmt.adr(v))
-  const fmtR = (v: number) => (isGap ? otbFmt.gapRev(v) : otbFmt.rev(v))
+  const fmtA = (v: number) => (isGap ? fmt.gapAdr(v) : fmt.adr(v))
+  const fmtR = (v: number) => (isGap ? fmt.gapRev(v) : fmt.rev(v))
   const sorted = [...accounts].sort((a, b) => Math.abs(rowN(b)) - Math.abs(rowN(a)))
   const tN = accounts.reduce((s, a) => s + rowN(a), 0)
   const tR = accounts.reduce((s, a) => s + rowR(a), 0)
@@ -194,14 +206,6 @@ function AccountPanel({
                 </tr>
               ))}
             </tbody>
-            <tfoot>
-              <tr style={{ position: 'sticky', bottom: 0, background: '#000000' }}>
-                <td style={{ padding: '7px 12px', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.4)' }}>Total</td>
-                <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: valColor(tN), borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtN(tN)}</td>
-                <td style={{ padding: '7px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.25)', borderTop: '1px solid rgba(0,229,160,0.4)' }}>—</td>
-                <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: valColor(tR), borderTop: '1px solid rgba(0,229,160,0.4)' }}><FmtVal val={fmtR(tR)} numSize={11} /></td>
-              </tr>
-            </tfoot>
           </table>
         )}
       </div>
@@ -259,12 +263,84 @@ export function PaceSegmentModal({ open, onClose, updateDate, hotelId, year, mon
   const data    = useMemo(() => buildOtbCompare(schema, rows), [schema, rows])
   const codeMap = useMemo(() => codesBySchemaId(schema), [schema])
 
+  // 합계 (HOU 제외) — 공유 buildOtbCompare.total은 main-합이며 HOU 미제외이므로
+  // MarketPickupDayModal / lyComparisonSegTable 와 동일한 leaf-합(HOU 코드 제외) 방식으로 재계산
+  const houExcludedTotal = useMemo<OtbCompareVals>(() => {
+    const houCodes = new Set<string>()
+    for (const s of schema) {
+      if (s.segmentation.includes('HOU')) {
+        for (const code of s.segmentation) houCodes.add(code)
+      }
+    }
+    const t = data.rows
+      .filter(r => r.level !== 'main' && !((codeMap[r.id] ?? []).some(c => houCodes.has(c))))
+      .reduce((a, r) => ({
+        otbN: a.otbN + r.otbN, otbR: a.otbR + r.otbR,
+        lyN:  a.lyN  + r.lyN,  lyR:  a.lyR  + r.lyR,
+      }), { otbN: 0, otbR: 0, lyN: 0, lyR: 0 })
+    const otbAdr = t.otbN > 0 ? Math.round(t.otbR / t.otbN) : 0
+    const lyAdr  = t.lyN  > 0 ? Math.round(t.lyR  / t.lyN)  : 0
+    return {
+      otbN: t.otbN, otbAdr, otbR: t.otbR,
+      lyN:  t.lyN,  lyAdr,  lyR:  t.lyR,
+      gapN: t.otbN - t.lyN, gapAdr: otbAdr - lyAdr, gapR: t.otbR - t.lyR,
+    }
+  }, [schema, data, codeMap])
+
   const [selSeg, setSelSeg] = useState<{ id: string; source: 'otb' | 'ly' | 'gap' } | null>(null)
   useEffect(() => { setSelSeg(null) }, [updateDate, lyMode])
   const selSegRow = selSeg ? (data.rows.find(r => r.id === selSeg.id) ?? null) : null
   const accounts = useMemo(
     () => (selSeg ? buildOtbCompareAccounts(codeMap[selSeg.id] ?? [], rows) : []),
     [selSeg, codeMap, rows],
+  )
+
+  // ── 금액 단위 설정 (ADR/REV 각각) — 셀엔 접미사 없이 숫자만, 단위는 하단 안내로 표시 ──
+  const [adrUnit, setAdrUnit] = useState<'won' | 'k' | 'm'>('k')   // ADR 기본: 천원
+  const [revUnit, setRevUnit] = useState<'won' | 'k' | 'm'>('m')   // REV 기본: 백만원
+  const [unitPanelOpen, setUnitPanelOpen] = useState(false)
+  const unitLabel  = (u: 'won' | 'k' | 'm') => u === 'won' ? '원' : u === 'k' ? '천원' : '백만원'
+  const fmtUnitNum = (v: number, u: 'won' | 'k' | 'm') =>
+    u === 'won' ? Math.round(v).toLocaleString()
+    : u === 'k' ? Math.round(v / 1000).toLocaleString()
+    : (Math.round(v / 1e5) / 10).toLocaleString()
+  // REV 전용 — 백만원(m)도 소수점 없이 정수 반올림 (ADR엔 미적용)
+  const fmtRevNum = (v: number, u: 'won' | 'k' | 'm') =>
+    u === 'm' ? Math.round(v / 1e6).toLocaleString() : fmtUnitNum(v, u)
+  // Rev.PAR 전용 — revUnit 연동, 접미사 없음 (백만원은 소수 1자리)
+  const fmtRevPar = (v: number, u: 'won' | 'k' | 'm') =>
+    u === 'won' ? Math.round(v).toLocaleString()
+    : u === 'k' ? Math.round(v / 1000).toLocaleString()
+    : (Math.round(v / 1e6 * 10) / 10).toLocaleString()
+  const fmt: UnitFmt = {
+    adr:    (v) => v === 0 ? '—' : fmtUnitNum(v, adrUnit),
+    rev:    (v) => v === 0 ? '—' : fmtRevNum(v, revUnit),
+    gapAdr: (v) => Math.abs(v) < 500   ? '—' : `${v > 0 ? '+' : ''}${fmtUnitNum(v, adrUnit)}`,
+    gapRev: (v) => Math.abs(v) < 50000 ? '—' : `${v > 0 ? '+' : ''}${fmtRevNum(v, revUnit)}`,
+    revPar: (v) => fmtRevPar(v, revUnit),
+  }
+  // 단위 설정 패널의 한 줄 (ADR / REV) — 원/천원/백만원 선택
+  const renderUnitRow = (label: string, val: 'won' | 'k' | 'm', onPick: (u: 'won' | 'k' | 'm') => void) => (
+    <div style={{ marginBottom: label === 'ADR' ? 8 : 0 }}>
+      <div style={{ fontSize: 10, color: '#888', marginBottom: 4 }}>{label}</div>
+      <div style={{ display: 'flex', gap: 4 }}>
+        {(['won', 'k', 'm'] as const).map(u => (
+          <div
+            key={u}
+            onClick={() => onPick(u)}
+            style={{
+              flex: 1, textAlign: 'center', padding: '5px 6px', fontSize: 11, borderRadius: 6, cursor: 'pointer',
+              color: val === u ? '#00E5A0' : '#ccc',
+              background: val === u ? 'rgba(0,229,160,0.1)' : 'transparent',
+              border: `0.5px solid ${val === u ? 'rgba(0,229,160,0.3)' : 'rgba(255,255,255,0.08)'}`,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {unitLabel(u)}
+          </div>
+        ))}
+      </div>
+    </div>
   )
 
   // ESC + scroll lock
@@ -281,7 +357,7 @@ export function PaceSegmentModal({ open, onClose, updateDate, hotelId, year, mon
   return createPortal(
     <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }} onClick={onClose} />
-      <div style={{ position: 'relative', width: 'min(1200px, 95vw)', maxHeight: '86vh', background: '#0d0d0d', border: '1px solid #1f1f1f', borderRadius: 12, padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ position: 'relative', width: 'min(1201px, 95vw)', maxHeight: '86vh', background: '#0d0d0d', border: '0.5px solid rgba(0,229,160,0.2)', borderLeft: '3px solid rgba(0,229,160,0.6)', borderRadius: 12, padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
         {/* 헤더 */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>{month}월 페이스 — {updateDate} 기준</span>
@@ -299,22 +375,66 @@ export function PaceSegmentModal({ open, onClose, updateDate, hotelId, year, mon
               <div style={{ padding: 40, textAlign: 'center', fontSize: 12, color: '#555' }}>No data</div>
             ) : (
               <SegCompareTable
-                data={data} roomCount={roomCount} days={daysInMonth} isPeriod={isPeriod}
+                data={{ rows: data.rows, total: houExcludedTotal }} roomCount={roomCount} days={daysInMonth} isPeriod={isPeriod}
                 selectedId={selSeg?.id ?? null} selectedSource={selSeg?.source ?? null}
                 onSelect={(id, source) => setSelSeg(prev => (prev?.id === id && prev.source === source ? null : { id, source }))}
+                fmt={fmt}
               />
             )}
           </div>
-          <div style={{ width: 240, flexShrink: 0, borderLeft: `1px solid ${DIV}`, display: 'flex', flexDirection: 'column', maxHeight: '64vh' }}>
+          <div style={{
+            width: 331, flexShrink: 0, borderLeft: `1px solid ${DIV}`, display: 'flex', flexDirection: 'column', maxHeight: '64vh',
+            background: `
+              radial-gradient(circle at 100% 100%, rgba(0,229,160,0.08) 0%, transparent 40%),
+              #0a0a0a
+            `,
+          }}>
             {selSeg && selSegRow ? (
-              <AccountPanel segName={selSegRow.name} segColor={selSegRow.bgDarkColor} source={selSeg.source} accounts={accounts} rangeLabel={updateDate} />
+              <AccountPanel segName={selSegRow.name} segColor={selSegRow.bgDarkColor} source={selSeg.source} accounts={accounts} rangeLabel={updateDate} fmt={fmt} />
             ) : (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 200 }}>
-                <span style={{ fontSize: 28, opacity: 0.2 }}>👆</span>
-                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>Select a segment</span>
+              <div style={{ padding: '10px 14px' }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#F59E0B' }}>Account 증감</div>
+                <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>세그먼트를 클릭하세요</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, fontSize: 11, color: '#666' }}>
+                  <span>어카운트</span>
+                  <div style={{ display: 'flex', gap: 24 }}>
+                    <span>객실</span>
+                    <span>객단가</span>
+                    <span>매출</span>
+                  </div>
+                </div>
               </div>
             )}
           </div>
+        </div>
+
+        {/* 하단 — 금액 단위 설정 (우측 정렬, 셀엔 숫자만 표시하고 단위는 여기서 안내) */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, position: 'relative' }}>
+          <span style={{ fontSize: 11, color: '#00E5A0', whiteSpace: 'nowrap' }}>
+            단위 : 실, {unitLabel(adrUnit)}, {unitLabel(revUnit)}
+          </span>
+          <button
+            onClick={() => setUnitPanelOpen(v => !v)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              background: 'transparent', border: '0.5px solid rgba(0,229,160,0.4)',
+              borderRadius: 6, padding: '3px 8px', color: '#00E5A0', cursor: 'pointer',
+            }}
+            aria-label="단위 설정"
+          >
+            <Settings size={12} />
+          </button>
+          {unitPanelOpen && (<>
+            <div onClick={() => setUnitPanelOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 10 }} />
+            <div style={{
+              position: 'absolute', bottom: '100%', right: 0, marginBottom: 6,
+              background: '#161616', border: '0.5px solid rgba(255,255,255,0.1)',
+              borderRadius: 8, padding: 10, zIndex: 11, minWidth: 160,
+            }}>
+              {renderUnitRow('ADR', adrUnit, setAdrUnit)}
+              {renderUnitRow('REV', revUnit, setRevUnit)}
+            </div>
+          </>)}
         </div>
       </div>
     </div>,

@@ -698,7 +698,7 @@ export default function MarketPickupDayModal({
         </div>
 
         {/* 본문 — 통합 세그 테이블 · 어카운트 */}
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden', gap: 16 }}>
 
           {/* 좌측: 세그 테이블 (탭에 따라 OTB&Pickup / 전년 비교) */}
           <div style={{ width: activeTab === 'ly' ? 900 : 560, flexShrink: 0, borderRight: '0.5px solid rgba(255,255,255,0.08)', overflowY: 'auto' }}>
@@ -759,14 +759,6 @@ export default function MarketPickupDayModal({
                               </tr>
                             ))}
                           </tbody>
-                          <tfoot>
-                            <tr style={{ position: 'sticky', bottom: 0, background: '#000000' }}>
-                              <td style={{ padding: '7px 12px', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.4)' }}>Total</td>
-                              <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: valColor(tN), borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtN(tN)}</td>
-                              <td style={{ padding: '7px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.25)', borderTop: '1px solid rgba(0,229,160,0.4)' }}>—</td>
-                              <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: valColor(tR), borderTop: '1px solid rgba(0,229,160,0.4)' }}><FmtVal val={fmtR(tR)} numSize={11} /></td>
-                            </tr>
-                          </tfoot>
                         </table>
                       )}
                     </div>
@@ -813,20 +805,6 @@ export default function MarketPickupDayModal({
                           </tr>
                         ))}
                       </tbody>
-                      <tfoot>
-                        <tr style={{ position: 'sticky', bottom: 0, background: '#000000' }}>
-                          <td style={{ padding: '7px 12px', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.4)' }}>Total</td>
-                          {selType === 'pickup' ? (<>
-                            <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: puColor(accTotal.puNights), borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtPuRn(accTotal.puNights)}</td>
-                            <td style={{ padding: '7px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.25)', borderTop: '1px solid rgba(0,229,160,0.4)' }}>—</td>
-                            <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: puColor(accTotal.puRevenue), borderTop: '1px solid rgba(0,229,160,0.4)' }}><FmtVal val={fmtPuRev(accTotal.puRevenue)} numSize={11} /></td>
-                          </>) : (<>
-                            <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.4)' }}>{fmtOtbRn(accTotal.otbNights)}</td>
-                            <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.4)' }}><FmtVal val={fmtOtbAdr(accTotalOtbAdr)} numSize={11} /></td>
-                            <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: '#fff', borderTop: '1px solid rgba(0,229,160,0.4)' }}><FmtVal val={fmtOtbRev(accTotal.otbRevenue)} numSize={11} /></td>
-                          </>)}
-                        </tr>
-                      </tfoot>
                     </table>
                   )}
                 </div>
