@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import { LayoutGrid, Store } from 'lucide-react'
+import { LayoutGrid, Store, BarChart3, Percent, Tag, Coins, BedDouble } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
@@ -126,14 +126,12 @@ export default function DowPerformancePage() {
   // 전년 기준 (동기간 온북 / 마감)
   const [lyBasis, setLyBasis] = useState<'ly_otb' | 'ly_close'>('ly_otb')
 
-  // 탭2 컨트롤
-  const [segYearSel, setSegYearSel] = useState<YearSel>('gap')
-  const [segMetric,  setSegMetric]  = useState<Metric>('rn')
   // 탭3 컨트롤
-  const [acctYearSel, setAcctYearSel] = useState<YearSel>('gap')
-  const [acctMetric,  setAcctMetric]  = useState<Metric>('rn')
   const [selectedSegs, setSelectedSegs] = useState<Set<string>>(new Set())
   const [selectedAccts, setSelectedAccts] = useState<Set<string>>(new Set())
+  // 드롭다운 임시값(draft) — '완료' 클릭 시에만 확정값으로 반영
+  const [draftSegs, setDraftSegs] = useState<Set<string>>(new Set())
+  const [draftAccts, setDraftAccts] = useState<Set<string>>(new Set())
   const [openDrop, setOpenDrop] = useState<'seg' | 'acct' | null>(null)
   const [acctSearch, setAcctSearch] = useState('')
 
@@ -300,6 +298,28 @@ export default function DowPerformancePage() {
     return gapNode(metric, cy, ly)
   }
 
+  // ─── 공유 지표 '점유율' 셀 (탭2/탭3) — 분모는 요일별 전체 캐파와 동일 ───────────────
+  const occText = (n: number, dc: number, pctColor: string): React.ReactNode =>
+    n === 0 ? '—' : <>{occOf(n, dc).toFixed(1)}<span style={{ fontSize: 11, color: pctColor }}>%</span></>
+  const occCellBySel = (sel: YearSel, cy: Cell, ly: Cell, dcCy: number, dcLy: number): { text: React.ReactNode; color: string } => {
+    if (sel === 'cy') return { text: cy.n === 0 ? '—' : cy.n.toLocaleString(), color: cy.n === 0 ? '#555' : MINT }
+    if (sel === 'ly') return { text: ly.n === 0 ? '—' : ly.n.toLocaleString(), color: ly.n === 0 ? '#555' : AMBER }
+    if (cy.n === 0 && ly.n === 0) return { text: '—', color: '#555' }
+    const d = cy.n - ly.n
+    const color = d > 0 ? MINT : d < 0 ? RED : '#888'
+    return { text: `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(d).toLocaleString()}`, color }
+  }
+  // 어카운트 정렬·드롭다운용 — 공유 지표 기준 (occ 는 전체 월 캐파 분모)
+  const acctGapRaw = (cy: Cell, ly: Cell): number =>
+    barBasis === 'occ' ? cy.n - ly.n : gapRaw(barBasis, cy, ly)
+  const acctGapNode = (cy: Cell, ly: Cell): { text: string; color: string } => {
+    if (barBasis !== 'occ') return gapNode(barBasis, cy, ly)
+    if (cy.n === 0 && ly.n === 0) return { text: '—', color: '#555' }
+    const d = cy.n - ly.n
+    const color = d > 0 ? MINT : d < 0 ? RED : '#888'
+    return { text: `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(d).toLocaleString()}`, color }
+  }
+
   // 전년 기준 토글 — ly_otb 행이 없으면(과거월) 마감 고정, 월 이동 시 기본값 복귀
   const hasLyOtb = useMemo(() => rpcRows.some(r => r.year_type === 'ly_otb'), [rpcRows])
   useEffect(() => { setLyBasis(hasLyOtb ? 'ly_otb' : 'ly_close') }, [hasLyOtb, selectedYear, m1])
@@ -312,7 +332,7 @@ export default function DowPerformancePage() {
     if (midUnits.length === 0 || rpcRows.length === 0) return
     setSelectedSegs(new Set(midUnits.map(m => m.id)))
     const scored = agg.accountNames.map(nm => ({
-      nm, v: Math.abs(gapRaw(acctMetric, acctCellSum(nm, 'cy'), acctCellSum(nm, lyBasis))),
+      nm, v: Math.abs(acctGapRaw(acctCellSum(nm, 'cy'), acctCellSum(nm, lyBasis))),
     }))
     scored.sort((a, b) => b.v - a.v)
     setSelectedAccts(new Set(scored.slice(0, 3).map(s => s.nm)))
@@ -379,7 +399,7 @@ export default function DowPerformancePage() {
           </svg>
         </button>
         {showUnitSetting && (
-          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, width: 190, background: '#0f0f0f', border: '0.5px solid #242424', borderRadius: 10, padding: '12px 14px', zIndex: 9999, boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
+          <div style={{ position: 'absolute', bottom: 34, right: 0, width: 190, background: '#0f0f0f', border: '0.5px solid #242424', borderRadius: 10, padding: '12px 14px', zIndex: 9999, boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
             <UnitRow label="객단가" value={adrUnit} onChange={setAdrUnit} />
             <div style={{ height: 8 }} />
             <UnitRow label="매출" value={revUnit} onChange={setRevUnit} />
@@ -420,6 +440,7 @@ export default function DowPerformancePage() {
       return { val, hasPrev }
     }
     const barFmt = (val: number) => barBasis === 'occ' ? Math.abs(val).toFixed(1) : Math.abs(val).toLocaleString()
+    const barSuffix = barBasis === 'occ' ? '%p' : barBasis === 'adr' ? adrUnit : revUnit
     // 스케일 최대값 — 요일 7행 + 연휴 행 (합계 제외)
     const scaleRows: { cy: Cell; ly: Cell; dcCy: number; dcLy: number }[] = DOWS.map(d => ({
       cy: agg.dowTot.cy[d] ?? { n: 0, rev: 0 }, ly: agg.dowTot[lyBasis][d] ?? { n: 0, rev: 0 },
@@ -430,7 +451,7 @@ export default function DowPerformancePage() {
     // 영점선 기준 좌우 막대 + 막대 바깥쪽 값 텍스트 (전년 값 없으면 영점선만)
     const barInner = (cy: Cell, ly: Cell, dcCy: number, dcLy: number, h: number, tone = false) => {
       const { val, hasPrev } = barValueOf(cy, ly, dcCy, dcLy)
-      const pct = hasPrev && barMax > 0 ? Math.abs(val) / barMax * 20 : 0
+      const pct = hasPrev && barMax > 0 ? Math.abs(val) / barMax * 15 : 0
       const show = hasPrev && Math.abs(val) > 0
       const posBar = tone ? 'linear-gradient(90deg,rgba(0,229,160,0.35),rgba(0,229,160,0.75))' : 'linear-gradient(90deg,rgba(0,229,160,0.5),#00E5A0)'
       const negBar = tone ? 'linear-gradient(90deg,rgba(226,75,74,0.75),rgba(226,75,74,0.35))' : 'linear-gradient(90deg,#E24B4A,rgba(226,75,74,0.5))'
@@ -441,26 +462,18 @@ export default function DowPerformancePage() {
           {show && val > 0 && (
             <>
               <div style={{ position: 'absolute', left: '50%', top: 12, height: 12, width: `${pct}%`, background: posBar, borderRadius: '0 2px 2px 0' }} />
-              <span style={{ position: 'absolute', left: `calc(50% + ${pct}% + 6px)`, top: 9, fontSize: txtSize, color: posTxt, whiteSpace: 'nowrap' }}>{barFmt(val)}</span>
+              <span style={{ position: 'absolute', left: `calc(50% + ${pct}% + 6px)`, top: 9, fontSize: txtSize, color: posTxt, whiteSpace: 'nowrap' }}>{barFmt(val)}<span style={{ fontSize: 11 }}>{barSuffix}</span></span>
             </>
           )}
           {show && val < 0 && (
             <>
               <div style={{ position: 'absolute', right: '50%', top: 12, height: 12, width: `${pct}%`, background: negBar, borderRadius: '2px 0 0 2px' }} />
-              <span style={{ position: 'absolute', right: `calc(50% + ${pct}% + 6px)`, top: 9, fontSize: txtSize, color: negTxt, whiteSpace: 'nowrap' }}>{barFmt(val)}</span>
+              <span style={{ position: 'absolute', right: `calc(50% + ${pct}% + 6px)`, top: 9, fontSize: txtSize, color: negTxt, whiteSpace: 'nowrap' }}>{barFmt(val)}<span style={{ fontSize: 11 }}>{barSuffix}</span></span>
             </>
           )}
         </div>
       )
     }
-    const barBtn = (v: 'occ' | 'adr' | 'rev', label: string) => (
-      <span key={v} onClick={() => setBarBasis(v)} style={{
-        fontSize: 13, padding: '5px 11px', borderRadius: 6, cursor: 'pointer',
-        ...(barBasis === v
-          ? { border: '0.5px solid rgba(0,229,160,0.5)', background: 'rgba(0,229,160,0.08)', color: MINT }
-          : { border: '0.5px solid #262626', color: '#888' }),
-      }}>{label}</span>
-    )
     // 전년 기준 토글 (2025년 헤더) — 골드 계열, ly_otb 없으면 '동기간 온북' 비활성
     const lyItem = (v: 'ly_otb' | 'ly_close', label: string) => {
       const disabled = v === 'ly_otb' && !hasLyOtb
@@ -476,10 +489,6 @@ export default function DowPerformancePage() {
     return (
       <div style={card}>
         <div style={leftBar} />
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginBottom: 10 }}>
-          <span style={{ fontSize: 12, color: '#4a4a4a' }}>막대 기준</span>
-          {barBtn('occ', '점유율')}{barBtn('adr', '객단가')}{barBtn('rev', '매출')}
-        </div>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0 }}>
             <colgroup>
@@ -491,8 +500,8 @@ export default function DowPerformancePage() {
             </colgroup>
             <thead>
               <tr>
-                <th style={{ ...hCell, textAlign: 'left' }} />
-                <th style={hCell} />
+                <th style={{ ...hCell, textAlign: 'left', color: '#bbb', fontSize: 14, fontWeight: 500 }}>요일</th>
+                <th style={{ ...hCell, textAlign: 'center', color: '#bbb', fontSize: 14, fontWeight: 500 }}>전년비</th>
                 <th colSpan={3} style={{ ...hCell, textAlign: 'center', color: MINT, fontSize: 14, fontWeight: 500, ...groupStart }}>{selectedYear}년</th>
                 <th colSpan={3} style={{ ...hCell, textAlign: 'center', color: AMBER, fontSize: 14, fontWeight: 500, ...groupStart }}>
                   {selectedYear - 1}년
@@ -505,8 +514,8 @@ export default function DowPerformancePage() {
                 <th colSpan={3} style={{ ...hCell, textAlign: 'center', color: '#bbb', fontSize: 14, fontWeight: 500, ...groupStart }}>GAP</th>
               </tr>
               <tr>
-                <th style={{ ...hCell, textAlign: 'left' }}>요일<span style={{ color: '#3a3a3a', marginLeft: 6 }}>일수</span></th>
-                <th style={{ ...hCell, textAlign: 'center' }}>전년비</th>
+                <th style={{ ...hCell, textAlign: 'left', color: '#3a3a3a' }}>일수</th>
+                <th style={{ ...hCell, textAlign: 'center', color: '#6a6a6a' }}>{barBasis === 'occ' ? '점유율 대비' : barBasis === 'adr' ? '객단가 대비' : '매출 대비'}</th>
                 <th style={{ ...hCell, ...groupStart }}>점유율</th><th style={hCell}>객단가</th><th style={hCell}>매출</th>
                 <th style={{ ...hCell, ...groupStart }}>점유율</th><th style={hCell}>객단가</th><th style={hCell}>매출</th>
                 <th style={{ ...hCell, ...groupStart }}>Δ점유</th><th style={hCell}>Δ단가</th><th style={hCell}>Δ매출</th>
@@ -527,7 +536,7 @@ export default function DowPerformancePage() {
                   <tr key={dow} onMouseEnter={() => setDowHover(key)} onMouseLeave={() => setDowHover(null)}>
                     <td style={{ ...dCell, textAlign: 'left', color: dowColor(dow), background: bg }}>
                       <span style={{ fontSize: 16 }}>{DOW_NAME[dow]}</span>
-                      <span style={{ fontSize: 14, marginLeft: 12, color: dcColor }}>{dcCy}/{dcLy}</span>
+                      <span style={{ fontSize: 14, marginLeft: 12, color: dcColor }}>{dcCy}일/{dcLy}일</span>
                     </td>
                     <td style={{ ...dCell, position: 'relative', padding: '0 5px', background: bg }}>{barInner(cy, ly, dcCy, dcLy, rowH)}</td>
                     <td style={{ ...dCell, color: '#e8e8e8', background: bg, ...groupStart }}>{occNode(cy.n, occCy, '#666')}</td>
@@ -559,7 +568,7 @@ export default function DowPerformancePage() {
                   <tr onMouseEnter={() => setDowHover(key)} onMouseLeave={() => setDowHover(null)}>
                     <td style={{ ...tb, textAlign: 'left', color: '#fff' }}>
                       <span style={{ fontSize: 16 }}>합계</span>
-                      <span style={{ fontSize: 14, marginLeft: 12, color: '#4a4a4a' }}>{agg.monthDays.cy}/{agg.monthDays[lyBasis]}</span>
+                      <span style={{ fontSize: 14, marginLeft: 12, color: '#4a4a4a' }}>{agg.monthDays.cy}일/{agg.monthDays[lyBasis]}일</span>
                     </td>
                     <td style={{ ...tb, position: 'relative', padding: '0 5px' }}>{barInner(cy, ly, agg.monthDays.cy, agg.monthDays[lyBasis], totH)}</td>
                     <td style={{ ...tb, color: '#fff', ...groupStart }}>{occNode(cy.n, occCy, '#666')}</td>
@@ -616,7 +625,7 @@ export default function DowPerformancePage() {
                       <td style={{ ...eb, textAlign: 'left' }}>
                         <div style={{ display: 'flex', alignItems: 'baseline' }}>
                           <span style={{ fontSize: 16, color: '#a78bfa' }}>연휴</span>
-                          <span style={{ fontSize: 14, marginLeft: 12, color: '#6a5a9a' }}>{dcCy}/{dcLy}</span>
+                          <span style={{ fontSize: 14, marginLeft: 12, color: '#6a5a9a' }}>{dcCy}일/{dcLy}일</span>
                         </div>
                         <div style={{ fontSize: 11, color: '#6a5a9a', marginTop: 2 }}>{eventSub}</div>
                       </td>
@@ -683,118 +692,174 @@ export default function DowPerformancePage() {
   }
 
   // ─── 탭2: 세그먼트 실적 ────────────────────────────────────────────────────────
-  function segControls() {
-    const yrItem = (v: YearSel, label: string) => (
-      <span key={v} onClick={() => setSegYearSel(v)} style={{
-        fontSize: 10, padding: '5px 11px', borderRadius: 5, cursor: 'pointer',
-        ...(segYearSel === v ? { background: 'rgba(0,229,160,0.12)', color: MINT } : { color: '#777' }),
-      }}>{label}</span>
-    )
-    const mItem = (v: Metric, label: string) => (
-      <span key={v} onClick={() => setSegMetric(v)} style={{
-        fontSize: 10, padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
-        ...(segMetric === v
-          ? { border: '0.5px solid rgba(0,229,160,0.5)', background: 'rgba(0,229,160,0.08)', color: MINT }
-          : { border: '0.5px solid #262626', color: '#888' }),
-      }}>{label}</span>
-    )
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-        <div style={{ display: 'flex', gap: 2, background: '#0c0c0c', border: '0.5px solid #242424', borderRadius: 7, padding: 2 }}>
-          {yrItem('gap', 'GAP')}{yrItem('cy', String(selectedYear))}{yrItem('ly', String(selectedYear - 1))}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 10, color: '#555' }}>지표</span>
-          {mItem('rn', '객실')}{mItem('adr', '객단가')}{mItem('rev', '매출')}
-        </div>
-      </div>
-    )
-  }
   function renderSegTab() {
     const rows: { level: 'main' | 'mid'; name: string; codes: string[] }[] = []
     for (const top of tops) {
       rows.push({ level: 'main', name: top.name, codes: top.codes })
       if (top.children.length) for (const c of top.children) rows.push({ level: 'mid', name: c.name, codes: c.codes })
     }
-    const cellFor = (codes: string[], dow: number) => cellBySel(segYearSel, segMetric, segCell(codes, 'cy', dow), segCell(codes, lyBasis, dow))
-    const cellSumFor = (codes: string[]) => cellBySel(segYearSel, segMetric, segCellSum(codes, 'cy'), segCellSum(codes, lyBasis))
     const totCodes = midUnits.filter(m => !m.codes.some(c => houCodes.has(c))).flatMap(m => m.codes)
+    const metricHeadLabel = barBasis === 'occ' ? '객실' : barBasis === 'adr' ? '객단가' : '매출'
+    const fmt = (v: number) => v.toLocaleString()
+    // 전년 기준 토글 (탭1과 lyBasis 공유) — 골드 계열, ly_otb 없으면 '동기간 온북' 비활성
+    const lyItem = (v: 'ly_otb' | 'ly_close', label: string) => {
+      const disabled = v === 'ly_otb' && !hasLyOtb
+      const active = lyBasis === v
+      return (
+        <span key={v} onClick={disabled ? undefined : () => setLyBasis(v)} style={{
+          fontSize: 10, padding: '3px 8px', borderRadius: 4,
+          cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.3 : 1,
+          ...(active ? { background: 'rgba(245,158,11,0.14)', color: '#F59E0B' } : { color: '#777' }),
+        }}>{label}</span>
+      )
+    }
+    // 요일별 26년/25년/Δ 값 (선택 지표 1종)
+    const triple = (codes: string[], dow: number) => {
+      const cy = segCell(codes, 'cy', dow), ly = segCell(codes, lyBasis, dow)
+      let v26: number | null, v25: number | null, dRaw: number, dPresent: boolean, isZeroD: boolean
+      if (barBasis === 'occ') {
+        v26 = cy.n === 0 ? null : cy.n
+        v25 = ly.n === 0 ? null : ly.n
+        dRaw = cy.n - ly.n
+        dPresent = !(cy.n === 0 && ly.n === 0)
+        isZeroD = dRaw === 0
+      } else if (barBasis === 'adr') {
+        v26 = cy.n === 0 ? null : scaleUnit(cy.rev / cy.n, adrUnit)
+        v25 = ly.n === 0 ? null : scaleUnit(ly.rev / ly.n, adrUnit)
+        dRaw = scaleUnit((cy.n > 0 ? cy.rev / cy.n : 0) - (ly.n > 0 ? ly.rev / ly.n : 0), adrUnit)
+        dPresent = (cy.n > 0 || cy.rev > 0) && (ly.n > 0 || ly.rev > 0)
+        isZeroD = dRaw === 0
+      } else {
+        v26 = cy.rev === 0 ? null : scaleUnit(cy.rev, revUnit)
+        v25 = ly.rev === 0 ? null : scaleUnit(ly.rev, revUnit)
+        dRaw = scaleUnit(cy.rev - ly.rev, revUnit)
+        dPresent = (cy.n > 0 || cy.rev > 0) && (ly.n > 0 || ly.rev > 0)
+        isZeroD = dRaw === 0
+      }
+      return { v26, v25, dRaw, dPresent, isZeroD }
+    }
+    // 한 요일의 3칸(26/25/Δ) td
+    const triCells = (codes: string[], dow: number, tier: 'main' | 'mid' | 'total', base: React.CSSProperties) => {
+      const { v26, v25, dRaw, dPresent, isZeroD } = triple(codes, dow)
+      const c26 = tier === 'main' ? '#e8e8e8' : tier === 'mid' ? '#bbb' : '#fff'
+      const c25 = tier === 'main' ? '#888' : tier === 'mid' ? '#777' : '#aaa'
+      const up = tier === 'mid' ? '#3d9d7c' : MINT
+      const down = tier === 'mid' ? '#b04745' : RED
+      const size = tier === 'mid' ? 12 : 13
+      const t26 = v26 === null ? '—' : fmt(v26)
+      const t25 = v25 === null ? '—' : fmt(v25)
+      const dText = !dPresent ? '—' : isZeroD ? '0' : `${dRaw > 0 ? '+' : '−'}${fmt(Math.abs(dRaw))}`
+      const dCol = !dPresent ? '#3f3f3f' : isZeroD ? '#555' : dRaw > 0 ? up : down
+      const cs = (color: string): React.CSSProperties => ({ ...base, textAlign: 'right', whiteSpace: 'nowrap', fontSize: size, color })
+      return (
+        <Fragment key={dow}>
+          <td style={{ ...cs(v26 === null ? '#3f3f3f' : c26), ...groupStart }}>{t26}</td>
+          <td style={cs(v25 === null ? '#3f3f3f' : c25)}>{t25}</td>
+          <td style={cs(dCol)}>{dText}</td>
+        </Fragment>
+      )
+    }
     return (
-      <>
-        {segControls()}
-        <div style={card}>
-          <div style={leftBar} />
-          <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
+      <div style={card}>
+        <div style={leftBar} />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+          <div style={{ display: 'flex', background: '#0c0c0c', border: '0.5px solid #242424', borderRadius: 5, padding: 2 }}>
+            {lyItem('ly_otb', '동기간 온북')}{lyItem('ly_close', '마감')}
+          </div>
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: 1252, tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0 }}>
+            <colgroup>
+              <col style={{ width: 160 }} />
+              {DOWS.map(d => <Fragment key={d}><col style={{ width: 52 }} /><col style={{ width: 52 }} /><col style={{ width: 52 }} /></Fragment>)}
+            </colgroup>
             <thead>
               <tr>
-                <th style={{ ...th, textAlign: 'left' }}>세그먼트</th>
-                {DOWS.map(d => <th key={d} style={{ ...th, color: dowColor(d) }}>{DOW_NAME[d]}</th>)}
-                <th style={{ ...th, color: '#fff' }}>합계</th>
+                <th style={{ textAlign: 'left' }} />
+                {DOWS.map(d => <th key={d} colSpan={3} style={{ fontSize: 14, textAlign: 'center', paddingBottom: 3, color: dowColor(d), fontWeight: 500, whiteSpace: 'nowrap', ...groupStart }}>{DOW_NAME[d]}</th>)}
+              </tr>
+              <tr>
+                <th style={{ fontSize: 12, color: '#3a3a3a', textAlign: 'left', padding: '0 5px 7px', fontWeight: 400 }}>{metricHeadLabel}</th>
+                {DOWS.map(d => (
+                  <Fragment key={d}>
+                    <th style={{ fontSize: 11, textAlign: 'right', padding: '0 3px 7px', color: '#2f6b57', fontWeight: 400, whiteSpace: 'nowrap', ...groupStart }}>26년</th>
+                    <th style={{ fontSize: 11, textAlign: 'right', padding: '0 3px 7px', color: '#7a6030', fontWeight: 400, whiteSpace: 'nowrap' }}>25년</th>
+                    <th style={{ fontSize: 11, textAlign: 'right', padding: '0 3px 7px', color: '#6a6a6a', fontWeight: 400, whiteSpace: 'nowrap' }}>Δ</th>
+                  </Fragment>
+                ))}
               </tr>
             </thead>
             <tbody>
               {rows.map((r, i) => {
                 const isMain = r.level === 'main'
-                const valColor = (c: { color: string }) => c.color
-                const rowBg = isMain ? '#0f1d18' : 'transparent'
+                const height = isMain ? 34 : 30
+                const bg = isMain ? '#0f1d18' : 'transparent'
+                const base: React.CSSProperties = { padding: '0 5px', height, background: bg, borderBottom: '0.5px solid #141414' }
                 return (
                   <tr key={`${r.name}-${i}`}>
-                    <td style={{ ...td, textAlign: 'left', background: rowBg, color: isMain ? '#fff' : '#999', fontWeight: isMain ? 500 : 400, paddingLeft: isMain ? 8 : 12 }}>
+                    <td style={{ ...base, textAlign: 'left', color: isMain ? '#fff' : '#999', fontWeight: isMain ? 500 : 400, fontSize: isMain ? 13 : 12, paddingLeft: isMain ? 8 : 16 }}>
                       {isMain ? r.name : <span><span style={{ color: '#555' }}>└ </span>{r.name}</span>}
                     </td>
-                    {DOWS.map(dow => {
-                      const c = cellFor(r.codes, dow)
-                      return <td key={dow} style={{ ...td, background: rowBg, color: isMain ? c.color : (c.color === MINT ? '#3d9d7c' : c.color === RED ? '#b04745' : c.color) }}>{c.text}</td>
-                    })}
-                    {(() => { const c = cellSumFor(r.codes); return <td style={{ ...td, background: rowBg, color: isMain ? valColor(c) : (c.color === MINT ? '#3d9d7c' : c.color === RED ? '#b04745' : c.color) }}>{c.text}</td> })()}
+                    {DOWS.map(dow => triCells(r.codes, dow, isMain ? 'main' : 'mid', base))}
                   </tr>
                 )
               })}
               {/* 합계 (HOU 제외) */}
-              <tr>
-                <td style={{ ...td, textAlign: 'left', borderTop: '1px solid rgba(0,229,160,0.35)', color: '#fff', fontWeight: 500 }}>합계</td>
-                {DOWS.map(dow => { const c = cellFor(totCodes, dow); return <td key={dow} style={{ ...td, borderTop: '1px solid rgba(0,229,160,0.35)', color: c.color, fontWeight: 500 }}>{c.text}</td> })}
-                {(() => { const c = cellSumFor(totCodes); return <td style={{ ...td, borderTop: '1px solid rgba(0,229,160,0.35)', color: c.color, fontWeight: 500 }}>{c.text}</td> })()}
-              </tr>
+              {(() => {
+                const base: React.CSSProperties = { padding: '0 5px', height: 36, borderTop: '1px solid rgba(0,229,160,0.35)' }
+                return (
+                  <tr>
+                    <td style={{ ...base, textAlign: 'left', color: '#fff', fontWeight: 500, fontSize: 13 }}>합계</td>
+                    {DOWS.map(dow => triCells(totCodes, dow, 'total', base))}
+                  </tr>
+                )
+              })()}
             </tbody>
           </table>
-          {unitFooter(<div />)}
         </div>
-      </>
+        {unitFooter(<div />)}
+      </div>
     )
   }
 
   // ─── 탭3: 어카운트 ─────────────────────────────────────────────────────────────
   const acctAllowed = useMemo(
-    () => agg.accountNames.filter(nm => selectedSegs.has(agg.acctMid[nm])),
-    [agg, selectedSegs],
+    () => agg.accountNames.filter(nm => draftSegs.has(agg.acctMid[nm])),
+    [agg, draftSegs],
   )
   function acctControlsRow() {
-    const selBtn = (which: 'seg' | 'acct', Icon: typeof LayoutGrid, label: string, count: number) => (
-      <div className="dow-dd-btn" onClick={() => setOpenDrop(openDrop === which ? null : which)} style={{
-        display: 'flex', alignItems: 'center', gap: 7, background: '#0d1512', border: '0.5px solid rgba(0,229,160,0.45)',
-        borderRadius: 8, padding: '7px 11px', cursor: 'pointer',
-      }}>
-        <Icon size={13} color={MINT} />
-        <span style={{ fontSize: 12, color: '#e8e8e8' }}>{label}</span>
-        <span style={{ fontSize: 10, background: 'rgba(0,229,160,0.18)', color: MINT, padding: '2px 7px', borderRadius: 5 }}>{count}개 선택</span>
-        <span style={{ fontSize: 9, color: MINT }}>▾</span>
-      </div>
-    )
-    const yrItem = (v: YearSel, label: string) => (
-      <span key={v} onClick={() => setAcctYearSel(v)} style={{
-        fontSize: 10, padding: '5px 11px', borderRadius: 5, cursor: 'pointer',
-        ...(acctYearSel === v ? { background: 'rgba(0,229,160,0.12)', color: MINT } : { color: '#777' }),
-      }}>{label}</span>
-    )
-    const mItem = (v: Metric, label: string) => (
-      <span key={v} onClick={() => setAcctMetric(v)} style={{
-        fontSize: 10, padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
-        ...(acctMetric === v
-          ? { border: '0.5px solid rgba(0,229,160,0.5)', background: 'rgba(0,229,160,0.08)', color: MINT }
-          : { border: '0.5px solid #262626', color: '#888' }),
-      }}>{label}</span>
-    )
+    const selBtn = (which: 'seg' | 'acct', Icon: typeof LayoutGrid, label: string, count: number) => {
+      const full = which === 'acct' && count >= 4
+      const accent = full ? '#F59E0B' : MINT
+      return (
+        <div className="dow-dd-btn" onClick={() => {
+          if (openDrop === which) { setOpenDrop(null); return }
+          setDraftSegs(new Set(selectedSegs)); setDraftAccts(new Set(selectedAccts))
+          setOpenDrop(which)
+        }} style={{
+          display: 'flex', alignItems: 'center', gap: 7, background: '#0d1512',
+          border: full ? '0.5px solid rgba(245,158,11,0.45)' : '0.5px solid rgba(0,229,160,0.45)',
+          borderRadius: 8, padding: '7px 11px', cursor: 'pointer',
+        }}>
+          <Icon size={13} color={accent} />
+          <span style={{ fontSize: 12, color: '#e8e8e8' }}>{label}</span>
+          <span style={{ fontSize: 10, background: full ? 'rgba(245,158,11,0.18)' : 'rgba(0,229,160,0.18)', color: accent, padding: '2px 7px', borderRadius: 5 }}>{full ? '4개 · 가득' : `${count}개 선택`}</span>
+          <span style={{ fontSize: 9, color: accent }}>▾</span>
+        </div>
+      )
+    }
+    // 전년 기준 토글 (탭1·탭2와 lyBasis 공유) — 골드 계열, ly_otb 없으면 '동기간 온북' 비활성
+    const lyItem = (v: 'ly_otb' | 'ly_close', label: string) => {
+      const disabled = v === 'ly_otb' && !hasLyOtb
+      const active = lyBasis === v
+      return (
+        <span key={v} onClick={disabled ? undefined : () => setLyBasis(v)} style={{
+          fontSize: 10, padding: '3px 8px', borderRadius: 4,
+          cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.3 : 1,
+          ...(active ? { background: 'rgba(245,158,11,0.14)', color: '#F59E0B' } : { color: '#777' }),
+        }}>{label}</span>
+      )
+    }
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
         <div style={{ position: 'relative' }}>
@@ -805,12 +870,10 @@ export default function DowPerformancePage() {
           {selBtn('acct', Store, '어카운트', selectedAccts.size)}
           {openDrop === 'acct' && acctDropdown()}
         </div>
-        <div style={{ width: 1, height: 22, background: '#242424' }} />
-        <div style={{ display: 'flex', gap: 2, background: '#0c0c0c', border: '0.5px solid #242424', borderRadius: 7, padding: 2 }}>
-          {yrItem('gap', 'GAP')}{yrItem('cy', String(selectedYear))}{yrItem('ly', String(selectedYear - 1))}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {mItem('rn', '객실')}{mItem('adr', '객단가')}{mItem('rev', '매출')}
+        <span style={{ fontSize: 10, color: '#3a3a3a' }}>최대 4개</span>
+        <div style={{ flex: 1 }} />
+        <div style={{ display: 'flex', background: '#0c0c0c', border: '0.5px solid #242424', borderRadius: 5, padding: 2 }}>
+          {lyItem('ly_otb', '동기간 온북')}{lyItem('ly_close', '마감')}
         </div>
       </div>
     )
@@ -825,14 +888,15 @@ export default function DowPerformancePage() {
     position: 'absolute', top: 40, left: 0, width: 206, background: '#0d0d0d',
     border: '0.5px solid rgba(0,229,160,0.30)', borderRadius: 10, boxShadow: '0 10px 28px rgba(0,0,0,0.8)', zIndex: 20,
   }
-  const ddBtns = (onReset: () => void, resetLabel: string, onDone: () => void) => (
+  const ddBtns = (onClear: () => void, onAll: () => void, onDone: () => void) => (
     <div style={{ padding: '9px 10px', borderTop: '0.5px solid #1a1a1a', display: 'flex', gap: 5 }}>
-      <button onClick={onReset} style={{ flex: 1, fontSize: 10, padding: '6px 0', borderRadius: 6, textAlign: 'center', border: '0.5px solid #2a2a2a', background: 'transparent', color: '#999', cursor: 'pointer' }}>{resetLabel}</button>
+      <button onClick={onClear} style={{ flex: 1, fontSize: 10, padding: '6px 0', borderRadius: 6, textAlign: 'center', border: '0.5px solid #2a2a2a', background: 'transparent', color: '#999', cursor: 'pointer' }}>초기화</button>
+      <button onClick={onAll} style={{ flex: 1, fontSize: 10, padding: '6px 0', borderRadius: 6, textAlign: 'center', border: '0.5px solid #2a2a2a', background: 'transparent', color: '#999', cursor: 'pointer' }}>전체</button>
       <button onClick={onDone} style={{ flex: 1.3, fontSize: 10, padding: '6px 0', borderRadius: 6, textAlign: 'center', border: 'none', background: MINT, color: '#000', fontWeight: 500, cursor: 'pointer' }}>완료</button>
     </div>
   )
   function segDropdown() {
-    const toggle = (id: string) => setSelectedSegs(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+    const toggle = (id: string) => setDraftSegs(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
     return (
       <div className="dow-dd-panel" style={ddPanel}>
         <div style={{ maxHeight: 212, overflowY: 'auto', padding: '6px 8px' }}>
@@ -842,7 +906,7 @@ export default function DowPerformancePage() {
                 <div style={{ fontSize: 9, color: '#4a4a4a', letterSpacing: 0.5, padding: '6px 2px 3px', textTransform: 'uppercase' }}>{top.name}</div>
               )}
               {(top.children.length ? top.children : [{ id: top.id, name: top.name, codes: top.codes }]).map(mu => {
-                const on = selectedSegs.has(mu.id)
+                const on = draftSegs.has(mu.id)
                 return (
                   <div key={mu.id} onClick={() => toggle(mu.id)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 3px', cursor: 'pointer' }}>
                     {checkbox(on)}
@@ -853,19 +917,19 @@ export default function DowPerformancePage() {
             </Fragment>
           ))}
         </div>
-        {ddBtns(() => setSelectedSegs(new Set(midUnits.map(m => m.id))), '전체', () => setOpenDrop(null))}
+        {ddBtns(() => setDraftSegs(new Set()), () => setDraftSegs(new Set(midUnits.map(m => m.id))), () => { setSelectedSegs(new Set(draftSegs)); setOpenDrop(null) })}
       </div>
     )
   }
   function acctDropdown() {
-    const toggle = (nm: string) => setSelectedAccts(prev => { const n = new Set(prev); n.has(nm) ? n.delete(nm) : n.add(nm); return n })
+    const toggle = (nm: string) => setDraftAccts(prev => { const n = new Set(prev); n.has(nm) ? n.delete(nm) : n.add(nm); return n })
     const q = acctSearch.trim().toLowerCase()
     // 중분류(midUnit) 별 그룹핑
-    const groups = midUnits.filter(mu => selectedSegs.has(mu.id)).map(mu => {
+    const groups = midUnits.filter(mu => draftSegs.has(mu.id)).map(mu => {
       const names = acctAllowed
         .filter(nm => agg.acctMid[nm] === mu.id)
         .filter(nm => !q || nm.toLowerCase().includes(q))
-        .sort((a, b) => Math.abs(gapRaw(acctMetric, acctCellSum(b, 'cy'), acctCellSum(b, lyBasis))) - Math.abs(gapRaw(acctMetric, acctCellSum(a, 'cy'), acctCellSum(a, lyBasis))))
+        .sort((a, b) => Math.abs(acctGapRaw(acctCellSum(b, 'cy'), acctCellSum(b, lyBasis))) - Math.abs(acctGapRaw(acctCellSum(a, 'cy'), acctCellSum(a, lyBasis))))
       return { mu, names }
     }).filter(g => g.names.length > 0)
     return (
@@ -880,10 +944,11 @@ export default function DowPerformancePage() {
             <Fragment key={g.mu.id}>
               <div style={{ fontSize: 9, color: '#4a4a4a', letterSpacing: 0.5, padding: '6px 2px 3px', textTransform: 'uppercase' }}>{g.mu.name}</div>
               {g.names.map(nm => {
-                const on = selectedAccts.has(nm)
-                const gp = gapNode(acctMetric, acctCellSum(nm, 'cy'), acctCellSum(nm, lyBasis))
+                const on = draftAccts.has(nm)
+                const disabled = !on && draftAccts.size >= 4
+                const gp = acctGapNode(acctCellSum(nm, 'cy'), acctCellSum(nm, lyBasis))
                 return (
-                  <div key={nm} onClick={() => toggle(nm)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 3px', cursor: 'pointer' }}>
+                  <div key={nm} onClick={disabled ? undefined : () => toggle(nm)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 3px', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.3 : 1 }}>
                     {checkbox(on)}
                     <span style={{ fontSize: 11, color: on ? '#e8e8e8' : '#777', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nm}</span>
                     <span style={{ fontSize: 10, color: gp.color }}>{gp.text}</span>
@@ -893,66 +958,127 @@ export default function DowPerformancePage() {
             </Fragment>
           ))}
         </div>
-        {ddBtns(() => setSelectedAccts(new Set()), '초기화', () => setOpenDrop(null))}
+        {ddBtns(() => setDraftAccts(new Set()), () => setDraftAccts(new Set([...acctAllowed].sort((a, b) => Math.abs(acctGapRaw(acctCellSum(b, 'cy'), acctCellSum(b, lyBasis))) - Math.abs(acctGapRaw(acctCellSum(a, 'cy'), acctCellSum(a, lyBasis)))).slice(0, 4))), () => { setSelectedAccts(new Set(draftAccts)); setOpenDrop(null) })}
       </div>
     )
   }
   function renderAcctTab() {
     const selNames = [...selectedAccts]
       .filter(nm => selectedSegs.has(agg.acctMid[nm]))
-      .sort((a, b) => Math.abs(gapRaw(acctMetric, acctCellSum(b, 'cy'), acctCellSum(b, lyBasis))) - Math.abs(gapRaw(acctMetric, acctCellSum(a, 'cy'), acctCellSum(a, lyBasis))))
+      .sort((a, b) => Math.abs(acctGapRaw(acctCellSum(b, 'cy'), acctCellSum(b, lyBasis))) - Math.abs(acctGapRaw(acctCellSum(a, 'cy'), acctCellSum(a, lyBasis))))
     const selCodes = midUnits.filter(m => selectedSegs.has(m.id)).flatMap(m => m.codes)
-    const acctFor = (nm: string, dow: number) => cellBySel(acctYearSel, acctMetric, acctCell(nm, 'cy', dow), acctCell(nm, lyBasis, dow))
-    const acctSumFor = (nm: string) => cellBySel(acctYearSel, acctMetric, acctCellSum(nm, 'cy'), acctCellSum(nm, lyBasis))
-    // 선택 합계
-    const selSum = (dow: number) => {
-      let cy: Cell = { n: 0, rev: 0 }, ly: Cell = { n: 0, rev: 0 }
-      for (const nm of selNames) { const a = acctCell(nm, 'cy', dow), b = acctCell(nm, lyBasis, dow); cy = { n: cy.n + a.n, rev: cy.rev + a.rev }; ly = { n: ly.n + b.n, rev: ly.rev + b.rev } }
-      return cellBySel(acctYearSel, acctMetric, cy, ly)
+    const fmt = (v: number) => v.toLocaleString()
+    const purpleStart: React.CSSProperties = { boxShadow: 'inset 1px 0 0 rgba(167,139,250,0.3)' }
+    const tableW = 110 + selNames.length * 3 * 56 + 3 * 62
+    // 어카운트/세그 26년·25년·Δ 값 (선택 지표 1종) — occ = 객실수
+    const triple = (cy: Cell, ly: Cell) => {
+      let v26: number | null, v25: number | null, dRaw: number, dPresent: boolean, isZeroD: boolean
+      if (barBasis === 'occ') {
+        v26 = cy.n === 0 ? null : cy.n
+        v25 = ly.n === 0 ? null : ly.n
+        dRaw = cy.n - ly.n
+        dPresent = !(cy.n === 0 && ly.n === 0)
+        isZeroD = dRaw === 0
+      } else if (barBasis === 'adr') {
+        v26 = cy.n === 0 ? null : scaleUnit(cy.rev / cy.n, adrUnit)
+        v25 = ly.n === 0 ? null : scaleUnit(ly.rev / ly.n, adrUnit)
+        dRaw = scaleUnit((cy.n > 0 ? cy.rev / cy.n : 0) - (ly.n > 0 ? ly.rev / ly.n : 0), adrUnit)
+        dPresent = (cy.n > 0 || cy.rev > 0) && (ly.n > 0 || ly.rev > 0)
+        isZeroD = dRaw === 0
+      } else {
+        v26 = cy.rev === 0 ? null : scaleUnit(cy.rev, revUnit)
+        v25 = ly.rev === 0 ? null : scaleUnit(ly.rev, revUnit)
+        dRaw = scaleUnit(cy.rev - ly.rev, revUnit)
+        dPresent = (cy.n > 0 || cy.rev > 0) && (ly.n > 0 || ly.rev > 0)
+        isZeroD = dRaw === 0
+      }
+      return { v26, v25, dRaw, dPresent, isZeroD }
     }
-    const selSumTot = () => {
-      let cy: Cell = { n: 0, rev: 0 }, ly: Cell = { n: 0, rev: 0 }
-      for (const nm of selNames) { const a = acctCellSum(nm, 'cy'), b = acctCellSum(nm, lyBasis); cy = { n: cy.n + a.n, rev: cy.rev + a.rev }; ly = { n: ly.n + b.n, rev: ly.rev + b.rev } }
-      return cellBySel(acctYearSel, acctMetric, cy, ly)
+    const triCells = (cy: Cell, ly: Cell, tier: 'acct' | 'seg' | 'total', base: React.CSSProperties, firstStart: React.CSSProperties) => {
+      const { v26, v25, dRaw, dPresent, isZeroD } = triple(cy, ly)
+      const c26 = tier === 'acct' ? '#e8e8e8' : tier === 'seg' ? '#bbb' : '#fff'
+      const c25 = tier === 'acct' ? '#888' : tier === 'seg' ? '#777' : '#aaa'
+      const up = tier === 'seg' ? '#3d9d7c' : MINT
+      const down = tier === 'seg' ? '#b04745' : RED
+      const size = tier === 'seg' ? 12 : 13
+      const t26 = v26 === null ? '—' : fmt(v26)
+      const t25 = v25 === null ? '—' : fmt(v25)
+      const dText = !dPresent ? '—' : isZeroD ? '0' : `${dRaw > 0 ? '+' : '−'}${fmt(Math.abs(dRaw))}`
+      const dCol = !dPresent ? '#3f3f3f' : isZeroD ? '#555' : dRaw > 0 ? up : down
+      const cs = (color: string): React.CSSProperties => ({ ...base, textAlign: 'right', whiteSpace: 'nowrap', fontSize: size, color })
+      return (
+        <>
+          <td style={{ ...cs(v26 === null ? '#3f3f3f' : c26), ...firstStart }}>{t26}</td>
+          <td style={cs(v25 === null ? '#3f3f3f' : c25)}>{t25}</td>
+          <td style={cs(dCol)}>{dText}</td>
+        </>
+      )
     }
     return (
       <>
         {acctControlsRow()}
         <div style={card}>
           <div style={leftBar} />
-          <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
-            <thead>
-              <tr>
-                <th style={{ ...th, textAlign: 'left' }}>어카운트</th>
-                {DOWS.map(d => <th key={d} style={{ ...th, color: dowColor(d) }}>{DOW_NAME[d]}</th>)}
-                <th style={{ ...th, color: '#fff' }}>합계</th>
-              </tr>
-            </thead>
-            <tbody>
-              {selNames.length === 0 && (
-                <tr><td colSpan={9} style={{ ...td, textAlign: 'center', color: '#555' }}>선택된 어카운트 없음</td></tr>
-              )}
-              {selNames.map(nm => (
-                <tr key={nm}>
-                  <td style={{ ...td, textAlign: 'left', color: '#e8e8e8', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>{nm}</td>
-                  {DOWS.map(dow => { const c = acctFor(nm, dow); return <td key={dow} style={{ ...td, color: c.color }}>{c.text}</td> })}
-                  {(() => { const c = acctSumFor(nm); return <td style={{ ...td, color: c.color }}>{c.text}</td> })()}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: tableW, tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0 }}>
+              <colgroup>
+                <col style={{ width: 110 }} />
+                {selNames.map(nm => <Fragment key={nm}><col style={{ width: 56 }} /><col style={{ width: 56 }} /><col style={{ width: 56 }} /></Fragment>)}
+                <col style={{ width: 62 }} /><col style={{ width: 62 }} /><col style={{ width: 62 }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left' }} />
+                  {selNames.map(nm => <th key={nm} colSpan={3} style={{ fontSize: 13, textAlign: 'center', paddingBottom: 3, color: '#ccc', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...groupStart }}>{nm}</th>)}
+                  <th colSpan={3} style={{ fontSize: 13, textAlign: 'center', paddingBottom: 3, color: '#7a7a7a', fontWeight: 500, whiteSpace: 'nowrap', ...purpleStart }}>세그 전체</th>
                 </tr>
-              ))}
-              {/* 선택 합계 */}
-              <tr>
-                <td style={{ ...td, textAlign: 'left', borderTop: '1px solid rgba(0,229,160,0.35)', color: '#fff', fontWeight: 500 }}>선택 합계</td>
-                {DOWS.map(dow => { const c = selSum(dow); return <td key={dow} style={{ ...td, borderTop: '1px solid rgba(0,229,160,0.35)', color: c.color, fontWeight: 500 }}>{c.text}</td> })}
-                {(() => { const c = selSumTot(); return <td style={{ ...td, borderTop: '1px solid rgba(0,229,160,0.35)', color: c.color, fontWeight: 500 }}>{c.text}</td> })()}
-              </tr>
-              {/* 세그 전체 */}
-              <tr>
-                <td style={{ ...td, textAlign: 'left', fontSize: 9, color: '#666' }}>세그 전체</td>
-                {DOWS.map(dow => { const c = cellBySel(acctYearSel, acctMetric, segCell(selCodes, 'cy', dow), segCell(selCodes, lyBasis, dow)); return <td key={dow} style={{ ...td, fontSize: 9, color: '#666' }}>{c.text}</td> })}
-                {(() => { const c = cellBySel(acctYearSel, acctMetric, segCellSum(selCodes, 'cy'), segCellSum(selCodes, lyBasis)); return <td style={{ ...td, fontSize: 9, color: '#666' }}>{c.text}</td> })()}
-              </tr>
-            </tbody>
-          </table>
+                <tr>
+                  <th style={{ fontSize: 12, color: '#3a3a3a', textAlign: 'left', padding: '0 5px 7px', fontWeight: 400 }}>일수 · 객실</th>
+                  {selNames.map(nm => (
+                    <Fragment key={nm}>
+                      <th style={{ fontSize: 11, textAlign: 'right', padding: '0 3px 7px', color: '#2f6b57', fontWeight: 400, whiteSpace: 'nowrap', ...groupStart }}>26년</th>
+                      <th style={{ fontSize: 11, textAlign: 'right', padding: '0 3px 7px', color: '#7a6030', fontWeight: 400, whiteSpace: 'nowrap' }}>25년</th>
+                      <th style={{ fontSize: 11, textAlign: 'right', padding: '0 3px 7px', color: '#6a6a6a', fontWeight: 400, whiteSpace: 'nowrap' }}>Δ</th>
+                    </Fragment>
+                  ))}
+                  <th style={{ fontSize: 11, textAlign: 'right', padding: '0 3px 7px', color: '#2f6b57', fontWeight: 400, whiteSpace: 'nowrap', ...purpleStart }}>26년</th>
+                  <th style={{ fontSize: 11, textAlign: 'right', padding: '0 3px 7px', color: '#7a6030', fontWeight: 400, whiteSpace: 'nowrap' }}>25년</th>
+                  <th style={{ fontSize: 11, textAlign: 'right', padding: '0 3px 7px', color: '#6a6a6a', fontWeight: 400, whiteSpace: 'nowrap' }}>Δ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {DOWS.map(dow => {
+                  const dcCy = agg.dayCount.cy[dow] ?? 0, dcLy = agg.dayCount[lyBasis][dow] ?? 0
+                  const dcColor = dcCy === dcLy ? '#4a4a4a' : dcCy > dcLy ? MINT : RED
+                  const base: React.CSSProperties = { padding: '0 5px', height: 36, borderBottom: '0.5px solid #141414' }
+                  return (
+                    <tr key={dow}>
+                      <td style={{ ...base, textAlign: 'left' }}>
+                        <span style={{ fontSize: 16, color: dowColor(dow) }}>{DOW_NAME[dow]}</span>
+                        <span style={{ fontSize: 14, marginLeft: 12, color: dcColor }}>{dcCy}일/{dcLy}일</span>
+                      </td>
+                      {selNames.map(nm => <Fragment key={nm}>{triCells(acctCell(nm, 'cy', dow), acctCell(nm, lyBasis, dow), 'acct', base, groupStart)}</Fragment>)}
+                      {triCells(segCell(selCodes, 'cy', dow), segCell(selCodes, lyBasis, dow), 'seg', base, purpleStart)}
+                    </tr>
+                  )
+                })}
+                {/* 합계 */}
+                {(() => {
+                  const base: React.CSSProperties = { padding: '0 5px', height: 38, borderTop: '1px solid rgba(0,229,160,0.35)' }
+                  return (
+                    <tr>
+                      <td style={{ ...base, textAlign: 'left' }}>
+                        <span style={{ fontSize: 16, color: '#fff' }}>합계</span>
+                        <span style={{ fontSize: 14, marginLeft: 12, color: '#4a4a4a' }}>{agg.monthDays.cy}일/{agg.monthDays[lyBasis]}일</span>
+                      </td>
+                      {selNames.map(nm => <Fragment key={nm}>{triCells(acctCellSum(nm, 'cy'), acctCellSum(nm, lyBasis), 'total', base, groupStart)}</Fragment>)}
+                      {triCells(segCellSum(selCodes, 'cy'), segCellSum(selCodes, lyBasis), 'total', base, purpleStart)}
+                    </tr>
+                  )
+                })()}
+              </tbody>
+            </table>
+          </div>
           {unitFooter(<div />)}
         </div>
       </>
@@ -966,6 +1092,19 @@ export default function DowPerformancePage() {
       ...(tab === t ? { color: MINT, borderBottom: `2px solid ${MINT}`, marginBottom: -1 } : { color: '#777' }),
     }}>{label}</span>
   )
+  const METRIC_ICON = { occ: Percent, adr: Tag, rev: Coins } as const
+  const metricBtn = (v: 'occ' | 'adr' | 'rev', label: string) => {
+    const Icon = v === 'occ' && (tab === 'seg' || tab === 'acct') ? BedDouble : METRIC_ICON[v]
+    return (
+      <span key={v} onClick={() => setBarBasis(v)} style={{
+        display: 'flex', alignItems: 'center', gap: 4,
+        fontSize: 11, padding: '3px 9px', borderRadius: 4, cursor: 'pointer',
+        ...(barBasis === v
+          ? { background: 'rgba(0,229,160,0.14)', color: MINT }
+          : { color: '#777' }),
+      }}><Icon size={11} />{label}</span>
+    )
+  }
 
   return (
     <div>
@@ -994,8 +1133,16 @@ export default function DowPerformancePage() {
       </div>
 
       {/* 탭 바 */}
-      <div style={{ display: 'flex', gap: 2, borderBottom: '0.5px solid #1c1c1c', marginBottom: 16 }}>
-        {tabItem('dow', '요일별 실적')}{tabItem('seg', '세그먼트 실적')}{tabItem('acct', '어카운트')}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '0.5px solid #1c1c1c', marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 2 }}>
+          {tabItem('dow', '요일별 실적')}{tabItem('seg', '세그먼트 실적')}{tabItem('acct', '어카운트')}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, paddingBottom: 6 }}>
+          <BarChart3 size={12} color="#3a3a3a" />
+          <div style={{ display: 'flex', background: '#0c0c0c', border: '0.5px solid #232323', borderRadius: 6, padding: 2 }}>
+            {metricBtn('occ', (tab === 'seg' || tab === 'acct') ? '객실' : '점유율')}{metricBtn('adr', '객단가')}{metricBtn('rev', '매출')}
+          </div>
+        </div>
       </div>
 
       {isLoading && rpcRows.length === 0 ? (
