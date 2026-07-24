@@ -50,9 +50,9 @@ type ModeCfg = { L: [string, string]; R: [string, string]; gap: string }
 const MODE_MAP: Record<Mode, ModeCfg> = {
   cy:          { L: ['cy', 'month_start'], R: ['cy', 'current_otb'], gap: '픽업' },
   ly:          { L: ['ly', 'month_start'], R: ['ly', 'current_otb'], gap: '픽업' },
-  cmp_start:   { L: ['ly', 'month_start'], R: ['cy', 'month_start'], gap: '전년 대비' },
-  cmp_otb:     { L: ['ly', 'current_otb'], R: ['cy', 'current_otb'], gap: '전년 대비' },
-  cmp_closing: { L: ['ly', 'closing'],     R: ['cy', 'closing'],     gap: '전년 대비' },
+  cmp_start:   { L: ['cy', 'month_start'], R: ['ly', 'month_start'], gap: '전년 대비' },
+  cmp_otb:     { L: ['cy', 'current_otb'], R: ['ly', 'current_otb'], gap: '전년 대비' },
+  cmp_closing: { L: ['cy', 'closing'],     R: ['ly', 'closing'],     gap: '전년 대비' },
 }
 
 // 올해/전년 모드는 과거월일 때 우측 시점을 current_otb → closing(마감)으로 전환
@@ -83,7 +83,7 @@ export default function StartEndSegModal({
   const [adrUnit, setAdrUnit] = useState<Unit>('천원')
   const [revUnit, setRevUnit] = useState<Unit>('백만원')
   const [showUnit, setShowUnit] = useState(false)
-  const [selectedSeg, setSelectedSeg] = useState<{ name: string; codes: string[] } | null>(null)
+  const [selectedSeg, setSelectedSeg] = useState<{ name: string; codes: string[]; grp: 'L' | 'R' | 'gap' } | null>(null)
   const [mode, setMode] = useState<Mode>('cy')
 
   useEffect(() => {
@@ -161,6 +161,8 @@ export default function StartEndSegModal({
   const cfg = resolveCfg(mode, monthState)
   const [lYt, lPt] = cfg.L
   const [rYt, rPt] = cfg.R
+  // 비교 모드는 좌(올해)/우(전년)로 배치 → GAP = 좌−우(=올해−전년) 유지 위해 부호 반전. 픽업(올해/전년)은 우−좌 그대로
+  const gapSign = cfg.gap === '전년 대비' ? -1 : 1
   const g1 = data?.seg?.[lYt]?.[lPt] ?? null
   const g2 = data?.seg?.[rYt]?.[rPt] ?? null
   const g1Date = data?.snap?.[lYt]?.[lPt] ?? null
@@ -216,6 +218,9 @@ export default function StartEndSegModal({
     const cfg = resolveCfg(mode, monthState)
     const [alYt, alPt] = cfg.L
     const [arYt, arPt] = cfg.R
+    const gapSign = cfg.gap === '전년 대비' ? -1 : 1
+    const grp = selectedSeg.grp
+    const DIM = 'rgba(255,255,255,0.3)'
     const acc: Record<string, { n1: number; n2: number; rev1: number; rev2: number }> = {}
     for (const r of acctData) {
       const k = r.account_name ?? '(없음)'
@@ -223,14 +228,43 @@ export default function StartEndSegModal({
       if (r.year_type === alYt && r.point_type === alPt) { acc[k].n1 += Number(r.nights ?? 0); acc[k].rev1 += Number(r.room_revenue ?? 0) }
       if (r.year_type === arYt && r.point_type === arPt) { acc[k].n2 += Number(r.nights ?? 0); acc[k].rev2 += Number(r.room_revenue ?? 0) }
     }
+    if (grp === 'gap') {
+      // 증감 (Δ객실 0 제외, Δ객실 내림차순 — 기존)
+      return Object.entries(acc).map(([name, v]) => {
+        const adr1 = v.n1 > 0 ? v.rev1 / v.n1 : null
+        const adr2 = v.n2 > 0 ? v.rev2 / v.n2 : null
+        const dN = gapSign * (v.n2 - v.n1)
+        const sAdr = (adr1 === null || adr2 === null) ? null : scaleUnit(gapSign * (adr2 - adr1), adrUnit)
+        const sRev = scaleUnit(gapSign * (v.rev2 - v.rev1), revUnit)
+        return { name, dN, cells: [
+          { text: dN === 0 ? '—' : `${dN > 0 ? '+' : ''}${dN.toLocaleString('ko-KR')}`, color: dN > 0 ? '#00E5A0' : dN < 0 ? '#E24B4A' : DIM },
+          { text: sAdr === null || sAdr === 0 ? '—' : `${sAdr > 0 ? '+' : ''}${sAdr.toLocaleString()}`, color: sAdr === null || sAdr === 0 ? DIM : sAdr > 0 ? '#00E5A0' : '#E24B4A' },
+          { text: sRev === 0 ? '—' : `${sRev > 0 ? '+' : ''}${sRev.toLocaleString()}`, color: sRev > 0 ? '#00E5A0' : sRev < 0 ? '#E24B4A' : DIM },
+        ] }
+      }).filter(a => a.dN !== 0).sort((a, b) => b.dN - a.dN)
+    }
+    // 올해(L) / 전년(R) 절대값 (객실 0 제외, 객실 내림차순)
+    const col = grp === 'L' ? '#e8e8e8' : '#888'
     return Object.entries(acc).map(([name, v]) => {
-      const adr1 = v.n1 > 0 ? v.rev1 / v.n1 : null
-      const adr2 = v.n2 > 0 ? v.rev2 / v.n2 : null
-      return { name, dN: v.n2 - v.n1, dAdr: (adr1 === null || adr2 === null) ? null : adr2 - adr1, dRev: v.rev2 - v.rev1 }
-    }).sort((a, b) => b.dN - a.dN)
-  }, [selectedSeg, acctData, mode, monthState])
+      const n = grp === 'L' ? v.n1 : v.n2
+      const rev = grp === 'L' ? v.rev1 : v.rev2
+      const adrS = n > 0 ? scaleUnit(rev / n, adrUnit) : 0
+      const revS = scaleUnit(rev, revUnit)
+      return { name, n, cells: [
+        { text: n.toLocaleString('ko-KR'), color: col },
+        { text: adrS === 0 ? '—' : adrS.toLocaleString(), color: adrS === 0 ? DIM : col },
+        { text: revS === 0 ? '—' : revS.toLocaleString(), color: revS === 0 ? DIM : col },
+      ] }
+    }).filter(a => a.n > 0).sort((a, b) => b.n - a.n)
+  }, [selectedSeg, acctData, mode, monthState, adrUnit, revUnit])
 
   const GBORDER = 'inset 1px 0 0 rgba(0,229,160,0.3)'
+  const SEL_BORDER = 'inset 3px 0 0 #00E5A0'
+  // 클릭한 '해당 행 + 해당 그룹'의 객실(첫 컬럼) 셀만 강조
+  const grpBorder = (grp: 'L' | 'R' | 'gap', name: string) => selectedSeg?.grp === grp && selectedSeg?.name === name ? SEL_BORDER : GBORDER
+  // 그룹 셀 클릭 — 같은 그룹+세그 재클릭이면 해제, 아니면 이동
+  const pickSeg = (name: string, codes: string[], grp: 'L' | 'R' | 'gap') =>
+    setSelectedSeg(prev => prev && prev.grp === grp && prev.name === name ? null : { name, codes, grp })
   const th: React.CSSProperties = { fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.5)', padding: '5px 8px', textAlign: 'right', whiteSpace: 'nowrap' }
   const td: React.CSSProperties = { fontSize: 11, padding: '5px 8px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: '0.5px solid rgba(255,255,255,0.05)' }
 
@@ -243,31 +277,31 @@ export default function StartEndSegModal({
   function GroupCells({ name, codes, isMain }: { name: string; codes: string[]; isMain: boolean }) {
     const a = noL ? { n: 0, rev: 0 } : sumCodes(g1, codes)
     const b = noR ? { n: 0, rev: 0 } : sumCodes(g2, codes)
-    const dN = b.n - a.n
+    const dN = gapSign * (b.n - a.n)
     const adrA = a.n > 0 ? a.rev / a.n : 0, adrB = b.n > 0 ? b.rev / b.n : 0
-    const dAdr = scaleUnit(adrB - adrA, adrUnit)
-    const dRev = scaleUnit(b.rev - a.rev, revUnit)
+    const dAdr = scaleUnit(gapSign * (adrB - adrA), adrUnit)
+    const dRev = scaleUnit(gapSign * (b.rev - a.rev), revUnit)
     return (
       <>
-        {/* 그룹1 */}
-        <td style={{ ...td, boxShadow: GBORDER }}>{noL ? '—' : fmtN(a.n)}</td>
-        <td style={td}>{noL ? '—' : (a.n === 0 ? '—' : scaleUnit(a.rev / a.n, adrUnit).toLocaleString())}</td>
-        <td style={td}>{noL ? '—' : fmtRev(a.rev)}</td>
-        {/* 그룹2 */}
-        <td style={{ ...td, boxShadow: GBORDER }}>{noR ? '—' : fmtN(b.n)}</td>
-        <td style={td}>{noR ? '—' : (b.n === 0 ? '—' : scaleUnit(b.rev / b.n, adrUnit).toLocaleString())}</td>
-        <td style={td}>{noR ? '—' : fmtRev(b.rev)}</td>
+        {/* 그룹1 (올해) */}
+        <td style={{ ...td, boxShadow: grpBorder('L', name), cursor: noL ? 'default' : 'pointer' }} onClick={noL ? undefined : () => pickSeg(name, codes, 'L')}>{noL ? '—' : fmtN(a.n)}</td>
+        <td style={{ ...td, cursor: noL ? 'default' : 'pointer' }} onClick={noL ? undefined : () => pickSeg(name, codes, 'L')}>{noL ? '—' : (a.n === 0 ? '—' : scaleUnit(a.rev / a.n, adrUnit).toLocaleString())}</td>
+        <td style={{ ...td, cursor: noL ? 'default' : 'pointer' }} onClick={noL ? undefined : () => pickSeg(name, codes, 'L')}>{noL ? '—' : fmtRev(a.rev)}</td>
+        {/* 그룹2 (전년) */}
+        <td style={{ ...td, boxShadow: grpBorder('R', name), cursor: noR ? 'default' : 'pointer' }} onClick={noR ? undefined : () => pickSeg(name, codes, 'R')}>{noR ? '—' : fmtN(b.n)}</td>
+        <td style={{ ...td, cursor: noR ? 'default' : 'pointer' }} onClick={noR ? undefined : () => pickSeg(name, codes, 'R')}>{noR ? '—' : (b.n === 0 ? '—' : scaleUnit(b.rev / b.n, adrUnit).toLocaleString())}</td>
+        <td style={{ ...td, cursor: noR ? 'default' : 'pointer' }} onClick={noR ? undefined : () => pickSeg(name, codes, 'R')}>{noR ? '—' : fmtRev(b.rev)}</td>
         {/* GAP */}
-        <td style={{ ...td, boxShadow: GBORDER, cursor: noGap ? 'default' : 'pointer', color: noGap ? 'rgba(255,255,255,0.3)' : gapColor(dN, isMain) }}
-            onClick={noGap ? undefined : () => setSelectedSeg({ name, codes })}>
+        <td style={{ ...td, boxShadow: grpBorder('gap', name), cursor: noGap ? 'default' : 'pointer', color: noGap ? 'rgba(255,255,255,0.3)' : gapColor(dN, isMain) }}
+            onClick={noGap ? undefined : () => pickSeg(name, codes, 'gap')}>
           {noGap ? '—' : gapNum(dN)}
         </td>
         <td style={{ ...td, cursor: noGap ? 'default' : 'pointer', color: noGap ? 'rgba(255,255,255,0.3)' : gapColor(dAdr, isMain) }}
-            onClick={noGap ? undefined : () => setSelectedSeg({ name, codes })}>
+            onClick={noGap ? undefined : () => pickSeg(name, codes, 'gap')}>
           {noGap ? '—' : (dAdr === 0 ? '—' : `${dAdr > 0 ? '+' : ''}${dAdr.toLocaleString()}`)}
         </td>
         <td style={{ ...td, cursor: noGap ? 'default' : 'pointer', color: noGap ? 'rgba(255,255,255,0.3)' : gapColor(dRev, isMain) }}
-            onClick={noGap ? undefined : () => setSelectedSeg({ name, codes })}>
+            onClick={noGap ? undefined : () => pickSeg(name, codes, 'gap')}>
           {noGap ? '—' : (dRev === 0 ? '—' : `${dRev > 0 ? '+' : ''}${dRev.toLocaleString()}`)}
         </td>
       </>
@@ -277,6 +311,9 @@ export default function StartEndSegModal({
   // 하단 합계/점유율/REVPAR
   const totA = sumCodes(g1, allCodes)
   const totB = noR ? { n: 0, rev: 0 } : sumCodes(g2, allCodes)
+  // 합계 Δ객단가 — 각 그룹의 합계 객단가(매출합/객실합) 차이 (세그별 합산 아님)
+  const noAdrTot = noGap || totA.n === 0 || totB.n === 0
+  const dAdrTot = scaleUnit(gapSign * ((totB.n > 0 ? totB.rev / totB.n : 0) - (totA.n > 0 ? totA.rev / totA.n : 0)), adrUnit)
   const occ = (n: number) => cap > 0 ? `${((n / cap) * 100).toFixed(1)}%` : '—'
   const revpar = (rev: number) => cap > 0 ? `${Math.round(rev / cap / 1000)}k` : '—'
 
@@ -303,6 +340,7 @@ export default function StartEndSegModal({
             </button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 10, color: '#555' }}>Start-End</span>
             {/* 올해 / 전년 — 붙은 세그먼트 컨트롤 */}
             <div style={{ display: 'flex', background: '#0c0c0c', border: '0.5px solid #242424', borderRadius: 7, padding: 2 }}>
               <div onClick={() => setMode('cy')} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '5px 11px', borderRadius: 5, cursor: 'pointer', ...(mode === 'cy' ? { background: 'rgba(0,229,160,0.12)', color: '#00E5A0' } : { color: '#777' }) }}>
@@ -381,23 +419,23 @@ export default function StartEndSegModal({
                     <td style={{ ...td, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.35)' }}>{noR ? '—' : (totB.n === 0 ? '—' : scaleUnit(totB.rev / totB.n, adrUnit).toLocaleString())}</td>
                     <td style={{ ...td, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.35)' }}>{noR ? '—' : fmtRev(totB.rev)}</td>
                     {/* GAP */}
-                    <td style={{ ...td, boxShadow: GBORDER, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.35)', color: gapColor(totB.n - totA.n, true) }}>{noGap ? '—' : gapNum(totB.n - totA.n)}</td>
-                    <td style={{ ...td, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.35)' }} />
-                    <td style={{ ...td, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.35)', color: gapColor(totB.rev - totA.rev, true) }}>{noGap ? '—' : gapNum(scaleUnit(totB.rev - totA.rev, revUnit))}</td>
+                    <td style={{ ...td, boxShadow: GBORDER, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.35)', color: gapColor(gapSign * (totB.n - totA.n), true) }}>{noGap ? '—' : gapNum(gapSign * (totB.n - totA.n))}</td>
+                    <td style={{ ...td, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.35)', color: noAdrTot ? '#3f3f3f' : gapColor(dAdrTot, true) }}>{noAdrTot ? '—' : gapNum(dAdrTot)}</td>
+                    <td style={{ ...td, fontWeight: 600, borderTop: '1px solid rgba(0,229,160,0.35)', color: gapColor(gapSign * (totB.rev - totA.rev), true) }}>{noGap ? '—' : gapNum(scaleUnit(gapSign * (totB.rev - totA.rev), revUnit))}</td>
                   </tr>
                   {/* 점유율 */}
                   <tr>
                     <td style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.4)', padding: '6px 8px' }}>점유율</td>
                     <td colSpan={3} style={{ ...td, textAlign: 'center', boxShadow: GBORDER, fontWeight: 600 }}>{occ(totA.n)}</td>
                     <td colSpan={3} style={{ ...td, textAlign: 'center', boxShadow: GBORDER, fontWeight: 600 }}>{noR ? '—' : occ(totB.n)}</td>
-                    <td colSpan={3} style={{ ...td, textAlign: 'center', boxShadow: GBORDER, fontWeight: 600 }}>{noGap ? '—' : `${(((totB.n - totA.n) / (cap || 1)) * 100).toFixed(1)}%p`}</td>
+                    <td colSpan={3} style={{ ...td, textAlign: 'center', boxShadow: GBORDER, fontWeight: 600 }}>{noGap ? '—' : `${((gapSign * (totB.n - totA.n) / (cap || 1)) * 100).toFixed(1)}%p`}</td>
                   </tr>
                   {/* REVPAR */}
                   <tr>
                     <td style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.4)', padding: '6px 8px' }}>REVPAR</td>
                     <td colSpan={3} style={{ ...td, textAlign: 'center', boxShadow: GBORDER, fontWeight: 600 }}>{revpar(totA.rev)}</td>
                     <td colSpan={3} style={{ ...td, textAlign: 'center', boxShadow: GBORDER, fontWeight: 600 }}>{noR ? '—' : revpar(totB.rev)}</td>
-                    <td colSpan={3} style={{ ...td, textAlign: 'center', boxShadow: GBORDER, fontWeight: 600 }}>{noGap ? '—' : `${Math.round((totB.rev - totA.rev) / (cap || 1) / 1000)}k`}</td>
+                    <td colSpan={3} style={{ ...td, textAlign: 'center', boxShadow: GBORDER, fontWeight: 600 }}>{noGap ? '—' : `${Math.round(gapSign * (totB.rev - totA.rev) / (cap || 1) / 1000)}k`}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -407,8 +445,8 @@ export default function StartEndSegModal({
           {/* 우측 Account 패널 */}
           <div style={{ width: 340, flexShrink: 0, borderLeft: '0.5px solid rgba(0,229,160,0.18)', display: 'flex', flexDirection: 'column', background: '#000' }}>
             <div style={{ padding: '10px 12px', borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
-              <div style={{ fontSize: 11, fontWeight: 500, color: '#F59E0B' }}>Account 증감</div>
-              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', marginTop: 3 }}>{selectedSeg ? (selectedSeg.name || '선택됨') : '세그먼트를 클릭하세요'}</div>
+              <div style={{ fontSize: 11, fontWeight: 500, color: '#F59E0B' }}>{selectedSeg && selectedSeg.grp !== 'gap' ? 'Account 실적' : 'Account 증감'}</div>
+              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', marginTop: 3 }}>{selectedSeg ? (selectedSeg.grp === 'gap' ? (selectedSeg.name || '선택됨') : `${selectedSeg.grp === 'L' ? sideTitle(lYt, lPt) : sideTitle(rYt, rPt)} · ${selectedSeg.name}`) : '세그먼트를 클릭하세요'}</div>
             </div>
             <div style={{ display: 'flex', padding: '4px 12px', borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
               <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', flex: 1 }}>어카운트</span>
@@ -426,20 +464,16 @@ export default function StartEndSegModal({
                 </div>
               ) : accountList.length === 0 ? (
                 <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', padding: 12 }}>데이터 없음</div>
-              ) : accountList.map((a, i) => {
-                const sAdr = a.dAdr === null ? null : scaleUnit(a.dAdr, adrUnit)
-                const sRev = scaleUnit(a.dRev, revUnit)
-                return (
+              ) : accountList.map((a, i) => (
                 <div key={`${a.name}-${i}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 12px', borderBottom: '0.5px solid #141414' }}>
                   <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>{a.name}</span>
                   <div style={{ display: 'flex', flexShrink: 0 }}>
-                    <span style={{ fontSize: 11, width: 40, textAlign: 'right', color: a.dN > 0 ? '#00E5A0' : a.dN < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)' }}>{gapNum(a.dN)}</span>
-                    <span style={{ fontSize: 11, width: 52, textAlign: 'right', color: sAdr === null || sAdr === 0 ? 'rgba(255,255,255,0.3)' : sAdr > 0 ? '#00E5A0' : '#E24B4A' }}>{sAdr === null || sAdr === 0 ? '—' : `${sAdr > 0 ? '+' : ''}${sAdr.toLocaleString()}`}</span>
-                    <span style={{ fontSize: 11, width: 56, textAlign: 'right', color: sRev > 0 ? '#00E5A0' : sRev < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)' }}>{sRev === 0 ? '—' : `${sRev > 0 ? '+' : ''}${sRev.toLocaleString()}`}</span>
+                    <span style={{ fontSize: 11, width: 40, textAlign: 'right', color: a.cells[0].color }}>{a.cells[0].text}</span>
+                    <span style={{ fontSize: 11, width: 52, textAlign: 'right', color: a.cells[1].color }}>{a.cells[1].text}</span>
+                    <span style={{ fontSize: 11, width: 56, textAlign: 'right', color: a.cells[2].color }}>{a.cells[2].text}</span>
                   </div>
                 </div>
-                )
-              })}
+              ))}
             </div>
           </div>
         </div>

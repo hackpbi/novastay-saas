@@ -34,6 +34,7 @@ type DowRow = {
 const MINT = '#00E5A0'
 const RED  = '#E24B4A'
 const AMBER = '#F59E0B'
+const MAX_ACCTS = 5   // 어카운트 최대 선택 개수 (탭3)
 const pad = (n: number) => String(n).padStart(2, '0')
 const DOWS = [1, 2, 3, 4, 5, 6, 7]
 const DOW_NAME: Record<number, string> = { 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토', 7: '일' }
@@ -134,6 +135,8 @@ export default function DowPerformancePage() {
   const [draftAccts, setDraftAccts] = useState<Set<string>>(new Set())
   const [openDrop, setOpenDrop] = useState<'seg' | 'acct' | null>(null)
   const [acctSearch, setAcctSearch] = useState('')
+  // 탭3 하단 요일별 구성 카드 대상 (null = 세그 전체)
+  const [dowCardAcct, setDowCardAcct] = useState<string | null>(null)
 
   const m1 = selectedMonth + 1
   const otbY = otbBase.getFullYear()
@@ -768,10 +771,10 @@ export default function DowPerformancePage() {
           </div>
         </div>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: 1252, tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0 }}>
+          <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0 }}>
             <colgroup>
-              <col style={{ width: 160 }} />
-              {DOWS.map(d => <Fragment key={d}><col style={{ width: 52 }} /><col style={{ width: 52 }} /><col style={{ width: 52 }} /></Fragment>)}
+              <col style={{ width: '13%' }} />
+              {DOWS.map(d => <Fragment key={d}><col style={{ width: '4.14%' }} /><col style={{ width: '4.14%' }} /><col style={{ width: '4.14%' }} /></Fragment>)}
             </colgroup>
             <thead>
               <tr>
@@ -829,7 +832,7 @@ export default function DowPerformancePage() {
   )
   function acctControlsRow() {
     const selBtn = (which: 'seg' | 'acct', Icon: typeof LayoutGrid, label: string, count: number) => {
-      const full = which === 'acct' && count >= 4
+      const full = which === 'acct' && count >= MAX_ACCTS
       const accent = full ? '#F59E0B' : MINT
       return (
         <div className="dow-dd-btn" onClick={() => {
@@ -843,7 +846,7 @@ export default function DowPerformancePage() {
         }}>
           <Icon size={13} color={accent} />
           <span style={{ fontSize: 12, color: '#e8e8e8' }}>{label}</span>
-          <span style={{ fontSize: 10, background: full ? 'rgba(245,158,11,0.18)' : 'rgba(0,229,160,0.18)', color: accent, padding: '2px 7px', borderRadius: 5 }}>{full ? '4개 · 가득' : `${count}개 선택`}</span>
+          <span style={{ fontSize: 10, background: full ? 'rgba(245,158,11,0.18)' : 'rgba(0,229,160,0.18)', color: accent, padding: '2px 7px', borderRadius: 5 }}>{full ? `${MAX_ACCTS}개 · 가득` : `${count}개 선택`}</span>
           <span style={{ fontSize: 9, color: accent }}>▾</span>
         </div>
       )
@@ -870,7 +873,7 @@ export default function DowPerformancePage() {
           {selBtn('acct', Store, '어카운트', selectedAccts.size)}
           {openDrop === 'acct' && acctDropdown()}
         </div>
-        <span style={{ fontSize: 10, color: '#3a3a3a' }}>최대 4개</span>
+        <span style={{ fontSize: 10, color: '#3a3a3a' }}>최대 {MAX_ACCTS}개</span>
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', background: '#0c0c0c', border: '0.5px solid #242424', borderRadius: 5, padding: 2 }}>
           {lyItem('ly_otb', '동기간 온북')}{lyItem('ly_close', '마감')}
@@ -945,7 +948,7 @@ export default function DowPerformancePage() {
               <div style={{ fontSize: 9, color: '#4a4a4a', letterSpacing: 0.5, padding: '6px 2px 3px', textTransform: 'uppercase' }}>{g.mu.name}</div>
               {g.names.map(nm => {
                 const on = draftAccts.has(nm)
-                const disabled = !on && draftAccts.size >= 4
+                const disabled = !on && draftAccts.size >= MAX_ACCTS
                 const gp = acctGapNode(acctCellSum(nm, 'cy'), acctCellSum(nm, lyBasis))
                 return (
                   <div key={nm} onClick={disabled ? undefined : () => toggle(nm)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 3px', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.3 : 1 }}>
@@ -958,7 +961,7 @@ export default function DowPerformancePage() {
             </Fragment>
           ))}
         </div>
-        {ddBtns(() => setDraftAccts(new Set()), () => setDraftAccts(new Set([...acctAllowed].sort((a, b) => Math.abs(acctGapRaw(acctCellSum(b, 'cy'), acctCellSum(b, lyBasis))) - Math.abs(acctGapRaw(acctCellSum(a, 'cy'), acctCellSum(a, lyBasis)))).slice(0, 4))), () => { setSelectedAccts(new Set(draftAccts)); setOpenDrop(null) })}
+        {ddBtns(() => setDraftAccts(new Set()), () => setDraftAccts(new Set([...acctAllowed].sort((a, b) => Math.abs(acctGapRaw(acctCellSum(b, 'cy'), acctCellSum(b, lyBasis))) - Math.abs(acctGapRaw(acctCellSum(a, 'cy'), acctCellSum(a, lyBasis)))).slice(0, MAX_ACCTS))), () => { setSelectedAccts(new Set(draftAccts)); setOpenDrop(null) })}
       </div>
     )
   }
@@ -969,7 +972,22 @@ export default function DowPerformancePage() {
     const selCodes = midUnits.filter(m => selectedSegs.has(m.id)).flatMap(m => m.codes)
     const fmt = (v: number) => v.toLocaleString()
     const purpleStart: React.CSSProperties = { boxShadow: 'inset 1px 0 0 rgba(167,139,250,0.3)' }
-    const tableW = 110 + selNames.length * 3 * 56 + 3 * 62
+    // 폭 비율(%) — 요일 12 / 세그전체 각 6 / 어카운트 컬럼(N×3)이 나머지 70 균등. 0개면 세그전체가 나머지 채움
+    const nAcct = selNames.length
+    const acctColW = nAcct > 0 ? 70 / (nAcct * 3) : 0
+    const segColW = nAcct > 0 ? 6 : 88 / 3
+    // ── 하단 요일별 구성 카드 (객실수 고정, 지표 버튼 무관) ──
+    const activeCardAcct = dowCardAcct && selNames.includes(dowCardAcct) ? dowCardAcct : null
+    const cardN = (yt: YearType, dow: number) => activeCardAcct ? acctCell(activeCardAcct, yt, dow).n : segCell(selCodes, yt, dow).n
+    const cardTotCy = activeCardAcct ? acctCellSum(activeCardAcct, 'cy').n : segCellSum(selCodes, 'cy').n
+    const cardTotLy = activeCardAcct ? acctCellSum(activeCardAcct, lyBasis).n : segCellSum(selCodes, lyBasis).n
+    const cardData = DOWS.map(dow => {
+      const cyN = cardN('cy', dow)
+      const share = cardTotCy > 0 ? cyN / cardTotCy * 100 : 0
+      const yoy = cardTotLy > 0 ? share - (cardN(lyBasis, dow) / cardTotLy * 100) : null
+      return { dow, cyN, share, yoy }
+    })
+    const cardTopDow = cardTotCy > 0 ? cardData.reduce((mx, d) => d.share > mx.share ? d : mx).dow : -1
     // 어카운트/세그 26년·25년·Δ 값 (선택 지표 1종) — occ = 객실수
     const triple = (cy: Cell, ly: Cell) => {
       let v26: number | null, v25: number | null, dRaw: number, dPresent: boolean, isZeroD: boolean
@@ -1020,17 +1038,17 @@ export default function DowPerformancePage() {
         <div style={card}>
           <div style={leftBar} />
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: tableW, tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0 }}>
+            <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'separate', borderSpacing: 0 }}>
               <colgroup>
-                <col style={{ width: 110 }} />
-                {selNames.map(nm => <Fragment key={nm}><col style={{ width: 56 }} /><col style={{ width: 56 }} /><col style={{ width: 56 }} /></Fragment>)}
-                <col style={{ width: 62 }} /><col style={{ width: 62 }} /><col style={{ width: 62 }} />
+                <col style={{ width: '12%' }} />
+                {selNames.map(nm => <Fragment key={nm}><col style={{ width: `${acctColW}%` }} /><col style={{ width: `${acctColW}%` }} /><col style={{ width: `${acctColW}%` }} /></Fragment>)}
+                <col style={{ width: `${segColW}%` }} /><col style={{ width: `${segColW}%` }} /><col style={{ width: `${segColW}%` }} />
               </colgroup>
               <thead>
                 <tr>
                   <th style={{ textAlign: 'left' }} />
-                  {selNames.map(nm => <th key={nm} colSpan={3} style={{ fontSize: 13, textAlign: 'center', paddingBottom: 3, color: '#ccc', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...groupStart }}>{nm}</th>)}
-                  <th colSpan={3} style={{ fontSize: 13, textAlign: 'center', paddingBottom: 3, color: '#7a7a7a', fontWeight: 500, whiteSpace: 'nowrap', ...purpleStart }}>세그 전체</th>
+                  {selNames.map(nm => <th key={nm} colSpan={3} onClick={() => setDowCardAcct(nm)} style={{ fontSize: 13, textAlign: 'center', paddingBottom: 3, color: activeCardAcct === nm ? MINT : '#ccc', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', ...groupStart }}>{nm}</th>)}
+                  <th colSpan={3} onClick={() => setDowCardAcct(null)} style={{ fontSize: 13, textAlign: 'center', paddingBottom: 3, color: activeCardAcct === null ? MINT : '#7a7a7a', fontWeight: 500, whiteSpace: 'nowrap', cursor: 'pointer', ...purpleStart }}>세그 전체</th>
                 </tr>
                 <tr>
                   <th style={{ fontSize: 12, color: '#3a3a3a', textAlign: 'left', padding: '0 5px 7px', fontWeight: 400 }}>일수 · 객실</th>
@@ -1080,6 +1098,53 @@ export default function DowPerformancePage() {
             </table>
           </div>
           {unitFooter(<div />)}
+        </div>
+        {/* ── 하단: 요일별 구성 카드 7개 (객실수 고정) ── */}
+        <div style={{ marginTop: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 14, fontWeight: 500, color: MINT }}>요일별 구성</span>
+              <span style={{ fontSize: 11, color: '#4a4a4a' }}>{activeCardAcct ?? '세그 전체'}</span>
+            </div>
+            <span style={{ fontSize: 10, color: '#3a3a3a' }}>표의 어카운트명을 클릭하면 해당 어카운트로 전환</span>
+          </div>
+          <div style={{ fontSize: 10, color: '#4a4a4a', marginBottom: 12 }}>비중 = 월 전체 객실수 중 그 요일이 차지하는 몫 · 전년비 = 작년 같은 달의 비중과 비교</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {cardData.map(d => {
+              const dowCol = d.dow === 6 ? MINT : d.dow === 7 ? RED : '#999'
+              const empty = cardTotCy <= 0
+              const noPrev = d.yoy === null
+              const up = d.yoy !== null && d.yoy >= 0
+              const isTop = d.dow === cardTopDow
+              const barColor = noPrev ? '#2a2a2a' : up ? MINT : RED
+              return (
+                <div key={d.dow} style={{ flex: 1, background: '#0d0d0d', border: isTop ? '0.5px solid rgba(0,229,160,0.28)' : '0.5px solid #1c1c1c', borderRadius: 10, padding: '11px 11px 10px' }}>
+                  <div style={{ textAlign: 'center', fontSize: 12, marginBottom: 7, color: dowCol }}>{DOW_NAME[d.dow]}</div>
+                  <div style={{ textAlign: 'center', marginBottom: 9 }}>
+                    {empty ? <span style={{ fontSize: 23, fontWeight: 500, color: '#3f3f3f' }}>—</span> : (
+                      <>
+                        <span style={{ fontSize: 23, fontWeight: 500, letterSpacing: '-0.5px', color: isTop ? MINT : '#e8e8e8' }}>{d.share.toFixed(1)}</span>
+                        <span style={{ fontSize: 12, color: isTop ? '#2f6b57' : '#666', marginLeft: 1 }}>%</span>
+                      </>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+                    <span style={{ fontSize: 10, color: '#4a4a4a' }}>객실</span>
+                    <span style={{ fontSize: 12, color: '#ccc' }}>{empty ? '—' : (<>{d.cyN.toLocaleString()}<span style={{ fontSize: 9, color: '#666', marginLeft: 1 }}>실</span></>)}</span>
+                  </div>
+                  <div style={{ height: 5, background: '#1a1a1a', borderRadius: 3, overflow: 'hidden', marginBottom: 7 }}>
+                    <div style={{ height: '100%', borderRadius: 3, width: `${empty ? 0 : d.share}%`, background: barColor }} />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <span style={{ fontSize: 10, color: '#4a4a4a' }}>전년비</span>
+                    <span style={{ fontSize: 11, color: empty || noPrev ? '#4a4a4a' : up ? MINT : RED }}>
+                      {empty || noPrev ? '—' : (<>{up ? '▲' : '▼'}{Math.abs(d.yoy!).toFixed(1)}<span style={{ fontSize: 9 }}>%p</span></>)}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       </>
     )
