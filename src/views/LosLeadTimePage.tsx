@@ -27,13 +27,12 @@ const BLUE  = '#5B8DEF'
 const AMBER = '#F59E0B'
 const pad = (n: number) => String(n).padStart(2, '0')
 
-// 레이아웃 폭
-const NAME_W = 132
-const LY_W = 44, YOY_W = 140, CY_W = 44          // LOS 구역 = 228
-const NEG_W = 40, BAR_W = 60, POS_W = 40         // YoY 내부
+// 레이아웃 폭 — 두 구역은 flex:1 균등, 나머지는 고정
+const NAME_W = 116
+const LY_W = 40, CY_W = 42                        // LOS 구역: '25년 40, YoY flex, '26년 42
+const NEG_W = 42, POS_W = 42, BAR_HALF = 28       // YoY 라벨 42 · 막대 편측 최대 28px
 const GAP_W = 12
-const LLY_W = 32, LCY_W = 38                     // 리드타임 좌/우 (막대 flex)
-const LOS_W = LY_W + YOY_W + CY_W
+const LLY_W = 30, LCY_W = 40                      // 리드타임 좌/우 (막대 flex)
 const MINT_OV = 'inset 0 0 0 999px rgba(0,229,160,0.045)'
 const BLUE_OV = 'inset 0 0 0 999px rgba(91,141,239,0.05)'
 
@@ -70,6 +69,9 @@ export default function LosLeadTimePage() {
   const m1 = selMonth + 1
   const fromDate = `${selYear}-${pad(m1)}-01`
   const toDate   = `${selYear}-${pad(m1)}-${pad(new Date(selYear, m1, 0).getDate())}`
+
+  // 과거 기간 판정 (선택 월이 OTB 기준일 월보다 이전 — 당월/미래는 과거 아님, KST)
+  const isPastPeriod = selYear < otbBase.getFullYear() || (selYear === otbBase.getFullYear() && selMonth < otbBase.getMonth())
 
   const [dim, setDim] = useState<Dim>('segment')
 
@@ -192,7 +194,7 @@ export default function LosLeadTimePage() {
         {/* 구분 */}
         <div style={{
           width: NAME_W, flexShrink: 0, display: 'flex', alignItems: 'center',
-          paddingLeft: r.level === 'sub' ? 26 : (isTotal ? 12 : 12), paddingRight: 8, boxSizing: 'border-box',
+          paddingLeft: r.level === 'sub' ? 26 : 12, paddingRight: 8, boxSizing: 'border-box',
           background: bg,
           fontSize: r.level === 'sub' ? 12 : 13,
           fontWeight: (isTotal ? true : r.isBold) ? 500 : 400,
@@ -202,41 +204,38 @@ export default function LosLeadTimePage() {
         }}>{r.name}</div>
 
         {/* LOS 구역 (민트 오버레이) */}
-        <div style={{ width: LOS_W, flexShrink: 0, display: 'flex', alignItems: 'stretch', background: bg, boxShadow: MINT_OV }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'stretch', background: bg, boxShadow: MINT_OV, padding: '6px 8px', boxSizing: 'border-box' }}>
           {noLos ? (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#333' }}>데이터 없음</div>
           ) : (
             <>
-              <div style={{ width: LY_W, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 6, fontSize: 12, color: isTotal ? MINT : '#8a8a8a' }}>
+              <div style={{ width: LY_W, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 6, fontSize: 12, color: isTotal ? MINT : '#8a8a8a' }}>
                 {lyA != null ? lyA.toFixed(2) : dash}
               </div>
-              <div style={{ width: YOY_W, display: 'flex', alignItems: 'stretch' }}>
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'stretch' }}>
                 {yoy == null ? (
                   <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#3f3f3f' }}>—</div>
-                ) : (
-                  <>
-                    <div style={{ width: NEG_W, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 4, fontSize: 11, color: yoy < 0 ? negColor : 'transparent' }}>
-                      {yoy < 0 ? `${Math.abs(yoy).toFixed(1)}%` : ' '}
-                    </div>
-                    <div style={{ width: BAR_W, position: 'relative' }}>
-                      <div style={{ position: 'absolute', left: BAR_W / 2, top: 0, bottom: 0, width: 1, background: '#2e2e2e' }} />
-                      {yoy < 0 && (
-                        <div style={{ position: 'absolute', right: BAR_W / 2, top: '50%', transform: 'translateY(-50%)', height: 7, borderRadius: 1, width: Math.min(Math.abs(yoy), 100) / 100 * (BAR_W / 2), background: negColor }} />
-                      )}
-                      {yoy > 0 && (
-                        <div style={{ position: 'absolute', left: BAR_W / 2, top: '50%', transform: 'translateY(-50%)', height: 7, borderRadius: 1, width: Math.min(yoy, 100) / 100 * (BAR_W / 2), background: posColor }} />
-                      )}
-                      {yoy === 0 && (
-                        <div style={{ position: 'absolute', left: BAR_W / 2, top: '50%', transform: 'translate(-50%,-50%)', width: 5, height: 5, borderRadius: '50%', background: '#5a5a5a' }} />
-                      )}
-                    </div>
-                    <div style={{ width: POS_W, display: 'flex', alignItems: 'center', paddingLeft: 4, fontSize: 11, color: yoy > 0 ? posColor : 'transparent' }}>
-                      {yoy > 0 ? `${Math.abs(yoy).toFixed(1)}%` : ' '}
-                    </div>
-                  </>
-                )}
+                ) : (() => {
+                  const isZero = Math.abs(yoy) < 0.05
+                  const cat = isZero ? 'zero' : yoy > 0 ? 'pos' : 'neg'
+                  const lbl = isZero ? '0.0%' : (yoy > 0 ? '+' : '−') + Math.abs(yoy).toFixed(1) + '%'
+                  const barW = Math.max(Math.min(Math.abs(yoy), 100) / 100 * BAR_HALF, 1.5)
+                  const zeroCol = isTotal ? MINT : '#5a5a5a'
+                  return (
+                    <>
+                      <div style={{ width: NEG_W, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 4, fontSize: 11, color: cat === 'neg' ? negColor : 'transparent' }}>{cat === 'neg' ? lbl : ' '}</div>
+                      <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+                        <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: '#2e2e2e' }} />
+                        {cat === 'neg' && <div style={{ position: 'absolute', right: '50%', top: '50%', transform: 'translateY(-50%)', height: 7, borderRadius: 1, width: barW, background: negColor }} />}
+                        {cat === 'pos' && <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translateY(-50%)', height: 7, borderRadius: 1, width: barW, background: posColor }} />}
+                        {cat === 'zero' && <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: 5, height: 5, borderRadius: '50%', background: zeroCol }} />}
+                      </div>
+                      <div style={{ width: POS_W, flexShrink: 0, display: 'flex', alignItems: 'center', paddingLeft: 4, fontSize: 11, color: cat === 'pos' ? posColor : cat === 'zero' ? zeroCol : 'transparent' }}>{cat === 'neg' ? ' ' : lbl}</div>
+                    </>
+                  )
+                })()}
               </div>
-              <div style={{ width: CY_W, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 6, fontSize: 13, color: isTotal ? MINT : '#e8e8e8' }}>
+              <div style={{ width: CY_W, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', fontSize: 13, color: isTotal ? MINT : '#e8e8e8' }}>
                 {cyA != null ? cyA.toFixed(2) : dash}
               </div>
             </>
@@ -246,22 +245,24 @@ export default function LosLeadTimePage() {
         {/* 간격 (검정) */}
         <div style={{ width: GAP_W, flexShrink: 0 }} />
 
-        {/* 리드타임 구역 (파랑 오버레이) — '25년 없음 */}
-        <div style={{ flex: 1, display: 'flex', alignItems: 'stretch', background: bg, boxShadow: BLUE_OV }}>
-          <div style={{ width: LLY_W, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 6, fontSize: 11, color: '#3f3f3f' }}>—</div>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 6px' }}>
-            <div style={{ position: 'relative', flex: 1, height: 10, borderRadius: 2, background: 'rgba(0,0,0,0.45)', overflow: 'hidden' }}>
-              {showLead && (
-                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.max(0, Math.min(100, leadV / leadMax * 100))}%`, background: isTotal ? MINT : BLUE }} />
-              )}
-              {leadAvg != null && leadAvg > 0 && (
-                <div style={{ position: 'absolute', left: `${Math.max(0, Math.min(100, leadAvg / leadMax * 100))}%`, top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.22)' }} />
-              )}
-            </div>
-          </div>
-          <div style={{ width: LCY_W, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 6, fontSize: 13, color: isTotal ? MINT : '#e8e8e8' }}>
-            {showLead ? Math.round(leadV) : dash}
-          </div>
+        {/* 리드타임 구역 (파랑 오버레이) — '25년 없음 / 과거 기간엔 빈 상태 */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', background: bg, boxShadow: BLUE_OV, padding: '6px 8px', boxSizing: 'border-box' }}>
+          {isPastPeriod ? null : (
+            <>
+              <div style={{ width: LLY_W, flexShrink: 0, textAlign: 'right', paddingRight: 6, fontSize: 11, color: '#3f3f3f' }}>—</div>
+              <div style={{ position: 'relative', flex: 1, minWidth: 0, height: 10, borderRadius: 2, background: 'rgba(0,0,0,0.45)', overflow: 'hidden', margin: '0 8px' }}>
+                {showLead && (
+                  <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.max(0, Math.min(100, leadV / leadMax * 100))}%`, background: isTotal ? MINT : BLUE }} />
+                )}
+                {leadAvg != null && leadAvg > 0 && (
+                  <div style={{ position: 'absolute', left: `${Math.max(0, Math.min(100, leadAvg / leadMax * 100))}%`, top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.22)' }} />
+                )}
+              </div>
+              <div style={{ width: LCY_W, flexShrink: 0, textAlign: 'right', fontSize: 13, color: isTotal ? MINT : '#e8e8e8' }}>
+                {showLead ? leadV.toFixed(1) : dash}
+              </div>
+            </>
+          )}
         </div>
       </div>
     )
@@ -309,31 +310,51 @@ export default function LosLeadTimePage() {
           {/* 2단 헤더 — 1단: 그룹명 */}
           <div style={{ display: 'flex', alignItems: 'flex-end' }}>
             <div style={{ width: NAME_W, flexShrink: 0 }} />
-            <div style={{ width: LOS_W, flexShrink: 0, boxShadow: MINT_OV, borderRadius: '4px 4px 0 0', textAlign: 'center', fontSize: 12, fontWeight: 500, color: MINT, padding: '4px 0' }}>평균 투숙일수</div>
+            <div style={{ flex: 1, boxShadow: MINT_OV, borderRadius: '4px 4px 0 0', textAlign: 'center', fontSize: 12, fontWeight: 500, color: MINT, padding: '4px 0' }}>평균 투숙일수</div>
             <div style={{ width: GAP_W, flexShrink: 0 }} />
             <div style={{ flex: 1, boxShadow: BLUE_OV, borderRadius: '4px 4px 0 0', textAlign: 'center', fontSize: 12, fontWeight: 500, color: BLUE, padding: '4px 0' }}>평균 리드타임</div>
           </div>
           {/* 2단 헤더 — 2단: 컬럼명 */}
           <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 6, borderBottom: '0.5px solid rgba(255,255,255,0.05)' }}>
             <div style={{ width: NAME_W, flexShrink: 0 }} />
-            <div style={{ width: LOS_W, flexShrink: 0, display: 'flex', boxShadow: MINT_OV }}>
-              <div style={{ width: LY_W, textAlign: 'right', paddingRight: 6, fontSize: 10, color: '#666' }}>{"'25년"}</div>
-              <div style={{ width: YOY_W, textAlign: 'center', fontSize: 10, color: AMBER }}>YoY %</div>
-              <div style={{ width: CY_W, textAlign: 'right', paddingRight: 6, fontSize: 10, color: '#666' }}>{"'26년"}</div>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', boxShadow: MINT_OV, padding: '0 8px', boxSizing: 'border-box' }}>
+              <div style={{ width: LY_W, flexShrink: 0, textAlign: 'right', paddingRight: 6, fontSize: 10, color: '#666' }}>{"'25년"}</div>
+              <div style={{ flex: 1, textAlign: 'center', fontSize: 10, color: AMBER }}>YoY %</div>
+              <div style={{ width: CY_W, flexShrink: 0, textAlign: 'right', fontSize: 10, color: '#666' }}>{"'26년"}</div>
             </div>
             <div style={{ width: GAP_W, flexShrink: 0 }} />
-            <div style={{ flex: 1, display: 'flex', boxShadow: BLUE_OV }}>
-              <div style={{ width: LLY_W, textAlign: 'right', paddingRight: 6, fontSize: 10, color: '#666' }}>{"'25년"}</div>
-              <div style={{ flex: 1, textAlign: 'center', fontSize: 10, color: '#454545' }}>0–{Math.round(leadMax)}일</div>
-              <div style={{ width: LCY_W, textAlign: 'right', paddingRight: 6, fontSize: 10, color: '#666' }}>{"'26년"}</div>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', boxShadow: BLUE_OV, padding: '0 8px', boxSizing: 'border-box' }}>
+              <div style={{ width: LLY_W, flexShrink: 0, textAlign: 'right', paddingRight: 6, fontSize: 10, color: '#666' }}>{"'25년"}</div>
+              <div style={{ flex: 1, textAlign: 'center', fontSize: 10, color: isPastPeriod ? '#4a4a4a' : '#454545' }}>{isPastPeriod ? '과거 기간 — 산출 불가' : `0–${Math.round(leadMax)}일`}</div>
+              <div style={{ width: LCY_W, flexShrink: 0, textAlign: 'right', fontSize: 10, color: '#666' }}>{"'26년"}</div>
             </div>
           </div>
 
-          {displayRows.map((r, i) => renderRow(r, i))}
-          {renderRow(totalRow, 'total', true)}
+          {/* 본문 — 과거 기간이면 리드타임 구역에 안내 오버레이 1회 */}
+          <div style={{ position: 'relative' }}>
+            {displayRows.map((r, i) => renderRow(r, i))}
+            {renderRow(totalRow, 'total', true)}
+            {isPastPeriod && (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', pointerEvents: 'none' }}>
+                <div style={{ width: NAME_W, flexShrink: 0 }} />
+                <div style={{ flex: 1 }} />
+                <div style={{ width: GAP_W, flexShrink: 0 }} />
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', lineHeight: 1.6 }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: '#4a4a4a' }}>과거 기간은 리드타임 산출 불가</div>
+                    <div style={{ fontSize: 11, color: '#4a4a4a' }}>체크인 처리 시 예약 생성일이 덮어써짐</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* 하단 주석 */}
-          <div style={{ fontSize: 11, color: '#5a5a5a', marginTop: 10 }}>리드타임 전년값 없음 — 과거 예약의 생성일이 원본에 남지 않음</div>
+          <div style={{ fontSize: 11, color: '#5a5a5a', marginTop: 10 }}>
+            {isPastPeriod
+              ? '과거 도착분은 체크인 처리 시 예약 생성일이 덮어써져 리드타임을 산출할 수 없음'
+              : '리드타임 전년값 없음 — 과거 예약의 생성일이 원본에 남지 않음'}
+          </div>
         </div>
       )}
     </div>
