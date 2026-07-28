@@ -29,8 +29,7 @@ const pad = (n: number) => String(n).padStart(2, '0')
 
 // 레이아웃 폭 — 두 구역은 flex:1 균등, 나머지는 고정
 const NAME_W = 116
-const LY_W = 40, CY_W = 42                        // LOS 구역: '25년 40, YoY flex, '26년 42
-const NEG_W = 42, POS_W = 42, BAR_HALF = 28       // YoY 라벨 42 · 막대 편측 최대 28px
+const BARDIV_W = 62, YOY_W = 54, V25_W = 46, V26_W = 46, CHG_W = 52, BAR_MAX = 26  // LOS 구역 컬럼 (막대·YoY%·'25·'26·증감)
 const GAP_W = 12
 const LLY_W = 30, LCY_W = 40                      // 리드타임 좌/우 (막대 flex)
 const MINT_OV = 'inset 0 0 0 999px rgba(0,229,160,0.045)'
@@ -172,15 +171,12 @@ export default function LosLeadTimePage() {
   function renderRow(r: DRow, key: React.Key, isTotal = false) {
     const cyA = r.cy.alos, lyA = r.lyc.alos
     const noLos = cyA == null && lyA == null
-    const yoy = (cyA != null && lyA != null && lyA !== 0) ? (cyA - lyA) / lyA * 100 : null
     const leadV = r.cy.lead
     const showLead = leadV != null && leadV > 0
     const bg = isTotal ? 'transparent' : (r.bg ?? 'transparent')
     const dim35 = !isTotal && noLos ? 0.35 : 1
     const rowOp = !isTotal && r.cy.resv <= 4 ? 0.55 : 1
 
-    const negColor = isTotal ? MINT : RED
-    const posColor = MINT
     const dash = <span style={{ color: '#3f3f3f' }}>–</span>
 
     return (
@@ -203,43 +199,35 @@ export default function LosLeadTimePage() {
           opacity: dim35,
         }}>{r.name}</div>
 
-        {/* LOS 구역 (민트 오버레이) */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'stretch', background: bg, boxShadow: MINT_OV, padding: '6px 8px', boxSizing: 'border-box' }}>
+        {/* LOS 구역 (민트 오버레이) — 막대 → YoY% → '25년 → '26년 → 증감 → 여백 */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', background: bg, boxShadow: MINT_OV, padding: '6px 8px', boxSizing: 'border-box' }}>
           {noLos ? (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#333' }}>데이터 없음</div>
-          ) : (
-            <>
-              <div style={{ width: LY_W, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 6, fontSize: 12, color: isTotal ? MINT : '#8a8a8a' }}>
-                {lyA != null ? lyA.toFixed(2) : dash}
-              </div>
-              <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'stretch' }}>
-                {yoy == null ? (
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#3f3f3f' }}>—</div>
-                ) : (() => {
-                  const isZero = Math.abs(yoy) < 0.05
-                  const cat = isZero ? 'zero' : yoy > 0 ? 'pos' : 'neg'
-                  const lbl = isZero ? '0.0%' : (yoy > 0 ? '+' : '−') + Math.abs(yoy).toFixed(1) + '%'
-                  const barW = Math.max(Math.min(Math.abs(yoy), 100) / 100 * BAR_HALF, 1.5)
-                  const zeroCol = isTotal ? MINT : '#5a5a5a'
-                  return (
-                    <>
-                      <div style={{ width: NEG_W, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 4, fontSize: 11, color: cat === 'neg' ? negColor : 'transparent' }}>{cat === 'neg' ? lbl : ' '}</div>
-                      <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
-                        <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: '#2e2e2e' }} />
-                        {cat === 'neg' && <div style={{ position: 'absolute', right: '50%', top: '50%', transform: 'translateY(-50%)', height: 7, borderRadius: 1, width: barW, background: negColor }} />}
-                        {cat === 'pos' && <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translateY(-50%)', height: 7, borderRadius: 1, width: barW, background: posColor }} />}
-                        {cat === 'zero' && <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: 5, height: 5, borderRadius: '50%', background: zeroCol }} />}
-                      </div>
-                      <div style={{ width: POS_W, flexShrink: 0, display: 'flex', alignItems: 'center', paddingLeft: 4, fontSize: 11, color: cat === 'pos' ? posColor : cat === 'zero' ? zeroCol : 'transparent' }}>{cat === 'neg' ? ' ' : lbl}</div>
-                    </>
-                  )
-                })()}
-              </div>
-              <div style={{ width: CY_W, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', fontSize: 13, color: isTotal ? MINT : '#e8e8e8' }}>
-                {cyA != null ? cyA.toFixed(2) : dash}
-              </div>
-            </>
-          )}
+          ) : (() => {
+            const has = cyA != null && lyA != null && lyA !== 0
+            const p = has ? (cyA! - lyA!) / lyA! * 100 : 0
+            const d = has ? cyA! - lyA! : 0
+            const zero = has && Math.abs(p) < 0.05
+            const chColor = !has ? '#3f3f3f' : zero ? '#5a5a5a' : p < 0 ? RED : MINT
+            const lbl = !has ? '—' : (zero ? '' : (p > 0 ? '+' : '−')) + Math.abs(p).toFixed(1) + '%'
+            const dlb = !has ? '—' : zero ? '0.00' : (d > 0 ? '▲' : '▼') + Math.abs(d).toFixed(2)
+            const barW = Math.max(Math.min(Math.abs(p), 100) / 100 * BAR_MAX, 2)
+            return (
+              <>
+                <div style={{ width: BARDIV_W, flexShrink: 0, position: 'relative', height: 14 }}>
+                  <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: '#2e2e2e' }} />
+                  {has && !zero && p > 0 && <div style={{ position: 'absolute', left: '50%', top: 3.5, height: 7, borderRadius: 1, width: barW, background: MINT }} />}
+                  {has && !zero && p < 0 && <div style={{ position: 'absolute', left: `calc(50% - ${barW}px)`, top: 3.5, height: 7, borderRadius: 1, width: barW, background: RED }} />}
+                  {has && zero && <div style={{ position: 'absolute', left: 'calc(50% - 2.5px)', top: 4.5, width: 5, height: 5, borderRadius: '50%', background: '#5a5a5a' }} />}
+                </div>
+                <div style={{ width: YOY_W, flexShrink: 0, textAlign: 'right', fontSize: 11, color: chColor }}>{lbl}</div>
+                <div style={{ width: V25_W, flexShrink: 0, textAlign: 'right', fontSize: 12, color: lyA != null ? '#8a8a8a' : '#3f3f3f' }}>{lyA != null ? lyA.toFixed(2) : '–'}</div>
+                <div style={{ width: V26_W, flexShrink: 0, textAlign: 'right', fontSize: 13, color: cyA != null ? (isTotal ? MINT : '#e8e8e8') : '#3f3f3f' }}>{cyA != null ? cyA.toFixed(2) : '–'}</div>
+                <div style={{ width: CHG_W, flexShrink: 0, textAlign: 'right', fontSize: 11, color: chColor }}>{dlb}</div>
+                <div style={{ flex: 1 }} />
+              </>
+            )
+          })()}
         </div>
 
         {/* 간격 (검정) */}
@@ -318,9 +306,11 @@ export default function LosLeadTimePage() {
           <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 6, borderBottom: '0.5px solid rgba(255,255,255,0.05)' }}>
             <div style={{ width: NAME_W, flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0, display: 'flex', boxShadow: MINT_OV, padding: '0 8px', boxSizing: 'border-box' }}>
-              <div style={{ width: LY_W, flexShrink: 0, textAlign: 'right', paddingRight: 6, fontSize: 10, color: '#666' }}>{"'25년"}</div>
-              <div style={{ flex: 1, textAlign: 'center', fontSize: 10, color: AMBER }}>YoY %</div>
-              <div style={{ width: CY_W, flexShrink: 0, textAlign: 'right', fontSize: 10, color: '#666' }}>{"'26년"}</div>
+              <div style={{ width: BARDIV_W + YOY_W, flexShrink: 0, textAlign: 'center', fontSize: 10, color: AMBER }}>YoY %</div>
+              <div style={{ width: V25_W, flexShrink: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>{"'25년"}</div>
+              <div style={{ width: V26_W, flexShrink: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>{"'26년"}</div>
+              <div style={{ width: CHG_W, flexShrink: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>증감</div>
+              <div style={{ flex: 1 }} />
             </div>
             <div style={{ width: GAP_W, flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0, display: 'flex', boxShadow: BLUE_OV, padding: '0 8px', boxSizing: 'border-box' }}>
