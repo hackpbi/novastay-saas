@@ -24,6 +24,23 @@ const OV_B = 'inset 0 0 0 999px rgba(91,141,239,0.05)'
 const CO = ['#00E5A0', '#0FB894', '#1C8A88', '#2A5D7C', '#5B8DEF']
 const bktColor = (i: number) => CO[Math.min(i, CO.length - 1)]
 
+// 국적 탭 — ISO alpha-3 → alpha-2 (국기 이모지용)
+const A3_A2: Record<string, string> = {
+  KOR:'KR', USA:'US', JPN:'JP', CHN:'CN', TWN:'TW', HKG:'HK',
+  SGP:'SG', THA:'TH', VNM:'VN', PHL:'PH', IDN:'ID', MYS:'MY',
+  IND:'IN', AUS:'AU', NZL:'NZ', GBR:'GB', DEU:'DE', FRA:'FR',
+  ITA:'IT', ESP:'ES', NLD:'NL', BEL:'BE', CHE:'CH', AUT:'AT',
+  SWE:'SE', NOR:'NO', DNK:'DK', FIN:'FI', POL:'PL', CZE:'CZ',
+  RUS:'RU', TUR:'TR', ARE:'AE', SAU:'SA', ISR:'IL', EGY:'EG',
+  ZAF:'ZA', CAN:'CA', MEX:'MX', BRA:'BR', ARG:'AR', CHL:'CL',
+  MNG:'MN', KAZ:'KZ', UZB:'UZ', LAO:'LA', KHM:'KH', MMR:'MM',
+}
+const flagOf = (a3: string): string => {
+  const a2 = A3_A2[a3]
+  if (!a2) return ''
+  return a2.replace(/./g, c => String.fromCodePoint(c.charCodeAt(0) + 127397))
+}
+
 function aggSum(map: Record<string, SumRow>, codes: string[]): Sum {
   let resv = 0, rn = 0, rooms = 0, mx: number | null = null
   for (const c of codes) {
@@ -351,7 +368,7 @@ export default function LosPage() {
           fontSize: r.level === 'sub' ? 12 : 13, fontWeight: (isTotal ? true : r.isBold) ? 500 : 400,
           color: isTotal ? MINT : r.level === 'sub' ? '#9a9a9a' : r.level === 'flat' ? '#e8e8e8' : (r.font ?? '#e8e8e8'),
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', opacity: dim35,
-        }}>{r.name}</div>
+        }}>{dim === 'country' && flagOf(r.name) && <span style={{ marginRight: 6, fontSize: 13 }}>{flagOf(r.name)}</span>}{r.name}</div>
 
         {/* 박수별 예약 건수 */}
         <div style={{ flex: 7, minWidth: 0, display: 'flex', alignItems: 'center' }}>
@@ -396,6 +413,7 @@ export default function LosPage() {
       <div style={{ background: '#101410', border: '1px solid rgba(0,229,160,0.45)', borderLeft: '4px solid #00E5A0', borderRadius: 4, overflow: 'hidden', marginTop: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px 8px', borderBottom: '1px solid rgba(0,229,160,0.28)' }}>
           <div style={{ display: 'flex', alignItems: 'baseline' }}>
+            {dim === 'country' && flagOf(r.name) && <span style={{ fontSize: 14, marginRight: 6 }}>{flagOf(r.name)}</span>}
             <span style={{ fontSize: 14, color: '#EAFFF7', fontWeight: 500 }}>{r.name}</span>
             <span style={{ fontSize: 11, color: '#6a6a6a', marginLeft: 6 }}>박수별 비중 · 단가</span>
           </div>
