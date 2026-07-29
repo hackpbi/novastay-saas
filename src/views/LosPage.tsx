@@ -299,8 +299,8 @@ export default function LosPage() {
       }}>
         {/* 구분 */}
         <div style={{
-          width: 104, flexShrink: 0, display: 'flex', alignItems: 'center', boxSizing: 'border-box',
-          paddingLeft: r.level === 'sub' ? 26 : 12, paddingRight: 8, background: bg,
+          width: 120, flexShrink: 0, display: 'flex', alignItems: 'center', boxSizing: 'border-box',
+          paddingLeft: r.level === 'sub' ? 28 : 14, paddingRight: 8, background: bg,
           fontSize: r.level === 'sub' ? 12 : 13, fontWeight: (isTotal ? true : r.isBold) ? 500 : 400,
           color: isTotal ? MINT : r.level === 'sub' ? '#9a9a9a' : r.level === 'flat' ? '#e8e8e8' : (r.font ?? '#e8e8e8'),
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', opacity: dim35,
@@ -310,15 +310,16 @@ export default function LosPage() {
         <div style={{ flex: 7, minWidth: 0, display: 'flex', alignItems: 'center', background: bg, boxShadow: OV }}>
           {noData ? (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#333' }}>데이터 없음</div>
-          ) : buckets.map(b => {
+          ) : (() => { const rowTot = buckets.reduce((s, b) => s + (r.cyBk[b.no] ?? 0), 0); return buckets.map(b => {
             const c = r.cyBk[b.no] ?? 0, l = r.lyBk[b.no] ?? 0, d = c - l
             return (
               <div key={b.no} style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', whiteSpace: 'nowrap' }}>
-                <div style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingRight: 4, fontSize: 14, color: c === 0 ? '#2b2b2b' : isTotal ? MINT : '#e8e8e8' }}>{c === 0 ? '·' : c}</div>
-                <div style={{ flex: 1, minWidth: 0, textAlign: 'left', paddingLeft: 4, fontSize: 10, color: (c === 0 || d === 0) ? 'transparent' : d > 0 ? MINT : RED }}>{(c === 0 || d === 0) ? '' : d > 0 ? `▲${d}` : `▼${Math.abs(d)}`}</div>
+                <div style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingRight: 3, fontSize: 14, color: c === 0 ? '#2b2b2b' : isTotal ? MINT : '#e8e8e8' }}>{c === 0 ? '·' : c}</div>
+                <div style={{ width: 34, flexShrink: 0, textAlign: 'center', fontSize: 10, color: c === 0 ? 'transparent' : isTotal ? 'rgba(0,229,160,0.75)' : '#6f6f6f' }}>{c === 0 ? '' : (c / rowTot * 100 < 1 ? '<1%' : `${Math.round(c / rowTot * 100)}%`)}</div>
+                <div style={{ flex: 1, minWidth: 0, textAlign: 'left', paddingLeft: 3, fontSize: 10, color: (c === 0 || d === 0) ? 'transparent' : d > 0 ? MINT : RED }}>{(c === 0 || d === 0) ? '' : d > 0 ? `▲${d}` : `▼${Math.abs(d)}`}</div>
               </div>
             )
-          })}
+          }) })()}
         </div>
 
         {/* 간격 */}
@@ -342,15 +343,15 @@ export default function LosPage() {
     const cyTot = buckets.reduce((s, b) => s + (r.cyBk[b.no] ?? 0), 0)
     const lyTot = buckets.reduce((s, b) => s + (r.lyBk[b.no] ?? 0), 0)
     return (
-      <div style={{ background: '#101410', border: '0.5px solid rgba(0,229,160,0.22)', borderRadius: 10, padding: '14px 16px', marginTop: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ background: '#101410', border: '1px solid rgba(0,229,160,0.45)', borderLeft: '4px solid #00E5A0', borderRadius: 4, overflow: 'hidden', marginTop: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px 8px', borderBottom: '1px solid rgba(0,229,160,0.28)' }}>
           <div style={{ display: 'flex', alignItems: 'baseline' }}>
             <span style={{ fontSize: 14, color: '#EAFFF7', fontWeight: 500 }}>{r.name}</span>
             <span style={{ fontSize: 11, color: '#6a6a6a', marginLeft: 6 }}>박수별 비중 · 단가</span>
           </div>
           <span onClick={() => setSelName(null)} style={{ fontSize: 16, color: '#6a6a6a', cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>×</span>
         </div>
-        <div style={{ display: 'flex', gap: 24, marginTop: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 24, padding: '12px 16px 8px', flexWrap: 'wrap' }}>
           {/* 도넛 2개 */}
           <div style={{ display: 'flex', gap: 16 }}>
             {([['ly', false, "'25년", '#8a8a8a'], ['cy', true, "'26년", MINT]] as const).map(([yk, isCy, lbl, col]) => (
@@ -365,7 +366,7 @@ export default function LosPage() {
             {/* 표 헤더 */}
             <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 6 }}>
               <span style={{ width: 9, marginRight: 8, flexShrink: 0 }} />
-              <span style={{ width: 40, flexShrink: 0 }} />
+              <span style={{ width: 46, flexShrink: 0 }} />
               <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>{"'25년"}</span>
               <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>{"'26년"}</span>
               <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>증감</span>
@@ -385,7 +386,7 @@ export default function LosPage() {
               return (
                 <div key={b.no} style={{ display: 'flex', alignItems: 'center', padding: '5px 0', ...(i > 0 ? { borderTop: '0.5px solid rgba(255,255,255,0.06)' } : {}) }}>
                   <span style={{ width: 9, height: 9, borderRadius: 2, marginRight: 8, flexShrink: 0, background: bktColor(i) }} />
-                  <span style={{ width: 40, flexShrink: 0, fontSize: 12, color: '#d8d8d8' }}>{b.label}</span>
+                  <span style={{ width: 46, flexShrink: 0, fontSize: 12, color: '#d8d8d8' }}>{b.label}</span>
                   <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 11, color: '#7a7a7a' }}>{l.toLocaleString()}</span>
                   <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 13, color: '#e8e8e8' }}>{c.toLocaleString()}</span>
                   <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 11, color: d > 0 ? MINT : d < 0 ? RED : '#5a5a5a' }}>{d === 0 ? '' : d > 0 ? `▲${d}` : `▼${Math.abs(d)}`}</span>
@@ -397,9 +398,9 @@ export default function LosPage() {
                 </div>
               )
             })}
-            <div style={{ textAlign: 'right', fontSize: 10, color: '#5a5a5a', marginTop: 6 }}>단위 : 건, 천원</div>
           </div>
         </div>
+        <div style={{ textAlign: 'right', fontSize: 10, color: '#5a5a5a', padding: '0 16px 10px' }}>단위 : 건, 천원</div>
       </div>
     )
   }
@@ -488,30 +489,32 @@ export default function LosPage() {
         <div className="animate-pulse" style={{ height: 420, background: 'var(--color-bg-tertiary)', borderRadius: 12 }} />
       ) : (
         <div>
+          <div style={{ border: '1px solid rgba(0,229,160,0.45)', borderLeft: '4px solid #00E5A0', borderRadius: 4, overflow: 'hidden' }}>
           {/* 헤더 1단 — 그룹명 */}
           <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-            <div style={{ width: 104, flexShrink: 0 }} />
+            <div style={{ width: 120, flexShrink: 0 }} />
             <div style={{ flex: 7, boxShadow: OV, borderRadius: '4px 4px 0 0', textAlign: 'center', fontSize: 12, fontWeight: 500, color: MINT, padding: '4px 0' }}>박수별 예약 건수</div>
             <div style={{ width: 10, flexShrink: 0 }} />
             <div style={{ flex: 3, boxShadow: OV_B, borderRadius: '4px 4px 0 0', textAlign: 'center', fontSize: 12, fontWeight: 500, color: '#5B8DEF', padding: '4px 0' }}>평균 · 최장</div>
           </div>
           {/* 헤더 2단 — 구간 라벨 (가운데) */}
           <div style={{ display: 'flex', alignItems: 'center' }}>
-            <div style={{ width: 104, flexShrink: 0 }} />
+            <div style={{ width: 120, flexShrink: 0 }} />
             <div style={{ flex: 7, minWidth: 0, display: 'flex', boxShadow: OV }}>
               {buckets.map(b => <div key={b.no} style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: 11.5, color: '#9a9a9a' }}>{b.label}</div>)}
             </div>
             <div style={{ width: 10, flexShrink: 0 }} />
             <div style={{ flex: 3, minWidth: 0, boxShadow: OV_B }} />
           </div>
-          {/* 헤더 3단 — 예약/증감 · ALOS/전년비/최장 */}
-          <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 6, borderBottom: '0.5px solid rgba(255,255,255,0.05)' }}>
-            <div style={{ width: 104, flexShrink: 0 }} />
+          {/* 헤더 3단 — 예약/비중/전년비 증감 · ALOS/전년비/최장 */}
+          <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 6, borderBottom: '1px solid rgba(0,229,160,0.28)' }}>
+            <div style={{ width: 120, flexShrink: 0 }} />
             <div style={{ flex: 7, minWidth: 0, display: 'flex', boxShadow: OV }}>
               {buckets.map(b => (
                 <div key={b.no} style={{ flex: 1, minWidth: 0, display: 'flex' }}>
-                  <div style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingRight: 4, fontSize: 10, color: '#4d4d4d' }}>예약</div>
-                  <div style={{ flex: 1, minWidth: 0, textAlign: 'left', paddingLeft: 4, fontSize: 10, color: '#4d4d4d' }}>증감</div>
+                  <div style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingRight: 3, fontSize: 9.5, color: '#4d4d4d', whiteSpace: 'nowrap' }}>예약</div>
+                  <div style={{ width: 34, flexShrink: 0, textAlign: 'center', fontSize: 9.5, color: '#5a5a5a', whiteSpace: 'nowrap' }}>비중</div>
+                  <div style={{ flex: 1, minWidth: 0, textAlign: 'left', paddingLeft: 3, fontSize: 9.5, color: '#4d4d4d', whiteSpace: 'nowrap' }}>전년비 증감</div>
                 </div>
               ))}
             </div>
@@ -525,6 +528,7 @@ export default function LosPage() {
 
           {displayRows.map((r, i) => renderRow(r, i))}
           {renderRow(totalRow, 'total', true)}
+          </div>
 
           {panelRow && renderPanel(panelRow)}
         </div>
