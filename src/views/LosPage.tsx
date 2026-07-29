@@ -290,7 +290,7 @@ export default function LosPage() {
       const frac = v / total
       segs.push({ d: arc(cx, cy, rO, rI, a + gap / 2, a + frac * 2 * Math.PI - gap / 2), color: bktColor(i) })
       const pct = frac * 100
-      if (pct >= 3) {
+      if (pct >= 2) {
         const mid = a + frac * Math.PI
         labels.push({ color: bktColor(i), label: b.label, pct, right: Math.cos(mid) >= 0, sx: cx + 46 * Math.cos(mid), sy: cy + 46 * Math.sin(mid), y: cy + 49 * Math.sin(mid) })
       }
@@ -313,13 +313,13 @@ export default function LosPage() {
               <polyline points={`${l.sx},${l.sy} ${lineEnd},${l.y} ${tx},${l.y}`} fill="none" stroke={l.color} strokeWidth={0.9} opacity={isCy ? 0.65 : 0.4} />
               <text x={tx} y={l.y} textAnchor={l.right ? 'start' : 'end'} dominantBaseline="central" fontSize={10}>
                 <tspan fill={isCy ? '#d8d8d8' : '#7f7f7f'}>{l.label}</tspan>
-                <tspan dx={3} fontWeight={600} fill={isCy ? l.color : '#8f8f8f'}>{Math.round(l.pct)}%</tspan>
+                <tspan dx={3} fontWeight={600} fill={isCy ? l.color : '#8f8f8f'}>{l.pct < 1 ? '<1' : Math.round(l.pct)}%</tspan>
               </text>
             </g>
           )
         })}
         <text x={cx} y={72} textAnchor="middle" dominantBaseline="central" fontSize={21} fill="#f2f2f2">{total.toLocaleString()}</text>
-        <text x={cx} y={86} textAnchor="middle" dominantBaseline="central" fontSize={9} fill="#6a6a6a">룸나잇</text>
+        <text x={cx} y={86} textAnchor="middle" dominantBaseline="central" fontSize={9} fill="#6a6a6a">예약</text>
         <text x={cx} y={152} textAnchor="middle" fontSize={12} fontWeight={500} fill={isCy ? MINT : '#8a8a8a'}>{isCy ? "'26년" : "'25년"}</text>
       </svg>
     )
@@ -390,8 +390,8 @@ export default function LosPage() {
   // ─── 도넛 상세 패널 ─────────────────────────────────────────────────────────────
   const panelRow = selName == null ? null : [...displayRows, totalRow].find(r => r.name === selName) ?? null
   const renderPanel = (r: DRow) => {
-    const cyTot = buckets.reduce((s, b) => s + (r.cyBk[b.no] ?? 0), 0)
-    const lyTot = buckets.reduce((s, b) => s + (r.lyBk[b.no] ?? 0), 0)
+    const ctr = buckets.reduce((s, b) => s + (r.cyBkResv[b.no] ?? 0), 0)
+    const ltr = buckets.reduce((s, b) => s + (r.lyBkResv[b.no] ?? 0), 0)
     return (
       <div style={{ background: '#101410', border: '1px solid rgba(0,229,160,0.45)', borderLeft: '4px solid #00E5A0', borderRadius: 4, overflow: 'hidden', marginTop: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px 8px', borderBottom: '1px solid rgba(0,229,160,0.28)' }}>
@@ -404,11 +404,11 @@ export default function LosPage() {
         <div style={{ display: 'flex', gap: 8, padding: '14px 18px 12px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
           {/* 도넛 '26년 */}
           <div style={{ width: 190, flex: 'none', lineHeight: 0 }}>
-            {renderDonut(r.cyBk, true)}
+            {renderDonut(r.cyBkResv, true)}
           </div>
           {/* 도넛 '25년 */}
           <div style={{ width: 190, flex: 'none', lineHeight: 0 }}>
-            {renderDonut(r.lyBk, false)}
+            {renderDonut(r.lyBkResv, false)}
           </div>
           {/* 표 */}
           <div style={{ flex: 1, minWidth: 0, paddingLeft: 8 }}>
@@ -427,20 +427,20 @@ export default function LosPage() {
               <span style={{ width: 10, marginRight: 9, flex: 'none' }} />
               <span style={{ width: 44, flex: 'none' }} />
               <div style={{ flex: 4, display: 'flex' }}>
-                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>예약</span>
-                <span style={{ flex: 1.1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>룸나잇</span>
+                <span style={{ flex: 1.1, textAlign: 'right', fontSize: 9.5, color: '#6a6a6a' }}>예약</span>
+                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>룸나잇</span>
                 <span style={{ flex: 0.9, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>비중</span>
                 <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>ADR</span>
               </div>
               <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 7px' }} />
               <div style={{ flex: 3.1, display: 'flex' }}>
-                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>예약</span>
-                <span style={{ flex: 1.1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>룸나잇</span>
+                <span style={{ flex: 1.1, textAlign: 'right', fontSize: 9.5, color: '#6a6a6a' }}>예약</span>
+                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>룸나잇</span>
                 <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>ADR</span>
               </div>
               <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 7px' }} />
               <div style={{ flex: 2.9, display: 'flex' }}>
-                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>예약</span>
+                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#6a6a6a' }}>예약</span>
                 <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>룸나잇</span>
                 <span style={{ flex: 0.9, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>비중</span>
               </div>
@@ -449,7 +449,7 @@ export default function LosPage() {
             {buckets.map((b, i) => {
               const c = r.cyBk[b.no] ?? 0, l = r.lyBk[b.no] ?? 0
               const cr = r.cyBkResv[b.no] ?? 0, lr = r.lyBkResv[b.no] ?? 0
-              const cp = cyTot ? c / cyTot * 100 : 0, lp = lyTot ? l / lyTot * 100 : 0
+              const cp = ctr ? cr / ctr * 100 : 0, lp = ltr ? lr / ltr * 100 : 0
               const ca = r.cyAdr[b.no], la = r.lyAdr[b.no]
               const dr = cr - lr
               const dn = c - l
@@ -464,23 +464,23 @@ export default function LosPage() {
                   <span style={{ width: 44, flex: 'none', fontSize: 12.5, color: '#d8d8d8' }}>{b.label}</span>
                   {/* '26년 */}
                   <div style={{ flex: 4, display: 'flex' }}>
-                    <span style={{ flex: 1, textAlign: 'right', fontSize: 12.5, color: '#b8b8b8' }}>{cr.toLocaleString()}</span>
-                    <span style={{ flex: 1.1, textAlign: 'right', fontSize: 14, color: '#f2f2f2' }}>{c.toLocaleString()}</span>
-                    <span style={{ flex: 0.9, textAlign: 'right', fontSize: 11.5, color: '#9a9a9a' }}>{Math.round(cp)}%</span>
+                    <span style={{ flex: 1.1, textAlign: 'right', fontSize: 14, color: '#f2f2f2' }}>{cr.toLocaleString()}</span>
+                    <span style={{ flex: 1, textAlign: 'right', fontSize: 12.5, color: '#b0b0b0' }}>{c.toLocaleString()}</span>
+                    <span style={{ flex: 0.9, textAlign: 'right', fontSize: 11.5, color: '#9a9a9a' }}>{cr === 0 ? '·' : cp < 1 ? '<1%' : `${Math.round(cp)}%`}</span>
                     <span style={{ flex: 1, textAlign: 'right', fontSize: 12.5, color: '#d0d0d0' }}>{ca == null ? '–' : Math.round(ca / 1000).toLocaleString()}</span>
                   </div>
                   <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 7px' }} />
                   {/* '25년 */}
                   <div style={{ flex: 3.1, display: 'flex' }}>
-                    <span style={{ flex: 1, textAlign: 'right', fontSize: 12, color: '#787878' }}>{lr.toLocaleString()}</span>
-                    <span style={{ flex: 1.1, textAlign: 'right', fontSize: 13, color: '#8a8a8a' }}>{l.toLocaleString()}</span>
+                    <span style={{ flex: 1.1, textAlign: 'right', fontSize: 13, color: '#8a8a8a' }}>{lr.toLocaleString()}</span>
+                    <span style={{ flex: 1, textAlign: 'right', fontSize: 12, color: '#787878' }}>{l.toLocaleString()}</span>
                     <span style={{ flex: 1, textAlign: 'right', fontSize: 12, color: '#7a7a7a' }}>{la == null ? '–' : Math.round(la / 1000).toLocaleString()}</span>
                   </div>
                   <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 7px' }} />
                   {/* 증감 */}
                   <div style={{ flex: 2.9, display: 'flex' }}>
-                    <span style={{ flex: 1, textAlign: 'right', fontSize: 11.5, color: drColor }}>{dr === 0 ? '—' : dr > 0 ? `▲${dr}` : `▼${Math.abs(dr)}`}</span>
-                    <span style={{ flex: 1, textAlign: 'right', fontSize: 12, color: dnColor }}>{dn === 0 ? '—' : dn > 0 ? `▲${dn}` : `▼${Math.abs(dn)}`}</span>
+                    <span style={{ flex: 1, textAlign: 'right', fontSize: 12, color: drColor }}>{dr === 0 ? '—' : dr > 0 ? `▲${dr}` : `▼${Math.abs(dr)}`}</span>
+                    <span style={{ flex: 1, textAlign: 'right', fontSize: 11.5, color: dnColor }}>{dn === 0 ? '—' : dn > 0 ? `▲${dn}` : `▼${Math.abs(dn)}`}</span>
                     <span style={{ flex: 0.9, textAlign: 'right', fontSize: 11, color: dpColor }}>{!dpShow ? '—' : `${dp > 0 ? '+' : '−'}${Math.abs(Math.round(dp))}p`}</span>
                   </div>
                 </div>
@@ -488,7 +488,7 @@ export default function LosPage() {
             })}
           </div>
         </div>
-        <div style={{ textAlign: 'right', fontSize: 10, color: '#5a5a5a', padding: '0 16px 10px' }}>단위 : 건, 룸나잇, 천원</div>
+        <div style={{ textAlign: 'right', fontSize: 10, color: '#5a5a5a', padding: '0 16px 10px' }}>비중은 예약 건수 기준 · 단위 : 건, 룸나잇, 천원</div>
       </div>
     )
   }
