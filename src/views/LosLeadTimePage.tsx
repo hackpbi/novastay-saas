@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useHotel } from '@/contexts/HotelContext'
@@ -29,7 +29,7 @@ const pad = (n: number) => String(n).padStart(2, '0')
 
 // 레이아웃 폭 — 두 구역은 flex:1 균등, 나머지는 고정
 const NAME_W = 116
-const BARDIV_W = 62, YOY_W = 54, V25_W = 46, V26_W = 46, CHG_W = 52, BAR_MAX = 26  // LOS 구역 컬럼 (막대·YoY%·'25·'26·증감)
+const YOY_W = 54, V25_W = 46, V26_W = 46, CHG_W = 52  // LOS 숫자 컬럼 폭 (막대는 flex, %폭)
 const GAP_W = 12
 const LLY_W = 30, LCY_W = 40                      // 리드타임 좌/우 (막대 flex)
 const MINT_OV = 'inset 0 0 0 999px rgba(0,229,160,0.045)'
@@ -74,15 +74,21 @@ export default function LosLeadTimePage() {
 
   const [dim, setDim] = useState<Dim>('segment')
 
+  // 세그먼트 필터 (국적·어카운트 탭 전용) — segmentation 코드 배열
+  const [selectedSegments, setSelectedSegments] = useState<string[]>([])
+  const [segFilterOpen, setSegFilterOpen] = useState(false)
+
   // ─── 데이터 조회 (dim 변경 시 재조회) ───────────────────────────────────────────
+  const segFilterKey = dim === 'segment' ? null : selectedSegments.slice().sort().join(',')
   const { data: rows = [], isLoading } = useQuery<Row[]>({
-    queryKey: ['los-leadtime', hotelId, otbDate, fromDate, toDate, dim],
+    queryKey: ['los-leadtime', hotelId, otbDate, fromDate, toDate, dim, segFilterKey],
     enabled: !!hotelId && !!otbDate,
     staleTime: 60 * 1000,
     placeholderData: keepPreviousData,
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc('get_los_leadtime', {
         p_hotel_id: hotelId, p_update_date: otbDate, p_from: fromDate, p_to: toDate, p_dim: dim,
+        p_segments: dim === 'segment' || selectedSegments.length === 0 ? null : selectedSegments,
       })
       if (error) throw error
       return ((data ?? []) as any[]).map(r => ({
@@ -105,6 +111,45 @@ export default function LosLeadTimePage() {
     }
     return { cy, lyc }
   }, [rows])
+
+  // ─── 세그먼트 필터 트리 (스키마 재사용, House Use 제외) ──────────────────────────
+  const segTree = useMemo(() => {
+    const tops = schema.filter(s => s.parent_id === null).sort((a, b) => a.order_index - b.order_index)
+    const groups: { key: string; name: string; codes: string[]; children: { name: string; codes: string[] }[] }[] = []
+    const allCodes: string[] = []
+    for (const top of tops) {
+      if (top.segmentation.includes('HOU')) continue
+      if (top.level === 'main') {
+        const kids = schema.filter(c => c.parent_id === top.id && !c.segmentation.includes('HOU')).sort((a, b) => a.order_index - b.order_index)
+        const children = kids.map(k => ({ name: k.name, codes: k.segmentation }))
+        const codes = kids.flatMap(k => k.segmentation)
+        groups.push({ key: top.id, name: top.name, codes, children })
+        allCodes.push(...codes)
+      } else {
+        groups.push({ key: top.id, name: top.name, codes: top.segmentation, children: [] })
+        allCodes.push(...top.segmentation)
+      }
+    }
+    return { groups, allCodes }
+  }, [schema])
+
+  // 초기 진입 시 전체 선택 (호텔 변경 시 재시드)
+  const segSeeded = useRef(false)
+  useEffect(() => { segSeeded.current = false }, [hotelId])
+  useEffect(() => {
+    if (segSeeded.current || segTree.allCodes.length === 0) return
+    setSelectedSegments(segTree.allCodes)
+    segSeeded.current = true
+  }, [segTree])
+  // 드롭다운 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!segFilterOpen) return
+    const h = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest('.seg-filter-wrap')) setSegFilterOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [segFilterOpen])
+  const toggleCodes = (codes: string[]) => setSelectedSegments(prev =>
+    codes.every(c => prev.includes(c)) ? prev.filter(c => !codes.includes(c)) : [...new Set([...prev, ...codes])])
 
   // ─── 표시 행 구성 (dim 별) ──────────────────────────────────────────────────────
   const displayRows = useMemo<DRow[]>(() => {
@@ -211,20 +256,20 @@ export default function LosLeadTimePage() {
             const chColor = !has ? '#3f3f3f' : zero ? '#5a5a5a' : p < 0 ? RED : MINT
             const lbl = !has ? '—' : (zero ? '' : (p > 0 ? '+' : '−')) + Math.abs(p).toFixed(1) + '%'
             const dlb = !has ? '—' : zero ? '0.00' : (d > 0 ? '▲' : '▼') + Math.abs(d).toFixed(2)
-            const barW = Math.max(Math.min(Math.abs(p), 100) / 100 * BAR_MAX, 2)
+            const wRaw = Math.min(Math.abs(p), 100) / 100 * 42
+            const wPct = wRaw > 0 && wRaw < 0.4 ? 0.4 : wRaw
             return (
               <>
-                <div style={{ width: BARDIV_W, flexShrink: 0, position: 'relative', height: 14 }}>
+                <div style={{ flex: 1, minWidth: 0, marginRight: 10, position: 'relative', height: 14 }}>
                   <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: '#2e2e2e' }} />
-                  {has && !zero && p > 0 && <div style={{ position: 'absolute', left: '50%', top: 3.5, height: 7, borderRadius: 1, width: barW, background: MINT }} />}
-                  {has && !zero && p < 0 && <div style={{ position: 'absolute', left: `calc(50% - ${barW}px)`, top: 3.5, height: 7, borderRadius: 1, width: barW, background: RED }} />}
+                  {has && !zero && p > 0 && <div style={{ position: 'absolute', left: '50%', top: 3.5, height: 7, borderRadius: 1, width: `${wPct}%`, background: MINT }} />}
+                  {has && !zero && p < 0 && <div style={{ position: 'absolute', left: `calc(50% - ${wPct}%)`, top: 3.5, height: 7, borderRadius: 1, width: `${wPct}%`, background: RED }} />}
                   {has && zero && <div style={{ position: 'absolute', left: 'calc(50% - 2.5px)', top: 4.5, width: 5, height: 5, borderRadius: '50%', background: '#5a5a5a' }} />}
                 </div>
                 <div style={{ width: YOY_W, flexShrink: 0, textAlign: 'right', fontSize: 11, color: chColor }}>{lbl}</div>
                 <div style={{ width: V25_W, flexShrink: 0, textAlign: 'right', fontSize: 12, color: lyA != null ? '#8a8a8a' : '#3f3f3f' }}>{lyA != null ? lyA.toFixed(2) : '–'}</div>
                 <div style={{ width: V26_W, flexShrink: 0, textAlign: 'right', fontSize: 13, color: cyA != null ? (isTotal ? MINT : '#e8e8e8') : '#3f3f3f' }}>{cyA != null ? cyA.toFixed(2) : '–'}</div>
                 <div style={{ width: CHG_W, flexShrink: 0, textAlign: 'right', fontSize: 11, color: chColor }}>{dlb}</div>
-                <div style={{ flex: 1 }} />
               </>
             )
           })()}
@@ -265,6 +310,17 @@ export default function LosLeadTimePage() {
         : { color: '#777', border: '0.5px solid rgba(255,255,255,0.1)' }),
     }}>{label}</span>
   )
+  const chk = (state: 'checked' | 'unchecked' | 'inter') => (
+    <span style={{
+      width: 12, height: 12, borderRadius: 3, flexShrink: 0, boxSizing: 'border-box',
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      border: `1px solid ${state === 'unchecked' ? '#3a3a3a' : '#00E5A0'}`,
+      background: state === 'checked' ? '#00E5A0' : 'transparent',
+    }}>
+      {state === 'checked' && <span style={{ color: '#0a0a0a', fontSize: 9, lineHeight: 1 }}>✓</span>}
+      {state === 'inter' && <span style={{ width: 6, height: 2, background: '#00E5A0' }} />}
+    </span>
+  )
 
   return (
     <div>
@@ -286,9 +342,63 @@ export default function LosLeadTimePage() {
         <span style={{ fontSize: 11, color: '#5f5f5f' }}>도착일 기준 · 단체/HOU 제외</span>
       </div>
 
-      {/* 탭 */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+      {/* 탭 + 세그먼트 필터 (국적·어카운트 탭에서만) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
         {dimItem('segment', '세그먼트')}{dimItem('country', '국적')}{dimItem('account', '어카운트')}
+        {dim !== 'segment' && (
+          <>
+            <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.12)', margin: '0 4px' }} />
+            <div className="seg-filter-wrap" style={{ position: 'relative' }}>
+              <div onClick={() => setSegFilterOpen(o => !o)} style={{
+                display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer',
+                fontSize: 12, padding: '5px 12px', borderRadius: 6, color: MINT,
+                border: '0.5px solid rgba(0,229,160,0.4)', background: 'rgba(0,229,160,0.06)',
+              }}>
+                <span style={{ fontSize: 11 }}>▦</span>
+                <span>세그먼트</span>
+                <span style={{ fontSize: 11, background: 'rgba(0,229,160,0.18)', padding: '1px 7px', borderRadius: 4 }}>{selectedSegments.length}개 선택</span>
+                <span style={{ fontSize: 9 }}>{segFilterOpen ? '▴' : '▾'}</span>
+              </div>
+              {segFilterOpen && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 210, zIndex: 20,
+                  background: '#101410', border: '0.5px solid rgba(0,229,160,0.3)', borderRadius: 8,
+                  padding: '8px 0', boxShadow: '0 8px 24px rgba(0,0,0,0.7)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 12px 8px', marginBottom: 6, borderBottom: '0.5px solid rgba(255,255,255,0.08)', fontSize: 11 }}>
+                    <span onClick={() => setSelectedSegments(segTree.allCodes)} style={{ color: MINT, cursor: 'pointer' }}>전체 선택</span>
+                    <span style={{ color: '#333' }}>|</span>
+                    <span onClick={() => setSelectedSegments([])} style={{ color: '#777', cursor: 'pointer' }}>전체 해제</span>
+                  </div>
+                  {segTree.groups.map(g => {
+                    const isLeaf = g.children.length === 0
+                    const childSel = g.children.filter(c => c.codes.every(cc => selectedSegments.includes(cc))).length
+                    const gState: 'checked' | 'unchecked' | 'inter' = isLeaf
+                      ? (g.codes.every(c => selectedSegments.includes(c)) ? 'checked' : 'unchecked')
+                      : (childSel === g.children.length ? 'checked' : childSel === 0 ? 'unchecked' : 'inter')
+                    return (
+                      <div key={g.key}>
+                        <div onClick={() => toggleCodes(g.codes)} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '4px 12px 4px 12px' }}>
+                          {chk(gState)}
+                          <span style={{ fontSize: 12.5, color: '#EAFFF7', fontWeight: 500 }}>{g.name}</span>
+                        </div>
+                        {g.children.map(c => {
+                          const cState: 'checked' | 'unchecked' = c.codes.every(cc => selectedSegments.includes(cc)) ? 'checked' : 'unchecked'
+                          return (
+                            <div key={c.name} onClick={() => toggleCodes(c.codes)} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '4px 12px 4px 26px' }}>
+                              {chk(cState)}
+                              <span style={{ fontSize: 12, color: '#b0b0b0' }}>{c.name}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {isLoading && rows.length === 0 ? (
@@ -306,11 +416,11 @@ export default function LosLeadTimePage() {
           <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 6, borderBottom: '0.5px solid rgba(255,255,255,0.05)' }}>
             <div style={{ width: NAME_W, flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0, display: 'flex', boxShadow: MINT_OV, padding: '0 8px', boxSizing: 'border-box' }}>
-              <div style={{ width: BARDIV_W + YOY_W, flexShrink: 0, textAlign: 'center', fontSize: 10, color: AMBER }}>YoY %</div>
+              <div style={{ flex: 1, minWidth: 0, marginRight: 10 }} />
+              <div style={{ width: YOY_W, flexShrink: 0, textAlign: 'right', fontSize: 10, color: AMBER }}>YoY %</div>
               <div style={{ width: V25_W, flexShrink: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>{"'25년"}</div>
               <div style={{ width: V26_W, flexShrink: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>{"'26년"}</div>
               <div style={{ width: CHG_W, flexShrink: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>증감</div>
-              <div style={{ flex: 1 }} />
             </div>
             <div style={{ width: GAP_W, flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0, display: 'flex', boxShadow: BLUE_OV, padding: '0 8px', boxSizing: 'border-box' }}>
