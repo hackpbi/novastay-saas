@@ -29,7 +29,6 @@ const pad = (n: number) => String(n).padStart(2, '0')
 
 // 레이아웃 폭 — 두 구역은 flex:1 균등, 나머지는 고정
 const NAME_W = 116
-const YOY_W = 54, V25_W = 46, V26_W = 46, CHG_W = 52  // LOS 숫자 컬럼 폭 (막대는 flex, %폭)
 const GAP_W = 12
 const LLY_W = 30, LCY_W = 40                      // 리드타임 좌/우 (막대 flex)
 const MINT_OV = 'inset 0 0 0 999px rgba(0,229,160,0.045)'
@@ -247,7 +246,7 @@ export default function LosLeadTimePage() {
         {/* LOS 구역 (민트 오버레이) — 막대 → YoY% → '25년 → '26년 → 증감 → 여백 */}
         <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', background: bg, boxShadow: MINT_OV, padding: '6px 8px', boxSizing: 'border-box' }}>
           {noLos ? (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#333' }}>데이터 없음</div>
+            <div style={{ flex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#333' }}>데이터 없음</div>
           ) : (() => {
             const has = cyA != null && lyA != null && lyA !== 0
             const p = has ? (cyA! - lyA!) / lyA! * 100 : 0
@@ -256,20 +255,23 @@ export default function LosLeadTimePage() {
             const chColor = !has ? '#3f3f3f' : zero ? '#5a5a5a' : p < 0 ? RED : MINT
             const lbl = !has ? '—' : (zero ? '' : (p > 0 ? '+' : '−')) + Math.abs(p).toFixed(1) + '%'
             const dlb = !has ? '—' : zero ? '0.00' : (d > 0 ? '▲' : '▼') + Math.abs(d).toFixed(2)
-            const wRaw = Math.min(Math.abs(p), 100) / 100 * 42
-            const wPct = wRaw > 0 && wRaw < 0.4 ? 0.4 : wRaw
+            const w = Math.max(Math.min(Math.abs(p), 100) / 100 * 26, 2)
+            const neg = has && p < 0
             return (
               <>
-                <div style={{ flex: 1, minWidth: 0, marginRight: 10, position: 'relative', height: 14 }}>
-                  <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: '#2e2e2e' }} />
-                  {has && !zero && p > 0 && <div style={{ position: 'absolute', left: '50%', top: 3.5, height: 7, borderRadius: 1, width: `${wPct}%`, background: MINT }} />}
-                  {has && !zero && p < 0 && <div style={{ position: 'absolute', left: `calc(50% - ${wPct}%)`, top: 3.5, height: 7, borderRadius: 1, width: `${wPct}%`, background: RED }} />}
-                  {has && zero && <div style={{ position: 'absolute', left: 'calc(50% - 2.5px)', top: 4.5, width: 5, height: 5, borderRadius: '50%', background: '#5a5a5a' }} />}
+                <div style={{ flex: 4, minWidth: 0, display: 'flex', alignItems: 'center' }}>
+                  <div style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingRight: 5, fontSize: 11, color: (neg || !has) ? chColor : 'transparent' }}>{(neg || !has) ? lbl : ''}</div>
+                  <div style={{ width: 58, flexShrink: 0, position: 'relative', height: 14 }}>
+                    <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: '#2e2e2e' }} />
+                    {has && !zero && p > 0 && <div style={{ position: 'absolute', left: '50%', top: 3.5, height: 7, borderRadius: 1, width: `${w}px`, background: MINT }} />}
+                    {has && !zero && p < 0 && <div style={{ position: 'absolute', left: `calc(50% - ${w}px)`, top: 3.5, height: 7, borderRadius: 1, width: `${w}px`, background: RED }} />}
+                    {has && zero && <div style={{ position: 'absolute', left: 'calc(50% - 2.5px)', top: 4.5, width: 5, height: 5, borderRadius: '50%', background: '#5a5a5a' }} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0, paddingLeft: 5, fontSize: 11, color: (!neg && has) ? chColor : 'transparent' }}>{(!neg && has) ? lbl : ''}</div>
                 </div>
-                <div style={{ width: YOY_W, flexShrink: 0, textAlign: 'right', fontSize: 11, color: chColor }}>{lbl}</div>
-                <div style={{ width: V25_W, flexShrink: 0, textAlign: 'right', fontSize: 12, color: lyA != null ? '#8a8a8a' : '#3f3f3f' }}>{lyA != null ? lyA.toFixed(2) : '–'}</div>
-                <div style={{ width: V26_W, flexShrink: 0, textAlign: 'right', fontSize: 13, color: cyA != null ? (isTotal ? MINT : '#e8e8e8') : '#3f3f3f' }}>{cyA != null ? cyA.toFixed(2) : '–'}</div>
-                <div style={{ width: CHG_W, flexShrink: 0, textAlign: 'right', fontSize: 11, color: chColor }}>{dlb}</div>
+                <div style={{ flex: 2, minWidth: 0, textAlign: 'right', fontSize: 12, color: lyA != null ? '#8a8a8a' : '#3f3f3f' }}>{lyA != null ? lyA.toFixed(2) : '–'}</div>
+                <div style={{ flex: 2, minWidth: 0, textAlign: 'right', fontSize: 13, color: cyA != null ? (isTotal ? MINT : '#e8e8e8') : '#3f3f3f' }}>{cyA != null ? cyA.toFixed(2) : '–'}</div>
+                <div style={{ flex: 2, minWidth: 0, textAlign: 'right', fontSize: 11, color: chColor }}>{dlb}</div>
               </>
             )
           })()}
@@ -416,11 +418,14 @@ export default function LosLeadTimePage() {
           <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 6, borderBottom: '0.5px solid rgba(255,255,255,0.05)' }}>
             <div style={{ width: NAME_W, flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0, display: 'flex', boxShadow: MINT_OV, padding: '0 8px', boxSizing: 'border-box' }}>
-              <div style={{ flex: 1, minWidth: 0, marginRight: 10 }} />
-              <div style={{ width: YOY_W, flexShrink: 0, textAlign: 'right', fontSize: 10, color: AMBER }}>YoY %</div>
-              <div style={{ width: V25_W, flexShrink: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>{"'25년"}</div>
-              <div style={{ width: V26_W, flexShrink: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>{"'26년"}</div>
-              <div style={{ width: CHG_W, flexShrink: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>증감</div>
+              <div style={{ flex: 4, minWidth: 0, display: 'flex', alignItems: 'center' }}>
+                <div style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingRight: 5, fontSize: 11, color: '#454545' }}>감소 ◀</div>
+                <div style={{ width: 58, flexShrink: 0, textAlign: 'center', fontSize: 11, color: AMBER }}>YoY %</div>
+                <div style={{ flex: 1, minWidth: 0, paddingLeft: 5, fontSize: 11, color: '#454545' }}>▶ 증가</div>
+              </div>
+              <div style={{ flex: 2, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>{"'25년"}</div>
+              <div style={{ flex: 2, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>{"'26년"}</div>
+              <div style={{ flex: 2, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>증감</div>
             </div>
             <div style={{ width: GAP_W, flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0, display: 'flex', boxShadow: BLUE_OV, padding: '0 8px', boxSizing: 'border-box' }}>
