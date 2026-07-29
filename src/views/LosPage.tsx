@@ -85,6 +85,7 @@ export default function LosPage() {
   const [selectedSegments, setSelectedSegments] = useState<string[]>([])
   const [segFilterOpen, setSegFilterOpen] = useState(false)
   const [selName, setSelName] = useState<string | null>(null)
+  const [hoverKey, setHoverKey] = useState<React.Key | null>(null)
 
   const segKey = dim === 'segment' ? null : selectedSegments.slice().sort().join(',')
   const p_segments = dim === 'segment' || selectedSegments.length === 0 ? null : selectedSegments
@@ -282,29 +283,33 @@ export default function LosPage() {
   // ─── 행 렌더 ───────────────────────────────────────────────────────────────────
   function renderRow(r: DRow, key: React.Key, isTotal = false) {
     const noData = r.cy.resv <= 0 && r.ly.resv <= 0
-    const bg = isTotal ? 'transparent' : (r.bg ?? 'transparent')
+    const bg = isTotal ? 'rgba(0,229,160,0.07)' : (r.bg ?? 'transparent')
     const dim35 = !isTotal && noData ? 0.35 : 1
     const rowOp = !isTotal && r.cy.rn <= 5 ? 0.55 : 1
     const sel = selName === r.name
+    const isHover = hoverKey === key
     const dAlos = (r.cy.alos != null && r.ly.alos != null) ? r.cy.alos - r.ly.alos : null
     return (
-      <div key={key} onClick={() => setSelName(prev => prev === r.name ? null : r.name)} style={{
+      <div key={key} onClick={() => setSelName(prev => prev === r.name ? null : r.name)}
+        onMouseEnter={() => setHoverKey(key)} onMouseLeave={() => setHoverKey(null)} style={{
         display: 'flex', alignItems: 'stretch', height: 38, cursor: 'pointer',
-        opacity: rowOp,
+        opacity: rowOp, background: bg,
+        boxShadow: isHover ? 'inset 0 0 0 999px rgba(0,229,160,0.07)' : undefined,
+        transition: 'box-shadow 0.12s ease',
         ...(sel ? { outline: '1px solid rgba(0,229,160,0.5)', outlineOffset: -1 } : {}),
-        ...(isTotal ? { borderTop: '0.5px solid rgba(255,255,255,0.2)' } : { borderBottom: '0.5px solid rgba(255,255,255,0.05)' }),
+        ...(isTotal ? { borderTop: '1px solid rgba(255,255,255,0.22)' } : { borderBottom: '0.5px solid rgba(255,255,255,0.09)' }),
       }}>
         {/* 구분 */}
         <div style={{
           width: 138, flexShrink: 0, display: 'flex', alignItems: 'center', boxSizing: 'border-box',
-          paddingLeft: r.level === 'sub' ? 32 : 16, paddingRight: 8, background: bg,
+          paddingLeft: r.level === 'sub' ? 32 : 16, paddingRight: 8,
           fontSize: r.level === 'sub' ? 12 : 13, fontWeight: (isTotal ? true : r.isBold) ? 500 : 400,
           color: isTotal ? MINT : r.level === 'sub' ? '#9a9a9a' : r.level === 'flat' ? '#e8e8e8' : (r.font ?? '#e8e8e8'),
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', opacity: dim35,
         }}>{r.name}</div>
 
         {/* 박수별 예약 건수 */}
-        <div style={{ flex: 7, minWidth: 0, display: 'flex', alignItems: 'center', background: bg, boxShadow: OV }}>
+        <div style={{ flex: 7, minWidth: 0, display: 'flex', alignItems: 'center' }}>
           {noData ? (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#333' }}>데이터 없음</div>
           ) : (() => { const rowTot = buckets.reduce((s, b) => s + (r.cyBk[b.no] ?? 0), 0); return buckets.map(b => {
@@ -319,11 +324,13 @@ export default function LosPage() {
           }) })()}
         </div>
 
-        {/* 간격 */}
-        <div style={{ width: 10, flexShrink: 0 }} />
+        {/* 간격 + 세로 구분선 */}
+        <div style={{ width: 10, flexShrink: 0, display: 'flex', justifyContent: 'center', alignSelf: 'stretch' }}>
+          <div style={{ width: 1, background: 'rgba(255,255,255,0.14)' }} />
+        </div>
 
         {/* 평균 · 최장 */}
-        <div style={{ flex: 3, minWidth: 0, display: 'flex', alignItems: 'center', background: bg, boxShadow: OV_B }}>
+        <div style={{ flex: 3, minWidth: 0, display: 'flex', alignItems: 'center' }}>
           <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 13, color: isTotal ? MINT : '#e8e8e8' }}>{r.cy.alos != null ? r.cy.alos.toFixed(2) : <span style={{ color: '#3f3f3f' }}>–</span>}</div>
           <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 11, color: dAlos == null ? '#3f3f3f' : dAlos > 0 ? MINT : dAlos < 0 ? RED : '#8a8a8a' }}>
             {dAlos == null ? '—' : `${dAlos > 0 ? '▲' : dAlos < 0 ? '▼' : ''}${Math.abs(dAlos).toFixed(2)}`}
