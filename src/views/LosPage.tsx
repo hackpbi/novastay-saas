@@ -9,9 +9,9 @@ import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
 
 // ─── 타입 ────────────────────────────────────────────────────────────────────────
 type Dim = 'segment' | 'country' | 'account'
-type SumRow = { year_type: string; dim_key: string; resv: number; room_nights: number; alos: number | null; max_los: number | null; adr: number | null }
+type SumRow = { year_type: string; dim_key: string; resv: number; rooms: number; room_nights: number; alos: number | null; max_los: number | null; adr: number | null }
 type BktRow = { year_type: string; dim_key: string; bucket_no: number; bucket_min: number; bucket_max: number | null; resv: number; room_nights: number; adr: number | null }
-type Sum = { resv: number; rn: number; alos: number | null; max: number | null }
+type Sum = { resv: number; rn: number; rooms: number; alos: number | null; max: number | null }
 type BucketDef = { no: number; min: number; max: number | null; label: string }
 type DRow = { name: string; level: 'main' | 'mid' | 'sub' | 'flat'; bg: string | null; font: string | null; isBold: boolean; cy: Sum; ly: Sum; cyBk: Record<number, number>; lyBk: Record<number, number>; cyAdr: Record<number, number | null> }
 
@@ -25,14 +25,13 @@ const CO = ['#00E5A0', '#0FB894', '#1C8A88', '#2A5D7C', '#5B8DEF']
 const bktColor = (i: number) => CO[Math.min(i, CO.length - 1)]
 
 function aggSum(map: Record<string, SumRow>, codes: string[]): Sum {
-  let resv = 0, rn = 0, an = 0, ad = 0, mx: number | null = null
+  let resv = 0, rn = 0, rooms = 0, mx: number | null = null
   for (const c of codes) {
     const r = map[c]; if (!r) continue
-    resv += r.resv; rn += r.room_nights
-    if (r.alos != null && r.resv > 0) { an += r.alos * r.resv; ad += r.resv }
+    resv += r.resv; rn += r.room_nights; rooms += r.rooms
     if (r.max_los != null) mx = mx == null ? r.max_los : Math.max(mx, r.max_los)
   }
-  return { resv, rn, alos: ad > 0 ? an / ad : null, max: mx }
+  return { resv, rn, rooms, alos: rooms > 0 ? rn / rooms : null, max: mx }
 }
 function aggBkt(bmap: Record<string, Record<number, number>>, codes: string[]): Record<number, number> {
   const out: Record<number, number> = {}
@@ -103,7 +102,7 @@ export default function LosPage() {
       if (error) throw error
       return ((data ?? []) as any[]).map(r => ({
         year_type: r.year_type as string, dim_key: r.dim_key as string,
-        resv: Number(r.resv) || 0, room_nights: Number(r.room_nights) || 0,
+        resv: Number(r.resv) || 0, rooms: Number(r.rooms) || 0, room_nights: Number(r.room_nights) || 0,
         alos: r.alos == null ? null : Number(r.alos),
         max_los: r.max_los == null ? null : Number(r.max_los),
         adr: r.adr == null ? null : Number(r.adr),
@@ -143,7 +142,7 @@ export default function LosPage() {
     for (const r of bktRows) {
       const t = r.year_type === 'cy' ? cy : r.year_type === 'ly' ? ly : null
       if (!t) continue
-      ;(t[r.dim_key] ??= {})[r.bucket_no] = (t[r.dim_key][r.bucket_no] ?? 0) + r.resv
+      ;(t[r.dim_key] ??= {})[r.bucket_no] = (t[r.dim_key][r.bucket_no] ?? 0) + r.room_nights
     }
     return { cy, ly }
   }, [bktRows])
@@ -238,22 +237,20 @@ export default function LosPage() {
 
   // ─── 합계 (부모 main 제외) ───────────────────────────────────────────────────────
   const totalRow = useMemo<DRow>(() => {
-    let resv = 0, an = 0, ad = 0, mx: number | null = null
-    let lresv = 0, lan = 0, lad = 0
+    let resv = 0, rn = 0, rooms = 0, mx: number | null = null
+    let lresv = 0, lrn = 0, lrooms = 0
     const cyBk: Record<number, number> = {}, lyBk: Record<number, number> = {}
     for (const r of displayRows) {
       if (r.level === 'main') continue
-      resv += r.cy.resv
-      if (r.cy.alos != null && r.cy.resv > 0) { an += r.cy.alos * r.cy.resv; ad += r.cy.resv }
+      resv += r.cy.resv; rn += r.cy.rn; rooms += r.cy.rooms
       if (r.cy.max != null) mx = mx == null ? r.cy.max : Math.max(mx, r.cy.max)
-      lresv += r.ly.resv
-      if (r.ly.alos != null && r.ly.resv > 0) { lan += r.ly.alos * r.ly.resv; lad += r.ly.resv }
+      lresv += r.ly.resv; lrn += r.ly.rn; lrooms += r.ly.rooms
       for (const b of buckets) { cyBk[b.no] = (cyBk[b.no] ?? 0) + (r.cyBk[b.no] ?? 0); lyBk[b.no] = (lyBk[b.no] ?? 0) + (r.lyBk[b.no] ?? 0) }
     }
     return {
       name: '합계', level: 'flat', bg: null, font: null, isBold: true,
-      cy: { resv, rn: 0, alos: ad > 0 ? an / ad : null, max: mx },
-      ly: { resv: lresv, rn: 0, alos: lad > 0 ? lan / lad : null, max: null },
+      cy: { resv, rn, rooms, alos: rooms > 0 ? rn / rooms : null, max: mx },
+      ly: { resv: lresv, rn: lrn, rooms: lrooms, alos: lrooms > 0 ? lrn / lrooms : null, max: null },
       cyBk, lyBk,
       cyAdr: aggBktAdr(bktAdrCy, buckets, Object.keys(bktAdrCy)),
     }
@@ -277,7 +274,7 @@ export default function LosPage() {
       <svg viewBox="0 0 118 118" width={118} height={118} style={{ opacity: isCy ? 1 : 0.45 }}>
         {segs.map((s, i) => <path key={i} d={s.d} fill={s.color} />)}
         <text x={59} y={57} textAnchor="middle" dominantBaseline="central" fontSize={20} fill="#e8e8e8">{total.toLocaleString()}</text>
-        <text x={59} y={73} textAnchor="middle" dominantBaseline="central" fontSize={10} fill="#6a6a6a">건</text>
+        <text x={59} y={73} textAnchor="middle" dominantBaseline="central" fontSize={10} fill="#6a6a6a">실</text>
       </svg>
     )
   }
@@ -287,7 +284,7 @@ export default function LosPage() {
     const noData = r.cy.resv <= 0 && r.ly.resv <= 0
     const bg = isTotal ? 'transparent' : (r.bg ?? 'transparent')
     const dim35 = !isTotal && noData ? 0.35 : 1
-    const rowOp = !isTotal && r.cy.resv <= 4 ? 0.55 : 1
+    const rowOp = !isTotal && r.cy.rn <= 5 ? 0.55 : 1
     const sel = selName === r.name
     const dAlos = (r.cy.alos != null && r.ly.alos != null) ? r.cy.alos - r.ly.alos : null
     return (
@@ -400,7 +397,7 @@ export default function LosPage() {
             })}
           </div>
         </div>
-        <div style={{ textAlign: 'right', fontSize: 10, color: '#5a5a5a', padding: '0 16px 10px' }}>단위 : 건, 천원</div>
+        <div style={{ textAlign: 'right', fontSize: 10, color: '#5a5a5a', padding: '0 16px 10px' }}>단위 : 룸나잇, 천원</div>
       </div>
     )
   }
@@ -437,7 +434,7 @@ export default function LosPage() {
             <span style={{ fontSize: 26, color: MINT, lineHeight: 1 }}>›</span><span style={{ fontSize: 9, color: MINT }}>다음</span>
           </button>
         </div>
-        <span style={{ fontSize: 11, color: '#5f5f5f' }}>도착일 기준 · 단체/HOU 제외</span>
+        <span style={{ fontSize: 11, color: '#5f5f5f' }}>도착일 기준 · 룸나잇 · HOU 제외</span>
       </div>
 
       {/* 탭 + 세그먼트 필터 */}
@@ -529,6 +526,8 @@ export default function LosPage() {
           {displayRows.map((r, i) => renderRow(r, i))}
           {renderRow(totalRow, 'total', true)}
           </div>
+
+          <div style={{ fontSize: 11, color: '#5a5a5a', marginTop: 10 }}>도착일 기준 집계 — 월을 넘기는 stay-over 로 투숙일 기준 실적과 차이가 있을 수 있음</div>
 
           {panelRow && renderPanel(panelRow)}
         </div>
