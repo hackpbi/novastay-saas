@@ -13,7 +13,7 @@ type SumRow = { year_type: string; dim_key: string; resv: number; rooms: number;
 type BktRow = { year_type: string; dim_key: string; bucket_no: number; bucket_min: number; bucket_max: number | null; resv: number; room_nights: number; adr: number | null }
 type Sum = { resv: number; rn: number; rooms: number; alos: number | null; max: number | null }
 type BucketDef = { no: number; min: number; max: number | null; label: string }
-type DRow = { name: string; level: 'main' | 'mid' | 'sub' | 'flat'; bg: string | null; font: string | null; isBold: boolean; cy: Sum; ly: Sum; cyBk: Record<number, number>; lyBk: Record<number, number>; cyAdr: Record<number, number | null> }
+type DRow = { name: string; level: 'main' | 'mid' | 'sub' | 'flat'; bg: string | null; font: string | null; isBold: boolean; cy: Sum; ly: Sum; cyBk: Record<number, number>; lyBk: Record<number, number>; cyAdr: Record<number, number | null>; lyAdr: Record<number, number | null> }
 
 // ─── 상수 (KST — getUTC 금지) ──────────────────────────────────────────────────────
 const MINT = '#00E5A0'
@@ -153,6 +153,11 @@ export default function LosPage() {
     for (const r of bktRows) { if (r.year_type !== 'cy') continue; (cy[r.dim_key] ??= {})[r.bucket_no] = { rn: r.room_nights, adr: r.adr } }
     return cy
   }, [bktRows])
+  const bktAdrLy = useMemo(() => {
+    const ly: Record<string, Record<number, { rn: number; adr: number | null }>> = {}
+    for (const r of bktRows) { if (r.year_type !== 'ly') continue; (ly[r.dim_key] ??= {})[r.bucket_no] = { rn: r.room_nights, adr: r.adr } }
+    return ly
+  }, [bktRows])
   // 버킷 정의 (반환된 bucket_no 만큼 동적)
   const buckets = useMemo<BucketDef[]>(() => {
     const byNo: Record<number, { min: number; max: number | null }> = {}
@@ -209,6 +214,7 @@ export default function LosPage() {
       cy: aggSum(sumBy.cy, codes), ly: aggSum(sumBy.ly, codes),
       cyBk: aggBkt(bktBy.cy, codes), lyBk: aggBkt(bktBy.ly, codes),
       cyAdr: aggBktAdr(bktAdrCy, buckets, codes),
+      lyAdr: aggBktAdr(bktAdrLy, buckets, codes),
     })
     if (dim === 'segment') {
       const tops = schema.filter(s => s.parent_id === null).sort((a, b) => a.order_index - b.order_index)
@@ -234,7 +240,7 @@ export default function LosPage() {
     const out = top15.map(s => make(s.key, 'flat', null, [s.key]))
     if (restKeys.length) out.push(make('기타', 'flat', null, restKeys))
     return out
-  }, [dim, sumRows, schema, sumBy, bktBy, bktAdrCy, buckets])
+  }, [dim, sumRows, schema, sumBy, bktBy, bktAdrCy, bktAdrLy, buckets])
 
   // ─── 합계 (부모 main 제외) ───────────────────────────────────────────────────────
   const totalRow = useMemo<DRow>(() => {
@@ -254,28 +260,54 @@ export default function LosPage() {
       ly: { resv: lresv, rn: lrn, rooms: lrooms, alos: lrooms > 0 ? lrn / lrooms : null, max: null },
       cyBk, lyBk,
       cyAdr: aggBktAdr(bktAdrCy, buckets, Object.keys(bktAdrCy)),
+      lyAdr: aggBktAdr(bktAdrLy, buckets, Object.keys(bktAdrLy)),
     }
-  }, [displayRows, buckets, bktAdrCy])
+  }, [displayRows, buckets, bktAdrCy, bktAdrLy])
 
   // ─── 도넛 ───────────────────────────────────────────────────────────────────────
   const renderDonut = (bk: Record<number, number>, isCy: boolean) => {
     const total = buckets.reduce((s, b) => s + (bk[b.no] ?? 0), 0)
-    if (total <= 0) return <div style={{ width: 118, height: 118, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#333', opacity: isCy ? 1 : 0.45 }}>없음</div>
-    const gap = 0.012
+    if (total <= 0) return <div style={{ width: 196, height: 147, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#333', opacity: isCy ? 1 : 0.45 }}>없음</div>
+    const cx = 100, cy = 74, rO = 45, rI = 29, gap = 0.014
     let a = -Math.PI / 2
     const segs: { d: string; color: string }[] = []
+    const labels: { color: string; label: string; pct: number; right: boolean; sx: number; sy: number; y: number }[] = []
     buckets.forEach((b, i) => {
       const v = bk[b.no] ?? 0
       if (v <= 0) return
       const frac = v / total
-      segs.push({ d: arc(59, 59, 52, 33, a + gap / 2, a + frac * 2 * Math.PI - gap / 2), color: bktColor(i) })
+      segs.push({ d: arc(cx, cy, rO, rI, a + gap / 2, a + frac * 2 * Math.PI - gap / 2), color: bktColor(i) })
+      const pct = frac * 100
+      if (pct >= 3) {
+        const mid = a + frac * Math.PI
+        labels.push({ color: bktColor(i), label: b.label, pct, right: Math.cos(mid) >= 0, sx: cx + 47 * Math.cos(mid), sy: cy + 47 * Math.sin(mid), y: cy + 50 * Math.sin(mid) })
+      }
       a += frac * 2 * Math.PI
     })
+    const leftLabels = labels.filter(l => !l.right)
+    const rightLabels = labels.filter(l => l.right)
+    ;[leftLabels, rightLabels].forEach(arr => {
+      arr.sort((x, y) => x.y - y.y)
+      for (let i = 1; i < arr.length; i++) if (arr[i].y - arr[i - 1].y < 12) arr[i].y = arr[i - 1].y + 12
+    })
     return (
-      <svg viewBox="0 0 118 118" width={118} height={118} style={{ opacity: isCy ? 1 : 0.45 }}>
+      <svg viewBox="0 0 200 150" width={196} height={147} style={{ opacity: isCy ? 1 : 0.45 }}>
         {segs.map((s, i) => <path key={i} d={s.d} fill={s.color} />)}
-        <text x={59} y={57} textAnchor="middle" dominantBaseline="central" fontSize={20} fill="#e8e8e8">{total.toLocaleString()}</text>
-        <text x={59} y={73} textAnchor="middle" dominantBaseline="central" fontSize={10} fill="#6a6a6a">실</text>
+        {[...leftLabels, ...rightLabels].map((l, i) => {
+          const lineEnd = l.right ? cx + 50 : cx - 50
+          const tx = l.right ? cx + 56 : cx - 56
+          return (
+            <g key={`lb${i}`}>
+              <polyline points={`${l.sx},${l.sy} ${lineEnd},${l.y} ${tx},${l.y}`} fill="none" stroke={l.color} strokeWidth={0.9} opacity={isCy ? 0.65 : 0.4} />
+              <text x={tx} y={l.y} textAnchor={l.right ? 'start' : 'end'} dominantBaseline="central" fontSize={10}>
+                <tspan fill={isCy ? '#d8d8d8' : '#7f7f7f'}>{l.label}</tspan>
+                <tspan dx={3} fontWeight={600} fill={isCy ? l.color : '#8f8f8f'}>{Math.round(l.pct)}%</tspan>
+              </text>
+            </g>
+          )
+        })}
+        <text x={cx} y={cy - 2} textAnchor="middle" dominantBaseline="central" fontSize={22} fill="#e8e8e8">{total.toLocaleString()}</text>
+        <text x={cx} y={cy + 14} textAnchor="middle" dominantBaseline="central" fontSize={9} fill="#6a6a6a">룸나잇</text>
       </svg>
     )
   }
@@ -355,50 +387,89 @@ export default function LosPage() {
           </div>
           <span onClick={() => setSelName(null)} style={{ fontSize: 16, color: '#6a6a6a', cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>×</span>
         </div>
-        <div style={{ display: 'flex', gap: 24, padding: '12px 16px 8px', flexWrap: 'wrap' }}>
-          {/* 도넛 2개 */}
-          <div style={{ display: 'flex', gap: 16 }}>
-            {([['ly', false, "'25년", '#8a8a8a'], ['cy', true, "'26년", MINT]] as const).map(([yk, isCy, lbl, col]) => (
-              <div key={yk} style={{ textAlign: 'center' }}>
-                {renderDonut(isCy ? r.cyBk : r.lyBk, isCy)}
-                <div style={{ fontSize: 11, color: col, marginTop: -2 }}>{lbl}</div>
-              </div>
-            ))}
+        <div style={{ display: 'flex', gap: 10, padding: '12px 18px 10px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          {/* 도넛 '26년 */}
+          <div style={{ width: 196, flex: 'none', textAlign: 'center' }}>
+            {renderDonut(r.cyBk, true)}
+            <div style={{ fontSize: 12, fontWeight: 500, color: MINT, marginTop: -6 }}>{"'26년"}</div>
+          </div>
+          {/* 도넛 '25년 */}
+          <div style={{ width: 196, flex: 'none', textAlign: 'center' }}>
+            {renderDonut(r.lyBk, false)}
+            <div style={{ fontSize: 12, fontWeight: 500, color: '#8a8a8a', marginTop: -6 }}>{"'25년"}</div>
           </div>
           {/* 표 */}
-          <div style={{ flex: 1, minWidth: 320 }}>
-            {/* 표 헤더 */}
-            <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 6 }}>
-              <span style={{ width: 9, marginRight: 8, flexShrink: 0 }} />
-              <span style={{ width: 46, flexShrink: 0 }} />
-              <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>{"'25년"}</span>
-              <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>{"'26년"}</span>
-              <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>증감</span>
-              <span style={{ flex: 1.1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>비중</span>
-              <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: MINT }}>ADR</span>
-              <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#F59E0B' }}>1박대비</span>
+          <div style={{ flex: 1, minWidth: 0, paddingLeft: 8 }}>
+            {/* 헤더 1단 — 연도 */}
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <span style={{ width: 10, marginRight: 9, flex: 'none' }} />
+              <span style={{ width: 44, flex: 'none' }} />
+              <div style={{ flex: 3, textAlign: 'center', fontSize: 10.5, fontWeight: 500, color: MINT }}>{"'26년"}</div>
+              <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 8px' }} />
+              <div style={{ flex: 3, textAlign: 'center', fontSize: 10.5, fontWeight: 500, color: '#8a8a8a' }}>{"'25년"}</div>
+              <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 8px' }} />
+              <div style={{ flex: 3, textAlign: 'center', fontSize: 10.5, fontWeight: 500, color: '#c8c8c8' }}>증감</div>
             </div>
+            {/* 헤더 2단 — 룸나잇 · 비중 · ADR */}
+            <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 4 }}>
+              <span style={{ width: 10, marginRight: 9, flex: 'none' }} />
+              <span style={{ width: 44, flex: 'none' }} />
+              <div style={{ flex: 3, display: 'flex' }}>
+                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>룸나잇</span>
+                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>비중</span>
+                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>ADR</span>
+              </div>
+              <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 8px' }} />
+              <div style={{ flex: 3, display: 'flex' }}>
+                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>룸나잇</span>
+                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>비중</span>
+                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>ADR</span>
+              </div>
+              <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 8px' }} />
+              <div style={{ flex: 3, display: 'flex' }}>
+                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>룸나잇</span>
+                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>비중</span>
+                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>ADR</span>
+              </div>
+            </div>
+            {/* 본문 */}
             {buckets.map((b, i) => {
-              const c = r.cyBk[b.no] ?? 0, l = r.lyBk[b.no] ?? 0, d = c - l
+              const c = r.cyBk[b.no] ?? 0, l = r.lyBk[b.no] ?? 0
               const cp = cyTot ? c / cyTot * 100 : 0, lp = lyTot ? l / lyTot * 100 : 0
+              const ca = r.cyAdr[b.no], la = r.lyAdr[b.no]
+              const dn = c - l
               const dp = cp - lp
-              const a = r.cyAdr[b.no], a0 = r.cyAdr[buckets[0].no]
-              const disc = (a0 && a && i > 0) ? (a - a0) / a0 * 100 : null
-              const discRed = disc != null && disc <= -15
-              const discColor = i === 0 ? '#3f3f3f' : disc == null ? '#3f3f3f' : disc <= -15 ? RED : disc < 0 ? '#8a8a8a' : MINT
-              const discText = i === 0 ? '기준' : disc == null ? '—' : `${disc >= 0 ? '+' : '−'}${Math.abs(disc).toFixed(1)}%`
+              const da = (ca && la) ? ca - la : null
+              const dak = da == null ? null : Math.round(da / 1000)
+              const dnColor = dn > 0 ? MINT : dn < 0 ? RED : '#4a4a4a'
+              const dpShow = Math.abs(dp) >= 0.5
+              const dpColor = !dpShow ? '#4a4a4a' : dp > 0 ? MINT : RED
+              const daShow = dak != null && dak !== 0
+              const daColor = !daShow ? '#4a4a4a' : (dak as number) > 0 ? MINT : RED
               return (
                 <div key={b.no} style={{ display: 'flex', alignItems: 'center', padding: '5px 0', ...(i > 0 ? { borderTop: '0.5px solid rgba(255,255,255,0.06)' } : {}) }}>
-                  <span style={{ width: 9, height: 9, borderRadius: 2, marginRight: 8, flexShrink: 0, background: bktColor(i) }} />
-                  <span style={{ width: 46, flexShrink: 0, fontSize: 12, color: '#d8d8d8' }}>{b.label}</span>
-                  <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 11, color: '#7a7a7a' }}>{l.toLocaleString()}</span>
-                  <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 13, color: '#e8e8e8' }}>{c.toLocaleString()}</span>
-                  <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 11, color: d > 0 ? MINT : d < 0 ? RED : '#5a5a5a' }}>{d === 0 ? '' : d > 0 ? `▲${d}` : `▼${Math.abs(d)}`}</span>
-                  <span style={{ flex: 1.1, minWidth: 0, textAlign: 'right', fontSize: 11, color: '#8a8a8a' }}>
-                    {cp.toFixed(0)}%{Math.abs(dp) >= 0.5 && <span style={{ marginLeft: 3, color: dp > 0 ? MINT : RED }}>{dp > 0 ? '+' : '−'}{Math.abs(dp).toFixed(0)}p</span>}
-                  </span>
-                  <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 12, color: a == null ? '#3f3f3f' : discRed ? RED : '#d8d8d8' }}>{a == null ? '–' : Math.round(a / 1000).toLocaleString()}</span>
-                  <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 11, color: discColor }}>{discText}</span>
+                  <span style={{ width: 10, height: 10, borderRadius: 2, marginRight: 9, flex: 'none', background: bktColor(i) }} />
+                  <span style={{ width: 44, flex: 'none', fontSize: 12.5, color: '#d8d8d8' }}>{b.label}</span>
+                  {/* '26년 */}
+                  <div style={{ flex: 3, display: 'flex' }}>
+                    <span style={{ flex: 1, textAlign: 'right', fontSize: 14, color: '#f2f2f2' }}>{c.toLocaleString()}</span>
+                    <span style={{ flex: 1, textAlign: 'right', fontSize: 11.5, color: '#9a9a9a' }}>{Math.round(cp)}%</span>
+                    <span style={{ flex: 1, textAlign: 'right', fontSize: 12.5, color: '#d0d0d0' }}>{ca == null ? '–' : Math.round(ca / 1000).toLocaleString()}</span>
+                  </div>
+                  <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 8px' }} />
+                  {/* '25년 */}
+                  <div style={{ flex: 3, display: 'flex' }}>
+                    <span style={{ flex: 1, textAlign: 'right', fontSize: 13, color: '#8a8a8a' }}>{l.toLocaleString()}</span>
+                    <span style={{ flex: 1, textAlign: 'right', fontSize: 11.5, color: '#6f6f6f' }}>{Math.round(lp)}%</span>
+                    <span style={{ flex: 1, textAlign: 'right', fontSize: 12, color: '#7a7a7a' }}>{la == null ? '–' : Math.round(la / 1000).toLocaleString()}</span>
+                  </div>
+                  <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 8px' }} />
+                  {/* 증감 */}
+                  <div style={{ flex: 3, display: 'flex' }}>
+                    <span style={{ flex: 1, textAlign: 'right', fontSize: 12, color: dnColor }}>{dn === 0 ? '—' : dn > 0 ? `▲${dn}` : `▼${Math.abs(dn)}`}</span>
+                    <span style={{ flex: 1, textAlign: 'right', fontSize: 11, color: dpColor }}>{!dpShow ? '—' : `${dp > 0 ? '+' : '−'}${Math.abs(Math.round(dp))}p`}</span>
+                    <span style={{ flex: 1, textAlign: 'right', fontSize: 12, color: daColor }}>{!daShow ? '—' : (dak as number) > 0 ? `▲${dak}` : `▼${Math.abs(dak as number)}`}</span>
+                  </div>
                 </div>
               )
             })}
