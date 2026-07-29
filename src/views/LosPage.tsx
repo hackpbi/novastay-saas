@@ -13,13 +13,14 @@ type SumRow = { year_type: string; dim_key: string; resv: number; room_nights: n
 type BktRow = { year_type: string; dim_key: string; bucket_no: number; bucket_min: number; bucket_max: number | null; resv: number; room_nights: number; adr: number | null }
 type Sum = { resv: number; rn: number; alos: number | null; max: number | null }
 type BucketDef = { no: number; min: number; max: number | null; label: string }
-type DRow = { name: string; level: 'main' | 'mid' | 'sub' | 'flat'; bg: string | null; font: string | null; isBold: boolean; cy: Sum; ly: Sum; cyBk: Record<number, number>; lyBk: Record<number, number> }
+type DRow = { name: string; level: 'main' | 'mid' | 'sub' | 'flat'; bg: string | null; font: string | null; isBold: boolean; cy: Sum; ly: Sum; cyBk: Record<number, number>; lyBk: Record<number, number>; cyAdr: Record<number, number | null> }
 
 // ─── 상수 (KST — getUTC 금지) ──────────────────────────────────────────────────────
 const MINT = '#00E5A0'
 const RED  = '#E24B4A'
 const pad = (n: number) => String(n).padStart(2, '0')
 const OV = 'inset 0 0 0 999px rgba(0,229,160,0.045)'
+const OV_B = 'inset 0 0 0 999px rgba(91,141,239,0.05)'
 const CO = ['#00E5A0', '#0FB894', '#1C8A88', '#2A5D7C', '#5B8DEF']
 const bktColor = (i: number) => CO[Math.min(i, CO.length - 1)]
 
@@ -39,6 +40,17 @@ function aggBkt(bmap: Record<string, Record<number, number>>, codes: string[]): 
     const m = bmap[c]; if (!m) continue
     for (const k in m) out[k] = (out[k] ?? 0) + m[k]
   }
+  return out
+}
+// 구간별 ADR — 룸나잇 가중 (cy)
+function aggBktAdr(bmap: Record<string, Record<number, { rn: number; adr: number | null }>>, bkts: BucketDef[], codes: string[]): Record<number, number | null> {
+  const num: Record<number, number> = {}, den: Record<number, number> = {}
+  for (const c of codes) {
+    const m = bmap[c]; if (!m) continue
+    for (const k in m) { const e = m[k]; if (e.adr != null && e.rn > 0) { num[k] = (num[k] ?? 0) + e.adr * e.rn; den[k] = (den[k] ?? 0) + e.rn } }
+  }
+  const out: Record<number, number | null> = {}
+  for (const b of bkts) out[b.no] = (den[b.no] ?? 0) > 0 ? num[b.no] / den[b.no] : null
   return out
 }
 // 도넛 조각(환형 섹터) path
@@ -135,6 +147,12 @@ export default function LosPage() {
     }
     return { cy, ly }
   }, [bktRows])
+  // 구간별 룸나잇·ADR (cy) — 패널 ADR 가중 계산용
+  const bktAdrCy = useMemo(() => {
+    const cy: Record<string, Record<number, { rn: number; adr: number | null }>> = {}
+    for (const r of bktRows) { if (r.year_type !== 'cy') continue; (cy[r.dim_key] ??= {})[r.bucket_no] = { rn: r.room_nights, adr: r.adr } }
+    return cy
+  }, [bktRows])
   // 버킷 정의 (반환된 bucket_no 만큼 동적)
   const buckets = useMemo<BucketDef[]>(() => {
     const byNo: Record<number, { min: number; max: number | null }> = {}
@@ -190,6 +208,7 @@ export default function LosPage() {
       isBold: node ? node.is_bold : true,
       cy: aggSum(sumBy.cy, codes), ly: aggSum(sumBy.ly, codes),
       cyBk: aggBkt(bktBy.cy, codes), lyBk: aggBkt(bktBy.ly, codes),
+      cyAdr: aggBktAdr(bktAdrCy, buckets, codes),
     })
     if (dim === 'segment') {
       const tops = schema.filter(s => s.parent_id === null).sort((a, b) => a.order_index - b.order_index)
@@ -215,7 +234,7 @@ export default function LosPage() {
     const out = top15.map(s => make(s.key, 'flat', null, [s.key]))
     if (restKeys.length) out.push(make('기타', 'flat', null, restKeys))
     return out
-  }, [dim, sumRows, schema, sumBy, bktBy])
+  }, [dim, sumRows, schema, sumBy, bktBy, bktAdrCy, buckets])
 
   // ─── 합계 (부모 main 제외) ───────────────────────────────────────────────────────
   const totalRow = useMemo<DRow>(() => {
@@ -236,8 +255,9 @@ export default function LosPage() {
       cy: { resv, rn: 0, alos: ad > 0 ? an / ad : null, max: mx },
       ly: { resv: lresv, rn: 0, alos: lad > 0 ? lan / lad : null, max: null },
       cyBk, lyBk,
+      cyAdr: aggBktAdr(bktAdrCy, buckets, Object.keys(bktAdrCy)),
     }
-  }, [displayRows, buckets])
+  }, [displayRows, buckets, bktAdrCy])
 
   // ─── 도넛 ───────────────────────────────────────────────────────────────────────
   const renderDonut = (bk: Record<number, number>, isCy: boolean) => {
@@ -263,7 +283,6 @@ export default function LosPage() {
   }
 
   // ─── 행 렌더 ───────────────────────────────────────────────────────────────────
-  const chgNode = (d: number, size: number) => d === 0 ? null : <span style={{ fontSize: size, marginLeft: 4, color: d > 0 ? MINT : RED }}>{d > 0 ? `▲${d}` : `▼${Math.abs(d)}`}</span>
   function renderRow(r: DRow, key: React.Key, isTotal = false) {
     const noData = r.cy.resv <= 0 && r.ly.resv <= 0
     const bg = isTotal ? 'transparent' : (r.bg ?? 'transparent')
@@ -288,26 +307,25 @@ export default function LosPage() {
         }}>{r.name}</div>
 
         {/* 박수별 예약 건수 */}
-        <div style={{ flex: 3, minWidth: 0, display: 'flex', alignItems: 'center', background: bg, boxShadow: OV }}>
+        <div style={{ flex: 5, minWidth: 0, display: 'flex', alignItems: 'center', background: bg, boxShadow: OV }}>
           {noData ? (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#333' }}>데이터 없음</div>
           ) : buckets.map(b => {
-            const c = r.cyBk[b.no] ?? 0, l = r.lyBk[b.no] ?? 0
+            const c = r.cyBk[b.no] ?? 0, l = r.lyBk[b.no] ?? 0, d = c - l
             return (
-              <div key={b.no} style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingLeft: 6, whiteSpace: 'nowrap' }}>
-                {c === 0 ? <span style={{ fontSize: 14, color: '#2f2f2f' }}>·</span> : (
-                  <><span style={{ fontSize: 14, color: isTotal ? MINT : '#e8e8e8' }}>{c}</span>{chgNode(c - l, 10)}</>
-                )}
+              <div key={b.no} style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+                <div style={{ flex: 1.3, minWidth: 0, textAlign: 'right', fontSize: 14, color: c === 0 ? '#2b2b2b' : isTotal ? MINT : '#e8e8e8' }}>{c === 0 ? '·' : c}</div>
+                <div style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingLeft: 4, fontSize: 10, color: (c === 0 || d === 0) ? 'transparent' : d > 0 ? MINT : RED }}>{(c === 0 || d === 0) ? '' : d > 0 ? `▲${d}` : `▼${Math.abs(d)}`}</div>
               </div>
             )
           })}
         </div>
 
         {/* 간격 */}
-        <div style={{ width: 12, flexShrink: 0 }} />
+        <div style={{ width: 10, flexShrink: 0 }} />
 
         {/* 평균 · 최장 */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', background: bg, boxShadow: OV }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', background: bg, boxShadow: OV_B }}>
           <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 13, color: isTotal ? MINT : '#e8e8e8' }}>{r.cy.alos != null ? r.cy.alos.toFixed(2) : <span style={{ color: '#3f3f3f' }}>–</span>}</div>
           <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 11, color: dAlos == null ? '#3f3f3f' : dAlos > 0 ? MINT : dAlos < 0 ? RED : '#8a8a8a' }}>
             {dAlos == null ? '—' : `${dAlos > 0 ? '▲' : dAlos < 0 ? '▼' : ''}${Math.abs(dAlos).toFixed(2)}`}
@@ -328,7 +346,7 @@ export default function LosPage() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'baseline' }}>
             <span style={{ fontSize: 14, color: '#EAFFF7', fontWeight: 500 }}>{r.name}</span>
-            <span style={{ fontSize: 11, color: '#6a6a6a', marginLeft: 6 }}>박수별 비중</span>
+            <span style={{ fontSize: 11, color: '#6a6a6a', marginLeft: 6 }}>박수별 비중 · 단가</span>
           </div>
           <span onClick={() => setSelName(null)} style={{ fontSize: 16, color: '#6a6a6a', cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>×</span>
         </div>
@@ -343,24 +361,43 @@ export default function LosPage() {
             ))}
           </div>
           {/* 표 */}
-          <div style={{ flex: 1, minWidth: 240 }}>
+          <div style={{ flex: 1, minWidth: 320 }}>
+            {/* 표 헤더 */}
+            <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 6 }}>
+              <span style={{ width: 9, marginRight: 8, flexShrink: 0 }} />
+              <span style={{ width: 40, flexShrink: 0 }} />
+              <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>{"'25년"}</span>
+              <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>{"'26년"}</span>
+              <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>증감</span>
+              <span style={{ flex: 1.1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>비중</span>
+              <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: MINT }}>ADR</span>
+              <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#F59E0B' }}>1박대비</span>
+            </div>
             {buckets.map((b, i) => {
               const c = r.cyBk[b.no] ?? 0, l = r.lyBk[b.no] ?? 0, d = c - l
               const cp = cyTot ? c / cyTot * 100 : 0, lp = lyTot ? l / lyTot * 100 : 0
               const dp = cp - lp
+              const a = r.cyAdr[b.no], a0 = r.cyAdr[buckets[0].no]
+              const disc = (a0 && a && i > 0) ? (a - a0) / a0 * 100 : null
+              const discRed = disc != null && disc <= -15
+              const discColor = i === 0 ? '#3f3f3f' : disc == null ? '#3f3f3f' : disc <= -15 ? RED : disc < 0 ? '#8a8a8a' : MINT
+              const discText = i === 0 ? '기준' : disc == null ? '—' : `${disc >= 0 ? '+' : '−'}${Math.abs(disc).toFixed(1)}%`
               return (
                 <div key={b.no} style={{ display: 'flex', alignItems: 'center', padding: '5px 0', ...(i > 0 ? { borderTop: '0.5px solid rgba(255,255,255,0.06)' } : {}) }}>
                   <span style={{ width: 9, height: 9, borderRadius: 2, marginRight: 8, flexShrink: 0, background: bktColor(i) }} />
-                  <span style={{ width: 44, flexShrink: 0, fontSize: 12, color: '#d8d8d8' }}>{b.label}</span>
+                  <span style={{ width: 40, flexShrink: 0, fontSize: 12, color: '#d8d8d8' }}>{b.label}</span>
                   <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 11, color: '#7a7a7a' }}>{l.toLocaleString()}</span>
                   <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 13, color: '#e8e8e8' }}>{c.toLocaleString()}</span>
                   <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 11, color: d > 0 ? MINT : d < 0 ? RED : '#5a5a5a' }}>{d === 0 ? '' : d > 0 ? `▲${d}` : `▼${Math.abs(d)}`}</span>
-                  <span style={{ flex: 1.2, minWidth: 0, textAlign: 'right', fontSize: 11, color: '#8a8a8a' }}>
+                  <span style={{ flex: 1.1, minWidth: 0, textAlign: 'right', fontSize: 11, color: '#8a8a8a' }}>
                     {cp.toFixed(0)}%{Math.abs(dp) >= 0.5 && <span style={{ marginLeft: 3, color: dp > 0 ? MINT : RED }}>{dp > 0 ? '+' : '−'}{Math.abs(dp).toFixed(0)}p</span>}
                   </span>
+                  <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 12, color: a == null ? '#3f3f3f' : discRed ? RED : '#d8d8d8' }}>{a == null ? '–' : Math.round(a / 1000).toLocaleString()}</span>
+                  <span style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 11, color: discColor }}>{discText}</span>
                 </div>
               )
             })}
+            <div style={{ textAlign: 'right', fontSize: 10, color: '#5a5a5a', marginTop: 6 }}>단위 : 건, 천원</div>
           </div>
         </div>
       </div>
@@ -451,24 +488,38 @@ export default function LosPage() {
         <div className="animate-pulse" style={{ height: 420, background: 'var(--color-bg-tertiary)', borderRadius: 12 }} />
       ) : (
         <div>
-          {/* 2단 헤더 — 1단 */}
+          {/* 헤더 1단 — 그룹명 */}
           <div style={{ display: 'flex', alignItems: 'flex-end' }}>
             <div style={{ width: 104, flexShrink: 0 }} />
-            <div style={{ flex: 3, boxShadow: OV, borderRadius: '4px 4px 0 0', textAlign: 'center', fontSize: 12, fontWeight: 500, color: MINT, padding: '4px 0' }}>박수별 예약 건수</div>
-            <div style={{ width: 12, flexShrink: 0 }} />
-            <div style={{ flex: 1, boxShadow: OV, borderRadius: '4px 4px 0 0', textAlign: 'center', fontSize: 12, fontWeight: 500, color: MINT, padding: '4px 0' }}>평균 · 최장</div>
+            <div style={{ flex: 5, boxShadow: OV, borderRadius: '4px 4px 0 0', textAlign: 'center', fontSize: 12, fontWeight: 500, color: MINT, padding: '4px 0' }}>박수별 예약 건수</div>
+            <div style={{ width: 10, flexShrink: 0 }} />
+            <div style={{ flex: 1, boxShadow: OV_B, borderRadius: '4px 4px 0 0', textAlign: 'center', fontSize: 12, fontWeight: 500, color: '#5B8DEF', padding: '4px 0' }}>평균 · 최장</div>
           </div>
-          {/* 2단 헤더 — 2단 */}
+          {/* 헤더 2단 — 구간 라벨 (가운데) */}
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <div style={{ width: 104, flexShrink: 0 }} />
+            <div style={{ flex: 5, minWidth: 0, display: 'flex', boxShadow: OV }}>
+              {buckets.map(b => <div key={b.no} style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: 11, color: '#7f7f7f' }}>{b.label}</div>)}
+            </div>
+            <div style={{ width: 10, flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0, boxShadow: OV_B }} />
+          </div>
+          {/* 헤더 3단 — 예약/증감 · ALOS/전년비/최장 */}
           <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 6, borderBottom: '0.5px solid rgba(255,255,255,0.05)' }}>
             <div style={{ width: 104, flexShrink: 0 }} />
-            <div style={{ flex: 3, minWidth: 0, display: 'flex', boxShadow: OV }}>
-              {buckets.map(b => <div key={b.no} style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingLeft: 6, fontSize: 11, color: '#5f5f5f' }}>{b.label}</div>)}
+            <div style={{ flex: 5, minWidth: 0, display: 'flex', boxShadow: OV }}>
+              {buckets.map(b => (
+                <div key={b.no} style={{ flex: 1, minWidth: 0, display: 'flex' }}>
+                  <div style={{ flex: 1.3, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#4d4d4d' }}>예약</div>
+                  <div style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingLeft: 4, fontSize: 10, color: '#4d4d4d' }}>증감</div>
+                </div>
+              ))}
             </div>
-            <div style={{ width: 12, flexShrink: 0 }} />
-            <div style={{ flex: 1, minWidth: 0, display: 'flex', boxShadow: OV }}>
-              <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 11, color: '#5f5f5f' }}>ALOS</div>
-              <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 11, color: '#5f5f5f' }}>전년비</div>
-              <div style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingRight: 4, fontSize: 11, color: '#5f5f5f' }}>최장</div>
+            <div style={{ width: 10, flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', boxShadow: OV_B }}>
+              <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>ALOS</div>
+              <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>전년비</div>
+              <div style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingRight: 4, fontSize: 10, color: '#5f5f5f' }}>최장</div>
             </div>
           </div>
 
