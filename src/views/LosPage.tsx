@@ -89,21 +89,41 @@ export default function LosPage() {
   const [applied, setApplied] = useState<string[]>([])
   const [draft, setDraft] = useState<string[]>([])
   const [segFilterOpen, setSegFilterOpen] = useState(false)
+  const [appliedAcc, setAppliedAcc] = useState<string[]>([])
+  const [draftAcc, setDraftAcc] = useState<string[]>([])
+  const [accFilterOpen, setAccFilterOpen] = useState(false)
+  const [accSearch, setAccSearch] = useState('')
   const [selName, setSelName] = useState<string | null>(null)
   const [hoverKey, setHoverKey] = useState<React.Key | null>(null)
 
   const segKey = dim === 'segment' ? null : applied.slice().sort().join(',')
   const p_segments = dim === 'segment' || applied.length === 0 ? null : applied
-
-  // ─── RPC 2개 ────────────────────────────────────────────────────────────────────
-  const { data: sumRows = [], isLoading: sumLoading } = useQuery<SumRow[]>({
-    queryKey: ['los-summary', hotelId, otbDate, fromDate, toDate, dim, segKey],
+  // 어카운트 전체 목록 (필터 미적용) — get_los_summary(p_dim:'account') 재사용
+  const { data: accountList = [] } = useQuery<string[]>({
+    queryKey: ['los-account-list', hotelId, otbDate, fromDate, toDate],
     enabled: !!hotelId && !!otbDate,
     staleTime: 60 * 1000,
     placeholderData: keepPreviousData,
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc('get_los_summary', {
-        p_hotel_id: hotelId, p_update_date: otbDate, p_from: fromDate, p_to: toDate, p_dim: dim, p_segments,
+        p_hotel_id: hotelId, p_update_date: otbDate, p_from: fromDate, p_to: toDate, p_dim: 'account', p_segments: null, p_accounts: null,
+      })
+      if (error) throw error
+      return [...new Set(((data ?? []) as any[]).filter(r => r.year_type === 'cy').map(r => r.dim_key as string))].sort((a, b) => a.localeCompare(b, 'ko'))
+    },
+  })
+  const accKey = dim === 'segment' || appliedAcc.length === 0 || appliedAcc.length === accountList.length ? null : appliedAcc.slice().sort().join(',')
+  const p_accounts = dim === 'segment' || appliedAcc.length === 0 || appliedAcc.length === accountList.length ? null : appliedAcc
+
+  // ─── RPC 2개 ────────────────────────────────────────────────────────────────────
+  const { data: sumRows = [], isLoading: sumLoading } = useQuery<SumRow[]>({
+    queryKey: ['los-summary', hotelId, otbDate, fromDate, toDate, dim, segKey, accKey],
+    enabled: !!hotelId && !!otbDate,
+    staleTime: 60 * 1000,
+    placeholderData: keepPreviousData,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('get_los_summary', {
+        p_hotel_id: hotelId, p_update_date: otbDate, p_from: fromDate, p_to: toDate, p_dim: dim, p_segments, p_accounts,
       })
       if (error) throw error
       return ((data ?? []) as any[]).map(r => ({
@@ -117,13 +137,13 @@ export default function LosPage() {
     },
   })
   const { data: bktRows = [], isLoading: bktLoading } = useQuery<BktRow[]>({
-    queryKey: ['los-buckets', hotelId, otbDate, fromDate, toDate, dim, segKey],
+    queryKey: ['los-buckets', hotelId, otbDate, fromDate, toDate, dim, segKey, accKey],
     enabled: !!hotelId && !!otbDate,
     staleTime: 60 * 1000,
     placeholderData: keepPreviousData,
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc('get_los_buckets', {
-        p_hotel_id: hotelId, p_update_date: otbDate, p_from: fromDate, p_to: toDate, p_dim: dim, p_segments,
+        p_hotel_id: hotelId, p_update_date: otbDate, p_from: fromDate, p_to: toDate, p_dim: dim, p_segments, p_accounts,
       })
       if (error) throw error
       return ((data ?? []) as any[]).map(r => ({
@@ -217,8 +237,15 @@ export default function LosPage() {
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
   }, [segFilterOpen])
+  useEffect(() => {
+    if (!accFilterOpen) { setAccSearch(''); return }
+    const h = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest('.acc-filter-wrap')) setAccFilterOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [accFilterOpen])
   const toggleCodes = (codes: string[]) => setDraft(prev =>
     codes.every(c => prev.includes(c)) ? prev.filter(c => !codes.includes(c)) : [...new Set([...prev, ...codes])])
+  const toggleAcc = (name: string) => setDraftAcc(prev => prev.includes(name) ? prev.filter(x => x !== name) : [...prev, name])
 
   // ─── 표시 행 ────────────────────────────────────────────────────────────────────
   const displayRows = useMemo<DRow[]>(() => {
@@ -543,7 +570,7 @@ export default function LosPage() {
           <>
             <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.12)', margin: '0 4px' }} />
             <div className="seg-filter-wrap" style={{ position: 'relative' }}>
-              <div onClick={() => { if (!segFilterOpen) setDraft(applied); setSegFilterOpen(o => !o) }} style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 12, padding: '5px 12px', borderRadius: 6, color: MINT, border: '0.5px solid rgba(0,229,160,0.4)', background: 'rgba(0,229,160,0.06)' }}>
+              <div onClick={() => { if (!segFilterOpen) { setDraft(applied); setAccFilterOpen(false) } setSegFilterOpen(o => !o) }} style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 12, padding: '5px 12px', borderRadius: 6, color: MINT, border: '0.5px solid rgba(0,229,160,0.4)', background: 'rgba(0,229,160,0.06)' }}>
                 <span style={{ fontSize: 11 }}>▦</span><span>세그먼트</span>
                 <span style={{ fontSize: 11, background: 'rgba(0,229,160,0.18)', padding: '1px 7px', borderRadius: 4 }}>{(segFilterOpen ? draft.length : applied.length)}개 선택</span>
                 <span style={{ fontSize: 9 }}>{segFilterOpen ? '▴' : '▾'}</span>
@@ -575,6 +602,40 @@ export default function LosPage() {
                     <span onClick={() => setDraft([])} style={{ flex: 1, textAlign: 'center', fontSize: 11.5, padding: '6px 0', borderRadius: 6, cursor: 'pointer', border: '0.5px solid rgba(255,255,255,0.14)', color: '#a8a8a8' }}>초기화</span>
                     <span onClick={() => setDraft(segTree.allCodes)} style={{ flex: 1, textAlign: 'center', fontSize: 11.5, padding: '6px 0', borderRadius: 6, cursor: 'pointer', border: '0.5px solid rgba(255,255,255,0.14)', color: '#a8a8a8' }}>전체</span>
                     <span onClick={() => { setApplied(draft); setSegFilterOpen(false) }} style={{ flex: 1.2, textAlign: 'center', fontSize: 11.5, padding: '6px 0', borderRadius: 6, cursor: 'pointer', background: '#00E5A0', color: '#08150f', fontWeight: 500 }}>완료</span>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="acc-filter-wrap" style={{ position: 'relative' }}>
+              <div onClick={() => { if (!accFilterOpen) { setDraftAcc(appliedAcc); setSegFilterOpen(false) } setAccFilterOpen(o => !o) }} style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 12, padding: '5px 12px', borderRadius: 6, color: MINT, border: '0.5px solid rgba(0,229,160,0.4)', background: 'rgba(0,229,160,0.06)' }}>
+                <span style={{ fontSize: 11 }}>▤</span><span>어카운트</span>
+                <span style={{ fontSize: 11, background: 'rgba(0,229,160,0.18)', padding: '1px 7px', borderRadius: 4 }}>{(() => { const size = accFilterOpen ? draftAcc.length : appliedAcc.length; return (size === accountList.length || size === 0) ? '전체' : `${size}개` })()}</span>
+                <span style={{ fontSize: 9 }}>{accFilterOpen ? '▴' : '▾'}</span>
+              </div>
+              {accFilterOpen && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, width: 250, zIndex: 20, background: '#101410', border: '0.5px solid rgba(0,229,160,0.3)', borderRadius: 8, overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.7)' }}>
+                  <div style={{ padding: '8px 10px 6px', borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
+                    <input value={accSearch} onChange={e => setAccSearch(e.target.value)} placeholder="어카운트 검색" style={{ width: '100%', boxSizing: 'border-box', background: '#0a0f0a', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 5, padding: '5px 8px', fontSize: 11.5, color: '#e0e0e0', outline: 'none' }} />
+                  </div>
+                  <div style={{ fontSize: 10, color: '#5a5a5a', padding: '5px 12px 3px' }}>이름순 · {accountList.length}개</div>
+                  <div style={{ maxHeight: 300, overflowY: 'auto', paddingBottom: 6 }}>
+                    {(() => {
+                      const q = accSearch.trim().toLowerCase()
+                      const shown = q ? accountList.filter(a => a.toLowerCase().includes(q)) : accountList
+                      return shown.length === 0 ? (
+                        <div style={{ fontSize: 11.5, color: '#4a4a4a', textAlign: 'center', padding: '16px 12px' }}>검색 결과 없음</div>
+                      ) : shown.map(name => (
+                        <div key={name} onClick={() => toggleAcc(name)} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '5px 12px' }}>
+                          <span style={{ width: 13, height: 13, borderRadius: 3, flexShrink: 0, boxSizing: 'border-box', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${draftAcc.includes(name) ? '#00E5A0' : '#3a3a3a'}`, background: draftAcc.includes(name) ? '#00E5A0' : 'transparent' }}>{draftAcc.includes(name) && <span style={{ color: '#0a0a0a', fontSize: 9, lineHeight: 1 }}>✓</span>}</span>
+                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: draftAcc.includes(name) ? '#e0e0e0' : '#8a8a8a' }}>{name}</span>
+                        </div>
+                      ))
+                    })()}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, padding: '8px 10px', borderTop: '0.5px solid rgba(255,255,255,0.1)', background: '#0c110c' }}>
+                    <span onClick={() => setDraftAcc([])} style={{ flex: 1, textAlign: 'center', fontSize: 11.5, padding: '6px 0', borderRadius: 6, cursor: 'pointer', border: '0.5px solid rgba(255,255,255,0.14)', color: '#a8a8a8' }}>초기화</span>
+                    <span onClick={() => setDraftAcc(accountList)} style={{ flex: 1, textAlign: 'center', fontSize: 11.5, padding: '6px 0', borderRadius: 6, cursor: 'pointer', border: '0.5px solid rgba(255,255,255,0.14)', color: '#a8a8a8' }}>전체</span>
+                    <span onClick={() => { setAppliedAcc(draftAcc); setAccFilterOpen(false) }} style={{ flex: 1.2, textAlign: 'center', fontSize: 11.5, padding: '6px 0', borderRadius: 6, cursor: 'pointer', background: '#00E5A0', color: '#08150f', fontWeight: 500 }}>완료</span>
                   </div>
                 </div>
               )}
