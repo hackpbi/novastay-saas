@@ -13,7 +13,7 @@ type SumRow = { year_type: string; dim_key: string; resv: number; rooms: number;
 type BktRow = { year_type: string; dim_key: string; bucket_no: number; bucket_min: number; bucket_max: number | null; resv: number; room_nights: number; adr: number | null }
 type Sum = { resv: number; rn: number; rooms: number; alos: number | null; max: number | null }
 type BucketDef = { no: number; min: number; max: number | null; label: string }
-type DRow = { name: string; level: 'main' | 'mid' | 'sub' | 'flat'; bg: string | null; font: string | null; isBold: boolean; cy: Sum; ly: Sum; cyBk: Record<number, number>; lyBk: Record<number, number>; cyAdr: Record<number, number | null>; lyAdr: Record<number, number | null> }
+type DRow = { name: string; level: 'main' | 'mid' | 'sub' | 'flat'; bg: string | null; font: string | null; isBold: boolean; cy: Sum; ly: Sum; cyBk: Record<number, number>; lyBk: Record<number, number>; cyBkResv: Record<number, number>; lyBkResv: Record<number, number>; cyAdr: Record<number, number | null>; lyAdr: Record<number, number | null> }
 
 // ─── 상수 (KST — getUTC 금지) ──────────────────────────────────────────────────────
 const MINT = '#00E5A0'
@@ -147,6 +147,16 @@ export default function LosPage() {
     }
     return { cy, ly }
   }, [bktRows])
+  // 구간별 예약 건수 (resv) — 패널 예약 컬럼용
+  const bktResvBy = useMemo(() => {
+    const cy: Record<string, Record<number, number>> = {}, ly: Record<string, Record<number, number>> = {}
+    for (const r of bktRows) {
+      const t = r.year_type === 'cy' ? cy : r.year_type === 'ly' ? ly : null
+      if (!t) continue
+      ;(t[r.dim_key] ??= {})[r.bucket_no] = (t[r.dim_key][r.bucket_no] ?? 0) + r.resv
+    }
+    return { cy, ly }
+  }, [bktRows])
   // 구간별 룸나잇·ADR (cy) — 패널 ADR 가중 계산용
   const bktAdrCy = useMemo(() => {
     const cy: Record<string, Record<number, { rn: number; adr: number | null }>> = {}
@@ -213,6 +223,7 @@ export default function LosPage() {
       isBold: node ? node.is_bold : true,
       cy: aggSum(sumBy.cy, codes), ly: aggSum(sumBy.ly, codes),
       cyBk: aggBkt(bktBy.cy, codes), lyBk: aggBkt(bktBy.ly, codes),
+      cyBkResv: aggBkt(bktResvBy.cy, codes), lyBkResv: aggBkt(bktResvBy.ly, codes),
       cyAdr: aggBktAdr(bktAdrCy, buckets, codes),
       lyAdr: aggBktAdr(bktAdrLy, buckets, codes),
     })
@@ -240,25 +251,26 @@ export default function LosPage() {
     const out = top15.map(s => make(s.key, 'flat', null, [s.key]))
     if (restKeys.length) out.push(make('기타', 'flat', null, restKeys))
     return out
-  }, [dim, sumRows, schema, sumBy, bktBy, bktAdrCy, bktAdrLy, buckets])
+  }, [dim, sumRows, schema, sumBy, bktBy, bktResvBy, bktAdrCy, bktAdrLy, buckets])
 
   // ─── 합계 (부모 main 제외) ───────────────────────────────────────────────────────
   const totalRow = useMemo<DRow>(() => {
     let resv = 0, rn = 0, rooms = 0, mx: number | null = null
     let lresv = 0, lrn = 0, lrooms = 0
     const cyBk: Record<number, number> = {}, lyBk: Record<number, number> = {}
+    const cyBkResv: Record<number, number> = {}, lyBkResv: Record<number, number> = {}
     for (const r of displayRows) {
       if (r.level === 'main') continue
       resv += r.cy.resv; rn += r.cy.rn; rooms += r.cy.rooms
       if (r.cy.max != null) mx = mx == null ? r.cy.max : Math.max(mx, r.cy.max)
       lresv += r.ly.resv; lrn += r.ly.rn; lrooms += r.ly.rooms
-      for (const b of buckets) { cyBk[b.no] = (cyBk[b.no] ?? 0) + (r.cyBk[b.no] ?? 0); lyBk[b.no] = (lyBk[b.no] ?? 0) + (r.lyBk[b.no] ?? 0) }
+      for (const b of buckets) { cyBk[b.no] = (cyBk[b.no] ?? 0) + (r.cyBk[b.no] ?? 0); lyBk[b.no] = (lyBk[b.no] ?? 0) + (r.lyBk[b.no] ?? 0); cyBkResv[b.no] = (cyBkResv[b.no] ?? 0) + (r.cyBkResv[b.no] ?? 0); lyBkResv[b.no] = (lyBkResv[b.no] ?? 0) + (r.lyBkResv[b.no] ?? 0) }
     }
     return {
       name: '합계', level: 'flat', bg: null, font: null, isBold: true,
       cy: { resv, rn, rooms, alos: rooms > 0 ? rn / rooms : null, max: mx },
       ly: { resv: lresv, rn: lrn, rooms: lrooms, alos: lrooms > 0 ? lrn / lrooms : null, max: null },
-      cyBk, lyBk,
+      cyBk, lyBk, cyBkResv, lyBkResv,
       cyAdr: aggBktAdr(bktAdrCy, buckets, Object.keys(bktAdrCy)),
       lyAdr: aggBktAdr(bktAdrLy, buckets, Object.keys(bktAdrLy)),
     }
@@ -267,8 +279,8 @@ export default function LosPage() {
   // ─── 도넛 ───────────────────────────────────────────────────────────────────────
   const renderDonut = (bk: Record<number, number>, isCy: boolean) => {
     const total = buckets.reduce((s, b) => s + (bk[b.no] ?? 0), 0)
-    if (total <= 0) return <div style={{ width: 196, height: 147, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#333', opacity: isCy ? 1 : 0.45 }}>없음</div>
-    const cx = 100, cy = 74, rO = 45, rI = 29, gap = 0.014
+    if (total <= 0) return <div style={{ width: 190, height: 155, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#333', opacity: isCy ? 1 : 0.45 }}>없음</div>
+    const cx = 97, cy = 70, rO = 44, rI = 28, gap = 0.014
     let a = -Math.PI / 2
     const segs: { d: string; color: string }[] = []
     const labels: { color: string; label: string; pct: number; right: boolean; sx: number; sy: number; y: number }[] = []
@@ -280,7 +292,7 @@ export default function LosPage() {
       const pct = frac * 100
       if (pct >= 3) {
         const mid = a + frac * Math.PI
-        labels.push({ color: bktColor(i), label: b.label, pct, right: Math.cos(mid) >= 0, sx: cx + 47 * Math.cos(mid), sy: cy + 47 * Math.sin(mid), y: cy + 50 * Math.sin(mid) })
+        labels.push({ color: bktColor(i), label: b.label, pct, right: Math.cos(mid) >= 0, sx: cx + 46 * Math.cos(mid), sy: cy + 46 * Math.sin(mid), y: cy + 49 * Math.sin(mid) })
       }
       a += frac * 2 * Math.PI
     })
@@ -291,11 +303,11 @@ export default function LosPage() {
       for (let i = 1; i < arr.length; i++) if (arr[i].y - arr[i - 1].y < 12) arr[i].y = arr[i - 1].y + 12
     })
     return (
-      <svg viewBox="0 0 200 150" width={196} height={147} style={{ opacity: isCy ? 1 : 0.45 }}>
+      <svg viewBox="0 0 194 158" width={190} height={155} style={{ opacity: isCy ? 1 : 0.45 }}>
         {segs.map((s, i) => <path key={i} d={s.d} fill={s.color} />)}
         {[...leftLabels, ...rightLabels].map((l, i) => {
           const lineEnd = l.right ? cx + 50 : cx - 50
-          const tx = l.right ? cx + 56 : cx - 56
+          const tx = l.right ? cx + 54 : cx - 54
           return (
             <g key={`lb${i}`}>
               <polyline points={`${l.sx},${l.sy} ${lineEnd},${l.y} ${tx},${l.y}`} fill="none" stroke={l.color} strokeWidth={0.9} opacity={isCy ? 0.65 : 0.4} />
@@ -306,8 +318,9 @@ export default function LosPage() {
             </g>
           )
         })}
-        <text x={cx} y={cy - 2} textAnchor="middle" dominantBaseline="central" fontSize={22} fill="#e8e8e8">{total.toLocaleString()}</text>
-        <text x={cx} y={cy + 14} textAnchor="middle" dominantBaseline="central" fontSize={9} fill="#6a6a6a">룸나잇</text>
+        <text x={cx} y={72} textAnchor="middle" dominantBaseline="central" fontSize={21} fill="#f2f2f2">{total.toLocaleString()}</text>
+        <text x={cx} y={86} textAnchor="middle" dominantBaseline="central" fontSize={9} fill="#6a6a6a">룸나잇</text>
+        <text x={cx} y={152} textAnchor="middle" fontSize={12} fontWeight={500} fill={isCy ? MINT : '#8a8a8a'}>{isCy ? "'26년" : "'25년"}</text>
       </svg>
     )
   }
@@ -387,16 +400,14 @@ export default function LosPage() {
           </div>
           <span onClick={() => setSelName(null)} style={{ fontSize: 16, color: '#6a6a6a', cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>×</span>
         </div>
-        <div style={{ display: 'flex', gap: 10, padding: '12px 18px 10px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', gap: 8, padding: '14px 18px 12px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
           {/* 도넛 '26년 */}
-          <div style={{ width: 196, flex: 'none', textAlign: 'center' }}>
+          <div style={{ width: 190, flex: 'none', lineHeight: 0 }}>
             {renderDonut(r.cyBk, true)}
-            <div style={{ fontSize: 12, fontWeight: 500, color: MINT, marginTop: -6 }}>{"'26년"}</div>
           </div>
           {/* 도넛 '25년 */}
-          <div style={{ width: 196, flex: 'none', textAlign: 'center' }}>
+          <div style={{ width: 190, flex: 'none', lineHeight: 0 }}>
             {renderDonut(r.lyBk, false)}
-            <div style={{ fontSize: 12, fontWeight: 500, color: '#8a8a8a', marginTop: -6 }}>{"'25년"}</div>
           </div>
           {/* 표 */}
           <div style={{ flex: 1, minWidth: 0, paddingLeft: 8 }}>
@@ -404,78 +415,79 @@ export default function LosPage() {
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <span style={{ width: 10, marginRight: 9, flex: 'none' }} />
               <span style={{ width: 44, flex: 'none' }} />
-              <div style={{ flex: 3, textAlign: 'center', fontSize: 10.5, fontWeight: 500, color: MINT }}>{"'26년"}</div>
-              <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 8px' }} />
-              <div style={{ flex: 3, textAlign: 'center', fontSize: 10.5, fontWeight: 500, color: '#8a8a8a' }}>{"'25년"}</div>
-              <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 8px' }} />
-              <div style={{ flex: 3, textAlign: 'center', fontSize: 10.5, fontWeight: 500, color: '#c8c8c8' }}>증감</div>
+              <div style={{ flex: 4, textAlign: 'center', fontSize: 10.5, fontWeight: 500, color: MINT }}>{"'26년"}</div>
+              <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 7px' }} />
+              <div style={{ flex: 3.1, textAlign: 'center', fontSize: 10.5, fontWeight: 500, color: '#8a8a8a' }}>{"'25년"}</div>
+              <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 7px' }} />
+              <div style={{ flex: 2.9, textAlign: 'center', fontSize: 10.5, fontWeight: 500, color: '#c8c8c8' }}>증감</div>
             </div>
-            {/* 헤더 2단 — 룸나잇 · 비중 · ADR */}
+            {/* 헤더 2단 — 예약 · 룸나잇 · 비중 · ADR */}
             <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 4 }}>
               <span style={{ width: 10, marginRight: 9, flex: 'none' }} />
               <span style={{ width: 44, flex: 'none' }} />
-              <div style={{ flex: 3, display: 'flex' }}>
-                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>룸나잇</span>
-                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>비중</span>
+              <div style={{ flex: 4, display: 'flex' }}>
+                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>예약</span>
+                <span style={{ flex: 1.1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>룸나잇</span>
+                <span style={{ flex: 0.9, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>비중</span>
                 <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>ADR</span>
               </div>
-              <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 8px' }} />
-              <div style={{ flex: 3, display: 'flex' }}>
-                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>룸나잇</span>
-                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>비중</span>
+              <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 7px' }} />
+              <div style={{ flex: 3.1, display: 'flex' }}>
+                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>예약</span>
+                <span style={{ flex: 1.1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>룸나잇</span>
                 <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>ADR</span>
               </div>
-              <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 8px' }} />
-              <div style={{ flex: 3, display: 'flex' }}>
+              <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 7px' }} />
+              <div style={{ flex: 2.9, display: 'flex' }}>
+                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>예약</span>
                 <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>룸나잇</span>
-                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>비중</span>
-                <span style={{ flex: 1, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>ADR</span>
+                <span style={{ flex: 0.9, textAlign: 'right', fontSize: 9.5, color: '#5a5a5a' }}>비중</span>
               </div>
             </div>
             {/* 본문 */}
             {buckets.map((b, i) => {
               const c = r.cyBk[b.no] ?? 0, l = r.lyBk[b.no] ?? 0
+              const cr = r.cyBkResv[b.no] ?? 0, lr = r.lyBkResv[b.no] ?? 0
               const cp = cyTot ? c / cyTot * 100 : 0, lp = lyTot ? l / lyTot * 100 : 0
               const ca = r.cyAdr[b.no], la = r.lyAdr[b.no]
+              const dr = cr - lr
               const dn = c - l
               const dp = cp - lp
-              const da = (ca && la) ? ca - la : null
-              const dak = da == null ? null : Math.round(da / 1000)
+              const drColor = dr > 0 ? MINT : dr < 0 ? RED : '#4a4a4a'
               const dnColor = dn > 0 ? MINT : dn < 0 ? RED : '#4a4a4a'
               const dpShow = Math.abs(dp) >= 0.5
               const dpColor = !dpShow ? '#4a4a4a' : dp > 0 ? MINT : RED
-              const daShow = dak != null && dak !== 0
-              const daColor = !daShow ? '#4a4a4a' : (dak as number) > 0 ? MINT : RED
               return (
                 <div key={b.no} style={{ display: 'flex', alignItems: 'center', padding: '5px 0', ...(i > 0 ? { borderTop: '0.5px solid rgba(255,255,255,0.06)' } : {}) }}>
                   <span style={{ width: 10, height: 10, borderRadius: 2, marginRight: 9, flex: 'none', background: bktColor(i) }} />
                   <span style={{ width: 44, flex: 'none', fontSize: 12.5, color: '#d8d8d8' }}>{b.label}</span>
                   {/* '26년 */}
-                  <div style={{ flex: 3, display: 'flex' }}>
-                    <span style={{ flex: 1, textAlign: 'right', fontSize: 14, color: '#f2f2f2' }}>{c.toLocaleString()}</span>
-                    <span style={{ flex: 1, textAlign: 'right', fontSize: 11.5, color: '#9a9a9a' }}>{Math.round(cp)}%</span>
+                  <div style={{ flex: 4, display: 'flex' }}>
+                    <span style={{ flex: 1, textAlign: 'right', fontSize: 12.5, color: '#b8b8b8' }}>{cr.toLocaleString()}</span>
+                    <span style={{ flex: 1.1, textAlign: 'right', fontSize: 14, color: '#f2f2f2' }}>{c.toLocaleString()}</span>
+                    <span style={{ flex: 0.9, textAlign: 'right', fontSize: 11.5, color: '#9a9a9a' }}>{Math.round(cp)}%</span>
                     <span style={{ flex: 1, textAlign: 'right', fontSize: 12.5, color: '#d0d0d0' }}>{ca == null ? '–' : Math.round(ca / 1000).toLocaleString()}</span>
                   </div>
-                  <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 8px' }} />
+                  <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 7px' }} />
                   {/* '25년 */}
-                  <div style={{ flex: 3, display: 'flex' }}>
-                    <span style={{ flex: 1, textAlign: 'right', fontSize: 13, color: '#8a8a8a' }}>{l.toLocaleString()}</span>
-                    <span style={{ flex: 1, textAlign: 'right', fontSize: 11.5, color: '#6f6f6f' }}>{Math.round(lp)}%</span>
+                  <div style={{ flex: 3.1, display: 'flex' }}>
+                    <span style={{ flex: 1, textAlign: 'right', fontSize: 12, color: '#787878' }}>{lr.toLocaleString()}</span>
+                    <span style={{ flex: 1.1, textAlign: 'right', fontSize: 13, color: '#8a8a8a' }}>{l.toLocaleString()}</span>
                     <span style={{ flex: 1, textAlign: 'right', fontSize: 12, color: '#7a7a7a' }}>{la == null ? '–' : Math.round(la / 1000).toLocaleString()}</span>
                   </div>
-                  <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 8px' }} />
+                  <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 7px' }} />
                   {/* 증감 */}
-                  <div style={{ flex: 3, display: 'flex' }}>
+                  <div style={{ flex: 2.9, display: 'flex' }}>
+                    <span style={{ flex: 1, textAlign: 'right', fontSize: 11.5, color: drColor }}>{dr === 0 ? '—' : dr > 0 ? `▲${dr}` : `▼${Math.abs(dr)}`}</span>
                     <span style={{ flex: 1, textAlign: 'right', fontSize: 12, color: dnColor }}>{dn === 0 ? '—' : dn > 0 ? `▲${dn}` : `▼${Math.abs(dn)}`}</span>
-                    <span style={{ flex: 1, textAlign: 'right', fontSize: 11, color: dpColor }}>{!dpShow ? '—' : `${dp > 0 ? '+' : '−'}${Math.abs(Math.round(dp))}p`}</span>
-                    <span style={{ flex: 1, textAlign: 'right', fontSize: 12, color: daColor }}>{!daShow ? '—' : (dak as number) > 0 ? `▲${dak}` : `▼${Math.abs(dak as number)}`}</span>
+                    <span style={{ flex: 0.9, textAlign: 'right', fontSize: 11, color: dpColor }}>{!dpShow ? '—' : `${dp > 0 ? '+' : '−'}${Math.abs(Math.round(dp))}p`}</span>
                   </div>
                 </div>
               )
             })}
           </div>
         </div>
-        <div style={{ textAlign: 'right', fontSize: 10, color: '#5a5a5a', padding: '0 16px 10px' }}>단위 : 룸나잇, 천원</div>
+        <div style={{ textAlign: 'right', fontSize: 10, color: '#5a5a5a', padding: '0 16px 10px' }}>단위 : 건, 룸나잇, 천원</div>
       </div>
     )
   }
@@ -568,7 +580,7 @@ export default function LosPage() {
           {/* 헤더 1단 — 그룹명 */}
           <div style={{ display: 'flex', alignItems: 'flex-end' }}>
             <div style={{ width: 138, flexShrink: 0 }} />
-            <div style={{ flex: 7, boxShadow: OV, borderRadius: '4px 4px 0 0', textAlign: 'center', fontSize: 12, fontWeight: 500, color: MINT, padding: '4px 0' }}>박수별 예약 건수</div>
+            <div style={{ flex: 7, boxShadow: OV, borderRadius: '4px 4px 0 0', textAlign: 'center', fontSize: 12, fontWeight: 500, color: MINT, padding: '4px 0' }}>박수별 룸나잇</div>
             <div style={{ width: 10, flexShrink: 0 }} />
             <div style={{ flex: 3, boxShadow: OV_B, borderRadius: '4px 4px 0 0', textAlign: 'center', fontSize: 12, fontWeight: 500, color: '#5B8DEF', padding: '4px 0' }}>평균 · 최장</div>
           </div>
@@ -587,7 +599,7 @@ export default function LosPage() {
             <div style={{ flex: 7, minWidth: 0, display: 'flex', boxShadow: OV }}>
               {buckets.map(b => (
                 <div key={b.no} style={{ flex: 1, minWidth: 0, display: 'flex' }}>
-                  <div style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingRight: 3, fontSize: 9.5, color: '#4d4d4d', whiteSpace: 'nowrap' }}>예약</div>
+                  <div style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingRight: 3, fontSize: 9.5, color: '#4d4d4d', whiteSpace: 'nowrap' }}>룸나잇</div>
                   <div style={{ width: 34, flexShrink: 0, textAlign: 'center', fontSize: 9.5, color: '#5a5a5a', whiteSpace: 'nowrap' }}>비중</div>
                   <div style={{ flex: 1, minWidth: 0, textAlign: 'left', paddingLeft: 3, fontSize: 9.5, color: '#4d4d4d', whiteSpace: 'nowrap' }}>전년비 증감</div>
                 </div>
