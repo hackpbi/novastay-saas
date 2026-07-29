@@ -100,13 +100,13 @@ export default function LosPage() {
   const p_segments = dim === 'segment' || applied.length === 0 ? null : applied
   // 어카운트 전체 목록 (필터 미적용) — get_los_summary(p_dim:'account') 재사용
   const { data: accountList = [] } = useQuery<string[]>({
-    queryKey: ['los-account-list', hotelId, otbDate, fromDate, toDate],
+    queryKey: ['los-account-list', hotelId, otbDate, fromDate, toDate, segKey],
     enabled: !!hotelId && !!otbDate,
     staleTime: 60 * 1000,
     placeholderData: keepPreviousData,
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc('get_los_summary', {
-        p_hotel_id: hotelId, p_update_date: otbDate, p_from: fromDate, p_to: toDate, p_dim: 'account', p_segments: null, p_accounts: null,
+        p_hotel_id: hotelId, p_update_date: otbDate, p_from: fromDate, p_to: toDate, p_dim: 'account', p_segments, p_accounts: null,
       })
       if (error) throw error
       return [...new Set(((data ?? []) as any[]).filter(r => r.year_type === 'cy').map(r => r.dim_key as string))].sort((a, b) => a.localeCompare(b, 'ko'))
@@ -246,6 +246,14 @@ export default function LosPage() {
   const toggleCodes = (codes: string[]) => setDraft(prev =>
     codes.every(c => prev.includes(c)) ? prev.filter(c => !codes.includes(c)) : [...new Set([...prev, ...codes])])
   const toggleAcc = (name: string) => setDraftAcc(prev => prev.includes(name) ? prev.filter(x => x !== name) : [...prev, name])
+  // 세그먼트 변경 등으로 어카운트 목록이 바뀌면 적용값을 교집합으로 정리 (비면 전체)
+  useEffect(() => {
+    if (accountList.length === 0) return
+    setAppliedAcc(prev => {
+      const next = prev.filter(a => accountList.includes(a))
+      return next.length === 0 ? accountList : next
+    })
+  }, [accountList])
 
   // ─── 표시 행 ────────────────────────────────────────────────────────────────────
   const displayRows = useMemo<DRow[]>(() => {
@@ -529,15 +537,23 @@ export default function LosPage() {
   }
 
   // ─── 탭 · 필터 ──────────────────────────────────────────────────────────────────
-  const dimItem = (d: Dim, label: string) => (
-    <span key={d} onClick={() => setDim(d)} style={{
-      fontSize: 12, padding: '5px 14px', borderRadius: 6, cursor: 'pointer',
-      ...(dim === d ? { background: 'rgba(0,229,160,0.12)', color: MINT, border: '0.5px solid rgba(0,229,160,0.4)' } : { color: '#777', border: '0.5px solid rgba(255,255,255,0.1)' }),
-    }}>{label}</span>
-  )
+  const TAB_W = 112
+  const tabs = [
+    { d: 'segment' as Dim, label: '세그먼트', icon: <><rect x="1" y="1" width="4" height="4" rx="1" fill="currentColor"/><rect x="7" y="1" width="4" height="4" rx="1" fill="currentColor"/><rect x="1" y="7" width="4" height="4" rx="1" fill="currentColor"/><rect x="7" y="7" width="4" height="4" rx="1" fill="currentColor"/></> },
+    { d: 'country' as Dim, label: '국적', icon: <><circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2" fill="none"/><path d="M1 6h10M6 1c1.6 1.6 2.4 3.3 2.4 5S7.6 10.4 6 11C4.4 10.4 3.6 8.7 3.6 6S4.4 2.6 6 1z" stroke="currentColor" strokeWidth="1.1" fill="none"/></> },
+    { d: 'account' as Dim, label: '어카운트', icon: <><path d="M1.5 1.5h4.2L11 6.8 6.8 11 1.5 5.7V1.5z" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinejoin="round"/><circle cx="3.9" cy="3.9" r="1" fill="currentColor"/></> },
+  ]
+  const activeIdx = tabs.findIndex(t => t.d === dim)
+  const segSize = segFilterOpen ? draft.length : applied.length
+  const accSize = accFilterOpen ? draftAcc.length : appliedAcc.length
+  const segAllBtn = segSize === 0 || segSize === segTree.allCodes.length
+  const accAllBtn = accSize === 0 || accSize === accountList.length
+  const segFiltered = applied.length > 0 && applied.length < segTree.allCodes.length
+  const accFiltered = appliedAcc.length > 0 && appliedAcc.length < accountList.length
+  const resetAll = () => { setApplied(segTree.allCodes); setAppliedAcc(accountList) }
   const chk = (state: 'checked' | 'unchecked' | 'inter') => (
     <span style={{
-      width: 12, height: 12, borderRadius: 3, flexShrink: 0, boxSizing: 'border-box', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      width: 14, height: 14, borderRadius: 4, flexShrink: 0, boxSizing: 'border-box', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       border: `1px solid ${state === 'unchecked' ? '#3a3a3a' : '#00E5A0'}`, background: state === 'checked' ? '#00E5A0' : 'transparent',
     }}>
       {state === 'checked' && <span style={{ color: '#0a0a0a', fontSize: 9, lineHeight: 1 }}>✓</span>}
@@ -563,21 +579,36 @@ export default function LosPage() {
         <span style={{ fontSize: 11, color: '#5f5f5f' }}>도착일 기준 · 룸나잇 · HOU 제외</span>
       </div>
 
-      {/* 탭 + 세그먼트 필터 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
-        {dimItem('segment', '세그먼트')}{dimItem('country', '국적')}{dimItem('account', '어카운트')}
+      {/* 탭 + 필터 */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
+        {/* 탭 — 세그먼티드 컨트롤 */}
+        <div style={{ position: 'relative', display: 'inline-flex', background: '#131313', border: '0.5px solid rgba(255,255,255,0.09)', borderRadius: 9, padding: 3, flex: 'none' }}>
+          <div style={{ position: 'absolute', top: 3, left: 3, width: TAB_W, height: 'calc(100% - 6px)', borderRadius: 7, background: '#00E5A0', transform: `translateX(${activeIdx * TAB_W}px)`, transition: 'transform .26s cubic-bezier(.34,1.32,.5,1)', willChange: 'transform' }} />
+          {tabs.map(t => {
+            const active = dim === t.d
+            return (
+              <div key={t.d} onClick={() => setDim(t.d)} style={{ position: 'relative', zIndex: 1, cursor: 'pointer', width: TAB_W, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 12.5, padding: '7px 0', fontWeight: active ? 500 : 400, color: active ? '#08150f' : '#8a8a8a', transition: 'color .18s ease' }}>
+                <svg viewBox="0 0 12 12" width={12} height={12}>{t.icon}</svg>{t.label}
+              </div>
+            )
+          })}
+        </div>
+        {/* 필터 */}
         {dim !== 'segment' && (
-          <>
-            <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.12)', margin: '0 4px' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 10, color: '#4a4a4a', letterSpacing: '0.08em', marginRight: 2 }}>FILTER</span>
             <div className="seg-filter-wrap" style={{ position: 'relative' }}>
-              <div onClick={() => { if (!segFilterOpen) { setDraft(applied); setAccFilterOpen(false) } setSegFilterOpen(o => !o) }} style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 12, padding: '5px 12px', borderRadius: 6, color: MINT, border: '0.5px solid rgba(0,229,160,0.4)', background: 'rgba(0,229,160,0.06)' }}>
-                <span style={{ fontSize: 11 }}>▦</span><span>세그먼트</span>
-                <span style={{ fontSize: 11, background: 'rgba(0,229,160,0.18)', padding: '1px 7px', borderRadius: 4 }}>{(segFilterOpen ? draft.length : applied.length)}개 선택</span>
+              <div onClick={() => { if (!segFilterOpen) { setDraft(applied); setAccFilterOpen(false) } setSegFilterOpen(o => !o) }} style={{ cursor: 'pointer', position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, padding: '7px 13px', borderRadius: 8, border: `0.5px solid rgba(255,255,255,${segFilterOpen ? 0.24 : 0.13})`, background: segFilterOpen ? 'rgba(255,255,255,0.05)' : 'transparent', color: segAllBtn ? '#8f8f8f' : '#dcdcdc', transition: 'all .15s' }}>
+                <svg viewBox="0 0 12 12" width={12} height={12} style={{ opacity: segAllBtn ? 0.45 : 0.85 }}><path d="M1 2h10L7 6.6V11L5 9.8V6.6L1 2z" fill="currentColor"/></svg>
+                <span>세그먼트</span>
+                <span style={{ color: segAllBtn ? '#5a5a5a' : '#00E5A0' }}>{segAllBtn ? '전체' : `${segSize}개`}</span>
                 <span style={{ fontSize: 9 }}>{segFilterOpen ? '▴' : '▾'}</span>
+                {!segAllBtn && <span style={{ position: 'absolute', top: -3, right: -3, width: 7, height: 7, borderRadius: '50%', background: '#00E5A0', boxShadow: '0 0 0 2px #0a0a0a' }} />}
               </div>
               {segFilterOpen && (
-                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, width: 232, zIndex: 20, background: '#101410', border: '0.5px solid rgba(0,229,160,0.3)', borderRadius: 8, overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.7)' }}>
-                  <div style={{ maxHeight: 340, overflowY: 'auto', padding: '8px 0' }}>
+                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, width: 252, zIndex: 20, background: '#101410', border: '0.5px solid rgba(0,229,160,0.26)', borderRadius: 9, overflow: 'hidden', boxShadow: '0 10px 28px rgba(0,0,0,0.8)' }}>
+                  <div style={{ fontSize: 10, color: '#565656', padding: '8px 12px 4px' }}>{draft.length} / {segTree.allCodes.length} 선택</div>
+                  <div style={{ maxHeight: 250, overflowY: 'auto', paddingBottom: 6 }}>
                   {segTree.groups.map(g => {
                     const isLeaf = g.children.length === 0
                     const childSel = g.children.filter(c => c.codes.every(cc => draft.includes(cc))).length
@@ -607,26 +638,31 @@ export default function LosPage() {
               )}
             </div>
             <div className="acc-filter-wrap" style={{ position: 'relative' }}>
-              <div onClick={() => { if (!accFilterOpen) { setDraftAcc(appliedAcc); setSegFilterOpen(false) } setAccFilterOpen(o => !o) }} style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 12, padding: '5px 12px', borderRadius: 6, color: MINT, border: '0.5px solid rgba(0,229,160,0.4)', background: 'rgba(0,229,160,0.06)' }}>
-                <span style={{ fontSize: 11 }}>▤</span><span>어카운트</span>
-                <span style={{ fontSize: 11, background: 'rgba(0,229,160,0.18)', padding: '1px 7px', borderRadius: 4 }}>{(() => { const size = accFilterOpen ? draftAcc.length : appliedAcc.length; return (size === accountList.length || size === 0) ? '전체' : `${size}개` })()}</span>
+              <div onClick={() => { if (!accFilterOpen) { setDraftAcc(appliedAcc); setSegFilterOpen(false) } setAccFilterOpen(o => !o) }} style={{ cursor: 'pointer', position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, padding: '7px 13px', borderRadius: 8, border: `0.5px solid rgba(255,255,255,${accFilterOpen ? 0.24 : 0.13})`, background: accFilterOpen ? 'rgba(255,255,255,0.05)' : 'transparent', color: accAllBtn ? '#8f8f8f' : '#dcdcdc', transition: 'all .15s' }}>
+                <svg viewBox="0 0 12 12" width={12} height={12} style={{ opacity: accAllBtn ? 0.45 : 0.85 }}><path d="M1 2h10L7 6.6V11L5 9.8V6.6L1 2z" fill="currentColor"/></svg>
+                <span>어카운트</span>
+                <span style={{ color: accAllBtn ? '#5a5a5a' : '#00E5A0' }}>{accAllBtn ? '전체' : `${accSize}개`}</span>
                 <span style={{ fontSize: 9 }}>{accFilterOpen ? '▴' : '▾'}</span>
+                {!accAllBtn && <span style={{ position: 'absolute', top: -3, right: -3, width: 7, height: 7, borderRadius: '50%', background: '#00E5A0', boxShadow: '0 0 0 2px #0a0a0a' }} />}
               </div>
               {accFilterOpen && (
-                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, width: 250, zIndex: 20, background: '#101410', border: '0.5px solid rgba(0,229,160,0.3)', borderRadius: 8, overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.7)' }}>
-                  <div style={{ padding: '8px 10px 6px', borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, width: 252, zIndex: 20, background: '#101410', border: '0.5px solid rgba(0,229,160,0.26)', borderRadius: 9, overflow: 'hidden', boxShadow: '0 10px 28px rgba(0,0,0,0.8)' }}>
+                  <div style={{ padding: '9px 10px 7px', borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
                     <input value={accSearch} onChange={e => setAccSearch(e.target.value)} placeholder="어카운트 검색" style={{ width: '100%', boxSizing: 'border-box', background: '#0a0f0a', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 5, padding: '5px 8px', fontSize: 11.5, color: '#e0e0e0', outline: 'none' }} />
                   </div>
-                  <div style={{ fontSize: 10, color: '#5a5a5a', padding: '5px 12px 3px' }}>이름순 · {accountList.length}개</div>
-                  <div style={{ maxHeight: 300, overflowY: 'auto', paddingBottom: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 12px 3px' }}>
+                    <span style={{ fontSize: 10, color: '#565656' }}>{draftAcc.length} / {accountList.length} 선택</span>
+                    {segFiltered && <span style={{ fontSize: 10, color: '#00E5A0', opacity: 0.75 }}>세그먼트 연동</span>}
+                  </div>
+                  <div style={{ maxHeight: 250, overflowY: 'auto', paddingBottom: 6 }}>
                     {(() => {
                       const q = accSearch.trim().toLowerCase()
                       const shown = q ? accountList.filter(a => a.toLowerCase().includes(q)) : accountList
                       return shown.length === 0 ? (
-                        <div style={{ fontSize: 11.5, color: '#4a4a4a', textAlign: 'center', padding: '16px 12px' }}>검색 결과 없음</div>
+                        <div style={{ fontSize: 11.5, color: '#454545', textAlign: 'center', padding: '16px 12px' }}>해당 없음</div>
                       ) : shown.map(name => (
                         <div key={name} onClick={() => toggleAcc(name)} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '5px 12px' }}>
-                          <span style={{ width: 13, height: 13, borderRadius: 3, flexShrink: 0, boxSizing: 'border-box', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${draftAcc.includes(name) ? '#00E5A0' : '#3a3a3a'}`, background: draftAcc.includes(name) ? '#00E5A0' : 'transparent' }}>{draftAcc.includes(name) && <span style={{ color: '#0a0a0a', fontSize: 9, lineHeight: 1 }}>✓</span>}</span>
+                          <span style={{ width: 14, height: 14, borderRadius: 4, flexShrink: 0, boxSizing: 'border-box', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${draftAcc.includes(name) ? '#00E5A0' : '#3a3a3a'}`, background: draftAcc.includes(name) ? '#00E5A0' : 'transparent' }}>{draftAcc.includes(name) && <span style={{ color: '#0a0a0a', fontSize: 9, lineHeight: 1 }}>✓</span>}</span>
                           <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: draftAcc.includes(name) ? '#e0e0e0' : '#8a8a8a' }}>{name}</span>
                         </div>
                       ))
@@ -640,7 +676,8 @@ export default function LosPage() {
                 </div>
               )}
             </div>
-          </>
+            {(segFiltered || accFiltered) && <span onClick={resetAll} style={{ fontSize: 11, color: '#6a6a6a', cursor: 'pointer', padding: '7px 3px' }}>해제</span>}
+          </div>
         )}
       </div>
 
