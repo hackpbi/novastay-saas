@@ -33,6 +33,7 @@ interface AlertRow {
   otb_rn:         number
   fcst_rn:        number
   otb_adr:        number
+  otb_rev:        number
   fcst_adr:       number
   adr_diff_pct:   number
   occ_pct:        number   // OTB 기준 전체 점유율
@@ -41,7 +42,7 @@ interface AlertRow {
 
 const RN_THRESHOLD  = 0    // otb_rn > fcst_rn
 const ADR_THRESHOLD = 10   // |diff| >= 10%
-const OTA_COMMISSION_DEFAULT = 15   // OTA 수수료 기본값(%)
+const OTA_COMMISSION_DEFAULT = 13.5   // OTA 수수료 기본값(%)
 const ROOM_CAP_LABEL = 'rooms'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -321,6 +322,7 @@ export function ForecastAlertModal({
           otb_rn,
           fcst_rn,
           otb_adr,
+          otb_rev:       v.otb_rev,
           fcst_adr,
           adr_diff_pct:  adrDiffPct,
           occ_pct:       (() => {
@@ -443,20 +445,15 @@ export function ForecastAlertModal({
     const channel = channelMap[r.segmentation]
     if (channel !== 'direct' && channel !== 'ota') return null
 
-    // 세그별 surcharge 프리미엄 = OTB ADR - 현재 BAR Rate
-    // (이 세그가 평소 BAR 대비 어느 정도 비싼/저렴한 객실타입을 쓰는지)
-    const premium = r.otb_rn > 0 ? (r.otb_adr - barInfo.bar_rate) : 0
-
-    // R/N 증가율 반영 — FCST RN이 OTB RN보다 많이 늘었으면 프리미엄을 약하게 할인 (재고 소진 가정)
-    const rnGrowth = r.otb_rn > 0 ? r.fcst_rn / r.otb_rn : 1
-    const decay = Math.max(0.7, 1 - (rnGrowth - 1) * 0.1)
-    const adjustedPremium = premium * decay
-
-    const base = barInfo.bar_rate + adjustedPremium
-    if (channel === 'ota') {
-      return Math.round(base * (1 - commission / 100))
-    }
-    return Math.round(base)
+    // AdrSimulatorModal getSegExpectedAdr와 동일 공식:
+    // 추가 예약분(FCST−OTB)을 신규 BAR(net)로 채운다고 가정 → (OTB매출 + 추가분×신BAR net) / FCST R/N
+    const fcstRn = getFixRn(r)                                     // 인라인 편집(localFix) 우선 → 원본 FCST R/N
+    if (fcstRn === 0) return null
+    const addRn = fcstRn - r.otb_rn                                // 추가 예약 R/N (FCST − OTB)
+    if (addRn <= 0) return null
+    const otbRev = r.otb_rev                                       // 원본 OTB 매출 (정수 반올림 오차 없음)
+    const newBarNet = channel === 'ota' ? barInfo.bar_rate * (1 - commission / 100) : barInfo.bar_rate   // OTA는 커미션 차감
+    return Math.round((otbRev + addRn * newBarNet) / fcstRn)
   }
 
   // ── bulk apply ───────────────────────────────────────────────────────────────
