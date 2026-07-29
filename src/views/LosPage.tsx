@@ -299,8 +299,8 @@ export default function LosPage() {
       }}>
         {/* 구분 */}
         <div style={{
-          width: 120, flexShrink: 0, display: 'flex', alignItems: 'center', boxSizing: 'border-box',
-          paddingLeft: r.level === 'sub' ? 28 : 14, paddingRight: 8, background: bg,
+          width: 138, flexShrink: 0, display: 'flex', alignItems: 'center', boxSizing: 'border-box',
+          paddingLeft: r.level === 'sub' ? 32 : 16, paddingRight: 8, background: bg,
           fontSize: r.level === 'sub' ? 12 : 13, fontWeight: (isTotal ? true : r.isBold) ? 500 : 400,
           color: isTotal ? MINT : r.level === 'sub' ? '#9a9a9a' : r.level === 'flat' ? '#e8e8e8' : (r.font ?? '#e8e8e8'),
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', opacity: dim35,
@@ -492,14 +492,14 @@ export default function LosPage() {
           <div style={{ border: '1px solid rgba(0,229,160,0.45)', borderLeft: '4px solid #00E5A0', borderRadius: 4, overflow: 'hidden' }}>
           {/* 헤더 1단 — 그룹명 */}
           <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-            <div style={{ width: 120, flexShrink: 0 }} />
+            <div style={{ width: 138, flexShrink: 0 }} />
             <div style={{ flex: 7, boxShadow: OV, borderRadius: '4px 4px 0 0', textAlign: 'center', fontSize: 12, fontWeight: 500, color: MINT, padding: '4px 0' }}>박수별 예약 건수</div>
             <div style={{ width: 10, flexShrink: 0 }} />
             <div style={{ flex: 3, boxShadow: OV_B, borderRadius: '4px 4px 0 0', textAlign: 'center', fontSize: 12, fontWeight: 500, color: '#5B8DEF', padding: '4px 0' }}>평균 · 최장</div>
           </div>
           {/* 헤더 2단 — 구간 라벨 (가운데) */}
           <div style={{ display: 'flex', alignItems: 'center' }}>
-            <div style={{ width: 120, flexShrink: 0 }} />
+            <div style={{ width: 138, flexShrink: 0 }} />
             <div style={{ flex: 7, minWidth: 0, display: 'flex', boxShadow: OV }}>
               {buckets.map(b => <div key={b.no} style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: 11.5, color: '#9a9a9a' }}>{b.label}</div>)}
             </div>
@@ -508,7 +508,7 @@ export default function LosPage() {
           </div>
           {/* 헤더 3단 — 예약/비중/전년비 증감 · ALOS/전년비/최장 */}
           <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 6, borderBottom: '1px solid rgba(0,229,160,0.28)' }}>
-            <div style={{ width: 120, flexShrink: 0 }} />
+            <div style={{ width: 138, flexShrink: 0 }} />
             <div style={{ flex: 7, minWidth: 0, display: 'flex', boxShadow: OV }}>
               {buckets.map(b => (
                 <div key={b.no} style={{ flex: 1, minWidth: 0, display: 'flex' }}>
