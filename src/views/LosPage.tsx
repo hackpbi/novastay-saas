@@ -86,13 +86,14 @@ export default function LosPage() {
   const toDate   = `${selYear}-${pad(m1)}-${pad(new Date(selYear, m1, 0).getDate())}`
 
   const [dim, setDim] = useState<Dim>('segment')
-  const [selectedSegments, setSelectedSegments] = useState<string[]>([])
+  const [applied, setApplied] = useState<string[]>([])
+  const [draft, setDraft] = useState<string[]>([])
   const [segFilterOpen, setSegFilterOpen] = useState(false)
   const [selName, setSelName] = useState<string | null>(null)
   const [hoverKey, setHoverKey] = useState<React.Key | null>(null)
 
-  const segKey = dim === 'segment' ? null : selectedSegments.slice().sort().join(',')
-  const p_segments = dim === 'segment' || selectedSegments.length === 0 ? null : selectedSegments
+  const segKey = dim === 'segment' ? null : applied.slice().sort().join(',')
+  const p_segments = dim === 'segment' || applied.length === 0 ? null : applied
 
   // ─── RPC 2개 ────────────────────────────────────────────────────────────────────
   const { data: sumRows = [], isLoading: sumLoading } = useQuery<SumRow[]>({
@@ -208,7 +209,7 @@ export default function LosPage() {
   useEffect(() => { segSeeded.current = false }, [hotelId])
   useEffect(() => {
     if (segSeeded.current || segTree.allCodes.length === 0) return
-    setSelectedSegments(segTree.allCodes); segSeeded.current = true
+    setApplied(segTree.allCodes); setDraft(segTree.allCodes); segSeeded.current = true
   }, [segTree])
   useEffect(() => {
     if (!segFilterOpen) return
@@ -216,7 +217,7 @@ export default function LosPage() {
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
   }, [segFilterOpen])
-  const toggleCodes = (codes: string[]) => setSelectedSegments(prev =>
+  const toggleCodes = (codes: string[]) => setDraft(prev =>
     codes.every(c => prev.includes(c)) ? prev.filter(c => !codes.includes(c)) : [...new Set([...prev, ...codes])])
 
   // ─── 표시 행 ────────────────────────────────────────────────────────────────────
@@ -542,23 +543,19 @@ export default function LosPage() {
           <>
             <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.12)', margin: '0 4px' }} />
             <div className="seg-filter-wrap" style={{ position: 'relative' }}>
-              <div onClick={() => setSegFilterOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 12, padding: '5px 12px', borderRadius: 6, color: MINT, border: '0.5px solid rgba(0,229,160,0.4)', background: 'rgba(0,229,160,0.06)' }}>
+              <div onClick={() => { if (!segFilterOpen) setDraft(applied); setSegFilterOpen(o => !o) }} style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 12, padding: '5px 12px', borderRadius: 6, color: MINT, border: '0.5px solid rgba(0,229,160,0.4)', background: 'rgba(0,229,160,0.06)' }}>
                 <span style={{ fontSize: 11 }}>▦</span><span>세그먼트</span>
-                <span style={{ fontSize: 11, background: 'rgba(0,229,160,0.18)', padding: '1px 7px', borderRadius: 4 }}>{selectedSegments.length}개 선택</span>
+                <span style={{ fontSize: 11, background: 'rgba(0,229,160,0.18)', padding: '1px 7px', borderRadius: 4 }}>{(segFilterOpen ? draft.length : applied.length)}개 선택</span>
                 <span style={{ fontSize: 9 }}>{segFilterOpen ? '▴' : '▾'}</span>
               </div>
               {segFilterOpen && (
-                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 210, zIndex: 20, background: '#101410', border: '0.5px solid rgba(0,229,160,0.3)', borderRadius: 8, padding: '8px 0', boxShadow: '0 8px 24px rgba(0,0,0,0.7)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 12px 8px', marginBottom: 6, borderBottom: '0.5px solid rgba(255,255,255,0.08)', fontSize: 11 }}>
-                    <span onClick={() => setSelectedSegments(segTree.allCodes)} style={{ color: MINT, cursor: 'pointer' }}>전체 선택</span>
-                    <span style={{ color: '#333' }}>|</span>
-                    <span onClick={() => setSelectedSegments([])} style={{ color: '#777', cursor: 'pointer' }}>전체 해제</span>
-                  </div>
+                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, width: 232, zIndex: 20, background: '#101410', border: '0.5px solid rgba(0,229,160,0.3)', borderRadius: 8, overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.7)' }}>
+                  <div style={{ maxHeight: 340, overflowY: 'auto', padding: '8px 0' }}>
                   {segTree.groups.map(g => {
                     const isLeaf = g.children.length === 0
-                    const childSel = g.children.filter(c => c.codes.every(cc => selectedSegments.includes(cc))).length
+                    const childSel = g.children.filter(c => c.codes.every(cc => draft.includes(cc))).length
                     const gState: 'checked' | 'unchecked' | 'inter' = isLeaf
-                      ? (g.codes.every(c => selectedSegments.includes(c)) ? 'checked' : 'unchecked')
+                      ? (g.codes.every(c => draft.includes(c)) ? 'checked' : 'unchecked')
                       : (childSel === g.children.length ? 'checked' : childSel === 0 ? 'unchecked' : 'inter')
                     return (
                       <div key={g.key}>
@@ -567,12 +564,18 @@ export default function LosPage() {
                         </div>
                         {g.children.map(c => (
                           <div key={c.name} onClick={() => toggleCodes(c.codes)} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '4px 12px 4px 26px' }}>
-                            {chk(c.codes.every(cc => selectedSegments.includes(cc)) ? 'checked' : 'unchecked')}<span style={{ fontSize: 12, color: '#b0b0b0' }}>{c.name}</span>
+                            {chk(c.codes.every(cc => draft.includes(cc)) ? 'checked' : 'unchecked')}<span style={{ fontSize: 12, color: '#b0b0b0' }}>{c.name}</span>
                           </div>
                         ))}
                       </div>
                     )
                   })}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, padding: '8px 10px', borderTop: '0.5px solid rgba(255,255,255,0.1)', background: '#0c110c' }}>
+                    <span onClick={() => setDraft([])} style={{ flex: 1, textAlign: 'center', fontSize: 11.5, padding: '6px 0', borderRadius: 6, cursor: 'pointer', border: '0.5px solid rgba(255,255,255,0.14)', color: '#a8a8a8' }}>초기화</span>
+                    <span onClick={() => setDraft(segTree.allCodes)} style={{ flex: 1, textAlign: 'center', fontSize: 11.5, padding: '6px 0', borderRadius: 6, cursor: 'pointer', border: '0.5px solid rgba(255,255,255,0.14)', color: '#a8a8a8' }}>전체</span>
+                    <span onClick={() => { setApplied(draft); setSegFilterOpen(false) }} style={{ flex: 1.2, textAlign: 'center', fontSize: 11.5, padding: '6px 0', borderRadius: 6, cursor: 'pointer', background: '#00E5A0', color: '#08150f', fontWeight: 500 }}>완료</span>
+                  </div>
                 </div>
               )}
             </div>
