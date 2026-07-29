@@ -9,11 +9,11 @@ import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
 
 // ─── 타입 ────────────────────────────────────────────────────────────────────────
 type Dim = 'segment' | 'country' | 'account'
-type SumRow = { year_type: string; dim_key: string; resv: number; rooms: number; room_nights: number; alos: number | null; max_los: number | null; adr: number | null }
+type SumRow = { year_type: string; dim_key: string; alpha2: string | null; resv: number; rooms: number; room_nights: number; alos: number | null; max_los: number | null; adr: number | null }
 type BktRow = { year_type: string; dim_key: string; bucket_no: number; bucket_min: number; bucket_max: number | null; resv: number; room_nights: number; adr: number | null }
 type Sum = { resv: number; rn: number; rooms: number; alos: number | null; max: number | null }
 type BucketDef = { no: number; min: number; max: number | null; label: string }
-type DRow = { name: string; level: 'main' | 'mid' | 'sub' | 'flat'; bg: string | null; font: string | null; isBold: boolean; cy: Sum; ly: Sum; cyBk: Record<number, number>; lyBk: Record<number, number>; cyBkResv: Record<number, number>; lyBkResv: Record<number, number>; cyAdr: Record<number, number | null>; lyAdr: Record<number, number | null> }
+type DRow = { name: string; alpha2: string | null; level: 'main' | 'mid' | 'sub' | 'flat'; bg: string | null; font: string | null; isBold: boolean; cy: Sum; ly: Sum; cyBk: Record<number, number>; lyBk: Record<number, number>; cyBkResv: Record<number, number>; lyBkResv: Record<number, number>; cyAdr: Record<number, number | null>; lyAdr: Record<number, number | null> }
 
 // ─── 상수 (KST — getUTC 금지) ──────────────────────────────────────────────────────
 const MINT = '#00E5A0'
@@ -24,22 +24,9 @@ const OV_B = 'inset 0 0 0 999px rgba(91,141,239,0.05)'
 const CO = ['#00E5A0', '#0FB894', '#1C8A88', '#2A5D7C', '#5B8DEF']
 const bktColor = (i: number) => CO[Math.min(i, CO.length - 1)]
 
-// 국적 탭 — ISO alpha-3 → alpha-2 (국기 이모지용)
-const A3_A2: Record<string, string> = {
-  KOR:'KR', USA:'US', JPN:'JP', CHN:'CN', TWN:'TW', HKG:'HK',
-  SGP:'SG', THA:'TH', VNM:'VN', PHL:'PH', IDN:'ID', MYS:'MY',
-  IND:'IN', AUS:'AU', NZL:'NZ', GBR:'GB', DEU:'DE', FRA:'FR',
-  ITA:'IT', ESP:'ES', NLD:'NL', BEL:'BE', CHE:'CH', AUT:'AT',
-  SWE:'SE', NOR:'NO', DNK:'DK', FIN:'FI', POL:'PL', CZE:'CZ',
-  RUS:'RU', TUR:'TR', ARE:'AE', SAU:'SA', ISR:'IL', EGY:'EG',
-  ZAF:'ZA', CAN:'CA', MEX:'MX', BRA:'BR', ARG:'AR', CHL:'CL',
-  MNG:'MN', KAZ:'KZ', UZB:'UZ', LAO:'LA', KHM:'KH', MMR:'MM',
-}
-const flagOf = (a3: string): string => {
-  const a2 = A3_A2[a3]
-  if (!a2) return ''
-  return a2.replace(/./g, c => String.fromCodePoint(c.charCodeAt(0) + 127397))
-}
+// 국적 탭 — alpha-2 → 국기 이미지 URL (Windows 이모지 미지원으로 flagcdn 사용)
+const flagUrl = (a2?: string | null) =>
+  a2 && a2.length === 2 ? `https://flagcdn.com/16x12/${a2.toLowerCase()}.png` : ''
 
 function aggSum(map: Record<string, SumRow>, codes: string[]): Sum {
   let resv = 0, rn = 0, rooms = 0, mx: number | null = null
@@ -120,6 +107,7 @@ export default function LosPage() {
       if (error) throw error
       return ((data ?? []) as any[]).map(r => ({
         year_type: r.year_type as string, dim_key: r.dim_key as string,
+        alpha2: r.alpha2 == null ? null : String(r.alpha2),
         resv: Number(r.resv) || 0, rooms: Number(r.rooms) || 0, room_nights: Number(r.room_nights) || 0,
         alos: r.alos == null ? null : Number(r.alos),
         max_los: r.max_los == null ? null : Number(r.max_los),
@@ -235,6 +223,7 @@ export default function LosPage() {
   const displayRows = useMemo<DRow[]>(() => {
     const make = (name: string, level: DRow['level'], node: MarketSchemaRow | null, codes: string[]): DRow => ({
       name, level,
+      alpha2: sumBy.cy[codes[0]]?.alpha2 ?? null,
       bg: node ? node.bg_dark_color : (level === 'flat' ? '#15211D14' : null),
       font: node ? node.font_dark_color : null,
       isBold: node ? node.is_bold : true,
@@ -284,7 +273,7 @@ export default function LosPage() {
       for (const b of buckets) { cyBk[b.no] = (cyBk[b.no] ?? 0) + (r.cyBk[b.no] ?? 0); lyBk[b.no] = (lyBk[b.no] ?? 0) + (r.lyBk[b.no] ?? 0); cyBkResv[b.no] = (cyBkResv[b.no] ?? 0) + (r.cyBkResv[b.no] ?? 0); lyBkResv[b.no] = (lyBkResv[b.no] ?? 0) + (r.lyBkResv[b.no] ?? 0) }
     }
     return {
-      name: '합계', level: 'flat', bg: null, font: null, isBold: true,
+      name: '합계', alpha2: null, level: 'flat', bg: null, font: null, isBold: true,
       cy: { resv, rn, rooms, alos: rooms > 0 ? rn / rooms : null, max: mx },
       ly: { resv: lresv, rn: lrn, rooms: lrooms, alos: lrooms > 0 ? lrn / lrooms : null, max: null },
       cyBk, lyBk, cyBkResv, lyBkResv,
@@ -368,7 +357,7 @@ export default function LosPage() {
           fontSize: r.level === 'sub' ? 12 : 13, fontWeight: (isTotal ? true : r.isBold) ? 500 : 400,
           color: isTotal ? MINT : r.level === 'sub' ? '#9a9a9a' : r.level === 'flat' ? '#e8e8e8' : (r.font ?? '#e8e8e8'),
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', opacity: dim35,
-        }}>{dim === 'country' && flagOf(r.name) && <span style={{ marginRight: 6, fontSize: 13 }}>{flagOf(r.name)}</span>}{r.name}</div>
+        }}>{dim === 'country' && flagUrl(r.alpha2) && <img src={flagUrl(r.alpha2)} alt="" style={{ width: 14, height: 10.5, marginRight: 5, verticalAlign: 'middle', border: '0.5px solid rgba(255,255,255,0.15)', flexShrink: 0 }} />}{r.name}</div>
 
         {/* 박수별 예약 건수 */}
         <div style={{ flex: 7, minWidth: 0, display: 'flex', alignItems: 'center' }}>
@@ -413,7 +402,7 @@ export default function LosPage() {
       <div style={{ background: '#101410', border: '1px solid rgba(0,229,160,0.45)', borderLeft: '4px solid #00E5A0', borderRadius: 4, overflow: 'hidden', marginTop: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px 8px', borderBottom: '1px solid rgba(0,229,160,0.28)' }}>
           <div style={{ display: 'flex', alignItems: 'baseline' }}>
-            {dim === 'country' && flagOf(r.name) && <span style={{ fontSize: 14, marginRight: 6 }}>{flagOf(r.name)}</span>}
+            {dim === 'country' && flagUrl(r.alpha2) && <img src={flagUrl(r.alpha2)} alt="" style={{ width: 14, height: 10.5, marginRight: 6, verticalAlign: 'middle', border: '0.5px solid rgba(255,255,255,0.15)', flexShrink: 0 }} />}
             <span style={{ fontSize: 14, color: '#EAFFF7', fontWeight: 500 }}>{r.name}</span>
             <span style={{ fontSize: 11, color: '#6a6a6a', marginLeft: 6 }}>박수별 비중 · 단가</span>
           </div>
