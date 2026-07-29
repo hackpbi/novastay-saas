@@ -330,7 +330,7 @@ export default function LosPage() {
     const noData = r.cy.resv <= 0 && r.ly.resv <= 0
     const bg = isTotal ? 'rgba(0,229,160,0.07)' : (r.bg ?? 'transparent')
     const dim35 = !isTotal && noData ? 0.35 : 1
-    const rowOp = !isTotal && r.cy.rn <= 5 ? 0.55 : 1
+    const rowOp = !isTotal && r.cy.resv <= 4 ? 0.55 : 1
     const sel = selName === r.name
     const isHover = hoverKey === key
     const dAlos = (r.cy.alos != null && r.ly.alos != null) ? r.cy.alos - r.ly.alos : null
@@ -353,19 +353,17 @@ export default function LosPage() {
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', opacity: dim35,
         }}>{r.name}</div>
 
-        {/* 박수별 룸나잇 */}
-        <div style={{ flex: 8, minWidth: 0, display: 'flex', alignItems: 'center' }}>
+        {/* 박수별 예약 건수 */}
+        <div style={{ flex: 7, minWidth: 0, display: 'flex', alignItems: 'center' }}>
           {noData ? (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#333' }}>데이터 없음</div>
-          ) : (() => { const rowTot = buckets.reduce((s, b) => s + (r.cyBk[b.no] ?? 0), 0); return buckets.map(b => {
-            const c = r.cyBk[b.no] ?? 0, l = r.lyBk[b.no] ?? 0, d = c - l
-            const rv = r.cyBkResv[b.no] ?? 0
+          ) : (() => { const rowTot = buckets.reduce((s, b) => s + (r.cyBkResv[b.no] ?? 0), 0); return buckets.map(b => {
+            const rv = r.cyBkResv[b.no] ?? 0, lv = r.lyBkResv[b.no] ?? 0, d = rv - lv
             return (
               <div key={b.no} style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', whiteSpace: 'nowrap' }}>
-                <div style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingRight: 5, fontSize: 11.5, color: rv === 0 ? '#2b2b2b' : isTotal ? 'rgba(0,229,160,0.75)' : '#8f8f8f' }}>{rv === 0 ? '·' : rv}</div>
-                <div style={{ flex: 1.2, minWidth: 0, textAlign: 'right', fontSize: 14, color: c === 0 ? '#2b2b2b' : isTotal ? MINT : '#f2f2f2' }}>{c === 0 ? '·' : c}</div>
-                <div style={{ width: 30, flexShrink: 0, textAlign: 'center', fontSize: 10, color: c === 0 ? 'transparent' : isTotal ? 'rgba(0,229,160,0.75)' : '#6f6f6f' }}>{c === 0 ? '' : (c / rowTot * 100 < 1 ? '<1%' : `${Math.round(c / rowTot * 100)}%`)}</div>
-                <div style={{ flex: 1.1, minWidth: 0, textAlign: 'left', paddingLeft: 3, fontSize: 10, color: (c === 0 || d === 0) ? 'transparent' : d > 0 ? MINT : RED }}>{(c === 0 || d === 0) ? '' : d > 0 ? `▲${d}` : `▼${Math.abs(d)}`}</div>
+                <div style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingRight: 3, fontSize: 14, color: rv === 0 ? '#2b2b2b' : isTotal ? MINT : '#f2f2f2' }}>{rv === 0 ? '·' : rv}</div>
+                <div style={{ width: 32, flexShrink: 0, textAlign: 'center', fontSize: 10, color: rv === 0 ? 'transparent' : isTotal ? 'rgba(0,229,160,0.75)' : '#6f6f6f' }}>{rv === 0 ? '' : (rv / rowTot * 100 < 1 ? '<1%' : `${Math.round(rv / rowTot * 100)}%`)}</div>
+                <div style={{ flex: 1, minWidth: 0, textAlign: 'left', paddingLeft: 3, fontSize: 10, color: (rv === 0 || d === 0) ? 'transparent' : d > 0 ? MINT : RED }}>{(rv === 0 || d === 0) ? '' : d > 0 ? `▲${d}` : `▼${Math.abs(d)}`}</div>
               </div>
             )
           }) })()}
@@ -376,13 +374,14 @@ export default function LosPage() {
           <div style={{ width: 1, background: 'rgba(255,255,255,0.14)' }} />
         </div>
 
-        {/* 평균 · 최장 */}
-        <div style={{ flex: 2, minWidth: 0, display: 'flex', alignItems: 'center' }}>
+        {/* 룸나잇 · 평균 · 최장 */}
+        <div style={{ flex: 3, minWidth: 0, display: 'flex', alignItems: 'center' }}>
+          <div style={{ flex: 1.2, minWidth: 0, textAlign: 'right', fontSize: 13.5, color: isTotal ? MINT : '#dcdcdc' }}>{r.cy.rn > 0 ? r.cy.rn.toLocaleString() : <span style={{ color: '#3f3f3f' }}>–</span>}</div>
           <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 13, color: isTotal ? MINT : '#e8e8e8' }}>{r.cy.alos != null ? r.cy.alos.toFixed(2) : <span style={{ color: '#3f3f3f' }}>–</span>}</div>
           <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 11, color: dAlos == null ? '#3f3f3f' : dAlos > 0 ? MINT : dAlos < 0 ? RED : '#8a8a8a' }}>
             {dAlos == null ? '—' : `${dAlos > 0 ? '▲' : dAlos < 0 ? '▼' : ''}${Math.abs(dAlos).toFixed(2)}`}
           </div>
-          <div style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingRight: 4, fontSize: 12, color: '#8a8a8a' }}>{r.cy.max != null ? `${r.cy.max}박` : <span style={{ color: '#3f3f3f' }}>–</span>}</div>
+          <div style={{ flex: 0.9, minWidth: 0, textAlign: 'right', paddingRight: 4, fontSize: 12, color: '#8a8a8a' }}>{r.cy.max != null ? `${r.cy.max}박` : <span style={{ color: '#3f3f3f' }}>–</span>}</div>
         </div>
       </div>
     )
@@ -582,37 +581,37 @@ export default function LosPage() {
           {/* 헤더 1단 — 그룹명 */}
           <div style={{ display: 'flex', alignItems: 'flex-end' }}>
             <div style={{ width: 138, flexShrink: 0 }} />
-            <div style={{ flex: 8, boxShadow: OV, borderRadius: '4px 4px 0 0', textAlign: 'center', fontSize: 12, fontWeight: 500, color: MINT, padding: '4px 0' }}>박수별 룸나잇</div>
+            <div style={{ flex: 7, boxShadow: OV, borderRadius: '4px 4px 0 0', textAlign: 'center', fontSize: 12, fontWeight: 500, color: MINT, padding: '4px 0' }}>박수별 예약 건수</div>
             <div style={{ width: 10, flexShrink: 0 }} />
-            <div style={{ flex: 2, boxShadow: OV_B, borderRadius: '4px 4px 0 0', textAlign: 'center', fontSize: 12, fontWeight: 500, color: '#5B8DEF', padding: '4px 0' }}>평균 · 최장</div>
+            <div style={{ flex: 3, boxShadow: OV_B, borderRadius: '4px 4px 0 0', textAlign: 'center', fontSize: 12, fontWeight: 500, color: '#5B8DEF', padding: '4px 0' }}>룸나잇 · 평균 · 최장</div>
           </div>
           {/* 헤더 2단 — 구간 라벨 (가운데) */}
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <div style={{ width: 138, flexShrink: 0 }} />
-            <div style={{ flex: 8, minWidth: 0, display: 'flex', boxShadow: OV }}>
+            <div style={{ flex: 7, minWidth: 0, display: 'flex', boxShadow: OV }}>
               {buckets.map(b => <div key={b.no} style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: 11.5, color: '#9a9a9a' }}>{b.label}</div>)}
             </div>
             <div style={{ width: 10, flexShrink: 0 }} />
-            <div style={{ flex: 2, minWidth: 0, boxShadow: OV_B }} />
+            <div style={{ flex: 3, minWidth: 0, boxShadow: OV_B }} />
           </div>
           {/* 헤더 3단 — 예약/비중/전년비 증감 · ALOS/전년비/최장 */}
           <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 6, borderBottom: '1px solid rgba(0,229,160,0.28)' }}>
             <div style={{ width: 138, flexShrink: 0 }} />
-            <div style={{ flex: 8, minWidth: 0, display: 'flex', boxShadow: OV }}>
+            <div style={{ flex: 7, minWidth: 0, display: 'flex', boxShadow: OV }}>
               {buckets.map(b => (
                 <div key={b.no} style={{ flex: 1, minWidth: 0, display: 'flex' }}>
-                  <div style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingRight: 5, fontSize: 9.5, color: '#4d4d4d', whiteSpace: 'nowrap' }}>예약</div>
-                  <div style={{ flex: 1.2, minWidth: 0, textAlign: 'right', fontSize: 9.5, color: '#6a6a6a', whiteSpace: 'nowrap' }}>룸나잇</div>
-                  <div style={{ width: 30, flexShrink: 0, textAlign: 'center', fontSize: 9.5, color: '#5a5a5a', whiteSpace: 'nowrap' }}>비중</div>
-                  <div style={{ flex: 1.1, minWidth: 0, textAlign: 'left', paddingLeft: 3, fontSize: 9.5, color: '#4d4d4d', whiteSpace: 'nowrap' }}>전년비</div>
+                  <div style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingRight: 3, fontSize: 9.5, color: '#6a6a6a', whiteSpace: 'nowrap' }}>예약</div>
+                  <div style={{ width: 32, flexShrink: 0, textAlign: 'center', fontSize: 9.5, color: '#5a5a5a', whiteSpace: 'nowrap' }}>비중</div>
+                  <div style={{ flex: 1, minWidth: 0, textAlign: 'left', paddingLeft: 3, fontSize: 9.5, color: '#4d4d4d', whiteSpace: 'nowrap' }}>전년비</div>
                 </div>
               ))}
             </div>
             <div style={{ width: 10, flexShrink: 0 }} />
-            <div style={{ flex: 2, minWidth: 0, display: 'flex', boxShadow: OV_B }}>
+            <div style={{ flex: 3, minWidth: 0, display: 'flex', boxShadow: OV_B }}>
+              <div style={{ flex: 1.2, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#6a6a6a' }}>룸나잇</div>
               <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>ALOS</div>
               <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>전년비</div>
-              <div style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingRight: 4, fontSize: 10, color: '#5f5f5f' }}>최장</div>
+              <div style={{ flex: 0.9, minWidth: 0, textAlign: 'right', paddingRight: 4, fontSize: 10, color: '#5f5f5f' }}>최장</div>
             </div>
           </div>
 
