@@ -259,7 +259,7 @@ export default function LosPage() {
   const displayRows = useMemo<DRow[]>(() => {
     const make = (name: string, level: DRow['level'], node: MarketSchemaRow | null, codes: string[]): DRow => ({
       name, level,
-      alpha2: sumBy.cy[codes[0]]?.alpha2 ?? null,
+      alpha2: sumBy.cy[codes[0]]?.alpha2 ?? sumBy.ly[codes[0]]?.alpha2 ?? null,
       bg: node ? node.bg_dark_color : (level === 'flat' ? '#15211D14' : null),
       font: node ? node.font_dark_color : null,
       isBold: node ? node.is_bold : true,
@@ -285,8 +285,8 @@ export default function LosPage() {
       }
       return out
     }
-    const keys = [...new Set(sumRows.filter(r => r.year_type === 'cy').map(r => r.dim_key))]
-    const scored = keys.map(k => ({ key: k, rn: sumBy.cy[k]?.room_nights ?? 0 })).sort((a, b) => b.rn - a.rn)
+    const keys = [...new Set(sumRows.filter(r => r.year_type === 'cy' || r.year_type === 'ly').map(r => r.dim_key))]
+    const scored = keys.map(k => ({ key: k, rn: sumBy.cy[k]?.room_nights ?? 0, lyRn: sumBy.ly[k]?.room_nights ?? 0 })).sort((a, b) => b.rn - a.rn || b.lyRn - a.lyRn)
     if (dim === 'country') return scored.map(s => make(s.key, 'flat', null, [s.key]))
     const top15 = scored.slice(0, 15)
     const restKeys = scored.slice(15).map(s => s.key)
@@ -401,11 +401,12 @@ export default function LosPage() {
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#333' }}>데이터 없음</div>
           ) : (() => { const rowTot = buckets.reduce((s, b) => s + (r.cyBkResv[b.no] ?? 0), 0); return buckets.map(b => {
             const rv = r.cyBkResv[b.no] ?? 0, lv = r.lyBkResv[b.no] ?? 0, d = rv - lv
+            const dHide = dim === 'segment' ? (rv === 0 || d === 0) : (d === 0)
             return (
               <div key={b.no} style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', whiteSpace: 'nowrap' }}>
                 <div style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingRight: 3, fontSize: 14, color: rv === 0 ? '#2b2b2b' : isTotal ? MINT : '#f2f2f2' }}>{rv === 0 ? '·' : rv}</div>
                 <div style={{ width: 32, flexShrink: 0, textAlign: 'center', fontSize: 10, color: rv === 0 ? 'transparent' : isTotal ? 'rgba(0,229,160,0.75)' : '#6f6f6f' }}>{rv === 0 ? '' : (rv / rowTot * 100 < 1 ? '<1%' : `${Math.round(rv / rowTot * 100)}%`)}</div>
-                <div style={{ flex: 1, minWidth: 0, textAlign: 'left', paddingLeft: 3, fontSize: 10, color: (rv === 0 || d === 0) ? 'transparent' : d > 0 ? MINT : RED }}>{(rv === 0 || d === 0) ? '' : d > 0 ? `▲${d}` : `▼${Math.abs(d)}`}</div>
+                <div style={{ flex: 1, minWidth: 0, textAlign: 'left', paddingLeft: 3, fontSize: 10, color: dHide ? 'transparent' : d > 0 ? MINT : RED }}>{dHide ? '' : d > 0 ? `▲${d}` : `▼${Math.abs(d)}`}</div>
               </div>
             )
           }) })()}
