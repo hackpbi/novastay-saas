@@ -274,8 +274,8 @@ export default function LosCalendarPage() {
 
   return (
     <div>
-      {/* 페이지 헤더 — 월 네비 (LosPage 헤더 패턴) */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+      {/* 페이지 헤더 — 월 네비 + 세그먼트 필터 (LosPage 헤더 패턴) */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <button onClick={prevMonth} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 6 }}>
             <span style={{ fontSize: 26, color: MINT, lineHeight: 1 }}>‹</span><span style={{ fontSize: 9, color: MINT }}>이전</span>
@@ -286,16 +286,6 @@ export default function LosCalendarPage() {
           <button onClick={nextMonth} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 6 }}>
             <span style={{ fontSize: 26, color: MINT, lineHeight: 1 }}>›</span><span style={{ fontSize: 9, color: MINT }}>다음</span>
           </button>
-        </div>
-        <span style={{ fontSize: 11, color: '#5f5f5f' }}>도착일 기준 · HOU 제외</span>
-      </div>
-
-      {/* 상단 — 제목 + 설명 + 세그먼트 필터 */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 15, color: '#fff', fontWeight: 500 }}>박수별 도착일 분포 <span style={{ fontSize: 11, color: MINT, marginLeft: 4 }}>{selYear}년 {m1}월</span></div>
-          <div style={{ fontSize: 11, color: '#6b6b6b', marginTop: 3 }}>해당 날짜에 체크인하는 예약을 숙박일수로 나눈 것</div>
-          <div style={{ fontSize: 11, color: '#6b6b6b', marginTop: 1 }}>건수는 예약 단위 · 단가 단위 천원 · OCC와 하단 ADR은 전체 기준</div>
         </div>
         <div className="los-date-seg-filter-wrap" style={{ position: 'relative', flexShrink: 0 }}>
           <div onClick={() => { if (!segFilterOpen) setDraft(applied); setSegFilterOpen(o => !o) }} style={{ cursor: 'pointer', position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, padding: '7px 13px', borderRadius: 8, border: `0.5px solid rgba(255,255,255,${segFilterOpen ? 0.24 : 0.13})`, background: segFilterOpen ? 'rgba(255,255,255,0.05)' : 'transparent', color: segAllBtn ? '#8f8f8f' : '#dcdcdc', transition: 'all .15s' }}>
