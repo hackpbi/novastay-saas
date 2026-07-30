@@ -27,6 +27,15 @@ const DEFAULT_DEFS: BucketDef[] = [{ no: 1, min: 1, max: 1 }, { no: 2, min: 2, m
 // 단가 — 천원 단위 반올림, 콤마·단위 없음
 const fmtAdr = (v: number | null) => (v == null || v === 0) ? '-' : String(Math.round(v / 1000))
 const defLabel = (d: BucketDef) => d.max === null ? `${d.min}+` : `${d.min}박`
+// 문자열 'null' · 'NULL' · 'undefined' · 빈 문자열 · 공백만 있는 값을 모두 제거 (뷰의 NULLIF 방어와 동일 기준)
+const normEvent = (v: unknown): string | null => {
+  if (v == null) return null
+  const s = String(v).trim()
+  if (s === '' || s === '-') return null
+  const low = s.toLowerCase()
+  if (low === 'null' || low === 'undefined') return null
+  return s
+}
 
 // ─── 페이지 ─────────────────────────────────────────────────────────────────────
 export default function LosDateCalendar({ selYear, selMonth }: { selYear: number; selMonth: number }) {
@@ -179,7 +188,9 @@ export default function LosDateCalendar({ selYear, selMonth }: { selYear: number
     })
     const maxCnt = Math.max(...rows.map(r => r.resv), 1)
     const maxResv = Math.max(...rows.map(r => r.resv))
-    const evs = eventsByDate[dateStr] ?? []
+    const evList = (eventsByDate[dateStr] ?? []).map(normEvent).filter((v): v is string => v !== null)
+    const evt = evList[0] ?? null
+    const allEvents = evList.join(' · ')
 
     return (
       <div key={day} style={{ borderRadius: 12, overflow: 'hidden', background: '#121212' }}>
@@ -189,8 +200,8 @@ export default function LosDateCalendar({ selYear, selMonth }: { selYear: number
         <div style={{ padding: '8px 10px', background: isAlert ? '#16211e' : '#171717', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 3 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
             <span style={{ fontSize: 12, color: isFriSat ? RED : '#c8c8c8', flexShrink: 0 }}>{day}</span>
-            {evs.length > 0 && (
-              <span title={evs.join(', ')} style={{ fontSize: 11, color: '#C99A3E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{evs[0]}</span>
+            {evt && (
+              <span title={allEvents} style={{ fontSize: 11, color: '#C99A3E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{evt}</span>
             )}
           </div>
           <span style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: 11 }}>
