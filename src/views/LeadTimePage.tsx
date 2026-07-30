@@ -24,18 +24,22 @@ const OV_B = 'inset 0 0 0 999px rgba(91,141,239,0.05)'
 const CO = ['#00E5A0', '#0FB894', '#1C8A88', '#2A5D7C', '#5B8DEF']
 const bktColor = (i: number) => CO[Math.min(i, CO.length - 1)]
 
-// ─── 리드타임 그룹 막대 미니차트 레이아웃 (버킷당 논리 폭 BW) ────────────────────────
-const BW = 100                     // 버킷 하나의 논리 폭
-const BASELINE = 68
-const BAR_MAX = 46                 // 최대 막대 높이
-const VB_HEIGHT = 90
-const LY_PURPLE = 'rgba(167,139,250,0.5)'   // 전년(LY) 막대 — 전역 퍼플 계열
+// ─── 리드타임 그룹 막대 미니차트 레이아웃 (px 고정 — 막대·숫자는 HTML, 화살표만 SVG) ────
+const BAR_AREA_H = 30              // 막대 영역 높이
+const BAR_W      = 26             // 막대 하나의 폭
+const BAR_GAP    = 24             // LY·CY 막대 사이 간격 (화살표 공간)
+const ROW_H      = 62             // 행 전체 높이
+const FONT       = 11             // 모든 숫자 폰트 크기
+const BAR_MIN_H  = 2             // 0% 초과일 때 최소 막대 높이
+const LY_PURPLE  = 'rgba(167,139,250,0.5)'   // 전년(LY) 막대 — 전역 퍼플 계열
+const MIN_RESV_FOR_HIGHLIGHT = 10   // 최다 구간 민트 강조 최소 예약건수
+const ARROW_FLAT_PP = 0.5           // ±이 값 이내면 회색 수평선(화살촉 없음)
 
 // 유형 배지 — avg_lead 기준. 호텔 특성에 따라 조정될 임계값이므로 상수로 분리
 const LEAD_BADGE = [
-  { max: 14,       label: '임박 예약형',   bg: 'rgba(226,75,74,0.14)',  fg: '#F09595' },
-  { max: 45,       label: '중기 예약형',   bg: 'rgba(91,141,239,0.16)', fg: '#85B7EB' },
-  { max: Infinity, label: '장기 선예약형', bg: 'rgba(60,52,137,0.30)',  fg: '#AFA9EC' },
+  { max: 14,       label: '임박', bg: 'rgba(226,75,74,0.14)',  fg: '#F09595' },
+  { max: 45,       label: '중기', bg: 'rgba(91,141,239,0.16)', fg: '#85B7EB' },
+  { max: Infinity, label: '장기', bg: 'rgba(60,52,137,0.30)',  fg: '#AFA9EC' },
 ]
 
 // 국적 탭 — alpha-2 → 국기 이미지 URL (Windows 이모지 미지원으로 flagcdn 사용)
@@ -406,66 +410,84 @@ export default function LeadTimePage() {
     )
   }
 
-  // ─── 버킷 그룹 막대 미니차트 (행당 SVG 1개, 버킷 수만큼 viewBox 폭 동적) ───────────────
+  // ─── 버킷 그룹 막대 미니차트 (막대·숫자 = HTML, 화살표만 px 고정 SVG) ─────────────────
   const renderBucketChart = (r: DRow, rowKey: string) => {
     const cyTot = buckets.reduce((s, b) => s + (r.cyBkResv[b.no] ?? 0), 0)
     const lyTot = buckets.reduce((s, b) => s + (r.lyBkResv[b.no] ?? 0), 0)
     const hasLy = buckets.some(b => (r.lyBkResv[b.no] ?? 0) > 0)
-    // 최다 비중(cy) 구간 → 밝은 민트
+    const canHighlight = cyTot >= MIN_RESV_FOR_HIGHLIGHT   // 표본 적으면 최다 구간 강조 억제
+    // 최다 비중(cy) 구간
     let maxBucketNo = -1, maxBucketPct = -1
     for (const b of buckets) {
       const cp = cyTot > 0 ? (r.cyBkResv[b.no] ?? 0) / cyTot * 100 : 0
       if (cp > maxBucketPct) { maxBucketPct = cp; maxBucketNo = b.no }
     }
-    const vbWidth = buckets.length * BW
-    const barH = (pct: number) => pct > 0 ? Math.max((pct / maxPct) * BAR_MAX, 2) : 0
-    const barY = (pct: number) => BASELINE - barH(pct)
+    // 화면 전체 최대 비중(maxPct) 기준 통일 스케일 (행별 정규화 아님)
+    const barH = (pct: number) => pct > 0 ? Math.max((pct / maxPct) * BAR_AREA_H, BAR_MIN_H) : 0
     const cyColor = (no: number, pct: number) =>
-      no === maxBucketNo ? '#00E5A0' : pct >= 20 ? '#1D9E75' : '#0F6E56'
+      (no === maxBucketNo && canHighlight) ? '#00E5A0' : pct >= 20 ? '#1D9E75' : '#0F6E56'
+    // 막대 컬럼 (건수 라벨 위 + 막대 아래)
+    const barCol = (resv: number, pct: number, color: string, labelColor: string) => (
+      <div style={{ width: BAR_W, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center' }}>
+        <span style={{ fontSize: FONT, lineHeight: 1, color: labelColor, marginBottom: 1 }}>{resv}</span>
+        <div style={{ width: BAR_W, height: barH(pct), background: color, borderRadius: '1px 1px 0 0' }} />
+      </div>
+    )
+    const spacer = (w: number) => <div style={{ width: w, flexShrink: 0 }} />
+    const pctLabel = (pct: number, color: string) =>
+      <span style={{ width: BAR_W, textAlign: 'center', fontSize: FONT, lineHeight: 1, color }}>{Math.round(pct)}%</span>
     return (
-      <svg viewBox={`0 0 ${vbWidth} ${VB_HEIGHT}`} width="100%" style={{ display: 'block' }}
-        role="img" aria-label={`${r.name} 리드타임 구간별 예약 건수와 비중`}>
-        <defs>
-          <marker id={`arrUp-${rowKey}`} viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="#00E5A0" /></marker>
-          <marker id={`arrDn-${rowKey}`} viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="#E24B4A" /></marker>
-        </defs>
-        <line x1={0} y1={BASELINE} x2={vbWidth} y2={BASELINE} stroke="#3a3a3a" strokeWidth={1} />
-        {buckets.map((b, i) => {
+      <div style={{ display: 'flex', width: '100%' }} role="img" aria-label={`${r.name} 리드타임 구간별 예약 건수와 비중`}>
+        {buckets.map(b => {
           const cyResv = r.cyBkResv[b.no] ?? 0, lyResv = r.lyBkResv[b.no] ?? 0
           const cyPct = cyTot > 0 ? cyResv / cyTot * 100 : 0
           const lyPct = lyTot > 0 ? lyResv / lyTot * 100 : 0
-          const cyBarX = hasLy ? i * BW + 62 : i * BW + 37
-          const cyCx   = hasLy ? i * BW + 75 : i * BW + 50
-          const lyBarX = i * BW + 12
-          const lyCx   = i * BW + 25
-          const isMax  = b.no === maxBucketNo
-          const diff   = cyPct - lyPct
-          const showArrow = hasLy && cyPct > 0 && lyPct > 0
-          const flat = Math.abs(diff) <= 0.5
+          const empty = cyResv === 0 && lyResv === 0
+          const isMax = b.no === maxBucketNo
+          const diff  = cyPct - lyPct
+          const flat  = Math.abs(diff) <= ARROW_FLAT_PP
+          const arrowColor = flat ? '#6b6b6b' : diff > 0 ? '#00E5A0' : '#E24B4A'
+          const showArrow  = hasLy && cyPct > 0 && lyPct > 0
+          const cyLabelColor = (isMax && canHighlight) ? '#00E5A0' : '#e8e8e8'
           return (
-            <g key={b.no}>
-              {hasLy && lyPct > 0 && (
-                <>
-                  <rect x={lyBarX} y={barY(lyPct)} width={26} height={barH(lyPct)} rx={1} fill={LY_PURPLE} />
-                  <text x={lyCx} y={barY(lyPct) - 5} textAnchor="middle" fontSize={11} fill="#6b5f96">{lyResv}</text>
-                  <text x={lyCx} y={84} textAnchor="middle" fontSize={11} fill="#8579b8">{Math.round(lyPct)}%</text>
-                </>
-              )}
-              {cyPct > 0 && (
-                <>
-                  <rect x={cyBarX} y={barY(cyPct)} width={26} height={barH(cyPct)} rx={1} fill={cyColor(b.no, cyPct)} />
-                  <text x={cyCx} y={barY(cyPct) - 5} textAnchor="middle" fontSize={11} fill="#8f8f8f">{cyResv}</text>
-                  <text x={cyCx} y={84} textAnchor="middle" fontSize={11} fill={isMax ? '#00E5A0' : '#e8e8e8'}>{Math.round(cyPct)}%</text>
-                </>
-              )}
-              {showArrow && (flat
-                ? <line x1={i * BW + 40} y1={barY(lyPct)} x2={i * BW + 60} y2={barY(lyPct)} stroke="#6b6b6b" strokeWidth={1.5} />
-                : <line x1={i * BW + 40} y1={barY(lyPct)} x2={i * BW + 60} y2={barY(cyPct)} stroke={diff > 0 ? '#00E5A0' : '#E24B4A'} strokeWidth={1.5} markerEnd={`url(#${diff > 0 ? `arrUp-${rowKey}` : `arrDn-${rowKey}`})`} />
-              )}
-            </g>
+            <div key={b.no} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+              {/* 막대 영역 — 기준선(borderBottom)이 버킷을 관통 */}
+              <div style={{ height: BAR_AREA_H, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', borderBottom: '1px solid #3a3a3a' }}>
+                {empty ? (
+                  <span style={{ fontSize: FONT, color: '#3f3f3f', alignSelf: 'center' }}>-</span>
+                ) : !hasLy ? (
+                  cyPct > 0 ? barCol(cyResv, cyPct, cyColor(b.no, cyPct), '#8f8f8f') : spacer(BAR_W)
+                ) : (
+                  <>
+                    {lyPct > 0 ? barCol(lyResv, lyPct, LY_PURPLE, '#6b5f96') : spacer(BAR_W)}
+                    {showArrow ? (
+                      <svg width={BAR_GAP} height={BAR_AREA_H} viewBox={`0 0 ${BAR_GAP} ${BAR_AREA_H}`} style={{ display: 'block', flexShrink: 0 }} aria-hidden="true">
+                        <defs>
+                          <marker id={`arr-${rowKey}-${b.no}`} viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill={arrowColor} /></marker>
+                        </defs>
+                        <line x1={2} y1={BAR_AREA_H - barH(lyPct)} x2={BAR_GAP - 2} y2={BAR_AREA_H - barH(cyPct)} stroke={arrowColor} strokeWidth={1.5} markerEnd={flat ? undefined : `url(#arr-${rowKey}-${b.no})`} />
+                      </svg>
+                    ) : spacer(BAR_GAP)}
+                    {cyPct > 0 ? barCol(cyResv, cyPct, cyColor(b.no, cyPct), '#8f8f8f') : spacer(BAR_W)}
+                  </>
+                )}
+              </div>
+              {/* 비중 행 (기준선 아래) */}
+              <div style={{ paddingTop: 3, display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
+                {empty ? null : !hasLy ? (
+                  cyPct > 0 ? pctLabel(cyPct, cyLabelColor) : spacer(BAR_W)
+                ) : (
+                  <>
+                    {lyPct > 0 ? pctLabel(lyPct, '#8579b8') : spacer(BAR_W)}
+                    {spacer(BAR_GAP)}
+                    {cyPct > 0 ? pctLabel(cyPct, cyLabelColor) : spacer(BAR_W)}
+                  </>
+                )}
+              </div>
+            </div>
           )
         })}
-      </svg>
+      </div>
     )
   }
 
@@ -486,7 +508,7 @@ export default function LeadTimePage() {
     return (
       <div key={key} onClick={() => setSelName(prev => prev === r.name ? null : r.name)}
         onMouseEnter={() => setHoverKey(key)} onMouseLeave={() => setHoverKey(null)} style={{
-        display: 'flex', alignItems: 'stretch', minHeight: 38, cursor: 'pointer',
+        display: 'flex', alignItems: 'stretch', height: ROW_H, cursor: 'pointer',
         opacity: rowOp, background: bg,
         boxShadow: isHover ? 'inset 0 0 0 999px rgba(0,229,160,0.07)' : undefined,
         transition: 'box-shadow 0.12s ease',
@@ -504,7 +526,7 @@ export default function LeadTimePage() {
             color: isTotal ? MINT : r.level === 'sub' ? '#9a9a9a' : r.level === 'flat' ? '#e8e8e8' : (r.font ?? '#e8e8e8'),
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>{dim === 'country' && flagUrl(r.alpha2) && <img src={flagUrl(r.alpha2)} alt="" style={{ width: 14, height: 10.5, marginRight: 5, verticalAlign: 'middle', border: '0.5px solid rgba(255,255,255,0.15)', flexShrink: 0 }} />}{r.name}</div>
-          {badge && <span style={{ alignSelf: 'flex-start', fontSize: 11, padding: '2px 7px', borderRadius: 4, background: badge.bg, color: badge.fg, whiteSpace: 'nowrap' }}>{badge.label}</span>}
+          {badge && <span style={{ alignSelf: 'flex-start', fontSize: 11, padding: '1px 6px', borderRadius: 3, background: badge.bg, color: badge.fg, whiteSpace: 'nowrap' }}>{badge.label}</span>}
         </div>
 
         {/* 리드타임 구간별 예약 건수 — 그룹 막대 미니차트 */}
@@ -811,15 +833,7 @@ export default function LeadTimePage() {
           {/* 헤더 3단 — 예약/비중/전년비 증감 · 리드/전년비/최장 */}
           <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 6, borderBottom: '1px solid rgba(0,229,160,0.28)' }}>
             <div style={{ width: 138, flexShrink: 0 }} />
-            <div style={{ flex: 7, minWidth: 0, display: 'flex', boxShadow: OV }}>
-              {buckets.map(b => (
-                <div key={b.no} style={{ flex: 1, minWidth: 0, display: 'flex' }}>
-                  <div style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingRight: 3, fontSize: 9.5, color: '#6a6a6a', whiteSpace: 'nowrap' }}>예약</div>
-                  <div style={{ width: 32, flexShrink: 0, textAlign: 'center', fontSize: 9.5, color: '#5a5a5a', whiteSpace: 'nowrap' }}>비중</div>
-                  <div style={{ flex: 1, minWidth: 0, textAlign: 'left', paddingLeft: 3, fontSize: 9.5, color: '#4d4d4d', whiteSpace: 'nowrap' }}>전년비</div>
-                </div>
-              ))}
-            </div>
+            <div style={{ flex: 7, minWidth: 0, boxShadow: OV }} />
             <div style={{ width: 10, flexShrink: 0 }} />
             <div style={{ flex: 3, minWidth: 0, display: 'flex', boxShadow: OV_B }}>
               <div style={{ flex: 1.2, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#6a6a6a' }}>룸나잇</div>
