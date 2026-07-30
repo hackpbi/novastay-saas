@@ -16,7 +16,7 @@ type BucketDef = { no: number; min: number; max: number | null }
 const MINT = '#00E5A0'
 const RED  = '#E24B4A'
 const pad = (n: number) => String(n).padStart(2, '0')
-const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일']   // index 4·5 = 금·토
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']   // 일요일 시작 · index 5·6 = 금·토
 const BAR_COLORS = ['#00E5A0', '#1D9E75', '#0F6E56', '#5B8DEF']   // 1박 / 2박 / 3박 / 4+
 // MLOS 검토 대상 판정 — 상수로 분리
 const ALERT_OCC = 85      // OCC 이상
@@ -38,11 +38,18 @@ const normEvent = (v: unknown): string | null => {
 }
 
 // ─── 페이지 ─────────────────────────────────────────────────────────────────────
-export default function LosDateCalendar({ selYear, selMonth }: { selYear: number; selMonth: number }) {
+export default function LosCalendarPage() {
   const { currentHotel } = useHotel()
   const hotelId = currentHotel?.id
   const { otbDate } = useDateContext()
   const { data: schema = [] } = useMarketSchema()
+
+  // 기본값 = KST 당월 (selMonth 는 0-based)
+  const kst = new Date().toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })  // 'YYYY-MM-DD'
+  const [selYear, setSelYear]   = useState(Number(kst.slice(0, 4)))
+  const [selMonth, setSelMonth] = useState(Number(kst.slice(5, 7)) - 1)
+  const prevMonth = () => { if (selMonth === 0) { setSelYear(y => y - 1); setSelMonth(11) } else setSelMonth(m => m - 1) }
+  const nextMonth = () => { if (selMonth === 11) { setSelYear(y => y + 1); setSelMonth(0) } else setSelMonth(m => m + 1) }
 
   const m1 = selMonth + 1
   const fromDate = `${selYear}-${pad(m1)}-01`
@@ -250,8 +257,8 @@ export default function LosDateCalendar({ selYear, selMonth }: { selYear: number
     )
   }
 
-  // ─── 그리드 구성 (월요일 시작) ─────────────────────────────────────────────────────
-  const leading = (new Date(selYear, selMonth, 1).getDay() + 6) % 7
+  // ─── 그리드 구성 (일요일 시작) ─────────────────────────────────────────────────────
+  const leading = new Date(selYear, selMonth, 1).getDay()   // 0=일 … 6=토
   const total = leading + daysInMonth
   const trailing = (7 - (total % 7)) % 7
 
@@ -267,6 +274,22 @@ export default function LosDateCalendar({ selYear, selMonth }: { selYear: number
 
   return (
     <div>
+      {/* 페이지 헤더 — 월 네비 (LosPage 헤더 패턴) */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <button onClick={prevMonth} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 6 }}>
+            <span style={{ fontSize: 26, color: MINT, lineHeight: 1 }}>‹</span><span style={{ fontSize: 9, color: MINT }}>이전</span>
+          </button>
+          <span style={{ fontSize: 19, fontWeight: 500, color: '#e8e8e8', letterSpacing: '0.04em' }}>
+            LOS Calendar <span style={{ color: MINT }}>{selYear}년 {m1}월</span>
+          </span>
+          <button onClick={nextMonth} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 6 }}>
+            <span style={{ fontSize: 26, color: MINT, lineHeight: 1 }}>›</span><span style={{ fontSize: 9, color: MINT }}>다음</span>
+          </button>
+        </div>
+        <span style={{ fontSize: 11, color: '#5f5f5f' }}>도착일 기준 · HOU 제외</span>
+      </div>
+
       {/* 상단 — 제목 + 설명 + 세그먼트 필터 */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
         <div style={{ minWidth: 0 }}>
@@ -323,7 +346,7 @@ export default function LosDateCalendar({ selYear, selMonth }: { selYear: number
           {/* 요일 헤더 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 5, marginBottom: 5 }}>
             {WEEKDAYS.map((w, i) => (
-              <div key={w} style={{ textAlign: 'center', fontSize: 11, color: (i === 4 || i === 5) ? '#8a5a58' : '#5f5f5f' }}>{w}</div>
+              <div key={w} style={{ textAlign: 'center', fontSize: 11, color: (i === 5 || i === 6) ? '#8a5a58' : '#5f5f5f' }}>{w}</div>
             ))}
           </div>
           {/* 달력 그리드 */}
