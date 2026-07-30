@@ -24,6 +24,20 @@ const OV_B = 'inset 0 0 0 999px rgba(91,141,239,0.05)'
 const CO = ['#00E5A0', '#0FB894', '#1C8A88', '#2A5D7C', '#5B8DEF']
 const bktColor = (i: number) => CO[Math.min(i, CO.length - 1)]
 
+// ─── 리드타임 그룹 막대 미니차트 레이아웃 (버킷당 논리 폭 BW) ────────────────────────
+const BW = 100                     // 버킷 하나의 논리 폭
+const BASELINE = 68
+const BAR_MAX = 46                 // 최대 막대 높이
+const VB_HEIGHT = 90
+const LY_PURPLE = 'rgba(167,139,250,0.5)'   // 전년(LY) 막대 — 전역 퍼플 계열
+
+// 유형 배지 — avg_lead 기준. 호텔 특성에 따라 조정될 임계값이므로 상수로 분리
+const LEAD_BADGE = [
+  { max: 14,       label: '임박 예약형',   bg: 'rgba(226,75,74,0.14)',  fg: '#F09595' },
+  { max: 45,       label: '중기 예약형',   bg: 'rgba(91,141,239,0.16)', fg: '#85B7EB' },
+  { max: Infinity, label: '장기 선예약형', bg: 'rgba(60,52,137,0.30)',  fg: '#AFA9EC' },
+]
+
 // 국적 탭 — alpha-2 → 국기 이미지 URL (Windows 이모지 미지원으로 flagcdn 사용)
 const flagUrl = (a2?: string | null) =>
   a2 && a2.length === 2 ? `https://flagcdn.com/16x12/${a2.toLowerCase()}.png` : ''
@@ -327,6 +341,22 @@ export default function LeadTimePage() {
     }
   }, [displayRows, buckets, bktAdrCy, bktAdrLy])
 
+  // ─── 미니차트 스케일 — 화면 전체(모든 행 × 버킷 × cy/ly) 최대 비중으로 통일 (행별 정규화 아님) ─
+  const maxPct = useMemo(() => {
+    let m = 1
+    for (const r of [...displayRows, totalRow]) {
+      const cyTot = buckets.reduce((s, b) => s + (r.cyBkResv[b.no] ?? 0), 0)
+      const lyTot = buckets.reduce((s, b) => s + (r.lyBkResv[b.no] ?? 0), 0)
+      for (const b of buckets) {
+        const cp = cyTot > 0 ? (r.cyBkResv[b.no] ?? 0) / cyTot * 100 : 0
+        const lp = lyTot > 0 ? (r.lyBkResv[b.no] ?? 0) / lyTot * 100 : 0
+        if (cp > m) m = cp
+        if (lp > m) m = lp
+      }
+    }
+    return m
+  }, [displayRows, totalRow, buckets])
+
   // ─── 도넛 ───────────────────────────────────────────────────────────────────────
   const renderDonut = (bk: Record<number, number>, isCy: boolean) => {
     const total = buckets.reduce((s, b) => s + (bk[b.no] ?? 0), 0)
@@ -376,6 +406,69 @@ export default function LeadTimePage() {
     )
   }
 
+  // ─── 버킷 그룹 막대 미니차트 (행당 SVG 1개, 버킷 수만큼 viewBox 폭 동적) ───────────────
+  const renderBucketChart = (r: DRow, rowKey: string) => {
+    const cyTot = buckets.reduce((s, b) => s + (r.cyBkResv[b.no] ?? 0), 0)
+    const lyTot = buckets.reduce((s, b) => s + (r.lyBkResv[b.no] ?? 0), 0)
+    const hasLy = buckets.some(b => (r.lyBkResv[b.no] ?? 0) > 0)
+    // 최다 비중(cy) 구간 → 밝은 민트
+    let maxBucketNo = -1, maxBucketPct = -1
+    for (const b of buckets) {
+      const cp = cyTot > 0 ? (r.cyBkResv[b.no] ?? 0) / cyTot * 100 : 0
+      if (cp > maxBucketPct) { maxBucketPct = cp; maxBucketNo = b.no }
+    }
+    const vbWidth = buckets.length * BW
+    const barH = (pct: number) => pct > 0 ? Math.max((pct / maxPct) * BAR_MAX, 2) : 0
+    const barY = (pct: number) => BASELINE - barH(pct)
+    const cyColor = (no: number, pct: number) =>
+      no === maxBucketNo ? '#00E5A0' : pct >= 20 ? '#1D9E75' : '#0F6E56'
+    return (
+      <svg viewBox={`0 0 ${vbWidth} ${VB_HEIGHT}`} width="100%" style={{ display: 'block' }}
+        role="img" aria-label={`${r.name} 리드타임 구간별 예약 건수와 비중`}>
+        <defs>
+          <marker id={`arrUp-${rowKey}`} viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="#00E5A0" /></marker>
+          <marker id={`arrDn-${rowKey}`} viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="#E24B4A" /></marker>
+        </defs>
+        <line x1={0} y1={BASELINE} x2={vbWidth} y2={BASELINE} stroke="#3a3a3a" strokeWidth={1} />
+        {buckets.map((b, i) => {
+          const cyResv = r.cyBkResv[b.no] ?? 0, lyResv = r.lyBkResv[b.no] ?? 0
+          const cyPct = cyTot > 0 ? cyResv / cyTot * 100 : 0
+          const lyPct = lyTot > 0 ? lyResv / lyTot * 100 : 0
+          const cyBarX = hasLy ? i * BW + 62 : i * BW + 37
+          const cyCx   = hasLy ? i * BW + 75 : i * BW + 50
+          const lyBarX = i * BW + 12
+          const lyCx   = i * BW + 25
+          const isMax  = b.no === maxBucketNo
+          const diff   = cyPct - lyPct
+          const showArrow = hasLy && cyPct > 0 && lyPct > 0
+          const flat = Math.abs(diff) <= 0.5
+          return (
+            <g key={b.no}>
+              {hasLy && lyPct > 0 && (
+                <>
+                  <rect x={lyBarX} y={barY(lyPct)} width={26} height={barH(lyPct)} rx={1} fill={LY_PURPLE} />
+                  <text x={lyCx} y={barY(lyPct) - 5} textAnchor="middle" fontSize={11} fill="#6b5f96">{lyResv}</text>
+                  <text x={lyCx} y={84} textAnchor="middle" fontSize={11} fill="#8579b8">{Math.round(lyPct)}%</text>
+                </>
+              )}
+              {cyPct > 0 && (
+                <>
+                  <rect x={cyBarX} y={barY(cyPct)} width={26} height={barH(cyPct)} rx={1} fill={cyColor(b.no, cyPct)} />
+                  <text x={cyCx} y={barY(cyPct) - 5} textAnchor="middle" fontSize={11} fill="#8f8f8f">{cyResv}</text>
+                  <text x={cyCx} y={84} textAnchor="middle" fontSize={11} fill={isMax ? '#00E5A0' : '#e8e8e8'}>{Math.round(cyPct)}%</text>
+                </>
+              )}
+              {showArrow && (flat
+                ? <line x1={i * BW + 40} y1={barY(lyPct)} x2={i * BW + 60} y2={barY(lyPct)} stroke="#6b6b6b" strokeWidth={1.5} />
+                : <line x1={i * BW + 40} y1={barY(lyPct)} x2={i * BW + 60} y2={barY(cyPct)} stroke={diff > 0 ? '#00E5A0' : '#E24B4A'} strokeWidth={1.5} markerEnd={`url(#${diff > 0 ? `arrUp-${rowKey}` : `arrDn-${rowKey}`})`} />
+              )}
+            </g>
+          )
+        })}
+      </svg>
+    )
+  }
+
   // ─── 행 렌더 ───────────────────────────────────────────────────────────────────
   function renderRow(r: DRow, key: React.Key, isTotal = false) {
     const noData = r.cy.resv <= 0 && r.ly.resv <= 0
@@ -385,10 +478,15 @@ export default function LeadTimePage() {
     const sel = selName === r.name
     const isHover = hoverKey === key
     const dLead = (r.cy.avgLead != null && r.ly.avgLead != null) ? r.cy.avgLead - r.ly.avgLead : null
+    const badge = !isTotal && r.cy.avgLead != null
+      ? LEAD_BADGE.find(t => (r.cy.avgLead as number) <= t.max) ?? null
+      : null
+    const mixDen = totalRow.cy.rn
+    const mix = mixDen > 0 ? Math.round(r.cy.rn / mixDen * 100) : null
     return (
       <div key={key} onClick={() => setSelName(prev => prev === r.name ? null : r.name)}
         onMouseEnter={() => setHoverKey(key)} onMouseLeave={() => setHoverKey(null)} style={{
-        display: 'flex', alignItems: 'stretch', height: 38, cursor: 'pointer',
+        display: 'flex', alignItems: 'stretch', minHeight: 38, cursor: 'pointer',
         opacity: rowOp, background: bg,
         boxShadow: isHover ? 'inset 0 0 0 999px rgba(0,229,160,0.07)' : undefined,
         transition: 'box-shadow 0.12s ease',
@@ -397,28 +495,25 @@ export default function LeadTimePage() {
       }}>
         {/* 구분 */}
         <div style={{
-          width: 138, flexShrink: 0, display: 'flex', alignItems: 'center', boxSizing: 'border-box',
-          paddingLeft: r.level === 'sub' ? 32 : 16, paddingRight: 8,
-          fontSize: r.level === 'sub' ? 12 : 13, fontWeight: (isTotal ? true : r.isBold) ? 500 : 400,
-          color: isTotal ? MINT : r.level === 'sub' ? '#9a9a9a' : r.level === 'flat' ? '#e8e8e8' : (r.font ?? '#e8e8e8'),
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', opacity: dim35,
-        }}>{dim === 'country' && flagUrl(r.alpha2) && <img src={flagUrl(r.alpha2)} alt="" style={{ width: 14, height: 10.5, marginRight: 5, verticalAlign: 'middle', border: '0.5px solid rgba(255,255,255,0.15)', flexShrink: 0 }} />}{r.name}</div>
+          width: 138, flexShrink: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', boxSizing: 'border-box',
+          paddingLeft: r.level === 'sub' ? 32 : 16, paddingRight: 8, gap: 3, opacity: dim35,
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', maxWidth: '100%',
+            fontSize: r.level === 'sub' ? 12 : 13, fontWeight: (isTotal ? true : r.isBold) ? 500 : 400,
+            color: isTotal ? MINT : r.level === 'sub' ? '#9a9a9a' : r.level === 'flat' ? '#e8e8e8' : (r.font ?? '#e8e8e8'),
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>{dim === 'country' && flagUrl(r.alpha2) && <img src={flagUrl(r.alpha2)} alt="" style={{ width: 14, height: 10.5, marginRight: 5, verticalAlign: 'middle', border: '0.5px solid rgba(255,255,255,0.15)', flexShrink: 0 }} />}{r.name}</div>
+          {badge && <span style={{ alignSelf: 'flex-start', fontSize: 11, padding: '2px 7px', borderRadius: 4, background: badge.bg, color: badge.fg, whiteSpace: 'nowrap' }}>{badge.label}</span>}
+        </div>
 
-        {/* 리드타임 구간별 예약 건수 */}
+        {/* 리드타임 구간별 예약 건수 — 그룹 막대 미니차트 */}
         <div style={{ flex: 7, minWidth: 0, display: 'flex', alignItems: 'center' }}>
           {noData ? (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#333' }}>데이터 없음</div>
-          ) : (() => { const rowTot = buckets.reduce((s, b) => s + (r.cyBkResv[b.no] ?? 0), 0); return buckets.map(b => {
-            const rv = r.cyBkResv[b.no] ?? 0, lv = r.lyBkResv[b.no] ?? 0, d = rv - lv
-            const dHide = dim === 'segment' ? (rv === 0 || d === 0) : (d === 0)
-            return (
-              <div key={b.no} style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', whiteSpace: 'nowrap' }}>
-                <div style={{ flex: 1, minWidth: 0, textAlign: 'right', paddingRight: 3, fontSize: 14, color: rv === 0 ? '#2b2b2b' : isTotal ? MINT : '#f2f2f2' }}>{rv === 0 ? '·' : rv}</div>
-                <div style={{ width: 32, flexShrink: 0, textAlign: 'center', fontSize: 10, color: rv === 0 ? 'transparent' : isTotal ? 'rgba(0,229,160,0.75)' : '#6f6f6f' }}>{rv === 0 ? '' : (rv / rowTot * 100 < 1 ? '<1%' : `${Math.round(rv / rowTot * 100)}%`)}</div>
-                <div style={{ flex: 1, minWidth: 0, textAlign: 'left', paddingLeft: 3, fontSize: 10, color: dHide ? 'transparent' : d > 0 ? MINT : RED }}>{dHide ? '' : d > 0 ? `▲${d}` : `▼${Math.abs(d)}`}</div>
-              </div>
-            )
-          }) })()}
+          ) : (
+            <div style={{ flex: 1, minWidth: 0 }}>{renderBucketChart(r, String(key))}</div>
+          )}
         </div>
 
         {/* 간격 + 세로 구분선 */}
@@ -426,9 +521,10 @@ export default function LeadTimePage() {
           <div style={{ width: 1, background: 'rgba(255,255,255,0.14)' }} />
         </div>
 
-        {/* 룸나잇 · 평균 · 최장 */}
+        {/* 룸나잇 · Mix · 평균 · 최장 */}
         <div style={{ flex: 3, minWidth: 0, display: 'flex', alignItems: 'center' }}>
           <div style={{ flex: 1.2, minWidth: 0, textAlign: 'right', fontSize: 13.5, color: isTotal ? MINT : '#dcdcdc' }}>{r.cy.rn > 0 ? r.cy.rn.toLocaleString() : <span style={{ color: '#3f3f3f' }}>–</span>}</div>
+          <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 12, color: isTotal ? MINT : '#a8a8a8' }}>{mix != null && r.cy.rn > 0 ? `${mix}%` : <span style={{ color: '#3f3f3f' }}>–</span>}</div>
           <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 13, color: isTotal ? MINT : '#e8e8e8' }}>{r.cy.avgLead != null ? r.cy.avgLead.toFixed(1) : <span style={{ color: '#3f3f3f' }}>–</span>}</div>
           <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 11, color: dLead == null ? '#3f3f3f' : dLead > 0 ? MINT : dLead < 0 ? RED : '#8a8a8a' }}>
             {dLead == null ? '—' : `${dLead > 0 ? '▲' : dLead < 0 ? '▼' : ''}${Math.abs(dLead).toFixed(1)}`}
@@ -727,6 +823,7 @@ export default function LeadTimePage() {
             <div style={{ width: 10, flexShrink: 0 }} />
             <div style={{ flex: 3, minWidth: 0, display: 'flex', boxShadow: OV_B }}>
               <div style={{ flex: 1.2, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#6a6a6a' }}>룸나잇</div>
+              <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>Mix</div>
               <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>리드</div>
               <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>전년비</div>
               <div style={{ flex: 0.9, minWidth: 0, textAlign: 'right', paddingRight: 4, fontSize: 10, color: '#5f5f5f' }}>최장</div>
@@ -737,6 +834,7 @@ export default function LeadTimePage() {
           {renderRow(totalRow, 'total', true)}
           </div>
 
+          <div style={{ fontSize: 11, color: '#6b6b6b', marginTop: 10 }}>막대 위 = 예약 건수 · 막대 아래 = 비중 · 화살표 = 비중 증감 · 밝은 민트 = 최다 예약 구간</div>
           <div style={{ fontSize: 11, color: '#5a5a5a', marginTop: 10 }}>도착일 기준 집계 · 예약 생성일 기준 리드타임</div>
 
           {panelRow && renderPanel(panelRow)}
