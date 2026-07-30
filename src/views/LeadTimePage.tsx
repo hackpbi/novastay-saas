@@ -106,8 +106,7 @@ export default function LeadTimePage() {
   const [accSearch, setAccSearch] = useState('')
   const [selName, setSelName] = useState<string | null>(null)
   const [hoverKey, setHoverKey] = useState<React.Key | null>(null)
-  const [cardParent, setCardParent] = useState<string | null>(null)   // 세그먼트 카드 드릴다운
-  useEffect(() => { setCardParent(null); setSelName(null) }, [dim])
+  useEffect(() => { setSelName(null) }, [dim])
 
   const segKey = dim === 'segment' ? null : applied.slice().sort().join(',')
   const p_segments = dim === 'segment' || applied.length === 0 ? null : applied
@@ -352,22 +351,21 @@ export default function LeadTimePage() {
       cyAdr: aggBktAdr(bktAdrCy, buckets, codes),
       lyAdr: aggBktAdr(bktAdrLy, buckets, codes),
     })
-    const topCards: { key: string; row: DRow; hasChildren: boolean }[] = []
-    const childrenByKey: Record<string, { key: string; row: DRow }[]> = {}
-    if (dim !== 'segment') return { topCards, childrenByKey }
+    const cards: { key: string; row: DRow }[] = []
+    if (dim !== 'segment') return { cards }
     const tops = schema.filter(s => s.parent_id === null).sort((a, b) => a.order_index - b.order_index)
     for (const top of tops) {
       if (top.segmentation.includes('HOU')) continue
       if (top.level === 'main') {
         const kids = schema.filter(c => c.parent_id === top.id && !c.segmentation.includes('HOU')).sort((a, b) => a.order_index - b.order_index)
-        const mainCodes = kids.length ? kids.flatMap(k => k.segmentation) : top.segmentation
-        topCards.push({ key: top.id, row: make(top.name, top, mainCodes), hasChildren: kids.length > 0 })
-        if (kids.length) childrenByKey[top.id] = kids.map(k => ({ key: k.id, row: make(k.name, k, k.segmentation) }))
+        // 말단(leaf)만 카드로 — 하위가 있으면 하위들을, 없으면 자신을
+        if (kids.length) for (const k of kids) cards.push({ key: k.id, row: make(k.name, k, k.segmentation) })
+        else cards.push({ key: top.id, row: make(top.name, top, top.segmentation) })
       } else {
-        topCards.push({ key: top.id, row: make(top.name, top, top.segmentation), hasChildren: false })
+        cards.push({ key: top.id, row: make(top.name, top, top.segmentation) })
       }
     }
-    return { topCards, childrenByKey }
+    return { cards }
   }, [dim, schema, sumBy, bktBy, bktResvBy, bktAdrCy, bktAdrLy, buckets])
 
   // ─── 공용 헬퍼 (카드 · 표 · 상세 패널) ──────────────────────────────────────────────
@@ -377,8 +375,6 @@ export default function LeadTimePage() {
   const renderBadge = (b: typeof LEAD_BADGE[number] | null) =>
     b ? <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 3, background: b.bg, color: b.fg, whiteSpace: 'nowrap', flexShrink: 0 }}>{b.label}</span> : null
   const mixOf = (r: DRow) => totalRow.cy.rn > 0 ? Math.round(r.cy.rn / totalRow.cy.rn * 100) : null
-  const shortLabel = (b: BucketDef) =>
-    b.max === null ? `${b.min}+` : (b.min === 0 && b.max === 0) ? '당일' : b.min === b.max ? `${b.min}` : `${b.min}-${b.max}`
   const cyBarColor = (isMax: boolean, canHl: boolean, pct: number) =>
     (isMax && canHl) ? '#00E5A0' : pct >= 20 ? '#1D9E75' : '#0F6E56'
   // 행 통계 — cyTot/lyTot, 최다 cy 버킷, 카드/행 내 최대 비중(정규화 기준), 강조 가능 여부
@@ -469,7 +465,16 @@ export default function LeadTimePage() {
         </div>
         {/* 구간 라벨 행 */}
         <div style={{ display: 'flex', gap: ROW_GAP, paddingTop: 2 }}>
-          {buckets.map(b => <div key={b.no} style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: FONT, color: '#7a7a7a' }}>{shortLabel(b)}</div>)}
+          {buckets.map(b => <div key={b.no} style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: FONT, color: '#7a7a7a' }}>{b.label}</div>)}
+        </div>
+        {/* 객단가 행 (26년 ADR, 천원) — 막대 있는 버킷만 */}
+        <div style={{ display: 'flex', gap: ROW_GAP, paddingTop: 2 }}>
+          {buckets.map(b => {
+            const cyResv = r.cyBkResv[b.no] ?? 0
+            const cyPct = cyTot > 0 ? cyResv / cyTot * 100 : 0
+            const adr = r.cyAdr[b.no]
+            return <div key={b.no} style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: FONT, color: '#6b6b6b' }}>{cyPct > 0 && adr != null && adr !== 0 ? `${Math.round(adr / 1000)}천원` : ''}</div>
+          })}
         </div>
       </div>
     )
@@ -487,7 +492,7 @@ export default function LeadTimePage() {
         onMouseEnter={() => setHoverKey(opts.key)} onMouseLeave={() => setHoverKey(null)}
         style={{
           gridColumn: opts.fullWidth ? '1 / -1' : undefined,
-          background: row.bg ?? '#0a0a0a', ...(row.bg ? {} : { border: '1px solid #1f1f1f' }),
+          background: row.bg ?? '#0a0a0a', border: '1px solid rgba(0,229,160,0.45)',
           borderRadius: 10, padding: 13, boxSizing: 'border-box',
           cursor: opts.clickable ? 'pointer' : 'default',
           ...(sel ? { outline: '1px solid rgba(0,229,160,0.6)', outlineOffset: -1 }
@@ -499,7 +504,6 @@ export default function LeadTimePage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
             <span style={{ fontSize: 13, fontWeight: 500, color: opts.isTotal ? MINT : '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.name}</span>
             {renderBadge(badge)}
-            {opts.clickable && <span style={{ fontSize: 12, color: '#6a6a6a', flexShrink: 0 }}>›</span>}
           </div>
           <span style={{ fontSize: 11, color: '#8f8f8f', whiteSpace: 'nowrap', flexShrink: 0 }}>{row.cy.rn.toLocaleString()}박{mix != null ? ` · Mix ${mix}%` : ''}</span>
         </div>
@@ -821,23 +825,9 @@ export default function LeadTimePage() {
         <div className="animate-pulse" style={{ height: 420, background: 'var(--color-bg-tertiary)', borderRadius: 12 }} />
       ) : dim === 'segment' ? (
         <div>
-          {cardParent && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <button onClick={() => setCardParent(null)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: '0.5px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', color: '#ccc', fontSize: 12 }}>
-                <span style={{ fontSize: 15, lineHeight: 1 }}>‹</span> 뒤로
-              </button>
-              <span style={{ fontSize: 12, color: '#8f8f8f' }}>세그먼트 › <span style={{ color: '#e8e8e8' }}>{segCards.topCards.find(c => c.key === cardParent)?.row.name ?? ''}</span></span>
-            </div>
-          )}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
-            {cardParent == null ? (
-              <>
-                {renderCard(totalRow, { key: 'total', fullWidth: true, isTotal: true })}
-                {segCards.topCards.map(c => renderCard(c.row, { key: c.key, clickable: c.hasChildren, onClick: () => setCardParent(c.key) }))}
-              </>
-            ) : (
-              (segCards.childrenByKey[cardParent] ?? []).map(c => renderCard(c.row, { key: c.key, clickable: true, onClick: () => setSelName(prev => prev === c.row.name ? null : c.row.name) }))
-            )}
+            {renderCard(totalRow, { key: 'total', fullWidth: true, isTotal: true })}
+            {segCards.cards.map(c => renderCard(c.row, { key: c.key, clickable: true, onClick: () => setSelName(prev => prev === c.row.name ? null : c.row.name) }))}
           </div>
 
           <div style={{ fontSize: 11, color: '#6b6b6b', marginTop: 12 }}>막대 = 리드타임 구간별 비중 · 회색 = 25년 · 밝은 민트 = 최다 예약 구간 · 막대 hover 시 건수</div>
