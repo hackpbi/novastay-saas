@@ -6,9 +6,10 @@ import { supabase } from '@/lib/supabase'
 import { useHotel } from '@/contexts/HotelContext'
 import { useDateContext } from '@/contexts/DateContext'
 import { useMarketSchema, type MarketSchemaRow } from '@/hooks/useMarketSchema'
+import LosDateCalendar from './LosDateCalendar'
 
 // ─── 타입 ────────────────────────────────────────────────────────────────────────
-type Dim = 'segment' | 'country' | 'account'
+type Dim = 'segment' | 'country' | 'account' | 'date'
 type SumRow = { year_type: string; dim_key: string; alpha2: string | null; resv: number; rooms: number; room_nights: number; alos: number | null; max_los: number | null; adr: number | null }
 type BktRow = { year_type: string; dim_key: string; bucket_no: number; bucket_min: number; bucket_max: number | null; resv: number; room_nights: number; adr: number | null }
 type Sum = { resv: number; rn: number; rooms: number; alos: number | null; max: number | null }
@@ -118,7 +119,7 @@ export default function LosPage() {
   // ─── RPC 2개 ────────────────────────────────────────────────────────────────────
   const { data: sumRows = [], isLoading: sumLoading } = useQuery<SumRow[]>({
     queryKey: ['los-summary', hotelId, otbDate, fromDate, toDate, dim, segKey, accKey],
-    enabled: !!hotelId && !!otbDate,
+    enabled: !!hotelId && !!otbDate && dim !== 'date',
     staleTime: 60 * 1000,
     placeholderData: keepPreviousData,
     queryFn: async () => {
@@ -138,7 +139,7 @@ export default function LosPage() {
   })
   const { data: bktRows = [], isLoading: bktLoading } = useQuery<BktRow[]>({
     queryKey: ['los-buckets', hotelId, otbDate, fromDate, toDate, dim, segKey, accKey],
-    enabled: !!hotelId && !!otbDate,
+    enabled: !!hotelId && !!otbDate && dim !== 'date',
     staleTime: 60 * 1000,
     placeholderData: keepPreviousData,
     queryFn: async () => {
@@ -543,6 +544,7 @@ export default function LosPage() {
     { d: 'segment' as Dim, label: '세그먼트', icon: <><rect x="1" y="1" width="4" height="4" rx="1" fill="currentColor"/><rect x="7" y="1" width="4" height="4" rx="1" fill="currentColor"/><rect x="1" y="7" width="4" height="4" rx="1" fill="currentColor"/><rect x="7" y="7" width="4" height="4" rx="1" fill="currentColor"/></> },
     { d: 'country' as Dim, label: '국적', icon: <><circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2" fill="none"/><path d="M1 6h10M6 1c1.6 1.6 2.4 3.3 2.4 5S7.6 10.4 6 11C4.4 10.4 3.6 8.7 3.6 6S4.4 2.6 6 1z" stroke="currentColor" strokeWidth="1.1" fill="none"/></> },
     { d: 'account' as Dim, label: '어카운트', icon: <><path d="M1.5 1.5h4.2L11 6.8 6.8 11 1.5 5.7V1.5z" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinejoin="round"/><circle cx="3.9" cy="3.9" r="1" fill="currentColor"/></> },
+    { d: 'date' as Dim, label: '일자별', icon: <><rect x="1" y="2" width="10" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.1" fill="none"/><path d="M1 4.5h10" stroke="currentColor" strokeWidth="1.1"/><path d="M3.5 1v2M8.5 1v2" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/></> },
   ]
   const activeIdx = tabs.findIndex(t => t.d === dim)
   const segSize = segFilterOpen ? draft.length : applied.length
@@ -595,7 +597,7 @@ export default function LosPage() {
           })}
         </div>
         {/* 필터 */}
-        {dim !== 'segment' && (
+        {dim !== 'segment' && dim !== 'date' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 10, color: '#4a4a4a', letterSpacing: '0.08em', marginRight: 2 }}>FILTER</span>
             <div className="seg-filter-wrap" style={{ position: 'relative' }}>
@@ -682,7 +684,9 @@ export default function LosPage() {
         )}
       </div>
 
-      {isLoading && sumRows.length === 0 ? (
+      {dim === 'date' ? (
+        <LosDateCalendar selYear={selYear} selMonth={selMonth} />
+      ) : isLoading && sumRows.length === 0 ? (
         <div className="animate-pulse" style={{ height: 420, background: 'var(--color-bg-tertiary)', borderRadius: 12 }} />
       ) : (
         <div>
