@@ -246,7 +246,8 @@
       "PowerShell(git status --short; \"---\"; $env:NEXT_DIST_DIR='.next-verify'; npm run build 2>&1 | Select-String -Pattern \"/los\\\\b|Error|Failed|Compiled successfully\" | Select-Object -First 12; \"BUILD_EXIT $LASTEXITCODE\"; Remove-Item -Recurse -Force .next-verify -ErrorAction SilentlyContinue)",
       "PowerShell(git add src/views/LosPage.tsx)",
       "PowerShell(git status --short; \"---\"; $env:NEXT_DIST_DIR='.next-verify'; npm run build 2>&1 | Select-String -Pattern \"/los\\\\b|Error|Failed|Compiled successfully\" | Select-Object -First 10; \"BUILD_EXIT $LASTEXITCODE\"; Remove-Item -Recurse -Force .next-verify -ErrorAction SilentlyContinue)",
-      "PowerShell(npx tsc --noEmit; \"EXIT $LASTEXITCODE\"; \"---\"; git status --short)"
+      "PowerShell(npx tsc --noEmit; \"EXIT $LASTEXITCODE\"; \"---\"; git status --short)",
+      "Bash(node analyze.mjs)"
     ],
     "additionalDirectories": [
       "C:\\dev\\18_NovaStay_Saas_ver1\\.next-verify"
