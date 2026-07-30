@@ -21,19 +21,17 @@ const RED  = '#E24B4A'
 const pad = (n: number) => String(n).padStart(2, '0')
 const OV = 'inset 0 0 0 999px rgba(0,229,160,0.045)'
 const OV_B = 'inset 0 0 0 999px rgba(91,141,239,0.05)'
-const CO = ['#00E5A0', '#0FB894', '#1C8A88', '#2A5D7C', '#5B8DEF']
-const bktColor = (i: number) => CO[Math.min(i, CO.length - 1)]
-
-// ─── 리드타임 그룹 막대 미니차트 레이아웃 (px 고정 — 막대·숫자는 HTML, 화살표만 SVG) ────
-const BAR_AREA_H = 30              // 막대 영역 높이
-const BAR_W      = 26             // 막대 하나의 폭
-const BAR_GAP    = 24             // LY·CY 막대 사이 간격 (화살표 공간)
-const ROW_H      = 62             // 행 전체 높이
+// ─── 리드타임 분포 차트 레이아웃 (막대·숫자 전부 HTML — SVG 금지) ──────────────────────
+const BAR_AREA_H = 34             // 막대 영역 높이 (카드/상세 패널 공용)
+const ROW_GAP    = 7              // 버킷 사이 간격
+const PAIR_GAP   = 2              // 25년·26년 막대 사이
 const FONT       = 11             // 모든 숫자 폰트 크기
-const BAR_MIN_H  = 2             // 0% 초과일 때 최소 막대 높이
-const LY_PURPLE  = 'rgba(167,139,250,0.5)'   // 전년(LY) 막대 — 전역 퍼플 계열
-const MIN_RESV_FOR_HIGHLIGHT = 10   // 최다 구간 민트 강조 최소 예약건수
-const ARROW_FLAT_PP = 0.5           // ±이 값 이내면 회색 수평선(화살촉 없음)
+const BAR_MIN_H  = 2              // 0% 초과일 때 최소 막대 높이
+const BAR_MAX_W  = 30             // 막대 최대 폭 (넓은 패널에서 과대 방지)
+const TABLE_ROW_H = 32            // 국적·어카운트 표 행 높이
+const LY_GRAY    = '#52514e'      // 전년(25년) 막대 — 회색
+const LY_TEXT    = '#a78bfa'      // 전년 리드타임 텍스트 — 퍼플 (전역 전년 문법)
+const MIN_RESV_FOR_HIGHLIGHT = 10 // 최다 구간 민트 강조 최소 예약건수
 
 // 유형 배지 — avg_lead 기준. 호텔 특성에 따라 조정될 임계값이므로 상수로 분리
 const LEAD_BADGE = [
@@ -76,13 +74,6 @@ function aggBktAdr(bmap: Record<string, Record<number, { rn: number; adr: number
   for (const b of bkts) out[b.no] = (den[b.no] ?? 0) > 0 ? num[b.no] / den[b.no] : null
   return out
 }
-// 도넛 조각(환형 섹터) path
-function arc(cx: number, cy: number, rO: number, rI: number, a0: number, a1: number): string {
-  const px = (r: number, a: number) => cx + r * Math.cos(a)
-  const py = (r: number, a: number) => cy + r * Math.sin(a)
-  const large = a1 - a0 > Math.PI ? 1 : 0
-  return `M ${px(rO, a0)} ${py(rO, a0)} A ${rO} ${rO} 0 ${large} 1 ${px(rO, a1)} ${py(rO, a1)} L ${px(rI, a1)} ${py(rI, a1)} A ${rI} ${rI} 0 ${large} 0 ${px(rI, a0)} ${py(rI, a0)} Z`
-}
 
 // ─── 페이지 ─────────────────────────────────────────────────────────────────────
 export default function LeadTimePage() {
@@ -115,6 +106,8 @@ export default function LeadTimePage() {
   const [accSearch, setAccSearch] = useState('')
   const [selName, setSelName] = useState<string | null>(null)
   const [hoverKey, setHoverKey] = useState<React.Key | null>(null)
+  const [cardParent, setCardParent] = useState<string | null>(null)   // 세그먼트 카드 드릴다운
+  useEffect(() => { setCardParent(null); setSelName(null) }, [dim])
 
   const segKey = dim === 'segment' ? null : applied.slice().sort().join(',')
   const p_segments = dim === 'segment' || applied.length === 0 ? null : applied
@@ -345,244 +338,259 @@ export default function LeadTimePage() {
     }
   }, [displayRows, buckets, bktAdrCy, bktAdrLy])
 
-  // ─── 미니차트 스케일 — 화면 전체(모든 행 × 버킷 × cy/ly) 최대 비중으로 통일 (행별 정규화 아님) ─
-  const maxPct = useMemo(() => {
-    let m = 1
-    for (const r of [...displayRows, totalRow]) {
-      const cyTot = buckets.reduce((s, b) => s + (r.cyBkResv[b.no] ?? 0), 0)
-      const lyTot = buckets.reduce((s, b) => s + (r.lyBkResv[b.no] ?? 0), 0)
-      for (const b of buckets) {
-        const cp = cyTot > 0 ? (r.cyBkResv[b.no] ?? 0) / cyTot * 100 : 0
-        const lp = lyTot > 0 ? (r.lyBkResv[b.no] ?? 0) / lyTot * 100 : 0
-        if (cp > m) m = cp
-        if (lp > m) m = lp
+  // ─── 세그먼트 카드 트리 (최상위 + 하위) ─────────────────────────────────────────────
+  const segCards = useMemo(() => {
+    const make = (name: string, node: MarketSchemaRow | null, codes: string[]): DRow => ({
+      name, level: node ? node.level as DRow['level'] : 'flat',
+      alpha2: null,
+      bg: node ? node.bg_dark_color : null,
+      font: node ? node.font_dark_color : null,
+      isBold: node ? node.is_bold : true,
+      cy: aggSum(sumBy.cy, codes), ly: aggSum(sumBy.ly, codes),
+      cyBk: aggBkt(bktBy.cy, codes), lyBk: aggBkt(bktBy.ly, codes),
+      cyBkResv: aggBkt(bktResvBy.cy, codes), lyBkResv: aggBkt(bktResvBy.ly, codes),
+      cyAdr: aggBktAdr(bktAdrCy, buckets, codes),
+      lyAdr: aggBktAdr(bktAdrLy, buckets, codes),
+    })
+    const topCards: { key: string; row: DRow; hasChildren: boolean }[] = []
+    const childrenByKey: Record<string, { key: string; row: DRow }[]> = {}
+    if (dim !== 'segment') return { topCards, childrenByKey }
+    const tops = schema.filter(s => s.parent_id === null).sort((a, b) => a.order_index - b.order_index)
+    for (const top of tops) {
+      if (top.segmentation.includes('HOU')) continue
+      if (top.level === 'main') {
+        const kids = schema.filter(c => c.parent_id === top.id && !c.segmentation.includes('HOU')).sort((a, b) => a.order_index - b.order_index)
+        const mainCodes = kids.length ? kids.flatMap(k => k.segmentation) : top.segmentation
+        topCards.push({ key: top.id, row: make(top.name, top, mainCodes), hasChildren: kids.length > 0 })
+        if (kids.length) childrenByKey[top.id] = kids.map(k => ({ key: k.id, row: make(k.name, k, k.segmentation) }))
+      } else {
+        topCards.push({ key: top.id, row: make(top.name, top, top.segmentation), hasChildren: false })
       }
     }
-    return m
-  }, [displayRows, totalRow, buckets])
+    return { topCards, childrenByKey }
+  }, [dim, schema, sumBy, bktBy, bktResvBy, bktAdrCy, bktAdrLy, buckets])
 
-  // ─── 도넛 ───────────────────────────────────────────────────────────────────────
-  const renderDonut = (bk: Record<number, number>, isCy: boolean) => {
-    const total = buckets.reduce((s, b) => s + (bk[b.no] ?? 0), 0)
-    if (total <= 0) return <div style={{ width: 190, height: 155, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#333', opacity: isCy ? 1 : 0.45 }}>없음</div>
-    const cx = 97, cy = 70, rO = 44, rI = 28, gap = 0.014
-    let a = -Math.PI / 2
-    const segs: { d: string; color: string }[] = []
-    const labels: { color: string; label: string; pct: number; right: boolean; sx: number; sy: number; y: number }[] = []
-    buckets.forEach((b, i) => {
-      const v = bk[b.no] ?? 0
-      if (v <= 0) return
-      const frac = v / total
-      segs.push({ d: arc(cx, cy, rO, rI, a + gap / 2, a + frac * 2 * Math.PI - gap / 2), color: bktColor(i) })
-      const pct = frac * 100
-      if (pct >= 2) {
-        const mid = a + frac * Math.PI
-        labels.push({ color: bktColor(i), label: b.label, pct, right: Math.cos(mid) >= 0, sx: cx + 46 * Math.cos(mid), sy: cy + 46 * Math.sin(mid), y: cy + 49 * Math.sin(mid) })
-      }
-      a += frac * 2 * Math.PI
-    })
-    const leftLabels = labels.filter(l => !l.right)
-    const rightLabels = labels.filter(l => l.right)
-    ;[leftLabels, rightLabels].forEach(arr => {
-      arr.sort((x, y) => x.y - y.y)
-      for (let i = 1; i < arr.length; i++) if (arr[i].y - arr[i - 1].y < 12) arr[i].y = arr[i - 1].y + 12
-    })
+  // ─── 공용 헬퍼 (카드 · 표 · 상세 패널) ──────────────────────────────────────────────
+  const COLW = { name: 152, rn: 62, mix: 44, lead: 50, dl: 52, max: 46 }
+  const badgeOf = (r: DRow, isTotal: boolean) =>
+    (!isTotal && r.cy.avgLead != null) ? (LEAD_BADGE.find(t => (r.cy.avgLead as number) <= t.max) ?? null) : null
+  const renderBadge = (b: typeof LEAD_BADGE[number] | null) =>
+    b ? <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 3, background: b.bg, color: b.fg, whiteSpace: 'nowrap', flexShrink: 0 }}>{b.label}</span> : null
+  const mixOf = (r: DRow) => totalRow.cy.rn > 0 ? Math.round(r.cy.rn / totalRow.cy.rn * 100) : null
+  const shortLabel = (b: BucketDef) =>
+    b.max === null ? `${b.min}+` : (b.min === 0 && b.max === 0) ? '당일' : b.min === b.max ? `${b.min}` : `${b.min}-${b.max}`
+  const cyBarColor = (isMax: boolean, canHl: boolean, pct: number) =>
+    (isMax && canHl) ? '#00E5A0' : pct >= 20 ? '#1D9E75' : '#0F6E56'
+  // 행 통계 — cyTot/lyTot, 최다 cy 버킷, 카드/행 내 최대 비중(정규화 기준), 강조 가능 여부
+  const bucketStats = (r: DRow) => {
+    const cyTot = buckets.reduce((s, b) => s + (r.cyBkResv[b.no] ?? 0), 0)
+    const lyTot = buckets.reduce((s, b) => s + (r.lyBkResv[b.no] ?? 0), 0)
+    let maxNo = -1, maxP = -1, mx = 1
+    for (const b of buckets) {
+      const cp = cyTot > 0 ? (r.cyBkResv[b.no] ?? 0) / cyTot * 100 : 0
+      const lp = lyTot > 0 ? (r.lyBkResv[b.no] ?? 0) / lyTot * 100 : 0
+      if (cp > maxP) { maxP = cp; maxNo = b.no }
+      if (cp > mx) mx = cp
+      if (lp > mx) mx = lp
+    }
+    return { cyTot, lyTot, maxNo, maxPct: mx, canHighlight: cyTot >= MIN_RESV_FOR_HIGHLIGHT }
+  }
+
+  // 리드 지표 줄 (카드 · 패널 공용)
+  const leadMetrics = (r: DRow) => {
+    const dLead = (r.cy.avgLead != null && r.ly.avgLead != null) ? r.cy.avgLead - r.ly.avgLead : null
     return (
-      <svg viewBox="0 0 194 158" width={190} height={155} style={{ opacity: isCy ? 1 : 0.45 }}>
-        {segs.map((s, i) => <path key={i} d={s.d} fill={s.color} />)}
-        {[...leftLabels, ...rightLabels].map((l, i) => {
-          const lineEnd = l.right ? cx + 50 : cx - 50
-          const tx = l.right ? cx + 54 : cx - 54
-          return (
-            <g key={`lb${i}`}>
-              <polyline points={`${l.sx},${l.sy} ${lineEnd},${l.y} ${tx},${l.y}`} fill="none" stroke={l.color} strokeWidth={0.9} opacity={isCy ? 0.65 : 0.4} />
-              <text x={tx} y={l.y} textAnchor={l.right ? 'start' : 'end'} dominantBaseline="central" fontSize={10}>
-                <tspan fill={isCy ? '#d8d8d8' : '#7f7f7f'}>{l.label}</tspan>
-                <tspan dx={3} fontWeight={600} fill={isCy ? l.color : '#8f8f8f'}>{l.pct < 1 ? '<1' : Math.round(l.pct)}%</tspan>
-              </text>
-            </g>
-          )
-        })}
-        <text x={cx} y={72} textAnchor="middle" dominantBaseline="central" fontSize={21} fill="#f2f2f2">{total.toLocaleString()}</text>
-        <text x={cx} y={86} textAnchor="middle" dominantBaseline="central" fontSize={9} fill="#6a6a6a">예약</text>
-        <text x={cx} y={152} textAnchor="middle" fontSize={12} fontWeight={500} fill={isCy ? MINT : '#8a8a8a'}>{isCy ? "'26년" : "'25년"}</text>
-      </svg>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 6 }}>
+        {r.cy.avgLead != null
+          ? <span style={{ display: 'inline-flex', alignItems: 'baseline' }}><span style={{ fontSize: 20, color: '#fff', lineHeight: 1 }}>{r.cy.avgLead.toFixed(1)}</span><span style={{ fontSize: 11, color: '#8f8f8f', marginLeft: 2 }}>일 전</span></span>
+          : <span style={{ fontSize: 20, color: '#3f3f3f', lineHeight: 1 }}>—</span>}
+        {r.ly.avgLead != null && <span style={{ fontSize: 11, color: LY_TEXT }}>작년 {r.ly.avgLead.toFixed(1)}</span>}
+        {dLead != null && <span style={{ fontSize: 11, color: dLead > 0 ? MINT : dLead < 0 ? RED : '#8a8a8a' }}>{dLead > 0 ? '▲' : dLead < 0 ? '▼' : ''}{Math.abs(dLead).toFixed(1)}</span>}
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#8f8f8f' }}>{r.cy.max != null ? `최장 ${r.cy.max}일` : ''}</span>
+      </div>
     )
   }
 
-  // ─── 버킷 그룹 막대 미니차트 (막대·숫자 = HTML, 화살표만 px 고정 SVG) ─────────────────
-  const renderBucketChart = (r: DRow, rowKey: string) => {
+  // 분포 그룹 막대 (카드 내장 · 상세 패널 공용) — 25년 왼쪽 회색 / 26년 오른쪽, 화살표 없음
+  const renderDistChart = (r: DRow, showCounts: boolean) => {
+    const { maxNo, maxPct: mp, canHighlight } = bucketStats(r)
     const cyTot = buckets.reduce((s, b) => s + (r.cyBkResv[b.no] ?? 0), 0)
     const lyTot = buckets.reduce((s, b) => s + (r.lyBkResv[b.no] ?? 0), 0)
     const hasLy = buckets.some(b => (r.lyBkResv[b.no] ?? 0) > 0)
-    const canHighlight = cyTot >= MIN_RESV_FOR_HIGHLIGHT   // 표본 적으면 최다 구간 강조 억제
-    // 최다 비중(cy) 구간
-    let maxBucketNo = -1, maxBucketPct = -1
-    for (const b of buckets) {
-      const cp = cyTot > 0 ? (r.cyBkResv[b.no] ?? 0) / cyTot * 100 : 0
-      if (cp > maxBucketPct) { maxBucketPct = cp; maxBucketNo = b.no }
-    }
-    // 화면 전체 최대 비중(maxPct) 기준 통일 스케일 (행별 정규화 아님)
-    const barH = (pct: number) => pct > 0 ? Math.max((pct / maxPct) * BAR_AREA_H, BAR_MIN_H) : 0
-    const cyColor = (no: number, pct: number) =>
-      (no === maxBucketNo && canHighlight) ? '#00E5A0' : pct >= 20 ? '#1D9E75' : '#0F6E56'
-    // 막대 컬럼 (건수 라벨 위 + 막대 아래)
-    const barCol = (resv: number, pct: number, color: string, labelColor: string) => (
-      <div style={{ width: BAR_W, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center' }}>
-        <span style={{ fontSize: FONT, lineHeight: 1, color: labelColor, marginBottom: 1 }}>{resv}</span>
-        <div style={{ width: BAR_W, height: barH(pct), background: color, borderRadius: '1px 1px 0 0' }} />
+    const barH = (pct: number) => pct > 0 ? Math.max((pct / mp) * BAR_AREA_H, BAR_MIN_H) : 0
+    const bar = (resv: number, pct: number, color: string, labelColor: string, tag: string) => (
+      <div key={tag} title={`${resv.toLocaleString()}건`} style={{ flex: 1, maxWidth: BAR_MAX_W, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', height: '100%' }}>
+        {showCounts && <span style={{ fontSize: FONT, lineHeight: 1, color: labelColor, marginBottom: 1 }}>{resv}</span>}
+        <div style={{ width: '100%', height: barH(pct), background: color, borderRadius: '2px 2px 0 0' }} />
       </div>
     )
-    const spacer = (w: number) => <div style={{ width: w, flexShrink: 0 }} />
-    const pctLabel = (pct: number, color: string) =>
-      <span style={{ width: BAR_W, textAlign: 'center', fontSize: FONT, lineHeight: 1, color }}>{Math.round(pct)}%</span>
+    const gap = (tag: string) => <div key={tag} style={{ flex: 1, maxWidth: BAR_MAX_W }} />
     return (
-      <div style={{ display: 'flex', width: '100%' }} role="img" aria-label={`${r.name} 리드타임 구간별 예약 건수와 비중`}>
+      <div role="img" aria-label={`${r.name} 리드타임 구간별 비중`}>
+        {/* 막대 영역 — 기준선(borderBottom)이 전체 버킷을 관통 */}
+        <div style={{ display: 'flex', gap: ROW_GAP, height: BAR_AREA_H, alignItems: 'flex-end', borderBottom: '1px solid #3a3a3a' }}>
+          {buckets.map(b => {
+            const cyResv = r.cyBkResv[b.no] ?? 0, lyResv = r.lyBkResv[b.no] ?? 0
+            const cyPct = cyTot > 0 ? cyResv / cyTot * 100 : 0
+            const lyPct = lyTot > 0 ? lyResv / lyTot * 100 : 0
+            const empty = cyResv === 0 && lyResv === 0
+            const cyCol = cyBarColor(b.no === maxNo, canHighlight, cyPct)
+            return (
+              <div key={b.no} style={{ flex: 1, minWidth: 0, height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: PAIR_GAP }}>
+                {empty ? <span style={{ fontSize: FONT, color: '#3f3f3f', alignSelf: 'center' }}>-</span>
+                  : !hasLy ? (cyPct > 0 ? bar(cyResv, cyPct, cyCol, '#8f8f8f', 'cy') : null)
+                  : <>
+                      {lyPct > 0 ? bar(lyResv, lyPct, LY_GRAY, '#6b6b6b', 'ly') : gap('lyg')}
+                      {cyPct > 0 ? bar(cyResv, cyPct, cyCol, '#8f8f8f', 'cy') : gap('cyg')}
+                    </>}
+              </div>
+            )
+          })}
+        </div>
+        {/* 비중 행 */}
+        <div style={{ display: 'flex', gap: ROW_GAP, paddingTop: 4 }}>
+          {buckets.map(b => {
+            const cyResv = r.cyBkResv[b.no] ?? 0, lyResv = r.lyBkResv[b.no] ?? 0
+            const cyPct = cyTot > 0 ? cyResv / cyTot * 100 : 0
+            const lyPct = lyTot > 0 ? lyResv / lyTot * 100 : 0
+            const empty = cyResv === 0 && lyResv === 0
+            const cyLabel = (b.no === maxNo && canHighlight) ? '#00E5A0' : '#e8e8e8'
+            return (
+              <div key={b.no} style={{ flex: 1, minWidth: 0, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', gap: PAIR_GAP }}>
+                {empty ? null
+                  : !hasLy ? (cyPct > 0 ? <span style={{ fontSize: FONT, lineHeight: 1, color: cyLabel }}>{Math.round(cyPct)}%</span> : null)
+                  : <>
+                      {lyPct > 0 ? <span style={{ flex: 1, maxWidth: BAR_MAX_W, textAlign: 'center', fontSize: FONT, lineHeight: 1, color: '#8f8f8f' }}>{Math.round(lyPct)}%</span> : gap('lyp')}
+                      {cyPct > 0 ? <span style={{ flex: 1, maxWidth: BAR_MAX_W, textAlign: 'center', fontSize: FONT, lineHeight: 1, color: cyLabel }}>{Math.round(cyPct)}%</span> : gap('cyp')}
+                    </>}
+              </div>
+            )
+          })}
+        </div>
+        {/* 구간 라벨 행 */}
+        <div style={{ display: 'flex', gap: ROW_GAP, paddingTop: 2 }}>
+          {buckets.map(b => <div key={b.no} style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: FONT, color: '#7a7a7a' }}>{shortLabel(b)}</div>)}
+        </div>
+      </div>
+    )
+  }
+
+  // 세그먼트 카드
+  const renderCard = (row: DRow, opts: { key: React.Key; fullWidth?: boolean; clickable?: boolean; onClick?: () => void; isTotal?: boolean }) => {
+    const badge = badgeOf(row, !!opts.isTotal)
+    const mix = mixOf(row)
+    const isHover = hoverKey === opts.key
+    const sel = selName === row.name && !opts.isTotal
+    return (
+      <div key={opts.key}
+        onClick={opts.clickable ? opts.onClick : undefined}
+        onMouseEnter={() => setHoverKey(opts.key)} onMouseLeave={() => setHoverKey(null)}
+        style={{
+          gridColumn: opts.fullWidth ? '1 / -1' : undefined,
+          background: row.bg ?? '#0a0a0a', ...(row.bg ? {} : { border: '1px solid #1f1f1f' }),
+          borderRadius: 10, padding: 13, boxSizing: 'border-box',
+          cursor: opts.clickable ? 'pointer' : 'default',
+          ...(sel ? { outline: '1px solid rgba(0,229,160,0.6)', outlineOffset: -1 }
+            : (opts.clickable && isHover) ? { outline: '1px solid rgba(0,229,160,0.4)', outlineOffset: -1 } : {}),
+          transition: 'outline 0.12s ease',
+        }}>
+        {/* 헤더 */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <span style={{ fontSize: 13, fontWeight: 500, color: opts.isTotal ? MINT : '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.name}</span>
+            {renderBadge(badge)}
+            {opts.clickable && <span style={{ fontSize: 12, color: '#6a6a6a', flexShrink: 0 }}>›</span>}
+          </div>
+          <span style={{ fontSize: 11, color: '#8f8f8f', whiteSpace: 'nowrap', flexShrink: 0 }}>{row.cy.rn.toLocaleString()}박{mix != null ? ` · Mix ${mix}%` : ''}</span>
+        </div>
+        {/* 지표 */}
+        {leadMetrics(row)}
+        {/* 분포 차트 */}
+        <div style={{ marginTop: 8 }}>{renderDistChart(row, false)}</div>
+      </div>
+    )
+  }
+
+  // 국적·어카운트 숫자 표 행 — 버킷은 26년 비중(%)만
+  const renderTableRow = (r: DRow, key: React.Key, isTotal = false) => {
+    const { cyTot, maxNo, canHighlight } = bucketStats(r)
+    const badge = badgeOf(r, isTotal)
+    const mix = mixOf(r)
+    const dLead = (r.cy.avgLead != null && r.ly.avgLead != null) ? r.cy.avgLead - r.ly.avgLead : null
+    const noData = r.cy.resv <= 0 && r.ly.resv <= 0
+    const bg = isTotal ? 'rgba(0,229,160,0.07)' : (r.bg ?? 'transparent')
+    const rowOp = !isTotal && r.cy.resv <= 4 ? 0.55 : 1
+    const dim35 = !isTotal && noData ? 0.35 : 1
+    const sel = selName === r.name
+    const isHover = hoverKey === key
+    const dash = <span style={{ color: '#3f3f3f' }}>–</span>
+    return (
+      <div key={key} onClick={() => setSelName(prev => prev === r.name ? null : r.name)}
+        onMouseEnter={() => setHoverKey(key)} onMouseLeave={() => setHoverKey(null)}
+        style={{
+          display: 'flex', alignItems: 'center', height: TABLE_ROW_H, cursor: 'pointer',
+          opacity: rowOp, background: bg,
+          boxShadow: isHover ? 'inset 0 0 0 999px rgba(0,229,160,0.07)' : undefined,
+          transition: 'box-shadow 0.12s ease',
+          ...(sel ? { outline: '1px solid rgba(0,229,160,0.5)', outlineOffset: -1 } : {}),
+          ...(isTotal ? { borderTop: '1px solid rgba(255,255,255,0.22)' } : { borderBottom: '0.5px solid rgba(255,255,255,0.09)' }),
+        }}>
+        {/* 이름 + 배지 */}
+        <div style={{ width: COLW.name, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5, paddingLeft: 12, paddingRight: 6, boxSizing: 'border-box', opacity: dim35, minWidth: 0 }}>
+          {dim === 'country' && flagUrl(r.alpha2) && <img src={flagUrl(r.alpha2)} alt="" style={{ width: 14, height: 10.5, border: '0.5px solid rgba(255,255,255,0.15)', flexShrink: 0 }} />}
+          <span style={{ fontSize: FONT, fontWeight: isTotal ? 500 : 400, color: isTotal ? MINT : '#e8e8e8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</span>
+          {badge && <span style={{ fontSize: 11, padding: '0 5px', borderRadius: 3, background: badge.bg, color: badge.fg, flexShrink: 0 }}>{badge.label}</span>}
+        </div>
+        {/* 버킷 — 26년 비중만 (건수는 hover 툴팁) */}
         {buckets.map(b => {
           const cyResv = r.cyBkResv[b.no] ?? 0, lyResv = r.lyBkResv[b.no] ?? 0
           const cyPct = cyTot > 0 ? cyResv / cyTot * 100 : 0
-          const lyPct = lyTot > 0 ? lyResv / lyTot * 100 : 0
-          const empty = cyResv === 0 && lyResv === 0
-          const isMax = b.no === maxBucketNo
-          const diff  = cyPct - lyPct
-          const flat  = Math.abs(diff) <= ARROW_FLAT_PP
-          const arrowColor = flat ? '#6b6b6b' : diff > 0 ? '#00E5A0' : '#E24B4A'
-          const showArrow  = hasLy && cyPct > 0 && lyPct > 0
-          const cyLabelColor = (isMax && canHighlight) ? '#00E5A0' : '#e8e8e8'
+          const isMax = b.no === maxNo
           return (
-            <div key={b.no} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-              {/* 막대 영역 — 기준선(borderBottom)이 버킷을 관통 */}
-              <div style={{ height: BAR_AREA_H, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', borderBottom: '1px solid #3a3a3a' }}>
-                {empty ? (
-                  <span style={{ fontSize: FONT, color: '#3f3f3f', alignSelf: 'center' }}>-</span>
-                ) : !hasLy ? (
-                  cyPct > 0 ? barCol(cyResv, cyPct, cyColor(b.no, cyPct), '#8f8f8f') : spacer(BAR_W)
-                ) : (
-                  <>
-                    {lyPct > 0 ? barCol(lyResv, lyPct, LY_PURPLE, '#6b5f96') : spacer(BAR_W)}
-                    {showArrow ? (
-                      <svg width={BAR_GAP} height={BAR_AREA_H} viewBox={`0 0 ${BAR_GAP} ${BAR_AREA_H}`} style={{ display: 'block', flexShrink: 0 }} aria-hidden="true">
-                        <defs>
-                          <marker id={`arr-${rowKey}-${b.no}`} viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill={arrowColor} /></marker>
-                        </defs>
-                        <line x1={2} y1={BAR_AREA_H - barH(lyPct)} x2={BAR_GAP - 2} y2={BAR_AREA_H - barH(cyPct)} stroke={arrowColor} strokeWidth={1.5} markerEnd={flat ? undefined : `url(#arr-${rowKey}-${b.no})`} />
-                      </svg>
-                    ) : spacer(BAR_GAP)}
-                    {cyPct > 0 ? barCol(cyResv, cyPct, cyColor(b.no, cyPct), '#8f8f8f') : spacer(BAR_W)}
-                  </>
-                )}
-              </div>
-              {/* 비중 행 (기준선 아래) */}
-              <div style={{ paddingTop: 3, display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
-                {empty ? null : !hasLy ? (
-                  cyPct > 0 ? pctLabel(cyPct, cyLabelColor) : spacer(BAR_W)
-                ) : (
-                  <>
-                    {lyPct > 0 ? pctLabel(lyPct, '#8579b8') : spacer(BAR_W)}
-                    {spacer(BAR_GAP)}
-                    {cyPct > 0 ? pctLabel(cyPct, cyLabelColor) : spacer(BAR_W)}
-                  </>
-                )}
-              </div>
-            </div>
+            <div key={b.no} title={cyResv > 0 ? `26년 ${cyResv.toLocaleString()}건 · 25년 ${lyResv.toLocaleString()}건` : ''}
+              style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: FONT, opacity: dim35, color: cyResv === 0 ? '#3f3f3f' : (isMax && canHighlight) ? '#00E5A0' : '#e8e8e8' }}>{cyResv === 0 ? '-' : `${Math.round(cyPct)}%`}</div>
           )
         })}
+        {/* 우측 지표 */}
+        <div style={{ width: COLW.rn, flexShrink: 0, textAlign: 'right', paddingRight: 6, fontSize: FONT, color: isTotal ? MINT : '#dcdcdc' }}>{r.cy.rn > 0 ? r.cy.rn.toLocaleString() : dash}</div>
+        <div style={{ width: COLW.mix, flexShrink: 0, textAlign: 'right', paddingRight: 6, fontSize: FONT, color: isTotal ? MINT : '#a8a8a8' }}>{mix != null && r.cy.rn > 0 ? `${mix}%` : dash}</div>
+        <div style={{ width: COLW.lead, flexShrink: 0, textAlign: 'right', paddingRight: 6, fontSize: FONT, color: isTotal ? MINT : '#e8e8e8' }}>{r.cy.avgLead != null ? r.cy.avgLead.toFixed(1) : dash}</div>
+        <div style={{ width: COLW.dl, flexShrink: 0, textAlign: 'right', paddingRight: 6, fontSize: FONT, color: dLead == null ? '#3f3f3f' : dLead > 0 ? MINT : dLead < 0 ? RED : '#8a8a8a' }}>{dLead == null ? '—' : `${dLead > 0 ? '▲' : dLead < 0 ? '▼' : ''}${Math.abs(dLead).toFixed(1)}`}</div>
+        <div style={{ width: COLW.max, flexShrink: 0, textAlign: 'right', paddingRight: 8, fontSize: FONT, color: '#8a8a8a' }}>{r.cy.max != null ? `${r.cy.max}일` : dash}</div>
       </div>
     )
   }
 
-  // ─── 행 렌더 ───────────────────────────────────────────────────────────────────
-  function renderRow(r: DRow, key: React.Key, isTotal = false) {
-    const noData = r.cy.resv <= 0 && r.ly.resv <= 0
-    const bg = isTotal ? 'rgba(0,229,160,0.07)' : (r.bg ?? 'transparent')
-    const dim35 = !isTotal && noData ? 0.35 : 1
-    const rowOp = !isTotal && r.cy.resv <= 4 ? 0.55 : 1
-    const sel = selName === r.name
-    const isHover = hoverKey === key
-    const dLead = (r.cy.avgLead != null && r.ly.avgLead != null) ? r.cy.avgLead - r.ly.avgLead : null
-    const badge = !isTotal && r.cy.avgLead != null
-      ? LEAD_BADGE.find(t => (r.cy.avgLead as number) <= t.max) ?? null
-      : null
-    const mixDen = totalRow.cy.rn
-    const mix = mixDen > 0 ? Math.round(r.cy.rn / mixDen * 100) : null
-    return (
-      <div key={key} onClick={() => setSelName(prev => prev === r.name ? null : r.name)}
-        onMouseEnter={() => setHoverKey(key)} onMouseLeave={() => setHoverKey(null)} style={{
-        display: 'flex', alignItems: 'stretch', height: ROW_H, cursor: 'pointer',
-        opacity: rowOp, background: bg,
-        boxShadow: isHover ? 'inset 0 0 0 999px rgba(0,229,160,0.07)' : undefined,
-        transition: 'box-shadow 0.12s ease',
-        ...(sel ? { outline: '1px solid rgba(0,229,160,0.5)', outlineOffset: -1 } : {}),
-        ...(isTotal ? { borderTop: '1px solid rgba(255,255,255,0.22)' } : { borderBottom: '0.5px solid rgba(255,255,255,0.09)' }),
-      }}>
-        {/* 구분 */}
-        <div style={{
-          width: 138, flexShrink: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', boxSizing: 'border-box',
-          paddingLeft: r.level === 'sub' ? 32 : 16, paddingRight: 8, gap: 3, opacity: dim35,
-        }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', maxWidth: '100%',
-            fontSize: r.level === 'sub' ? 12 : 13, fontWeight: (isTotal ? true : r.isBold) ? 500 : 400,
-            color: isTotal ? MINT : r.level === 'sub' ? '#9a9a9a' : r.level === 'flat' ? '#e8e8e8' : (r.font ?? '#e8e8e8'),
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}>{dim === 'country' && flagUrl(r.alpha2) && <img src={flagUrl(r.alpha2)} alt="" style={{ width: 14, height: 10.5, marginRight: 5, verticalAlign: 'middle', border: '0.5px solid rgba(255,255,255,0.15)', flexShrink: 0 }} />}{r.name}</div>
-          {badge && <span style={{ alignSelf: 'flex-start', fontSize: 11, padding: '1px 6px', borderRadius: 3, background: badge.bg, color: badge.fg, whiteSpace: 'nowrap' }}>{badge.label}</span>}
-        </div>
-
-        {/* 리드타임 구간별 예약 건수 — 그룹 막대 미니차트 */}
-        <div style={{ flex: 7, minWidth: 0, display: 'flex', alignItems: 'center' }}>
-          {noData ? (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#333' }}>데이터 없음</div>
-          ) : (
-            <div style={{ flex: 1, minWidth: 0 }}>{renderBucketChart(r, String(key))}</div>
-          )}
-        </div>
-
-        {/* 간격 + 세로 구분선 */}
-        <div style={{ width: 10, flexShrink: 0, display: 'flex', justifyContent: 'center', alignSelf: 'stretch' }}>
-          <div style={{ width: 1, background: 'rgba(255,255,255,0.14)' }} />
-        </div>
-
-        {/* 룸나잇 · Mix · 평균 · 최장 */}
-        <div style={{ flex: 3, minWidth: 0, display: 'flex', alignItems: 'center' }}>
-          <div style={{ flex: 1.2, minWidth: 0, textAlign: 'right', fontSize: 13.5, color: isTotal ? MINT : '#dcdcdc' }}>{r.cy.rn > 0 ? r.cy.rn.toLocaleString() : <span style={{ color: '#3f3f3f' }}>–</span>}</div>
-          <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 12, color: isTotal ? MINT : '#a8a8a8' }}>{mix != null && r.cy.rn > 0 ? `${mix}%` : <span style={{ color: '#3f3f3f' }}>–</span>}</div>
-          <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 13, color: isTotal ? MINT : '#e8e8e8' }}>{r.cy.avgLead != null ? r.cy.avgLead.toFixed(1) : <span style={{ color: '#3f3f3f' }}>–</span>}</div>
-          <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 11, color: dLead == null ? '#3f3f3f' : dLead > 0 ? MINT : dLead < 0 ? RED : '#8a8a8a' }}>
-            {dLead == null ? '—' : `${dLead > 0 ? '▲' : dLead < 0 ? '▼' : ''}${Math.abs(dLead).toFixed(1)}`}
-          </div>
-          <div style={{ flex: 0.9, minWidth: 0, textAlign: 'right', paddingRight: 4, fontSize: 12, color: '#8a8a8a' }}>{r.cy.max != null ? `${r.cy.max}일` : <span style={{ color: '#3f3f3f' }}>–</span>}</div>
-        </div>
-      </div>
-    )
-  }
-
-  // ─── 도넛 상세 패널 ─────────────────────────────────────────────────────────────
+  // ─── 상세 패널 (그룹 막대 + 단가 표) ───────────────────────────────────────────────
   const panelRow = selName == null ? null : [...displayRows, totalRow].find(r => r.name === selName) ?? null
   const renderPanel = (r: DRow) => {
     const ctr = buckets.reduce((s, b) => s + (r.cyBkResv[b.no] ?? 0), 0)
     const ltr = buckets.reduce((s, b) => s + (r.lyBkResv[b.no] ?? 0), 0)
+    const { maxNo, canHighlight } = bucketStats(r)
+    const badge = badgeOf(r, r.name === '합계')
+    const mix = mixOf(r)
     return (
       <div style={{ background: '#101410', border: '1px solid rgba(0,229,160,0.45)', borderLeft: '4px solid #00E5A0', borderRadius: 4, overflow: 'hidden', marginTop: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px 8px', borderBottom: '1px solid rgba(0,229,160,0.28)' }}>
-          <div style={{ display: 'flex', alignItems: 'baseline' }}>
-            {dim === 'country' && flagUrl(r.alpha2) && <img src={flagUrl(r.alpha2)} alt="" style={{ width: 14, height: 10.5, marginRight: 6, verticalAlign: 'middle', border: '0.5px solid rgba(255,255,255,0.15)', flexShrink: 0 }} />}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            {dim === 'country' && flagUrl(r.alpha2) && <img src={flagUrl(r.alpha2)} alt="" style={{ width: 14, height: 10.5, border: '0.5px solid rgba(255,255,255,0.15)', flexShrink: 0 }} />}
             <span style={{ fontSize: 14, color: '#EAFFF7', fontWeight: 500 }}>{r.name}</span>
-            <span style={{ fontSize: 11, color: '#6a6a6a', marginLeft: 6 }}>리드타임 구간별 비중 · 단가</span>
+            {renderBadge(badge)}
+            <span style={{ fontSize: 11, color: '#6a6a6a', marginLeft: 4 }}>리드타임 구간별 비중 · 단가</span>
           </div>
-          <span onClick={() => setSelName(null)} style={{ fontSize: 16, color: '#6a6a6a', cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>×</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 11, color: '#8f8f8f' }}>{r.cy.rn.toLocaleString()}박{mix != null ? ` · Mix ${mix}%` : ''}</span>
+            <span onClick={() => setSelName(null)} style={{ fontSize: 16, color: '#6a6a6a', cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>×</span>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, padding: '14px 18px 12px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-          {/* 도넛 '26년 */}
-          <div style={{ width: 190, flex: 'none', lineHeight: 0 }}>
-            {renderDonut(r.cyBkResv, true)}
-          </div>
-          {/* 도넛 '25년 */}
-          <div style={{ width: 190, flex: 'none', lineHeight: 0 }}>
-            {renderDonut(r.lyBkResv, false)}
-          </div>
-          {/* 표 */}
-          <div style={{ flex: 1, minWidth: 0, paddingLeft: 8 }}>
+        {/* 지표 + 분포 그룹 막대 (건수 막대 위 표시) */}
+        <div style={{ padding: '4px 18px 12px' }}>
+          {leadMetrics(r)}
+          <div style={{ marginTop: 12, maxWidth: 680 }}>{renderDistChart(r, true)}</div>
+        </div>
+        {/* 단가 표 */}
+        <div style={{ padding: '0 18px 12px' }}>
+          <div style={{ minWidth: 0 }}>
             {/* 헤더 1단 — 연도 */}
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <span style={{ width: 10, marginRight: 9, flex: 'none' }} />
@@ -631,7 +639,7 @@ export default function LeadTimePage() {
               const dpColor = !dpShow ? '#4a4a4a' : dp > 0 ? MINT : RED
               return (
                 <div key={b.no} style={{ display: 'flex', alignItems: 'center', padding: '5px 0', ...(i > 0 ? { borderTop: '0.5px solid rgba(255,255,255,0.06)' } : {}) }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 2, marginRight: 9, flex: 'none', background: bktColor(i) }} />
+                  <span style={{ width: 10, height: 10, borderRadius: 2, marginRight: 9, flex: 'none', background: cyBarColor(b.no === maxNo, canHighlight, cp) }} />
                   <span style={{ width: 44, flex: 'none', fontSize: 12.5, color: '#d8d8d8' }}>{b.label}</span>
                   {/* '26년 */}
                   <div style={{ flex: 4, display: 'flex' }}>
@@ -811,45 +819,51 @@ export default function LeadTimePage() {
 
       {isLoading && sumRows.length === 0 ? (
         <div className="animate-pulse" style={{ height: 420, background: 'var(--color-bg-tertiary)', borderRadius: 12 }} />
+      ) : dim === 'segment' ? (
+        <div>
+          {cardParent && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <button onClick={() => setCardParent(null)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: '0.5px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', color: '#ccc', fontSize: 12 }}>
+                <span style={{ fontSize: 15, lineHeight: 1 }}>‹</span> 뒤로
+              </button>
+              <span style={{ fontSize: 12, color: '#8f8f8f' }}>세그먼트 › <span style={{ color: '#e8e8e8' }}>{segCards.topCards.find(c => c.key === cardParent)?.row.name ?? ''}</span></span>
+            </div>
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+            {cardParent == null ? (
+              <>
+                {renderCard(totalRow, { key: 'total', fullWidth: true, isTotal: true })}
+                {segCards.topCards.map(c => renderCard(c.row, { key: c.key, clickable: c.hasChildren, onClick: () => setCardParent(c.key) }))}
+              </>
+            ) : (
+              (segCards.childrenByKey[cardParent] ?? []).map(c => renderCard(c.row, { key: c.key, clickable: true, onClick: () => setSelName(prev => prev === c.row.name ? null : c.row.name) }))
+            )}
+          </div>
+
+          <div style={{ fontSize: 11, color: '#6b6b6b', marginTop: 12 }}>막대 = 리드타임 구간별 비중 · 회색 = 25년 · 밝은 민트 = 최다 예약 구간 · 막대 hover 시 건수</div>
+          <div style={{ fontSize: 11, color: '#5a5a5a', marginTop: 8 }}>도착일 기준 집계 · 예약 생성일 기준 리드타임</div>
+
+          {panelRow && renderPanel(panelRow)}
+        </div>
       ) : (
         <div>
           <div style={{ border: '1px solid rgba(0,229,160,0.45)', borderLeft: '4px solid #00E5A0', borderRadius: 4, overflow: 'hidden' }}>
-          {/* 헤더 1단 — 그룹명 */}
-          <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-            <div style={{ width: 138, flexShrink: 0 }} />
-            <div style={{ flex: 7, boxShadow: OV, borderRadius: '4px 4px 0 0', textAlign: 'center', fontSize: 12, fontWeight: 500, color: MINT, padding: '4px 0' }}>리드타임 구간별 예약 건수</div>
-            <div style={{ width: 10, flexShrink: 0 }} />
-            <div style={{ flex: 3, boxShadow: OV_B, borderRadius: '4px 4px 0 0', textAlign: 'center', fontSize: 12, fontWeight: 500, color: '#5B8DEF', padding: '4px 0' }}>룸나잇 · 평균 · 최장</div>
-          </div>
-          {/* 헤더 2단 — 구간 라벨 (가운데) */}
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <div style={{ width: 138, flexShrink: 0 }} />
-            <div style={{ flex: 7, minWidth: 0, display: 'flex', boxShadow: OV }}>
-              {buckets.map(b => <div key={b.no} style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: 11.5, color: '#9a9a9a' }}>{b.label}</div>)}
+            {/* 헤더 */}
+            <div style={{ display: 'flex', alignItems: 'center', height: 30, borderBottom: '1px solid rgba(0,229,160,0.28)' }}>
+              <div style={{ width: COLW.name, flexShrink: 0, paddingLeft: 12, fontSize: 10, color: '#5f5f5f' }}>구분</div>
+              {buckets.map(b => <div key={b.no} style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: 10, color: '#9a9a9a' }}>{b.label}</div>)}
+              <div style={{ width: COLW.rn, flexShrink: 0, textAlign: 'right', paddingRight: 6, fontSize: 10, color: '#6a6a6a' }}>룸나잇</div>
+              <div style={{ width: COLW.mix, flexShrink: 0, textAlign: 'right', paddingRight: 6, fontSize: 10, color: '#5f5f5f' }}>Mix</div>
+              <div style={{ width: COLW.lead, flexShrink: 0, textAlign: 'right', paddingRight: 6, fontSize: 10, color: '#5f5f5f' }}>리드</div>
+              <div style={{ width: COLW.dl, flexShrink: 0, textAlign: 'right', paddingRight: 6, fontSize: 10, color: '#5f5f5f' }}>전년비</div>
+              <div style={{ width: COLW.max, flexShrink: 0, textAlign: 'right', paddingRight: 8, fontSize: 10, color: '#5f5f5f' }}>최장</div>
             </div>
-            <div style={{ width: 10, flexShrink: 0 }} />
-            <div style={{ flex: 3, minWidth: 0, boxShadow: OV_B }} />
-          </div>
-          {/* 헤더 3단 — 예약/비중/전년비 증감 · 리드/전년비/최장 */}
-          <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 6, borderBottom: '1px solid rgba(0,229,160,0.28)' }}>
-            <div style={{ width: 138, flexShrink: 0 }} />
-            <div style={{ flex: 7, minWidth: 0, boxShadow: OV }} />
-            <div style={{ width: 10, flexShrink: 0 }} />
-            <div style={{ flex: 3, minWidth: 0, display: 'flex', boxShadow: OV_B }}>
-              <div style={{ flex: 1.2, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#6a6a6a' }}>룸나잇</div>
-              <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>Mix</div>
-              <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>리드</div>
-              <div style={{ flex: 1, minWidth: 0, textAlign: 'right', fontSize: 10, color: '#5f5f5f' }}>전년비</div>
-              <div style={{ flex: 0.9, minWidth: 0, textAlign: 'right', paddingRight: 4, fontSize: 10, color: '#5f5f5f' }}>최장</div>
-            </div>
+            {displayRows.map((r, i) => renderTableRow(r, i))}
+            {renderTableRow(totalRow, 'total', true)}
           </div>
 
-          {displayRows.map((r, i) => renderRow(r, i))}
-          {renderRow(totalRow, 'total', true)}
-          </div>
-
-          <div style={{ fontSize: 11, color: '#6b6b6b', marginTop: 10 }}>막대 위 = 예약 건수 · 막대 아래 = 비중 · 화살표 = 비중 증감 · 밝은 민트 = 최다 예약 구간</div>
-          <div style={{ fontSize: 11, color: '#5a5a5a', marginTop: 10 }}>도착일 기준 집계 · 예약 생성일 기준 리드타임</div>
+          <div style={{ fontSize: 11, color: '#6b6b6b', marginTop: 10 }}>버킷 = 26년 비중 · 셀 hover 시 건수 · 밝은 민트 = 최다 예약 구간 · 행 클릭 시 상세</div>
+          <div style={{ fontSize: 11, color: '#5a5a5a', marginTop: 8 }}>도착일 기준 집계 · 예약 생성일 기준 리드타임</div>
 
           {panelRow && renderPanel(panelRow)}
         </div>
