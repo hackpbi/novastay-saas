@@ -427,9 +427,9 @@ export default function TodayPickupPage() {
           const pctTxt = (pct > 0 ? '+' : '') + pct.toFixed(1) + '%'
           // 비교 구간 지표 (from = base 슬롯 / to = cur 슬롯)
           const metricRows = [
-            { label: 'OCC', base: (sMo?.base.occ ?? 0).toFixed(1) + '%', cur: (sMo?.cur.occ ?? 0).toFixed(1) + '%' },
-            { label: 'ADR', base: sMo && sMo.base.nights > 0 ? fmtAdr(sMo.base.adr) : '—', cur: sMo && sMo.cur.nights > 0 ? fmtAdr(sMo.cur.adr) : '—' },
-            { label: 'REV', base: fmtBoxRev(sMo?.base.revenue ?? 0), cur: fmtBoxRev(sMo?.cur.revenue ?? 0) },
+            { label: '점유율', base: (sMo?.base.occ ?? 0).toFixed(1) + '%', cur: (sMo?.cur.occ ?? 0).toFixed(1) + '%' },
+            { label: '객단가', base: sMo && sMo.base.nights > 0 ? fmtAdr(sMo.base.adr) : '—', cur: sMo && sMo.cur.nights > 0 ? fmtAdr(sMo.cur.adr) : '—' },
+            { label: '매출',   base: fmtBoxRev(sMo?.base.revenue ?? 0), cur: fmtBoxRev(sMo?.cur.revenue ?? 0) },
           ]
           // 세그먼트 픽업 상위 3 (소분류만 · 절대값 내림차순 · 0 제외)
           const topSegs = segRows
@@ -496,8 +496,9 @@ export default function TodayPickupPage() {
                 )}
               </div>
 
-              {/* 세그먼트 픽업 상위 3 (각 height 12 고정) */}
+              {/* 세그먼트 픽업 상위 3 (블록 라벨 + 각 height 14 고정) */}
               <div style={{ marginTop: 5, paddingTop: 5, borderTop: '0.5px solid rgba(255,255,255,0.05)', textAlign: 'left' }}>
+                <div style={{ height: 13, fontSize: 9, fontWeight: 600, letterSpacing: '0.06em', color: 'rgba(0,229,160,0.5)' }}>PICKUP</div>
                 {[0, 1, 2].map(idx => {
                   const s = topSegs[idx]
                   return s ? (
@@ -548,15 +549,15 @@ export default function TodayPickupPage() {
 
               {/* 비교 구간 지표 — 지표가 행 / from·to 가 열 (우측 정렬, 높이 고정) */}
               <div style={{ marginTop: 6, paddingTop: 6, borderTop: '0.5px solid rgba(255,255,255,0.07)', fontVariantNumeric: 'tabular-nums' }}>
-                {/* 헤더 행 (구간 연동) */}
-                <div style={{ display: 'grid', gridTemplateColumns: '30px 1fr 1fr', height: 12, fontSize: 9, color: 'rgba(255,255,255,0.25)' }}>
-                  <span />
+                {/* 블록 라벨(OTB, 절대값) + 구간 헤더 (연동) */}
+                <div style={{ display: 'grid', gridTemplateColumns: '34px 1fr 1fr', height: 13, fontSize: 9, color: 'rgba(255,255,255,0.25)', alignItems: 'center' }}>
+                  <span style={{ textAlign: 'left', fontWeight: 600, letterSpacing: '0.06em', color: 'rgba(91,141,239,0.6)' }}>OTB</span>
                   <span style={{ textAlign: 'right' }}>{fromLabel}</span>
                   <span style={{ textAlign: 'right', color: 'rgba(0,229,160,0.6)' }}>{toLabel}</span>
                 </div>
                 {/* 지표 행 × 3 */}
                 {metricRows.map(r => (
-                  <div key={r.label} style={{ display: 'grid', gridTemplateColumns: '30px 1fr 1fr', height: 14, alignItems: 'center', fontSize: 10 }}>
+                  <div key={r.label} style={{ display: 'grid', gridTemplateColumns: '34px 1fr 1fr', height: 14, alignItems: 'center', fontSize: 10 }}>
                     <span style={{ textAlign: 'left', fontSize: 9, color: 'rgba(255,255,255,0.28)' }}>{r.label}</span>
                     <span style={{ textAlign: 'right', color: 'rgba(255,255,255,0.35)' }}>{r.base}</span>
                     <span style={{ textAlign: 'right', color: 'rgba(255,255,255,0.75)' }}>{r.cur}</span>
