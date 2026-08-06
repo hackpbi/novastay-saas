@@ -114,6 +114,15 @@ export default function TodayPickupPage() {
   // ── 포맷 헬퍼 ────────────────────────────────────────────────────────────────────
   const fmtAdr = (n: number) =>
     adrUnit === '천원' ? Math.round(n / 1000).toLocaleString() : Math.round(n).toLocaleString()
+  const fmtBoxRev = (n: number) =>
+    revUnit === '백만원' ? (n / 1_000_000).toFixed(1)
+    : revUnit === '천원'  ? Math.round(n / 1000).toLocaleString()
+    : Math.round(n).toLocaleString()
+
+  // 비교 구간 라벨 (from/to 슬롯 시각, KST HH:MM) — 고정 문자열 금지
+  const hhmm = (ts: string) => new Date(ts).toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false })
+  const fromLabel = fromSlot ? hhmm(fromSlot) : '새벽'
+  const toLabel   = toSlot ? hhmm(toSlot) : '-'
 
   const posColor = '#00E5A0'
   const negColor = '#E24B4A'
@@ -416,13 +425,12 @@ export default function TodayPickupPage() {
           const on     = i === selectedMonthIdx
           const pct    = base > 0 ? (pu / base) * 100 : 0        // base 0 가드 (먼 미래 월 예약 없음 → Infinity 방지)
           const pctTxt = (pct > 0 ? '+' : '') + pct.toFixed(1) + '%'
-          // OTB 현황 (현재 to 슬롯 기준)
-          const occTxt = (sMo?.cur.occ ?? 0).toFixed(1) + '%'
-          const adrTxt = sMo && sMo.cur.nights > 0 ? fmtAdr(sMo.cur.adr) : '—'
-          const curRevVal = sMo?.cur.revenue ?? 0
-          const revTxt = revUnit === '백만원' ? (curRevVal / 1_000_000).toFixed(1)
-                       : revUnit === '천원'  ? Math.round(curRevVal / 1000).toLocaleString()
-                       : Math.round(curRevVal).toLocaleString()
+          // 비교 구간 지표 (from = base 슬롯 / to = cur 슬롯)
+          const metricRows = [
+            { label: 'OCC', base: (sMo?.base.occ ?? 0).toFixed(1) + '%', cur: (sMo?.cur.occ ?? 0).toFixed(1) + '%' },
+            { label: 'ADR', base: sMo && sMo.base.nights > 0 ? fmtAdr(sMo.base.adr) : '—', cur: sMo && sMo.cur.nights > 0 ? fmtAdr(sMo.cur.adr) : '—' },
+            { label: 'REV', base: fmtBoxRev(sMo?.base.revenue ?? 0), cur: fmtBoxRev(sMo?.cur.revenue ?? 0) },
+          ]
           // 세그먼트 픽업 상위 3 (소분류만 · 절대값 내림차순 · 0 제외)
           const topSegs = segRows
             .filter(r => r.level === 'sub')
@@ -495,7 +503,7 @@ export default function TodayPickupPage() {
                   return s ? (
                     <div
                       key={idx}
-                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 12, fontSize: 9, cursor: 'help' }}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 14, fontSize: 11, cursor: 'help' }}
                       onMouseEnter={e => {
                         const rect = e.currentTarget.getBoundingClientRect()
                         // 이미 받은 데이터에서 어카운트별 픽업 집계 (추가 RPC 없음)
@@ -533,23 +541,27 @@ export default function TodayPickupPage() {
                       </span>
                     </div>
                   ) : (
-                    <div key={idx} style={{ height: 12 }} />
+                    <div key={idx} style={{ height: 14 }} />
                   )
                 })}
               </div>
 
-              {/* OTB 현황 — 라벨 행 / 값 행 분리 (높이 고정) */}
-              <div style={{ marginTop: 8, paddingTop: 7, borderTop: '0.5px solid rgba(255,255,255,0.07)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', fontSize: 9, color: 'rgba(255,255,255,0.28)', height: 12 }}>
-                  <span style={{ textAlign: 'center' }}>OCC</span>
-                  <span style={{ textAlign: 'center' }}>ADR</span>
-                  <span style={{ textAlign: 'center' }}>REV</span>
+              {/* 비교 구간 지표 — 지표가 행 / from·to 가 열 (우측 정렬, 높이 고정) */}
+              <div style={{ marginTop: 6, paddingTop: 6, borderTop: '0.5px solid rgba(255,255,255,0.07)', fontVariantNumeric: 'tabular-nums' }}>
+                {/* 헤더 행 (구간 연동) */}
+                <div style={{ display: 'grid', gridTemplateColumns: '30px 1fr 1fr', height: 12, fontSize: 9, color: 'rgba(255,255,255,0.25)' }}>
+                  <span />
+                  <span style={{ textAlign: 'right' }}>{fromLabel}</span>
+                  <span style={{ textAlign: 'right', color: 'rgba(0,229,160,0.6)' }}>{toLabel}</span>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', fontSize: 11, color: 'rgba(255,255,255,0.62)', height: 15, fontVariantNumeric: 'tabular-nums' }}>
-                  <span style={{ textAlign: 'center' }}>{occTxt}</span>
-                  <span style={{ textAlign: 'center' }}>{adrTxt}</span>
-                  <span style={{ textAlign: 'center' }}>{revTxt}</span>
-                </div>
+                {/* 지표 행 × 3 */}
+                {metricRows.map(r => (
+                  <div key={r.label} style={{ display: 'grid', gridTemplateColumns: '30px 1fr 1fr', height: 14, alignItems: 'center', fontSize: 10 }}>
+                    <span style={{ textAlign: 'left', fontSize: 9, color: 'rgba(255,255,255,0.28)' }}>{r.label}</span>
+                    <span style={{ textAlign: 'right', color: 'rgba(255,255,255,0.35)' }}>{r.base}</span>
+                    <span style={{ textAlign: 'right', color: 'rgba(255,255,255,0.75)' }}>{r.cur}</span>
+                  </div>
+                ))}
               </div>
             </button>
           )
