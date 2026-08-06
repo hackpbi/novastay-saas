@@ -99,7 +99,7 @@ export default function TodayPickupPage() {
   }, [showUnitSetting])
 
   // ── 모달 상태 ────────────────────────────────────────────────────────────────────
-  const [modalState, setModalState] = useState<{ businessDate: string | null } | null>(null)
+  const [modalState, setModalState] = useState<{ businessDate: string | null; monthKey: string } | null>(null)
 
   // ── 포맷 헬퍼 ────────────────────────────────────────────────────────────────────
   const fmtAdr = (n: number) =>
@@ -232,7 +232,7 @@ export default function TodayPickupPage() {
           onClick: (_e: any, els: any[]) => {
             if (!els.length) return
             const d = daily[els[0].index]
-            if (d) setModalState({ businessDate: d.dateStr })
+            if (d) setModalState({ businessDate: d.dateStr, monthKey: mk })
           },
           onHover: (e: any, els: any[]) => {
             const cv = e?.native?.target as HTMLCanvasElement | undefined
@@ -337,18 +337,6 @@ export default function TodayPickupPage() {
             ))}
           </select>
 
-          {/* 📅 MTD */}
-          <button
-            onClick={() => setModalState({ businessDate: null })}
-            style={{ width: 28, height: 28, border: '0.5px solid rgba(0,229,160,0.25)', borderRadius: 5, background: 'none', color: 'rgba(0,229,160,0.7)', fontSize: 14, marginLeft: 3, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            aria-label="MTD 픽업"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" />
-              <line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
-          </button>
-
           {/* ⚙ 단위 설정 */}
           <div className="unit-setting-wrap" style={{ position: 'relative' }}>
             <button
@@ -445,32 +433,56 @@ export default function TodayPickupPage() {
                 <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: '#00E5A0' }} />
               )}
 
-              {/* 라벨 */}
-              <div style={{ fontSize: 11, color: `rgba(255,255,255,${on ? 0.75 : has ? 0.5 : 0.3})` }}>
+              {/* MTD 픽업 아이콘 (우측 상단, 해당 월 전체 모달) */}
+              <div
+                onClick={e => { e.stopPropagation(); setModalState({ businessDate: null, monthKey: mkI }) }}
+                style={{
+                  position: 'absolute', top: 7, right: 6, width: 20, height: 20,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 12, cursor: 'pointer', borderRadius: 4,
+                  color: `rgba(0,229,160,${on ? 0.75 : 0.4})`,
+                  border: `0.5px solid rgba(0,229,160,${on ? 0.35 : 0.18})`,
+                }}
+                aria-label="해당 월 MTD 픽업"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+              </div>
+
+              {/* 라벨 (height 16) */}
+              <div style={{ fontSize: 11, height: 16, color: `rgba(255,255,255,${on ? 0.75 : has ? 0.5 : 0.3})` }}>
                 {m.month0 + 1}월
                 <span style={{ fontSize: '0.82em', marginLeft: 3, color: `rgba(255,255,255,${on ? 0.4 : 0.22})` }}>{String(m.year).slice(-2)}년</span>
               </div>
 
-              {/* 픽업 순증감 */}
-              {has ? (
-                <div style={{ marginTop: 2, display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 4 }}>
-                  <span style={{ fontSize: 17, fontWeight: 500, color: pos ? '#00E5A0' : '#E24B4A' }}>
-                    {pos ? '+' : ''}{pu}
-                  </span>
-                  <span style={{ fontSize: 11, color: `rgba(${accent},0.6)` }}>({pctTxt})</span>
-                </div>
-              ) : (
-                <div style={{ fontSize: 11, marginTop: 5, marginBottom: 1, color: 'rgba(255,255,255,0.2)' }}>픽업없음</div>
-              )}
+              {/* 픽업 순증감 (height 26 고정) */}
+              <div style={{ height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 2 }}>
+                {has ? (
+                  <>
+                    <span style={{ fontSize: 17, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: pos ? '#00E5A0' : '#E24B4A' }}>
+                      {pos ? '+' : ''}{pu}
+                    </span>
+                    <span style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums', color: `rgba(${accent},0.6)` }}>({pctTxt})</span>
+                  </>
+                ) : (
+                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)' }}>픽업없음</span>
+                )}
+              </div>
 
-              {/* OTB 현황 3열 */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, marginTop: 8, paddingTop: 7, borderTop: '0.5px solid rgba(255,255,255,0.07)' }}>
-                {([['OCC', occTxt], ['ADR', adrTxt], ['REV', revTxt]] as const).map(([label, value]) => (
-                  <div key={label} style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.28)', marginBottom: 1 }}>{label}</div>
-                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.62)' }}>{value}</div>
-                  </div>
-                ))}
+              {/* OTB 현황 — 라벨 행 / 값 행 분리 (높이 고정) */}
+              <div style={{ marginTop: 8, paddingTop: 7, borderTop: '0.5px solid rgba(255,255,255,0.07)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', fontSize: 9, color: 'rgba(255,255,255,0.28)', height: 12 }}>
+                  <span style={{ textAlign: 'center' }}>OCC</span>
+                  <span style={{ textAlign: 'center' }}>ADR</span>
+                  <span style={{ textAlign: 'center' }}>REV</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', fontSize: 11, color: 'rgba(255,255,255,0.62)', height: 15, fontVariantNumeric: 'tabular-nums' }}>
+                  <span style={{ textAlign: 'center' }}>{occTxt}</span>
+                  <span style={{ textAlign: 'center' }}>{adrTxt}</span>
+                  <span style={{ textAlign: 'center' }}>{revTxt}</span>
+                </div>
               </div>
             </button>
           )
@@ -507,12 +519,12 @@ export default function TodayPickupPage() {
 
           {/* ── 하단 주석 ── */}
           <div style={{ fontSize: 11, color: '#00E5A0', letterSpacing: '0.02em' }}>
-            단위 : 실 · {adrUnit} · {revUnit}  ·  HOU 제외  ·  순증감 기준
+            우측 상단 아이콘 = 해당 월 MTD 픽업 상세 · 단위 : % · {adrUnit} · {revUnit}
           </div>
         </>
       )}
 
-      {/* ── 세그먼트 상세 모달 (막대 클릭 = 일자 / 📅 = 월 전체) ── */}
+      {/* ── 세그먼트 상세 모달 (월 박스 아이콘 = 해당 월 / 차트 막대 = 해당 일자) ── */}
       <TodayPickupSegModal
         open={modalState != null}
         onClose={() => setModalState(null)}
@@ -520,7 +532,7 @@ export default function TodayPickupPage() {
         updateDate={updateDate}
         fromSlot={fromSlot}
         toSlot={toSlot}
-        monthKey={mk}
+        monthKey={modalState?.monthKey ?? mk}
         businessDate={modalState?.businessDate ?? undefined}
         adrUnit={adrUnit}
         revUnit={revUnit}
