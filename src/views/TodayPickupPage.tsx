@@ -295,16 +295,16 @@ export default function TodayPickupPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, boxSizing: 'border-box' }}>
       {/* ── 헤더 1행: 좌 타이틀 / 우 비교 구간 ── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexShrink: 0, marginBottom: 12 }}>
 
-        {/* 좌 — 타이틀 + 선택 월 */}
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
-          <span style={{ fontSize: 19, fontWeight: 500, color: 'rgba(255,255,255,0.92)' }}>당일 픽업</span>
-          <span style={{ fontSize: 13, color: '#00E5A0' }}>
-            {cur.month0 + 1}월
-            <span style={{ fontSize: '0.78em', marginLeft: 3, color: 'rgba(0,229,160,0.6)' }}>{String(cur.year).slice(-2)}년</span>
+        {/* 좌 — 타이틀 + 선택 월 (PickDetailPage 규격) */}
+        <span style={{ fontSize: 24, fontWeight: 500, color: '#fff', letterSpacing: '0.04em' }}>
+          당일 픽업_
+          <span style={{ color: '#00E5A0' }}>
+            {String(cur.month0 + 1).padStart(2, '0')}월{' '}
+            <span style={{ fontSize: '0.7em' }}>{String(cur.year).slice(-2)}년</span>
           </span>
-        </div>
+        </span>
 
         {/* 우 — 비교 구간 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, height: 40 }}>
