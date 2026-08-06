@@ -584,7 +584,7 @@ export default function DataUploadPage() {
         }
       }
 
-    } else {
+    } else if (tab === 'otb' || tab === 'today') {
       const isToday = tab === 'today'
       // ── OTB: 전체 파싱 후 DELETE 1회 + INSERT 전체 ───────────────────────
 
@@ -690,6 +690,8 @@ export default function DataUploadPage() {
           }])
         }
       }
+    } else {
+      console.error('[handleUploadAll] 처리되지 않은 탭:', tab)
     }
 
     if (otbUploaded) invalidateOtb()
