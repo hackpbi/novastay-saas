@@ -325,50 +325,16 @@ export default function TodayPickupPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, boxSizing: 'border-box' }}>
-      {/* ── 헤더 (한 줄): 6개월 pill + 비교구간 + 버튼 ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-
-        {/* 좌: 6개월 pill */}
-        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6 }}>
-          {monthList.map((m, i) => {
-            const mkI = `${m.year}-${String(m.month0 + 1).padStart(2, '0')}`
-            const net = summary.monthly[mkI]?.pu.nights ?? 0
-            const selected = i === selectedMonthIdx
-            return (
-              <button
-                key={mkI}
-                onClick={() => setSelectedMonthIdx(i)}
-                style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center',
-                  padding: '7px 4px', borderRadius: 8, cursor: 'pointer',
-                  border: selected ? '0.5px solid rgba(0,229,160,0.5)' : '0.5px solid rgba(255,255,255,0.08)',
-                  background: selected ? 'linear-gradient(175deg, #0d1f1a 0%, #0a0a0a 60%)' : '#0d0d0d',
-                }}
-              >
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
-                  {m.month0 + 1}월
-                  <span style={{ fontSize: '0.82em', marginLeft: 3, color: 'rgba(255,255,255,0.28)' }}>{String(m.year).slice(-2)}</span>
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 500, marginTop: 2, color: signColor(net) }}>
-                  {net > 0 ? '+' : ''}{fmtNights(net)}
-                </div>
-              </button>
-            )
-          })}
-        </div>
-
-        {/* 우: 비교구간 + 버튼 */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
-          paddingLeft: 10, borderLeft: '0.5px solid rgba(255,255,255,0.08)',
-        }}>
-          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', whiteSpace: 'nowrap' }}>비교</span>
+      {/* ── 헤더 1행: 비교 구간 (우측 정렬, 감싸는 박스 없음) ── */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, height: 40 }}>
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', whiteSpace: 'nowrap' }}>비교</span>
 
           {/* from */}
           <select
             value={fromSlot ?? ''}
             onChange={e => setFromSlot(e.target.value === '' ? null : e.target.value)}
-            style={{ fontSize: 11, padding: '4px 6px', background: '#0a0a0a', color: 'rgba(255,255,255,0.85)', border: '0.5px solid rgba(255,255,255,0.15)', borderRadius: 5, fontFamily: 'inherit', cursor: 'pointer' }}
+            style={{ fontSize: 12, padding: '6px 8px', background: '#0a0a0a', color: 'rgba(255,255,255,0.85)', border: '0.5px solid rgba(255,255,255,0.15)', borderRadius: 5, fontFamily: 'inherit', cursor: 'pointer' }}
           >
             <option value="">새벽 OTB</option>
             {sortedSlots.map(s => (
@@ -376,13 +342,13 @@ export default function TodayPickupPage() {
             ))}
           </select>
 
-          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>→</span>
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>→</span>
 
           {/* to */}
           <select
             value={toSlot ?? ''}
             onChange={e => setToSlot(e.target.value === '' ? null : e.target.value)}
-            style={{ fontSize: 11, padding: '4px 6px', background: '#0a0a0a', color: 'rgba(255,255,255,0.85)', border: '0.5px solid rgba(0,229,160,0.35)', borderRadius: 5, fontFamily: 'inherit', cursor: 'pointer' }}
+            style={{ fontSize: 12, padding: '6px 8px', background: '#0a0a0a', color: 'rgba(255,255,255,0.85)', border: '0.5px solid rgba(0,229,160,0.35)', borderRadius: 5, fontFamily: 'inherit', cursor: 'pointer' }}
           >
             {sortedSlots.map(s => (
               <option key={s.slot} value={s.slot} disabled={fromSlot != null && s.slot <= fromSlot}>
@@ -394,7 +360,7 @@ export default function TodayPickupPage() {
           {/* 📅 MTD */}
           <button
             onClick={() => setModalState({ businessDate: null })}
-            style={{ padding: '4px 6px', border: '0.5px solid rgba(0,229,160,0.25)', borderRadius: 5, background: 'none', color: 'rgba(0,229,160,0.7)', fontSize: 14, marginLeft: 3, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            style={{ width: 28, height: 28, border: '0.5px solid rgba(0,229,160,0.25)', borderRadius: 5, background: 'none', color: 'rgba(0,229,160,0.7)', fontSize: 14, marginLeft: 3, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             aria-label="MTD 픽업"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -407,7 +373,7 @@ export default function TodayPickupPage() {
           <div className="unit-setting-wrap" style={{ position: 'relative' }}>
             <button
               onClick={() => setShowUnitSetting(v => !v)}
-              style={{ padding: '4px 6px', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 5, background: showUnitSetting ? 'rgba(0,229,160,0.1)' : 'none', color: showUnitSetting ? '#00E5A0' : 'rgba(255,255,255,0.4)', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
+              style={{ width: 28, height: 28, border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 5, background: showUnitSetting ? 'rgba(0,229,160,0.1)' : 'none', color: showUnitSetting ? '#00E5A0' : 'rgba(255,255,255,0.4)', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
               aria-label="단위 설정"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -457,6 +423,52 @@ export default function TodayPickupPage() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* ── 헤더 2행: 월 박스 6개 (전체 폭) ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6, marginBottom: 14 }}>
+        {monthList.map((m, i) => {
+          const mkI    = `${m.year}-${String(m.month0 + 1).padStart(2, '0')}`
+          const sMo    = summary.monthly[mkI]
+          const pu     = sMo?.pu.nights ?? 0
+          const base   = sMo?.base.nights ?? 0
+          const has    = pu !== 0
+          const pos    = pu > 0
+          const accent = has ? (pos ? '0,229,160' : '226,75,74') : null
+          const on     = i === selectedMonthIdx
+          const pct    = base > 0 ? (pu / base) * 100 : 0        // base 0 가드 (먼 미래 월 예약 없음 → Infinity 방지)
+          const pctTxt = (pct > 0 ? '+' : '') + pct.toFixed(1) + '%'
+          const border = on
+            ? `1px solid ${has ? `rgba(${accent},0.75)` : 'rgba(255,255,255,0.3)'}`
+            : `0.5px solid ${has ? `rgba(${accent},0.3)` : 'rgba(255,255,255,0.07)'}`
+          const background = on
+            ? (has ? `linear-gradient(175deg, rgba(${accent},0.12) 0%, #0a0a0a 60%)`
+                   : 'linear-gradient(175deg,#141414 0%,#0a0a0a 60%)')
+            : (has ? `linear-gradient(175deg, rgba(${accent},0.05) 0%, #0d0d0d 60%)`
+                   : '#0b0b0b')
+          return (
+            <button
+              key={mkI}
+              onClick={() => setSelectedMonthIdx(i)}
+              style={{ padding: '10px 4px', textAlign: 'center', cursor: 'pointer', transition: 'all 0.15s', borderRadius: 8, border, background }}
+            >
+              <div style={{ fontSize: 11, color: `rgba(255,255,255,${has ? 0.55 : 0.32})` }}>
+                {m.month0 + 1}월
+                <span style={{ fontSize: '0.82em', marginLeft: 3, color: `rgba(255,255,255,${has ? 0.3 : 0.2})` }}>{String(m.year).slice(-2)}년</span>
+              </div>
+              {has ? (
+                <div style={{ marginTop: 3, display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 17, fontWeight: 500, color: pos ? '#00E5A0' : '#E24B4A' }}>
+                    {pos ? '+' : ''}{pu}
+                  </span>
+                  <span style={{ fontSize: 11, color: `rgba(${accent},0.6)` }}>({pctTxt})</span>
+                </div>
+              ) : (
+                <div style={{ fontSize: 11, marginTop: 7, color: 'rgba(255,255,255,0.22)' }}>픽업없음</div>
+              )}
+            </button>
+          )
+        })}
       </div>
 
       {/* ── 상태 분기 ── */}
