@@ -249,7 +249,8 @@
       "PowerShell(npx tsc --noEmit; \"EXIT $LASTEXITCODE\"; \"---\"; git status --short)",
       "Bash(node analyze.mjs)",
       "Bash(node -e \"console.log\\('Aug 1 2026 getDay =', new Date\\(2026,7,1\\).getDay\\(\\), '\\(6=Sat\\) => leading blanks', new Date\\(2026,7,1\\).getDay\\(\\)\\); console.log\\('Jul 1 2026 =', new Date\\(2026,6,1\\).getDay\\(\\), '| Sep 1 2026 =', new Date\\(2026,8,1\\).getDay\\(\\)\\)\")",
-      "PowerShell(Remove-Item -Recurse -Force .next-verify; \"removed: $\\(-not \\(Test-Path .next-verify\\)\\)\")"
+      "PowerShell(Remove-Item -Recurse -Force .next-verify; \"removed: $\\(-not \\(Test-Path .next-verify\\)\\)\")",
+      "PowerShell($env:NEXT_DIST_DIR='.next-verify'; npm run build 2>&1 | Select-Object -Last 12)"
     ],
     "additionalDirectories": [
       "C:\\dev\\18_NovaStay_Saas_ver1\\.next-verify"
