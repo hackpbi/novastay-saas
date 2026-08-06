@@ -5,6 +5,7 @@
 // MarketPickupPage 헤더 B타입 애니메이션 + LyComparisonSegModal 기어 팝오버 패턴 재사용.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useHotel } from '@/contexts/HotelContext'
@@ -100,6 +101,15 @@ export default function TodayPickupPage() {
 
   // ── 모달 상태 ────────────────────────────────────────────────────────────────────
   const [modalState, setModalState] = useState<{ businessDate: string | null; monthKey: string } | null>(null)
+
+  // ── 세그 줄 호버 → 어카운트 툴팁 ─────────────────────────────────────────────────
+  type SegTooltip = {
+    left: number; top: number; width: number
+    segName: string; segColor: string | null; monthLabel: string
+    shown: { name: string; pu: number }[]
+    restCount: number; restSum: number; total: number
+  }
+  const [segTooltip, setSegTooltip] = useState<SegTooltip | null>(null)
 
   // ── 포맷 헬퍼 ────────────────────────────────────────────────────────────────────
   const fmtAdr = (n: number) =>
@@ -416,7 +426,7 @@ export default function TodayPickupPage() {
           // 세그먼트 픽업 상위 3 (소분류만 · 절대값 내림차순 · 0 제외)
           const topSegs = segRows
             .filter(r => r.level === 'sub')
-            .map(r => ({ name: r.name, pu: r.monthly[mkI]?.pu.nights ?? 0, color: r.fontDarkColor }))
+            .map(r => ({ name: r.name, pu: r.monthly[mkI]?.pu.nights ?? 0, color: r.fontDarkColor, codes: r.segmentationCodes }))
             .filter(s => s.pu !== 0)
             .sort((a, b) => Math.abs(b.pu) - Math.abs(a.pu))
             .slice(0, 3)
@@ -483,7 +493,40 @@ export default function TodayPickupPage() {
                 {[0, 1, 2].map(idx => {
                   const s = topSegs[idx]
                   return s ? (
-                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 12, fontSize: 9 }}>
+                    <div
+                      key={idx}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 12, fontSize: 9, cursor: 'help' }}
+                      onMouseEnter={e => {
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        // 이미 받은 데이터에서 어카운트별 픽업 집계 (추가 RPC 없음)
+                        const accMap = new Map<string, number>()
+                        for (const r of todayRows) {
+                          if (r.business_date.slice(0, 7) !== mkI) continue
+                          if (!s.codes.includes(r.segmentation)) continue
+                          const k = r.account_name ?? '(없음)'
+                          accMap.set(k, (accMap.get(k) ?? 0) + (r.pu_nights ?? 0))
+                        }
+                        const accounts = [...accMap.entries()]
+                          .map(([name, pu]) => ({ name, pu }))
+                          .filter(a => a.pu !== 0)
+                          .sort((a, b) => Math.abs(b.pu) - Math.abs(a.pu))
+                        const shown = accounts.slice(0, 10)
+                        const rest  = accounts.slice(10)
+                        const restSum = rest.reduce((sum, a) => sum + a.pu, 0)
+                        const total   = accounts.reduce((sum, a) => sum + a.pu, 0)
+                        const TW = 210
+                        let left = rect.left
+                        if (left + TW > window.innerWidth - 8) left = window.innerWidth - TW - 8
+                        if (left < 8) left = 8
+                        setSegTooltip({
+                          left, top: rect.bottom + 6, width: TW,
+                          segName: s.name, segColor: s.color,
+                          monthLabel: `${m.month0 + 1}월 ${String(m.year).slice(-2)}년`,
+                          shown, restCount: rest.length, restSum, total,
+                        })
+                      }}
+                      onMouseLeave={() => setSegTooltip(null)}
+                    >
                       <span style={{ color: s.color ?? 'rgba(255,255,255,0.6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
                       <span style={{ color: s.pu < 0 ? '#E24B4A' : '#00E5A0', fontWeight: 600, flexShrink: 0, marginLeft: 4 }}>
                         {s.pu > 0 ? '+' : ''}{s.pu}
@@ -561,6 +604,38 @@ export default function TodayPickupPage() {
         adrUnit={adrUnit}
         revUnit={revUnit}
       />
+
+      {/* ── 세그 줄 호버 어카운트 툴팁 (body-appended fixed) ── */}
+      {segTooltip && createPortal(
+        <div style={{
+          position: 'fixed', left: segTooltip.left, top: segTooltip.top, width: segTooltip.width,
+          zIndex: 99999, pointerEvents: 'none',
+          background: '#111', border: '0.5px solid rgba(0,229,160,0.3)', borderRadius: 8,
+          padding: '8px 10px', boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: segTooltip.segColor ?? 'rgba(255,255,255,0.85)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{segTooltip.segName}</span>
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', flexShrink: 0 }}>{segTooltip.monthLabel}</span>
+          </div>
+          {segTooltip.shown.map((a, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 16, fontSize: 11 }}>
+              <span style={{ color: 'rgba(255,255,255,0.7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 8 }}>{a.name}</span>
+              <span style={{ color: a.pu < 0 ? '#E24B4A' : '#00E5A0', fontWeight: 600, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{a.pu > 0 ? '+' : ''}{a.pu}</span>
+            </div>
+          ))}
+          {segTooltip.restCount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 16, fontSize: 11 }}>
+              <span style={{ color: 'rgba(255,255,255,0.4)' }}>외 {segTooltip.restCount}건</span>
+              <span style={{ color: segTooltip.restSum < 0 ? '#E24B4A' : '#00E5A0', fontWeight: 600, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{segTooltip.restSum > 0 ? '+' : ''}{segTooltip.restSum}</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 18, fontSize: 11, fontWeight: 600, marginTop: 4, paddingTop: 4, borderTop: '0.5px solid rgba(0,229,160,0.2)' }}>
+            <span style={{ color: 'rgba(255,255,255,0.6)' }}>합계</span>
+            <span style={{ color: segTooltip.total < 0 ? '#E24B4A' : '#00E5A0', fontVariantNumeric: 'tabular-nums' }}>{segTooltip.total > 0 ? '+' : ''}{segTooltip.total}</span>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   )
 }
