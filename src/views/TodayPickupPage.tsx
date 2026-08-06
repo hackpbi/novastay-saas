@@ -173,7 +173,7 @@ export default function TodayPickupPage() {
   }, [calRows])
   const events = useMemo(
     () => Object.entries(eventMap).map(([day, name]) => ({ dayIndex: Number(day) - 1, name })),
-    [eventMap],
+    [eventMap, cur.year, cur.month0],
   )
 
   // ── 요일 / 주말 / 오늘 (KST) ──────────────────────────────────────────────────────
@@ -187,7 +187,6 @@ export default function TodayPickupPage() {
   // ── 차트 ─────────────────────────────────────────────────────────────────────────
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const chartRef  = useRef<any>(null)
-  const [badges, setBadges] = useState<{ dayIndex: number; name: string; x: number; bottom: number }[]>([])
   useEffect(() => {
     if (!hasBaseline || !hasToday) return
     let cancelled = false
@@ -260,17 +259,36 @@ export default function TodayPickupPage() {
         },
       }
 
-      // 이벤트 배지 위치 재계산 (생성·리사이즈 시)
-      const updateBadges = () => {
-        const chart = chartRef.current
-        if (!chart?.scales?.x || !chart.chartArea) { setBadges([]); return }
-        const x = chart.scales.x
-        const bottom = chart.chartArea.bottom
-        setBadges(events.map(e => ({ dayIndex: e.dayIndex, name: e.name, x: x.getPixelForValue(e.dayIndex), bottom })))
+      // 이벤트 배지 — canvas 직접 렌더 (React 미경유 → 무한루프 원천 차단)
+      const eventBadges = {
+        id: 'eventBadges',
+        afterDatasetsDraw(chart: any) {
+          const xs = chart.scales.x
+          if (!xs || !chart.chartArea) return
+          const ctx = chart.ctx
+          ctx.save()
+          ctx.textAlign    = 'center'
+          ctx.textBaseline = 'middle'
+          ctx.font         = '600 9px system-ui'
+          events.forEach(e => {
+            const px = xs.getPixelForValue(e.dayIndex)
+            const py = chart.chartArea.bottom + 36
+            ctx.beginPath()
+            ctx.arc(px, py, 7, 0, Math.PI * 2)
+            ctx.fillStyle   = 'rgba(245,158,11,0.15)'
+            ctx.fill()
+            ctx.strokeStyle = 'rgba(245,158,11,0.5)'
+            ctx.lineWidth   = 0.5
+            ctx.stroke()
+            ctx.fillStyle = '#F59E0B'
+            ctx.fillText(e.name.charAt(0), px, py)
+          })
+          ctx.restore()
+        },
       }
 
       chartRef.current = new Chart(canvasRef.current, {
-        plugins: [todayBand, zeroLine, valueLabels],
+        plugins: [todayBand, zeroLine, valueLabels, eventBadges],
         data: {
           labels,
           datasets: [
@@ -307,7 +325,6 @@ export default function TodayPickupPage() {
         options: {
           responsive: true, maintainAspectRatio: false,
           layout: { padding: { top: 14, bottom: 20 } },
-          onResize: () => requestAnimationFrame(updateBadges),
           interaction: { mode: 'index', intersect: false },
           onClick: (_e: any, els: any[]) => {
             if (!els.length) return
@@ -374,14 +391,13 @@ export default function TodayPickupPage() {
           },
         },
       })
-      updateBadges()
     })()
     return () => {
       cancelled = true
       chartRef.current?.destroy(); chartRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [daily, hasBaseline, hasToday, cur.month0, events, todayIdx])
+  }, [daily, hasBaseline, hasToday, cur.year, cur.month0, events, todayIdx])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, boxSizing: 'border-box' }}>
@@ -672,19 +688,6 @@ export default function TodayPickupPage() {
           </div>
           <div style={{ position: 'relative', height: 380 }}>
             <canvas ref={canvasRef} />
-            {/* 이벤트 배지 오버레이 — 첫 글자 한 자, 골드 원형 (전체 명칭은 title/툴팁) */}
-            <div style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
-              {badges.map(b => (
-                <div key={b.dayIndex} title={b.name}
-                  style={{
-                    position: 'absolute', left: b.x, top: b.bottom + 36, transform: 'translateX(-50%)',
-                    width: 14, height: 14, lineHeight: '13px', textAlign: 'center', fontSize: 9, fontWeight: 600,
-                    borderRadius: '50%', background: 'rgba(245,158,11,0.15)', border: '0.5px solid rgba(245,158,11,0.5)', color: '#F59E0B',
-                  }}>
-                  {b.name.charAt(0)}
-                </div>
-              ))}
-            </div>
           </div>
 
           {/* ── 하단 주석 ── */}
