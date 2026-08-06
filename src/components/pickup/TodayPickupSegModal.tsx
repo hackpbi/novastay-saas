@@ -180,7 +180,7 @@ export default function TodayPickupSegModal({
 
   const { rows, summary } = useMemo(
     () => !loading && schema.length > 0
-      ? buildTodayPickupSegTable({ schema, todayRows: scopedRows, roomCount })
+      ? buildTodayPickupSegTable({ schema, todayRows: scopedRows, roomCount, daysOverride: businessDate ? 1 : undefined })
       : { rows: [], summary: { monthly: {} } as ReturnType<typeof buildTodayPickupSegTable>['summary'] },
     [schema, scopedRows, roomCount, loading],
   )

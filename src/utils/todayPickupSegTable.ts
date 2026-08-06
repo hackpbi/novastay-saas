@@ -94,12 +94,13 @@ export function buildTodayPickupSegTable(args: {
   schema:    MarketSchemaRow[]
   todayRows: TodayPickupRow[]
   roomCount: number
+  daysOverride?: number   // 단일 일자 스코프면 1 전달 → occ/revpar 일 분모 계산
 }): {
   rows:      TodayPickupSegRow[]
   summary:   TodayPickupSegSummary
   monthKeys: string[]
 } {
-  const { schema, todayRows, roomCount } = args
+  const { schema, todayRows, roomCount, daysOverride } = args
 
   // Step A: monthKeys
   const monthKeys = Array.from(new Set(
@@ -207,7 +208,8 @@ export function buildTodayPickupSegTable(args: {
     const m = toMonthly(acc)
     const [y, mo]     = mk.split('-').map(Number)
     const daysInMonth  = new Date(y, mo, 0).getDate()
-    const denom        = roomCount * daysInMonth
+    const days         = daysOverride ?? daysInMonth
+    const denom        = roomCount * days
     const baseOcc    = denom > 0 ? (m.base.nights / denom) * 100 : 0
     const baseRevpar = denom > 0 ?  m.base.revenue / denom        : 0
     const curOcc     = denom > 0 ? (m.cur.nights  / denom) * 100 : 0

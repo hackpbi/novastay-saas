@@ -80,17 +80,9 @@ export default function TodayPickupPage() {
   }, [updateDate])
 
   const [selectedMonthIdx, setSelectedMonthIdx] = useState(0)
-  const [titleShifting, setTitleShifting] = useState(false)
-  useEffect(() => {
-    setTitleShifting(true)
-    const t = setTimeout(() => setTitleShifting(false), 350)
-    return () => clearTimeout(t)
-  }, [selectedMonthIdx])
 
-  const cur       = monthList[selectedMonthIdx] ?? monthList[0]
-  const mk        = `${cur.year}-${String(cur.month0 + 1).padStart(2, '0')}`
-  const isFirst   = selectedMonthIdx === 0
-  const isLast    = selectedMonthIdx >= monthList.length - 1
+  const cur = monthList[selectedMonthIdx] ?? monthList[0]
+  const mk  = `${cur.year}-${String(cur.month0 + 1).padStart(2, '0')}`
 
   // ── 단위 설정 (기어) ─────────────────────────────────────────────────────────────
   const [adrUnit, setAdrUnit] = useState<'원' | '천원'>('천원')
@@ -132,13 +124,6 @@ export default function TodayPickupPage() {
   const curRev    = sm?.cur.revenue ?? 0
   const occDiff   = sm?.pu.occDiff ?? 0
 
-  // ── 최종 갱신 시각 (KST) ─────────────────────────────────────────────────────────
-  const lastUpdated = status?.snapshot_at
-    ? new Date(status.snapshot_at).toLocaleTimeString('ko-KR', {
-        timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false,
-      })
-    : '--:--'
-
   const hasBaseline = status?.has_baseline ?? false
   const hasToday    = status?.has_today ?? false
 
@@ -176,83 +161,89 @@ export default function TodayPickupPage() {
       if (cancelled || !canvasRef.current) return
       chartRef.current?.destroy()
 
-      const labels   = daily.map(d => String(d.day).padStart(2, '0'))
-      const puData   = daily.map(d => d.pu)
-      const occData  = daily.map(d => d.occ)
+      const labels = daily.map(d => String(d.day).padStart(2, '0'))
+      const puArr  = daily.map(d => d.pu)
+      const occArr = daily.map(d => d.occ)
+      const mx     = Math.max(2, Math.max(...puArr.map(Math.abs))) * 1.4
 
-      const puBaseline = {
-        id: 'puBaseline',
-        afterDraw(chart: any) {
-          const { ctx, scales: { x, yBar } } = chart
-          if (!yBar) return
-          const y0 = yBar.getPixelForValue(0)
+      // 픽업 0 기준선 (라인/막대 아래) — 인스턴스 전용 플러그인
+      const zeroLine = {
+        id: 'zeroLine',
+        beforeDatasetsDraw(chart: any) {
+          const s = chart.scales.y1
+          if (!s) return
+          const y = s.getPixelForValue(0)
+          const ctx = chart.ctx
           ctx.save()
-          ctx.beginPath(); ctx.moveTo(x.left, y0); ctx.lineTo(x.right, y0)
-          ctx.strokeStyle = 'rgba(0,229,160,0.4)'; ctx.lineWidth = 1
-          ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([])
+          ctx.setLineDash([5, 4]); ctx.lineWidth = 1
+          ctx.strokeStyle = 'rgba(0,229,160,0.3)'
+          ctx.beginPath()
+          ctx.moveTo(chart.chartArea.left, y); ctx.lineTo(chart.chartArea.right, y)
+          ctx.stroke(); ctx.restore()
+        },
+      }
+
+      // 값 라벨 — 점유율(막대 안쪽) / 픽업(위·아래, 0 생략)
+      const valueLabels = {
+        id: 'valueLabels',
+        afterDatasetsDraw(chart: any) {
+          const ctx = chart.ctx
+          ctx.save()
+          const occMeta = chart.getDatasetMeta(0)
+          const puMeta  = chart.getDatasetMeta(1)
+          ctx.font = '600 9px system-ui'
+          ctx.textAlign = 'center'
+          occMeta.data.forEach((pt: any, i: number) => {
+            ctx.fillStyle = 'rgba(160,190,240,0.75)'
+            ctx.fillText(Math.round(chart.data.datasets[0].data[i]) + '%', pt.x, pt.y + 11)
+          })
+          ctx.font = '600 10px system-ui'
+          puMeta.data.forEach((pt: any, i: number) => {
+            const v = chart.data.datasets[1].data[i]
+            if (v === 0) return
+            ctx.fillStyle = v < 0 ? '#E24B4A' : '#00E5A0'
+            ctx.fillText((v > 0 ? '+' : '') + v, pt.x, v < 0 ? pt.y + 15 : pt.y - 8)
+          })
           ctx.restore()
         },
       }
 
-      const puLabels = {
-        id: 'puLabels',
-        afterDatasetsDraw(chart: any) {
-          const { ctx, scales } = chart
-          const yBar = scales.yBar
-          if (!yBar) return
-          const idx = chart.data.datasets.findIndex((d: any) => d.yAxisID === 'yBar')
-          if (idx === -1) return
-          const meta = chart.getDatasetMeta(idx)
-          if (!meta?.data) return
-          puData.forEach((val: number, i: number) => {
-            if (!val || !meta.data[i]) return
-            const xPos = meta.data[i].x
-            const yTop = yBar.getPixelForValue(val)
-            ctx.save()
-            ctx.fillStyle = val > 0 ? posColor : negColor
-            ctx.font = 'bold 10px sans-serif'
-            ctx.textAlign = 'center'
-            if (val > 0) { ctx.textBaseline = 'bottom'; ctx.fillText(`+${Math.round(val)}`, xPos, yTop - 3) }
-            else         { ctx.textBaseline = 'top';    ctx.fillText(`${Math.round(val)}`,  xPos, yTop + 3) }
-            ctx.restore()
-          })
-        },
-      }
-
       chartRef.current = new Chart(canvasRef.current, {
-        plugins: [puBaseline, puLabels],
+        plugins: [zeroLine, valueLabels],
         data: {
           labels,
           datasets: [
             {
               type: 'bar',
-              label: '순증감',
-              data: puData,
-              backgroundColor: puData.map(v => (v > 0 ? posColor : v < 0 ? negColor : 'transparent')),
-              borderColor: 'transparent',
-              borderWidth: 0,
-              borderRadius: 3,
-              barPercentage: 0.6,
-              categoryPercentage: 0.9,
-              yAxisID: 'yBar',
+              label: 'OTB 점유율',
+              data: occArr,
               order: 2,
+              yAxisID: 'y',
+              backgroundColor: 'rgba(91,141,239,0.4)',
+              borderRadius: 2,
+              barPercentage: 0.68,
             },
             {
               type: 'line',
-              label: 'OTB 점유율',
-              data: occData,
-              borderColor: '#5B8DEF',
-              borderWidth: 2,
-              pointRadius: 0,
-              borderDash: [4, 3],
-              tension: 0.3,
-              yAxisID: 'yOcc',
+              label: '픽업',
+              data: puArr,
               order: 1,
+              yAxisID: 'y1',
+              borderColor: '#00E5A0',
+              borderWidth: 2,
+              tension: 0.25,
+              pointRadius:          puArr.map(v => v === 0 ? 0 : 3.5),
+              pointBackgroundColor: puArr.map(v => v < 0 ? '#E24B4A' : '#00E5A0'),
+              pointBorderColor:     puArr.map(v => v < 0 ? '#E24B4A' : '#00E5A0'),
+              segment: {
+                borderColor: (c: any) => (c.p0.parsed.y < 0 || c.p1.parsed.y < 0) ? '#E24B4A' : '#00E5A0',
+              },
             } as any,
           ],
         },
         options: {
           responsive: true, maintainAspectRatio: false,
+          layout: { padding: { top: 14 } },
           interaction: { mode: 'index', intersect: false },
           onClick: (_e: any, els: any[]) => {
             if (!els.length) return
@@ -278,10 +269,8 @@ export default function TodayPickupPage() {
                 label: (item: any) => {
                   const d = daily[item.dataIndex]
                   if (!d) return ''
-                  if (item.dataset.yAxisID === 'yBar') {
-                    return `순증감 ${d.pu > 0 ? '+' : ''}${Math.round(d.pu)}실`
-                  }
-                  return `OTB 점유율 ${d.occ}%`
+                  if (item.dataset.yAxisID === 'y') return `OTB 점유율 ${d.occ}%`
+                  return `픽업 ${d.pu > 0 ? '+' : ''}${Math.round(d.pu)}실`
                 },
               },
             },
@@ -292,20 +281,21 @@ export default function TodayPickupPage() {
               border: { display: false },
               ticks: { color: '#888', font: { size: 10 }, autoSkip: false, maxRotation: 0 },
             },
-            yBar: {
-              position: 'left',
+            y: {
+              position: 'left', min: 0, max: 100,
               grid: { color: 'rgba(255,255,255,0.05)' },
               border: { display: false },
-              ticks: {
-                color: '#444', font: { size: 10 }, stepSize: 1,
-                callback: (v: any) => (v > 0 ? `+${v}` : `${v}`),
-              },
+              ticks: { color: 'rgba(91,141,239,0.55)', font: { size: 11 }, stepSize: 25, callback: (v: any) => `${v}%` },
             },
-            yOcc: {
-              position: 'right', min: 0, max: 100,
+            y1: {
+              position: 'right', min: -mx, max: mx,
               grid: { display: false },
               border: { display: false },
-              ticks: { color: '#444', font: { size: 10 }, stepSize: 25, callback: (v: any) => `${v}%` },
+              ticks: {
+                color: 'rgba(0,229,160,0.55)', font: { size: 11 },
+                stepSize: Math.max(1, Math.round(mx / 2)),
+                callback: (v: any) => (v > 0 ? `+${v}` : `${v}`),
+              },
             },
           },
         },
@@ -335,75 +325,79 @@ export default function TodayPickupPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, boxSizing: 'border-box' }}>
-      {/* ── 헤더 ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {/* ‹ 이전 (B타입) */}
-          <button
-            onClick={() => setSelectedMonthIdx(i => Math.max(0, i - 1))}
-            disabled={isFirst}
-            style={{
-              overflow: 'hidden',
-              maxWidth: isFirst ? 0 : 60,
-              opacity: isFirst ? 0 : 1,
-              transform: `translateX(${isFirst ? -10 : 0}px)`,
-              padding: isFirst ? '4px 0' : '4px 10px',
-              pointerEvents: isFirst ? 'none' : 'auto',
-              transition: 'max-width 0.35s ease, opacity 0.25s ease, transform 0.35s ease, padding 0.35s ease',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-              background: 'none', border: 'none', cursor: 'pointer', borderRadius: 6,
-            }}
-          >
-            <span style={{ fontSize: 24, color: '#00E5A0', lineHeight: 1 }}>‹</span>
-            <span style={{ fontSize: 10, color: 'rgba(0,229,160,0.6)', letterSpacing: '0.03em' }}>이전</span>
-          </button>
+      {/* ── 헤더 (한 줄): 6개월 pill + 비교구간 + 버튼 ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
 
-          {/* 타이틀 */}
-          <span style={{
-            fontSize: 19, fontWeight: 500, color: '#fff', letterSpacing: '0.04em',
-            transition: 'opacity 0.2s ease, transform 0.35s ease',
-            opacity: titleShifting ? 0.5 : 1,
-            transform: titleShifting ? 'translateX(4px)' : 'translateX(0)',
-          }}>
-            당일 픽업{'  '}
-            <span style={{ color: '#fff' }}>{cur.month0 + 1}월</span>
-            {' '}
-            <span style={{ fontSize: '0.7em', color: '#00E5A0' }}>{String(cur.year).slice(-2)}년</span>
-          </span>
-
-          {/* › 다음 */}
-          <button
-            onClick={() => setSelectedMonthIdx(i => Math.min(monthList.length - 1, i + 1))}
-            disabled={isLast}
-            style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-              background: 'none', border: 'none', cursor: isLast ? 'default' : 'pointer',
-              padding: '4px 10px', borderRadius: 6,
-            }}
-          >
-            <span style={{ fontSize: 24, color: isLast ? 'rgba(255,255,255,0.1)' : '#00E5A0', lineHeight: 1 }}>›</span>
-            <span style={{ fontSize: 10, color: isLast ? 'rgba(255,255,255,0.08)' : 'rgba(0,229,160,0.6)', letterSpacing: '0.03em' }}>다음</span>
-          </button>
+        {/* 좌: 6개월 pill */}
+        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6 }}>
+          {monthList.map((m, i) => {
+            const mkI = `${m.year}-${String(m.month0 + 1).padStart(2, '0')}`
+            const net = summary.monthly[mkI]?.pu.nights ?? 0
+            const selected = i === selectedMonthIdx
+            return (
+              <button
+                key={mkI}
+                onClick={() => setSelectedMonthIdx(i)}
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  padding: '7px 4px', borderRadius: 8, cursor: 'pointer',
+                  border: selected ? '0.5px solid rgba(0,229,160,0.5)' : '0.5px solid rgba(255,255,255,0.08)',
+                  background: selected ? 'linear-gradient(175deg, #0d1f1a 0%, #0a0a0a 60%)' : '#0d0d0d',
+                }}
+              >
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
+                  {m.month0 + 1}월
+                  <span style={{ fontSize: '0.82em', marginLeft: 3, color: 'rgba(255,255,255,0.28)' }}>{String(m.year).slice(-2)}</span>
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 500, marginTop: 2, color: signColor(net) }}>
+                  {net > 0 ? '+' : ''}{fmtNights(net)}
+                </div>
+              </button>
+            )
+          })}
         </div>
 
-        {/* 우측: 상태 + 버튼 */}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: hasToday ? '#00E5A0' : 'rgba(255,255,255,0.2)', display: 'inline-block' }} />
-            최종 갱신 {lastUpdated}
-          </span>
+        {/* 우: 비교구간 + 버튼 */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
+          paddingLeft: 10, borderLeft: '0.5px solid rgba(255,255,255,0.08)',
+        }}>
+          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', whiteSpace: 'nowrap' }}>비교</span>
 
-          {/* 📅 MTD 픽업 모달 */}
+          {/* from */}
+          <select
+            value={fromSlot ?? ''}
+            onChange={e => setFromSlot(e.target.value === '' ? null : e.target.value)}
+            style={{ fontSize: 11, padding: '4px 6px', background: '#0a0a0a', color: 'rgba(255,255,255,0.85)', border: '0.5px solid rgba(255,255,255,0.15)', borderRadius: 5, fontFamily: 'inherit', cursor: 'pointer' }}
+          >
+            <option value="">새벽 OTB</option>
+            {sortedSlots.map(s => (
+              <option key={s.slot} value={s.slot} disabled={toSlot != null && s.slot >= toSlot}>{s.slot_kst}</option>
+            ))}
+          </select>
+
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>→</span>
+
+          {/* to */}
+          <select
+            value={toSlot ?? ''}
+            onChange={e => setToSlot(e.target.value === '' ? null : e.target.value)}
+            style={{ fontSize: 11, padding: '4px 6px', background: '#0a0a0a', color: 'rgba(255,255,255,0.85)', border: '0.5px solid rgba(0,229,160,0.35)', borderRadius: 5, fontFamily: 'inherit', cursor: 'pointer' }}
+          >
+            {sortedSlots.map(s => (
+              <option key={s.slot} value={s.slot} disabled={fromSlot != null && s.slot <= fromSlot}>
+                {s.slot_kst}{s.slot === latestSlot ? ' (최신)' : ''}
+              </option>
+            ))}
+          </select>
+
+          {/* 📅 MTD */}
           <button
             onClick={() => setModalState({ businessDate: null })}
-            style={{
-              width: 30, height: 30, borderRadius: 6, border: '0.5px solid rgba(0,229,160,0.25)',
-              background: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.6)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}
+            style={{ padding: '4px 6px', border: '0.5px solid rgba(0,229,160,0.25)', borderRadius: 5, background: 'none', color: 'rgba(0,229,160,0.7)', fontSize: 14, marginLeft: 3, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             aria-label="MTD 픽업"
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" />
               <line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
             </svg>
@@ -413,12 +407,8 @@ export default function TodayPickupPage() {
           <div className="unit-setting-wrap" style={{ position: 'relative' }}>
             <button
               onClick={() => setShowUnitSetting(v => !v)}
-              style={{
-                width: 30, height: 30, borderRadius: 6, border: '1px solid #00E5A0',
-                background: showUnitSetting ? 'rgba(0,229,160,0.1)' : 'none', cursor: 'pointer',
-                color: showUnitSetting ? '#00E5A0' : 'rgba(255,255,255,0.4)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
-              }}
+              style={{ padding: '4px 6px', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 5, background: showUnitSetting ? 'rgba(0,229,160,0.1)' : 'none', color: showUnitSetting ? '#00E5A0' : 'rgba(255,255,255,0.4)', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
+              aria-label="단위 설정"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="3" />
@@ -480,74 +470,6 @@ export default function TodayPickupPage() {
         </div>
       ) : (
         <>
-          {/* ── 비교 구간 선택 바 ── */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-            padding: '8px 14px', background: '#0d0d0d', borderLeft: '2px solid rgba(0,229,160,0.4)',
-          }}>
-            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>비교 구간</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {/* from */}
-              <select
-                value={fromSlot ?? ''}
-                onChange={e => setFromSlot(e.target.value === '' ? null : e.target.value)}
-                style={{
-                  background: '#111', color: '#fff', border: '0.5px solid rgba(255,255,255,0.15)',
-                  borderRadius: 5, padding: '4px 8px', fontSize: 12, fontFamily: 'inherit', cursor: 'pointer',
-                }}
-              >
-                <option value="">새벽 OTB</option>
-                {sortedSlots.map(s => (
-                  <option key={s.slot} value={s.slot} disabled={toSlot != null && s.slot >= toSlot}>
-                    {s.slot_kst}
-                  </option>
-                ))}
-              </select>
-              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>→</span>
-              {/* to */}
-              <select
-                value={toSlot ?? ''}
-                onChange={e => setToSlot(e.target.value === '' ? null : e.target.value)}
-                style={{
-                  background: '#111', color: '#fff', border: '0.5px solid rgba(0,229,160,0.3)',
-                  borderRadius: 5, padding: '4px 8px', fontSize: 12, fontFamily: 'inherit', cursor: 'pointer',
-                }}
-              >
-                {sortedSlots.map(s => (
-                  <option key={s.slot} value={s.slot} disabled={fromSlot != null && s.slot <= fromSlot}>
-                    {s.slot_kst}{s.slot === latestSlot ? ' (최신)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* ── 6개월 pill ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6 }}>
-            {monthList.map((m, i) => {
-              const mkI = `${m.year}-${String(m.month0 + 1).padStart(2, '0')}`
-              const net = summary.monthly[mkI]?.pu.nights ?? 0
-              const selected = i === selectedMonthIdx
-              return (
-                <button
-                  key={mkI}
-                  onClick={() => setSelectedMonthIdx(i)}
-                  style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-                    padding: '8px 4px', borderRadius: 8, cursor: 'pointer',
-                    border: selected ? '0.5px solid rgba(0,229,160,0.5)' : '0.5px solid rgba(255,255,255,0.08)',
-                    background: selected ? 'linear-gradient(175deg, #0d1f1a 0%, #0a0a0a 60%)' : '#0d0d0d',
-                  }}
-                >
-                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>{m.month0 + 1}월</span>
-                  <span style={{ fontSize: 14, fontWeight: 500, color: signColor(net) }}>
-                    {net > 0 ? '+' : ''}{fmtNights(net)}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-
           {/* ── KPI 카드 3개 ── */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
             {/* 픽업 객실 */}
@@ -581,17 +503,17 @@ export default function TodayPickupPage() {
           {/* ── 범례 + 차트 ── */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontSize: 11, color: '#888' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ width: 12, height: 10, background: posColor, borderRadius: 2 }} />순증
+              <span style={{ width: 12, height: 10, background: 'rgba(91,141,239,0.4)', borderRadius: 2 }} />OTB 점유율
             </span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ width: 12, height: 10, background: negColor, borderRadius: 2 }} />순감
+              <span style={{ width: 18, height: 0, borderTop: `2px solid ${posColor}` }} />픽업 순증
             </span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ width: 18, height: 0, borderTop: '2px dashed #5B8DEF' }} />OTB 점유율
+              <span style={{ width: 18, height: 0, borderTop: `2px solid ${negColor}` }} />픽업 순감
             </span>
             <span style={{ marginLeft: 'auto', color: 'rgba(255,255,255,0.3)' }}>막대 클릭 시 세그먼트 상세</span>
           </div>
-          <div style={{ position: 'relative', height: 290 }}>
+          <div style={{ position: 'relative', height: 310 }}>
             <canvas ref={canvasRef} />
           </div>
 
