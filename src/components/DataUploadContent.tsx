@@ -17,7 +17,7 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type TabType = 'otb' | 'actual' | 'budget'
+type TabType = 'otb' | 'actual' | 'budget' | 'today'
 
 type UploadResult = {
   type:          'success' | 'partial' | 'error'
@@ -199,7 +199,8 @@ export default function DataUploadContent({ hotelId, showBulkUpload = false, onB
     const CHUNK = 1000
 
     // ── 2단계: DELETE + INSERT ─────────────────────────────────────────────────
-    if (tab === 'otb') {
+    if (tab === 'otb' || tab === 'today') {
+      const isToday = tab === 'today'
       // update_date별 그룹핑 → 그룹당 DELETE 1회 + INSERT
       const byUpdateDate = allInsertData.reduce<Record<string, any[]>>((acc, row) => {
         const key = row.update_date ?? date
@@ -209,7 +210,7 @@ export default function DataUploadContent({ hotelId, showBulkUpload = false, onB
 
       for (const [updateDate, rows] of Object.entries(byUpdateDate)) {
         try {
-          const { error: delError } = await (supabase as any).rpc('r02_delete_otb', {
+          const { error: delError } = await (supabase as any).rpc(isToday ? 'r02b_delete_today' : 'r02_delete_otb', {
             p_hotel_id:    hotelId,
             p_update_date: updateDate,
           })
@@ -218,7 +219,7 @@ export default function DataUploadContent({ hotelId, showBulkUpload = false, onB
           for (let i = 0; i < rows.length; i += CHUNK) {
             const chunk = rows.slice(i, i + CHUNK)
             setCurrentFileProgress(Math.round((i / rows.length) * 100))
-            const { data, error } = await (supabase as any).rpc('r02_insert_otb', {
+            const { data, error } = await (supabase as any).rpc(isToday ? 'r02b_insert_today' : 'r02_insert_otb', {
               p_hotel_id:    hotelId,
               p_update_date: updateDate,
               p_rows:        chunk,
@@ -230,14 +231,28 @@ export default function DataUploadContent({ hotelId, showBulkUpload = false, onB
           try {
             console.log('a02_refresh_otb_daily 호출 파라미터:', { p_hotel_id: hotelId, p_update_date: updateDate })
             const { data: refreshData, error: refreshError } = await (supabase as any)
-              .rpc('a02_refresh_otb_daily', { p_hotel_id: hotelId, p_update_date: updateDate })
+              .rpc(isToday ? 'a02b_refresh_otb_today' : 'a02_refresh_otb_daily', { p_hotel_id: hotelId, p_update_date: updateDate })
             console.log('a02_refresh_otb_daily 결과:', refreshData, 'error:', refreshError)
-            if (refreshError) console.error('집계 갱신 오류:', refreshError)
+            if (isToday) {
+              if (refreshError) throw refreshError
+              if (!refreshData?.success) {
+                throw new Error(refreshData?.error ?? '집계 실패')
+              }
+            } else {
+              if (refreshError) console.error('집계 갱신 오류:', refreshError)
+            }
           } catch (e: any) {
             console.error('a02_refresh_otb_daily 예외:', e)
+            if (isToday) throw e
           }
         } catch (e: any) {
           console.error(`OTB DELETE/INSERT 오류 [${updateDate}]:`, e)
+          if (isToday) {
+            setFileResults(prev => [...prev, {
+              fileName: '당일픽업 업로드',
+              result: { type: 'error', errors: [e.message ?? 'DELETE/INSERT 오류'] },
+            }])
+          }
         }
       }
       otbUploaded = true
@@ -281,7 +296,7 @@ export default function DataUploadContent({ hotelId, showBulkUpload = false, onB
       {/* 탭 */}
       <div className="flex gap-1 p-1 rounded-xl"
         style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)' }}>
-        {(['otb', 'actual', 'budget'] as TabType[]).map(t => (
+        {(['otb', 'actual', 'budget', 'today'] as TabType[]).map(t => (
           <button key={t} onClick={() => switchTab(t)} disabled={uploading}
             className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
             style={{
@@ -289,7 +304,10 @@ export default function DataUploadContent({ hotelId, showBulkUpload = false, onB
               color:      activeTab === t ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
               boxShadow:  activeTab === t ? 'var(--shadow-card)' : 'none',
             }}>
-            {t === 'otb' ? 'OTB' : t === 'actual' ? 'Actual' : 'Budget'}
+            {t === 'otb'    ? 'OTB'
+             : t === 'actual' ? 'Actual'
+             : t === 'budget' ? 'Budget'
+             : '당일픽업'}
           </button>
         ))}
       </div>
@@ -335,6 +353,24 @@ export default function DataUploadContent({ hotelId, showBulkUpload = false, onB
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* 당일픽업 안내 */}
+        {activeTab === 'today' && (
+          <div style={{
+            padding: '10px 14px',
+            marginBottom: 12,
+            borderRadius: 8,
+            border: '0.5px solid rgba(0,229,160,0.2)',
+            borderLeft: '3px solid rgba(0,229,160,0.6)',
+            background: 'linear-gradient(175deg, #0d1f1a 0%, #0a0a0a 40%)',
+            fontSize: 12,
+            color: 'rgba(255,255,255,0.6)',
+            lineHeight: 1.6,
+          }}>
+            당일 스냅샷을 업로드합니다. 새벽 OTB 업로드 기준으로 픽업이 계산됩니다.<br />
+            기준일 외 데이터는 자동 삭제되며 누적 저장되지 않습니다.
           </div>
         )}
 

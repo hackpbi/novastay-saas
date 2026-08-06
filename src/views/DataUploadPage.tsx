@@ -19,7 +19,7 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type TabType = 'otb' | 'actual'
+type TabType = 'otb' | 'actual' | 'today'
 
 type UploadResult = {
   type:          'success' | 'partial' | 'error'
@@ -585,6 +585,7 @@ export default function DataUploadPage() {
       }
 
     } else {
+      const isToday = tab === 'today'
       // ── OTB: 전체 파싱 후 DELETE 1회 + INSERT 전체 ───────────────────────
 
       // 1단계: 모든 파일 파싱 및 데이터 수집
@@ -638,7 +639,7 @@ export default function DataUploadPage() {
         const errs: string[] = []
 
         try {
-          const { error: delError } = await (supabase as any).rpc('r02_delete_otb', {
+          const { error: delError } = await (supabase as any).rpc(isToday ? 'r02b_delete_today' : 'r02_delete_otb', {
             p_hotel_id:    hotelId,
             p_update_date: date,
           })
@@ -647,7 +648,7 @@ export default function DataUploadPage() {
           for (let i = 0; i < allInsertData.length; i += CHUNK) {
             const chunk = allInsertData.slice(i, i + CHUNK)
             setCurrentFileProgress(Math.round((i / allInsertData.length) * 100))
-            const { data, error } = await (supabase as any).rpc('r02_insert_otb', {
+            const { data, error } = await (supabase as any).rpc(isToday ? 'r02b_insert_today' : 'r02_insert_otb', {
               p_hotel_id:    hotelId,
               p_update_date: date,
               p_rows:        chunk,
@@ -663,12 +664,20 @@ export default function DataUploadPage() {
           try {
             console.log('a02_refresh_otb_daily 호출:', { hotelId, otbDate: date })
             const { data: refreshData, error: refreshError } = await (supabase as any)
-              .rpc('a02_refresh_otb_daily', { p_hotel_id: hotelId, p_update_date: date })
+              .rpc(isToday ? 'a02b_refresh_otb_today' : 'a02_refresh_otb_daily', { p_hotel_id: hotelId, p_update_date: date })
             console.log('a02_refresh_otb_daily 결과:', refreshData, 'error:', refreshError)
-            if (refreshError) console.error('집계 갱신 오류:', refreshError)
-            else console.log('집계 갱신 완료')
+            if (isToday) {
+              if (refreshError) throw refreshError
+              if (!refreshData?.success) {
+                throw new Error(refreshData?.error ?? '집계 실패')
+              }
+            } else {
+              if (refreshError) console.error('집계 갱신 오류:', refreshError)
+              else console.log('집계 갱신 완료')
+            }
           } catch (e) {
             console.error('집계 갱신 예외:', e)
+            if (isToday) throw e
           }
 
           if (errs.length > 0) console.error('OTB INSERT 오류:', errs)
@@ -676,7 +685,7 @@ export default function DataUploadPage() {
         } catch (e: any) {
           console.error('OTB DELETE/INSERT 오류:', e)
           setFileResults(prev => [...prev, {
-            fileName: 'OTB 업로드',
+            fileName: isToday ? '당일픽업 업로드' : 'OTB 업로드',
             result: { type: 'error', errors: [e.message ?? 'DELETE/INSERT 오류'] },
           }])
         }
@@ -724,7 +733,7 @@ export default function DataUploadPage() {
         {/* ── 탭 ── */}
         <div className="flex gap-1 p-1 rounded-xl"
           style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-default)' }}>
-          {(['otb', 'actual'] as TabType[]).map(t => (
+          {(['otb', 'actual', 'today'] as TabType[]).map(t => (
             <button key={t} onClick={() => switchTab(t)} disabled={uploading}
               className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
               style={{
@@ -732,7 +741,7 @@ export default function DataUploadPage() {
                 color:      activeTab === t ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
                 boxShadow:  activeTab === t ? 'var(--shadow-card)' : 'none',
               }}>
-              {t === 'otb' ? 'OTB' : 'Actual'}
+              {t === 'otb' ? 'OTB' : t === 'actual' ? 'Actual' : '당일픽업'}
             </button>
           ))}
         </div>
@@ -770,6 +779,24 @@ export default function DataUploadPage() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* 당일픽업 안내 */}
+          {activeTab === 'today' && (
+            <div style={{
+              padding: '10px 14px',
+              marginBottom: 12,
+              borderRadius: 8,
+              border: '0.5px solid rgba(0,229,160,0.2)',
+              borderLeft: '3px solid rgba(0,229,160,0.6)',
+              background: 'linear-gradient(175deg, #0d1f1a 0%, #0a0a0a 40%)',
+              fontSize: 12,
+              color: 'rgba(255,255,255,0.6)',
+              lineHeight: 1.6,
+            }}>
+              당일 스냅샷을 업로드합니다. 새벽 OTB 업로드 기준으로 픽업이 계산됩니다.<br />
+              기준일 외 데이터는 자동 삭제되며 누적 저장되지 않습니다.
             </div>
           )}
 
