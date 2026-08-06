@@ -14,7 +14,7 @@ import {
   useTodayPickupSlots,
   useTodayPickupData,
 } from '@/hooks/useTodayPickup'
-import { buildTodayPickupSegTable, type TodayPickupSegSummary } from '@/utils/todayPickupSegTable'
+import { buildTodayPickupSegTable, type TodayPickupSegSummary, type TodayPickupSegRow } from '@/utils/todayPickupSegTable'
 import TodayPickupSegModal from '@/components/pickup/TodayPickupSegModal'
 
 export default function TodayPickupPage() {
@@ -62,11 +62,11 @@ export default function TodayPickupPage() {
 
   const { data: todayRows = [] } = useTodayPickupData({ hotelId, updateDate, fromSlot, toSlot })
 
-  // ── 세그 테이블(요약) — HOU 제외 · occ/revpar 포함 ───────────────────────────────
-  const { summary } = useMemo(
-    (): { summary: TodayPickupSegSummary } => schema.length > 0
+  // ── 세그 테이블(요약 + rows) — HOU 제외 · occ/revpar 포함 ────────────────────────
+  const { rows: segRows, summary } = useMemo(
+    (): { rows: TodayPickupSegRow[]; summary: TodayPickupSegSummary } => schema.length > 0
       ? buildTodayPickupSegTable({ schema, todayRows, roomCount })
-      : { summary: { monthly: {} } },
+      : { rows: [], summary: { monthly: {} } },
     [schema, todayRows, roomCount],
   )
 
@@ -413,6 +413,13 @@ export default function TodayPickupPage() {
           const revTxt = revUnit === '백만원' ? (curRevVal / 1_000_000).toFixed(1)
                        : revUnit === '천원'  ? Math.round(curRevVal / 1000).toLocaleString()
                        : Math.round(curRevVal).toLocaleString()
+          // 세그먼트 픽업 상위 3 (소분류만 · 절대값 내림차순 · 0 제외)
+          const topSegs = segRows
+            .filter(r => r.level === 'sub')
+            .map(r => ({ name: r.name, pu: r.monthly[mkI]?.pu.nights ?? 0, color: r.fontDarkColor }))
+            .filter(s => s.pu !== 0)
+            .sort((a, b) => Math.abs(b.pu) - Math.abs(a.pu))
+            .slice(0, 3)
           return (
             <button
               key={mkI}
@@ -469,6 +476,23 @@ export default function TodayPickupPage() {
                 ) : (
                   <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)' }}>픽업없음</span>
                 )}
+              </div>
+
+              {/* 세그먼트 픽업 상위 3 (각 height 12 고정) */}
+              <div style={{ marginTop: 5, paddingTop: 5, borderTop: '0.5px solid rgba(255,255,255,0.05)', textAlign: 'left' }}>
+                {[0, 1, 2].map(idx => {
+                  const s = topSegs[idx]
+                  return s ? (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 12, fontSize: 9 }}>
+                      <span style={{ color: s.color ?? 'rgba(255,255,255,0.6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                      <span style={{ color: s.pu < 0 ? '#E24B4A' : '#00E5A0', fontWeight: 600, flexShrink: 0, marginLeft: 4 }}>
+                        {s.pu > 0 ? '+' : ''}{s.pu}
+                      </span>
+                    </div>
+                  ) : (
+                    <div key={idx} style={{ height: 12 }} />
+                  )
+                })}
               </div>
 
               {/* OTB 현황 — 라벨 행 / 값 행 분리 (높이 고정) */}
