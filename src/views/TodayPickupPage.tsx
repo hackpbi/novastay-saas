@@ -102,27 +102,11 @@ export default function TodayPickupPage() {
   const [modalState, setModalState] = useState<{ businessDate: string | null } | null>(null)
 
   // ── 포맷 헬퍼 ────────────────────────────────────────────────────────────────────
-  const fmtNights = (n: number) => Math.round(n).toLocaleString('ko-KR')
   const fmtAdr = (n: number) =>
     adrUnit === '천원' ? Math.round(n / 1000).toLocaleString() : Math.round(n).toLocaleString()
-  const fmtRev = (n: number) =>
-    revUnit === '백만원' ? Math.round(n / 1_000_000).toLocaleString()
-    : revUnit === '천원' ? Math.round(n / 1000).toLocaleString()
-    : Math.round(n).toLocaleString()
 
   const posColor = '#00E5A0'
   const negColor = '#E24B4A'
-  const signColor = (n: number) => (n > 0 ? posColor : n < 0 ? negColor : 'rgba(255,255,255,0.25)')
-
-  // ── KPI (선택 월) ────────────────────────────────────────────────────────────────
-  const sm = summary.monthly[mk]
-  const puNights = sm?.pu.nights ?? 0
-  const puRev    = sm?.pu.revenue ?? 0
-  const puAdr    = sm && sm.pu.nights !== 0 ? sm.pu.revenue / sm.pu.nights : 0
-  const curNights = sm?.cur.nights ?? 0
-  const curAdr    = sm?.cur.adr ?? 0
-  const curRev    = sm?.cur.revenue ?? 0
-  const occDiff   = sm?.pu.occDiff ?? 0
 
   const hasBaseline = status?.has_baseline ?? false
   const hasToday    = status?.has_today ?? false
@@ -308,21 +292,6 @@ export default function TodayPickupPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [daily, hasBaseline, hasToday, cur.month0])
 
-  // ── 스타일 ───────────────────────────────────────────────────────────────────────
-  const kpiCard: React.CSSProperties = {
-    background: 'linear-gradient(175deg, #0d1f1a 0%, #0a0a0a 40%)',
-    border: '0.5px solid rgba(0,229,160,0.15)',
-    borderLeft: '3px solid rgba(0,229,160,0.6)',
-    borderRadius: 0,
-    padding: '12px 14px',
-  }
-  const kpiLabel: React.CSSProperties = { fontSize: 11, color: 'rgba(255,255,255,0.4)' }
-  const kpiSub: React.CSSProperties = {
-    marginTop: 6, paddingTop: 6, borderTop: '0.5px solid rgba(255,255,255,0.06)',
-    fontSize: 11, color: 'rgba(255,255,255,0.4)',
-  }
-  const unitSuffix: React.CSSProperties = { fontSize: '0.55em', marginLeft: 2, color: 'rgba(255,255,255,0.4)' }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, boxSizing: 'border-box' }}>
       {/* ── 헤더 1행: 좌 타이틀 / 우 비교 구간 ── */}
@@ -437,7 +406,7 @@ export default function TodayPickupPage() {
       </div>
 
       {/* ── 헤더 2행: 월 박스 6개 (전체 폭) ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6, marginBottom: 16 }}>
         {monthList.map((m, i) => {
           const mkI    = `${m.year}-${String(m.month0 + 1).padStart(2, '0')}`
           const sMo    = summary.monthly[mkI]
@@ -445,38 +414,64 @@ export default function TodayPickupPage() {
           const base   = sMo?.base.nights ?? 0
           const has    = pu !== 0
           const pos    = pu > 0
-          const accent = has ? (pos ? '0,229,160' : '226,75,74') : null
+          const accent = has ? (pos ? '0,229,160' : '226,75,74') : '255,255,255'
           const on     = i === selectedMonthIdx
           const pct    = base > 0 ? (pu / base) * 100 : 0        // base 0 가드 (먼 미래 월 예약 없음 → Infinity 방지)
           const pctTxt = (pct > 0 ? '+' : '') + pct.toFixed(1) + '%'
-          const border = on
-            ? `1px solid ${has ? `rgba(${accent},0.75)` : 'rgba(255,255,255,0.3)'}`
-            : `0.5px solid ${has ? `rgba(${accent},0.3)` : 'rgba(255,255,255,0.07)'}`
-          const background = on
-            ? (has ? `linear-gradient(175deg, rgba(${accent},0.12) 0%, #0a0a0a 60%)`
-                   : 'linear-gradient(175deg,#141414 0%,#0a0a0a 60%)')
-            : (has ? `linear-gradient(175deg, rgba(${accent},0.05) 0%, #0d0d0d 60%)`
-                   : '#0b0b0b')
+          // OTB 현황 (현재 to 슬롯 기준)
+          const occTxt = (sMo?.cur.occ ?? 0).toFixed(1) + '%'
+          const adrTxt = sMo && sMo.cur.nights > 0 ? fmtAdr(sMo.cur.adr) : '—'
+          const curRevVal = sMo?.cur.revenue ?? 0
+          const revTxt = revUnit === '백만원' ? (curRevVal / 1_000_000).toFixed(1)
+                       : revUnit === '천원'  ? Math.round(curRevVal / 1000).toLocaleString()
+                       : Math.round(curRevVal).toLocaleString()
           return (
             <button
               key={mkI}
               onClick={() => setSelectedMonthIdx(i)}
-              style={{ padding: '10px 4px', textAlign: 'center', cursor: 'pointer', transition: 'all 0.15s', borderRadius: 8, border, background }}
+              style={{
+                position: 'relative',
+                padding: '11px 6px 9px',
+                textAlign: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                borderRadius: 8,
+                border: on ? '1px solid rgba(0,229,160,0.55)' : '0.5px solid rgba(255,255,255,0.07)',
+                background: on ? 'linear-gradient(175deg,#12241e 0%,#0a0a0a 55%)' : '#0b0b0b',
+                ...(on && { boxShadow: '0 0 0 1px rgba(0,229,160,0.12), 0 4px 16px rgba(0,229,160,0.08)' }),
+              }}
             >
-              <div style={{ fontSize: 11, color: `rgba(255,255,255,${has ? 0.55 : 0.32})` }}>
+              {on && (
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: '#00E5A0' }} />
+              )}
+
+              {/* 라벨 */}
+              <div style={{ fontSize: 11, color: `rgba(255,255,255,${on ? 0.75 : has ? 0.5 : 0.3})` }}>
                 {m.month0 + 1}월
-                <span style={{ fontSize: '0.82em', marginLeft: 3, color: `rgba(255,255,255,${has ? 0.3 : 0.2})` }}>{String(m.year).slice(-2)}년</span>
+                <span style={{ fontSize: '0.82em', marginLeft: 3, color: `rgba(255,255,255,${on ? 0.4 : 0.22})` }}>{String(m.year).slice(-2)}년</span>
               </div>
+
+              {/* 픽업 순증감 */}
               {has ? (
-                <div style={{ marginTop: 3, display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 4 }}>
+                <div style={{ marginTop: 2, display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 4 }}>
                   <span style={{ fontSize: 17, fontWeight: 500, color: pos ? '#00E5A0' : '#E24B4A' }}>
                     {pos ? '+' : ''}{pu}
                   </span>
                   <span style={{ fontSize: 11, color: `rgba(${accent},0.6)` }}>({pctTxt})</span>
                 </div>
               ) : (
-                <div style={{ fontSize: 11, marginTop: 7, color: 'rgba(255,255,255,0.22)' }}>픽업없음</div>
+                <div style={{ fontSize: 11, marginTop: 5, marginBottom: 1, color: 'rgba(255,255,255,0.2)' }}>픽업없음</div>
               )}
+
+              {/* OTB 현황 3열 */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, marginTop: 8, paddingTop: 7, borderTop: '0.5px solid rgba(255,255,255,0.07)' }}>
+                {([['OCC', occTxt], ['ADR', adrTxt], ['REV', revTxt]] as const).map(([label, value]) => (
+                  <div key={label} style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.28)', marginBottom: 1 }}>{label}</div>
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.62)' }}>{value}</div>
+                  </div>
+                ))}
+              </div>
             </button>
           )
         })}
@@ -493,36 +488,6 @@ export default function TodayPickupPage() {
         </div>
       ) : (
         <>
-          {/* ── KPI 카드 3개 ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-            {/* 픽업 객실 */}
-            <div style={kpiCard}>
-              <div style={kpiLabel}>픽업 객실</div>
-              <div style={{ fontSize: 24, fontWeight: 500, color: signColor(puNights) }}>
-                {puNights > 0 ? '+' : ''}{fmtNights(puNights)}<span style={unitSuffix}>실</span>
-              </div>
-              <div style={kpiSub}>
-                OTB {fmtNights(curNights)}실 · <span style={{ color: signColor(occDiff) }}>{occDiff > 0 ? '▲' : occDiff < 0 ? '▼' : ''}{Math.abs(occDiff).toFixed(1)}%p</span>
-              </div>
-            </div>
-            {/* 픽업 객단가 */}
-            <div style={kpiCard}>
-              <div style={kpiLabel}>픽업 객단가</div>
-              <div style={{ fontSize: 24, fontWeight: 500, color: signColor(puAdr) }}>
-                {puAdr > 0 ? '+' : ''}{fmtAdr(puAdr)}<span style={unitSuffix}>{adrUnit}</span>
-              </div>
-              <div style={kpiSub}>OTB 객단가 {fmtAdr(curAdr)}</div>
-            </div>
-            {/* 픽업 매출 */}
-            <div style={kpiCard}>
-              <div style={kpiLabel}>픽업 매출</div>
-              <div style={{ fontSize: 24, fontWeight: 500, color: signColor(puRev) }}>
-                {puRev > 0 ? '+' : ''}{fmtRev(puRev)}<span style={unitSuffix}>{revUnit}</span>
-              </div>
-              <div style={kpiSub}>OTB 매출 {fmtRev(curRev)}</div>
-            </div>
-          </div>
-
           {/* ── 범례 + 차트 ── */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontSize: 11, color: '#888' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
@@ -536,7 +501,7 @@ export default function TodayPickupPage() {
             </span>
             <span style={{ marginLeft: 'auto', color: 'rgba(255,255,255,0.3)' }}>막대 클릭 시 세그먼트 상세</span>
           </div>
-          <div style={{ position: 'relative', height: 310 }}>
+          <div style={{ position: 'relative', height: 380 }}>
             <canvas ref={canvasRef} />
           </div>
 
