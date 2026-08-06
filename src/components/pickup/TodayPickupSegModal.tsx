@@ -52,20 +52,19 @@ function FmtPuNights({ n, fontColor }: { n: number; fontColor?: string }) {
   const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{n.toLocaleString('ko-KR')}</span>
 }
-function FmtPuAdr({ base, cur, fontColor, unit = '천원' }: { base: number; cur: number; fontColor?: string; unit?: '천원' | '원' }) {
-  const r = (n: number) => unit === '천원' ? Math.round(n / 1000) : Math.round(n)
+function FmtPuAdr({ nights, revenue, fontColor, unit = '천원' }: { nights: number; revenue: number; fontColor?: string; unit?: '천원' | '원' }) {
+  if (nights === 0) return <GapDash />   // 매출만 변동 → 나눗셈 불가
+  const adr = revenue / nights           // 픽업 평균 단가 = Σpu_revenue / Σpu_nights (차이값 아님)
+  const text = unit === '천원' ? Math.round(adr / 1000).toLocaleString() : Math.round(adr).toLocaleString()
+  return <span style={{ color: fontColor ?? 'var(--color-text-primary)' }}>{text}</span>
+}
+function FmtPuRevenue({ base, cur, fontColor, unit = '백만원' }: { base: number; cur: number; fontColor?: string; unit?: '원' | '천원' | '백만원' }) {
+  const r = (n: number) => unit === '백만원' ? Math.round(n / 1_000_000) : unit === '천원' ? Math.round(n / 1000) : Math.round(n)
   const d = r(cur) - r(base)   // 표시값 기준 차분 (화면 두 숫자로 검산 일치)
-  if (d === 0) return <GapDash />
+  if (d === 0) return <Dash />
   const sign = d > 0 ? '+' : ''
   const color = d > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
   return <span style={{ color }}>{sign}{d.toLocaleString()}</span>
-}
-function FmtPuRevenue({ n, fontColor, unit = '백만원' }: { n: number; fontColor?: string; unit?: '원' | '천원' | '백만원' }) {
-  if (Math.abs(n) < 50_000) return <Dash />
-  const sign = n > 0 ? '+' : ''
-  const color = n > 0 ? (fontColor ?? 'var(--color-text-primary)') : 'var(--color-negative)'
-  const text = unit === '백만원' ? Math.round(n / 1_000_000).toLocaleString() : unit === '천원' ? Math.round(n / 1000).toLocaleString() : Math.round(n).toLocaleString()
-  return <span style={{ color }}>{sign}{text}</span>
 }
 function FmtOcc({ n }: { n: number }) {
   if (Math.abs(n) < 0.1) return <Dash />
@@ -119,8 +118,8 @@ function SlotCells({ m, onBaseClick, onCurClick, onPuClick, bg, gapColor, gapBol
       <td className="font-mono" style={{ ...c, borderRight: DOUBLE }} onClick={onCurClick}><FmtRevenue n={m.cur.revenue} unit={revUnit} /></td>
       {/* pu (픽업) */}
       <td className="font-mono" style={g} onClick={onPuClick}><FmtPuNights n={m.pu.nights} fontColor={gapColor} /></td>
-      <td className="font-mono" style={g} onClick={onPuClick}><FmtPuAdr base={m.base.adr} cur={m.cur.adr} fontColor={gapColor} unit={adrUnit} /></td>
-      <td className="font-mono" style={g} onClick={onPuClick}><FmtPuRevenue n={m.pu.revenue} fontColor={gapColor} unit={revUnit} /></td>
+      <td className="font-mono" style={g} onClick={onPuClick}><FmtPuAdr nights={m.pu.nights} revenue={m.pu.revenue} fontColor={gapColor} unit={adrUnit} /></td>
+      <td className="font-mono" style={g} onClick={onPuClick}><FmtPuRevenue base={m.base.revenue} cur={m.cur.revenue} fontColor={gapColor} unit={revUnit} /></td>
     </>
   )
 }
@@ -234,16 +233,17 @@ export default function TodayPickupSegModal({
       const valRn  = viewMode === 'base' ? v.baseRn
                    : viewMode === 'cur'  ? v.curRn
                    : v.curRn - v.baseRn   // pu
-      // 각 시점 객단가 raw (나눗셈 가드는 시점별로만) — 반올림·차분은 렌더에서
-      const baseAdr = v.baseRn > 0 ? v.baseRev / v.baseRn : 0
-      const curAdr  = v.curRn  > 0 ? v.curRev  / v.curRn  : 0
-      const valAdr = viewMode === 'base' ? baseAdr
-                   : viewMode === 'cur'  ? curAdr
-                   : curAdr - baseAdr     // pu (렌더에서 표시값 차분으로 대체)
+      // base/cur = 시점 가중평균, pu = 픽업 평균단가(Σpu_rev/Σpu_rn). 값 없으면 null → '—'
+      const puRn  = v.curRn  - v.baseRn
+      const puRev = v.curRev - v.baseRev
+      const valAdr: number | null =
+                     viewMode === 'base' ? (v.baseRn > 0 ? v.baseRev / v.baseRn : null)
+                   : viewMode === 'cur'  ? (v.curRn  > 0 ? v.curRev  / v.curRn  : null)
+                   : (puRn !== 0 ? puRev / puRn : null)   // pu 평균단가
       const valRev = viewMode === 'base' ? v.baseRev
                    : viewMode === 'cur'  ? v.curRev
                    : v.curRev - v.baseRev  // pu
-      return { name, valRn, valRev, baseAdrRaw: baseAdr, curAdrRaw: curAdr, valAdr }
+      return { name, valRn, valRev, valAdr }
     })
     // viewMode별 자기 값이 0인 어카운트 제외 (매출만 있는 경우 살림)
     .filter(a => a.valRn !== 0 || a.valRev !== 0)
@@ -333,7 +333,7 @@ export default function TodayPickupSegModal({
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>객단가</th>
                     <th style={{ ...thBase, textAlign: 'right', borderRight: DOUBLE, borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>매출</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>Δ객실</th>
-                    <th style={{ ...thBase, textAlign: 'right', borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>Δ객단가</th>
+                    <th style={{ ...thBase, textAlign: 'right', borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>픽업 객단가</th>
                     <th style={{ ...thBase, textAlign: 'right', borderBottom: '0.5px solid rgba(255,255,255,0.12)' }}>Δ매출</th>
                   </tr>
                 </thead>
@@ -392,8 +392,8 @@ export default function TodayPickupSegModal({
                         <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtAdr n={sumMonth.cur.adr} unit={adrUnit} /></td>
                         <td className="font-mono" style={{ ...sumTd, textAlign: 'right', borderRight: DOUBLE }}><FmtRevenue n={sumMonth.cur.revenue} unit={revUnit} /></td>
                         <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtPuNights n={sumMonth.pu.nights} fontColor="var(--color-text-primary)" /></td>
-                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtPuAdr base={sumMonth.base.adr} cur={sumMonth.cur.adr} fontColor="var(--color-text-primary)" unit={adrUnit} /></td>
-                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtPuRevenue n={sumMonth.pu.revenue} fontColor="var(--color-text-primary)" unit={revUnit} /></td>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtPuAdr nights={sumMonth.pu.nights} revenue={sumMonth.pu.revenue} fontColor="var(--color-text-primary)" unit={adrUnit} /></td>
+                        <td className="font-mono" style={{ ...sumTd, textAlign: 'right' }}><FmtPuRevenue base={sumMonth.base.revenue} cur={sumMonth.cur.revenue} fontColor="var(--color-text-primary)" unit={revUnit} /></td>
                       </>
                     ) : <td colSpan={9} />}
                   </tr>
@@ -458,8 +458,6 @@ export default function TodayPickupSegModal({
               <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', padding: 12 }}>데이터가 없습니다.</div>
             ) : accountList.map((a, i) => {
               const isPu = selectedSeg?.viewMode === 'pu'
-              const rAdr = (n: number) => adrUnit === '천원' ? Math.round(n / 1000) : Math.round(n)
-              const adrDiff = rAdr(a.curAdrRaw) - rAdr(a.baseAdrRaw)   // pu: 표시값 차분
               return (
               <div key={`${a.name}-${i}`} style={{ padding: '6px 14px', borderBottom: '0.5px solid #1a1a1a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>
@@ -469,10 +467,8 @@ export default function TodayPickupSegModal({
                   <span style={{ fontSize: 11, color: isPu ? (a.valRn > 0 ? '#00E5A0' : a.valRn < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)') : '#fff', width: 40, textAlign: 'right' }}>
                     {a.valRn === 0 ? '—' : (isPu && a.valRn > 0 ? '+' : '') + a.valRn}
                   </span>
-                  <span style={{ fontSize: 11, color: isPu ? (adrDiff > 0 ? '#00E5A0' : adrDiff < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)') : '#fff', width: 52, textAlign: 'right' }}>
-                    {isPu
-                      ? (adrDiff === 0 ? '—' : (adrDiff > 0 ? '+' : '') + adrDiff.toLocaleString())
-                      : (a.valAdr === 0 ? '—' : scaleAdr(a.valAdr))}
+                  <span style={{ fontSize: 11, color: '#fff', width: 52, textAlign: 'right' }}>
+                    {a.valAdr === null ? '—' : scaleAdr(a.valAdr)}
                   </span>
                   <span style={{ fontSize: 11, color: isPu ? (a.valRev > 0 ? '#00E5A0' : a.valRev < 0 ? '#E24B4A' : 'rgba(255,255,255,0.3)') : '#fff', width: 56, textAlign: 'right' }}>
                     {a.valRev === 0 ? '—' : (isPu && a.valRev > 0 ? '+' : '') + scaleRev(a.valRev)}
