@@ -709,6 +709,8 @@ export default function TodayPickupPage() {
         businessDate={modalState?.businessDate ?? undefined}
         adrUnit={adrUnit}
         revUnit={revUnit}
+        setAdrUnit={setAdrUnit}
+        setRevUnit={setRevUnit}
       />
 
       {/* ── 세그 줄 호버 어카운트 툴팁 (body-appended fixed) ── */}
