@@ -152,9 +152,42 @@ export default function TodayPickupPage() {
     return arr
   }, [todayRows, mk, roomCount])
 
+  // ── 이벤트 (c06_calendar) — /analysis 페이지와 동일 방식 (date, event 컬럼) ──────
+  const monthStart = `${mk}-01`
+  const monthEnd   = `${mk}-${String(new Date(cur.year, cur.month0 + 1, 0).getDate()).padStart(2, '0')}`
+  const { data: calRows = [] } = useQuery({
+    queryKey: ['today-pickup-cal', mk],
+    staleTime: 60 * 60 * 1000,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from('c06_calendar').select('date, event')
+        .gte('date', monthStart).lte('date', monthEnd)
+      return (data ?? []) as { date: string; event: string | null }[]
+    },
+  })
+  const eventMap = useMemo(() => {
+    const isValidEvent = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '' && v.trim().toLowerCase() !== 'null'
+    const m: Record<number, string> = {}
+    for (const r of calRows) if (isValidEvent(r.event)) m[Number(r.date.slice(8, 10))] = r.event
+    return m
+  }, [calRows])
+  const events = useMemo(
+    () => Object.entries(eventMap).map(([day, name]) => ({ dayIndex: Number(day) - 1, name })),
+    [eventMap],
+  )
+
+  // ── 요일 / 주말 / 오늘 (KST) ──────────────────────────────────────────────────────
+  const DOW = ['일', '월', '화', '수', '목', '금', '토']
+  const dayLabels = daily.map(d => String(d.day).padStart(2, '0'))
+  const dowLabels = daily.map(d => DOW[new Date(cur.year, cur.month0, d.day).getDay()])
+  const isWeekend = daily.map(d => { const g = new Date(cur.year, cur.month0, d.day).getDay(); return g === 5 || g === 6 })
+  const [ty, tm, td] = new Date().toLocaleDateString('sv', { timeZone: 'Asia/Seoul' }).split('-').map(Number)
+  const todayIdx = (ty === cur.year && tm === cur.month0 + 1) ? td - 1 : -1   // 다른 월이면 -1 → 오늘 강조 전면 비활성
+
   // ── 차트 ─────────────────────────────────────────────────────────────────────────
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const chartRef  = useRef<any>(null)
+  const [badges, setBadges] = useState<{ dayIndex: number; name: string; x: number; bottom: number }[]>([])
   useEffect(() => {
     if (!hasBaseline || !hasToday) return
     let cancelled = false
@@ -197,7 +230,7 @@ export default function TodayPickupPage() {
           ctx.font = '600 9px system-ui'
           ctx.textAlign = 'center'
           occMeta.data.forEach((pt: any, i: number) => {
-            ctx.fillStyle = 'rgba(160,190,240,0.75)'
+            ctx.fillStyle = i === todayIdx ? '#BBD4FA' : 'rgba(160,190,240,0.75)'
             ctx.fillText(Math.round(chart.data.datasets[0].data[i]) + '%', pt.x, pt.y + 11)
           })
           ctx.font = '600 10px system-ui'
@@ -211,8 +244,33 @@ export default function TodayPickupPage() {
         },
       }
 
+      // 오늘 세로 밴드 (막대·라인 아래) — 다른 월이면 미표시
+      const todayBand = {
+        id: 'todayBand',
+        beforeDatasetsDraw(chart: any) {
+          if (todayIdx < 0) return
+          const m = chart.getDatasetMeta(0).data[todayIdx]
+          if (!m) return
+          const ctx = chart.ctx
+          const w = m.width * 1.35
+          ctx.save()
+          ctx.fillStyle = 'rgba(143,180,245,0.07)'
+          ctx.fillRect(m.x - w / 2, chart.chartArea.top, w, chart.chartArea.bottom - chart.chartArea.top)
+          ctx.restore()
+        },
+      }
+
+      // 이벤트 배지 위치 재계산 (생성·리사이즈 시)
+      const updateBadges = () => {
+        const chart = chartRef.current
+        if (!chart?.scales?.x || !chart.chartArea) { setBadges([]); return }
+        const x = chart.scales.x
+        const bottom = chart.chartArea.bottom
+        setBadges(events.map(e => ({ dayIndex: e.dayIndex, name: e.name, x: x.getPixelForValue(e.dayIndex), bottom })))
+      }
+
       chartRef.current = new Chart(canvasRef.current, {
-        plugins: [zeroLine, valueLabels],
+        plugins: [todayBand, zeroLine, valueLabels],
         data: {
           labels,
           datasets: [
@@ -222,7 +280,9 @@ export default function TodayPickupPage() {
               data: occArr,
               order: 2,
               yAxisID: 'y',
-              backgroundColor: 'rgba(91,141,239,0.4)',
+              backgroundColor: occArr.map((_, i) => i === todayIdx ? 'rgba(91,141,239,0.9)' : 'rgba(91,141,239,0.4)'),
+              borderColor:     occArr.map((_, i) => i === todayIdx ? '#8FB4F5' : 'transparent'),
+              borderWidth:     occArr.map((_, i) => i === todayIdx ? 1 : 0),
               borderRadius: 2,
               barPercentage: 0.68,
             },
@@ -246,7 +306,8 @@ export default function TodayPickupPage() {
         },
         options: {
           responsive: true, maintainAspectRatio: false,
-          layout: { padding: { top: 14 } },
+          layout: { padding: { top: 14, bottom: 20 } },
+          onResize: () => requestAnimationFrame(updateBadges),
           interaction: { mode: 'index', intersect: false },
           onClick: (_e: any, els: any[]) => {
             if (!els.length) return
@@ -266,8 +327,11 @@ export default function TodayPickupPage() {
               padding: 10,
               callbacks: {
                 title: (items: any[]) => {
-                  const d = daily[items[0]?.dataIndex]
-                  return d ? `${cur.month0 + 1}월 ${d.day}일` : ''
+                  const i = items[0]?.dataIndex
+                  const d = daily[i]
+                  if (!d) return ''
+                  const ev = eventMap[d.day]
+                  return `${cur.month0 + 1}월 ${d.day}일 (${dowLabels[i]})` + (ev ? ` · ${ev}` : '')
                 },
                 label: (item: any) => {
                   const d = daily[item.dataIndex]
@@ -281,8 +345,15 @@ export default function TodayPickupPage() {
           scales: {
             x: {
               grid: { display: false },
-              border: { display: false },
-              ticks: { color: '#888', font: { size: 10 }, autoSkip: false, maxRotation: 0 },
+              border: { color: 'rgba(255,255,255,0.12)' },
+              ticks: {
+                autoSkip: false, maxRotation: 0, font: { size: 10 }, padding: 4,
+                color: (ctx: any) =>
+                  ctx.index === todayIdx ? '#8FB4F5'
+                  : isWeekend[ctx.index] ? 'rgba(226,75,74,0.85)'
+                  : 'rgba(255,255,255,0.35)',
+                callback: (_v: any, i: number) => [dayLabels[i], dowLabels[i]],
+              },
             },
             y: {
               position: 'left', min: 0, max: 100,
@@ -303,13 +374,14 @@ export default function TodayPickupPage() {
           },
         },
       })
+      updateBadges()
     })()
     return () => {
       cancelled = true
       chartRef.current?.destroy(); chartRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [daily, hasBaseline, hasToday, cur.month0])
+  }, [daily, hasBaseline, hasToday, cur.month0, events, todayIdx])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, boxSizing: 'border-box' }}>
@@ -585,6 +657,11 @@ export default function TodayPickupPage() {
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
               <span style={{ width: 12, height: 10, background: 'rgba(91,141,239,0.4)', borderRadius: 2 }} />OTB 점유율
             </span>
+            {todayIdx >= 0 && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ width: 12, height: 10, background: 'rgba(91,141,239,0.9)', borderRadius: 2, boxShadow: '0 0 0 1px #8FB4F5' }} />오늘
+              </span>
+            )}
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
               <span style={{ width: 18, height: 0, borderTop: `2px solid ${posColor}` }} />픽업 순증
             </span>
@@ -595,6 +672,19 @@ export default function TodayPickupPage() {
           </div>
           <div style={{ position: 'relative', height: 380 }}>
             <canvas ref={canvasRef} />
+            {/* 이벤트 배지 오버레이 — 첫 글자 한 자, 골드 원형 (전체 명칭은 title/툴팁) */}
+            <div style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+              {badges.map(b => (
+                <div key={b.dayIndex} title={b.name}
+                  style={{
+                    position: 'absolute', left: b.x, top: b.bottom + 36, transform: 'translateX(-50%)',
+                    width: 14, height: 14, lineHeight: '13px', textAlign: 'center', fontSize: 9, fontWeight: 600,
+                    borderRadius: '50%', background: 'rgba(245,158,11,0.15)', border: '0.5px solid rgba(245,158,11,0.5)', color: '#F59E0B',
+                  }}>
+                  {b.name.charAt(0)}
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* ── 하단 주석 ── */}
