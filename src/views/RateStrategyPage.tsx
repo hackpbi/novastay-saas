@@ -23,6 +23,7 @@ import { RateCalendarView }  from '@/components/rate-strategy/RateCalendarView'
 import { RateChartView }     from '@/components/rate-strategy/RateChartView'
 import AdrSimulatorModal from '@/components/rate-strategy/AdrSimulatorModal'
 import BarRateModal from '@/components/pickup/BarRateModal'
+import RpaConfirmModal from '@/components/rate-strategy/RpaConfirmModal'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -558,6 +559,7 @@ export default function RateStrategyPage() {
   const [baseFlash,       setBaseFlash]       = useState<Record<string, 'saving' | 'success' | 'error'>>({})
   const [lastRpaTime,     setLastRpaTime]     = useState<string | null>(null)
   const [rpaSending,      setRpaSending]      = useState(false)
+  const [rpaModalOpen,    setRpaModalOpen]    = useState(false)
   const [segModalDate,    setSegModalDate]    = useState<string | null>(null)
   const [pickupView,      setPickupView]      = useState<PickupView>('fit')
   const [activeTab,       setActiveTab]       = useState<RateTab>('barrate')
@@ -697,7 +699,7 @@ export default function RateStrategyPage() {
   }, [customRates])
 
   // BAR Rate 변경 이력 (s01_rate_detail_history, room_type_code='BASE') — 요금 달력과 동일
-  const { data: rateHistory = [] } = useQuery<{ stay_date: string; old_rate: number; new_rate: number; created_at: string }[]>({
+  const { data: rateHistory = [], refetch: refetchRateHistory } = useQuery<{ stay_date: string; old_rate: number; new_rate: number; created_at: string }[]>({
     queryKey: ['s01_rate_detail_history', hotelId, tableStart, tableEnd],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
@@ -735,6 +737,18 @@ export default function RateStrategyPage() {
     }
     return result
   }, [rateHistory])
+
+  // RPA 전송 확인 모달용 — stay_date 별 변경 전(최초)→변경 후(최종) BAR (실제 변동만)
+  const rpaItems = useMemo(() => {
+    const todayKST = new Date().toLocaleDateString('sv', { timeZone: 'Asia/Seoul' })  // 'YYYY-MM-DD'
+    return Object.entries(rateHistGrouped)
+      .map(([stay_date, arr]) => {
+        const today = arr.find(g => g.changedDate === todayKST)   // 오늘(KST) 변경 그룹만
+        return today ? { stay_date, before_bar: today.oldRate, after_bar: today.newRate } : null
+      })
+      .filter((it): it is { stay_date: string; before_bar: number; after_bar: number } => it != null && it.before_bar !== it.after_bar)
+      .sort((a, b) => a.stay_date.localeCompare(b.stay_date))
+  }, [rateHistGrouped])
 
   // OCC + 픽업 데이터 (get_pickup_data RPC)
   // vsOtbDate 없으면 otbDate 를 fallback으로 사용 → pu_nights=0, otb_nights만 유효
@@ -1372,7 +1386,7 @@ export default function RateStrategyPage() {
           </div>
 
           {hotelId && (
-            <button onClick={handleRpaSend} disabled={rpaSending}
+            <button onClick={async () => { await refetchRateHistory(); setRpaModalOpen(true) }} disabled={rpaSending}
               className="rate-tab-btn flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold disabled:opacity-50"
               style={{ border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)', background: 'var(--color-bg-secondary)' }}>
               {rpaSending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} className="btn-icon" />}
@@ -2063,7 +2077,7 @@ export default function RateStrategyPage() {
             )}
 
             <div className="space-y-2" style={{ borderTop: '1px solid var(--color-border-default)', paddingTop: 12 }}>
-              <button onClick={handleRpaSend} disabled={rpaSending}
+              <button onClick={async () => { await refetchRateHistory(); setRpaModalOpen(true) }} disabled={rpaSending}
                 className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold disabled:opacity-50"
                 style={{ background: 'var(--gradient-cta)', color: '#0A0A0A' }}>
                 {rpaSending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
@@ -2213,6 +2227,13 @@ export default function RateStrategyPage() {
         baseBarRate={simBaseBar}
         booked={simBooked}
         fcstUpdateDate={fcstDate}
+      />
+
+      <RpaConfirmModal
+        open={rpaModalOpen}
+        onClose={() => setRpaModalOpen(false)}
+        onConfirm={handleRpaSend}
+        items={rpaItems}
       />
 
     </div>
