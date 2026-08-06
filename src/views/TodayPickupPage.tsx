@@ -325,8 +325,19 @@ export default function TodayPickupPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, boxSizing: 'border-box' }}>
-      {/* ── 헤더 1행: 비교 구간 (우측 정렬, 감싸는 박스 없음) ── */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+      {/* ── 헤더 1행: 좌 타이틀 / 우 비교 구간 ── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+
+        {/* 좌 — 타이틀 + 선택 월 */}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
+          <span style={{ fontSize: 19, fontWeight: 500, color: 'rgba(255,255,255,0.92)' }}>당일 픽업</span>
+          <span style={{ fontSize: 13, color: '#00E5A0' }}>
+            {cur.month0 + 1}월
+            <span style={{ fontSize: '0.78em', marginLeft: 3, color: 'rgba(0,229,160,0.6)' }}>{String(cur.year).slice(-2)}년</span>
+          </span>
+        </div>
+
+        {/* 우 — 비교 구간 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, height: 40 }}>
           <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', whiteSpace: 'nowrap' }}>비교</span>
 
